@@ -1,0 +1,647 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Brand Tokens + shadcn Token Mapping ──────────────────── */
+/* We map our brand palette INTO shadcn's token system so both
+   our custom classes AND shadcn components share the same DNA. */
+:root {
+  /* === Ping World Brand === */
+  --pw-primary: #985cff;
+  --pw-secondary: #2255fd;
+  --pw-bg: #02030b;
+  --pw-surface: #02040c;
+  --pw-muted: #8b92b8;
+  --pw-success: #22c985;
+  --pw-warning: #ffb347;
+  --pw-danger: #ff5c7a;
+  --pw-light-bg: #f4f6ff;
+  --pw-text: #f8f9ff;
+  --pw-cyan: #22d4fd;
+
+  /* === Typography === */
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* === shadcn Tokens (dark-first — our default) === */
+  --background: var(--pw-bg);
+  --foreground: var(--pw-text);
+  --card: var(--pw-surface);
+  --card-foreground: var(--pw-text);
+  --popover: var(--pw-surface);
+  --popover-foreground: var(--pw-text);
+  --primary: var(--pw-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--pw-secondary);
+  --secondary-foreground: #0a0c1b;
+  --muted: #1a1f40;
+  --muted-foreground: var(--pw-muted);
+  --accent: #311a3f;
+  --accent-foreground: var(--pw-text);
+  --destructive: var(--pw-danger);
+  --border: rgba(92, 111, 255, 0.12);
+  --input: rgba(92, 111, 255, 0.12);
+  --ring: var(--pw-primary);
+  --radius: 0.625rem;
+
+  /* === Charts === */
+  --chart-1: var(--pw-primary);
+  --chart-2: var(--pw-secondary);
+  --chart-3: var(--pw-success);
+  --chart-4: var(--pw-warning);
+  --chart-5: var(--pw-danger);
+
+  /* === Sidebar === */
+  --sidebar: #0d0f22;
+  --sidebar-foreground: var(--pw-text);
+  --sidebar-primary: var(--pw-primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1a1f40;
+  --sidebar-accent-foreground: var(--pw-text);
+  --sidebar-border: rgba(92, 111, 255, 0.1);
+  --sidebar-ring: var(--pw-primary);
+}
+
+/* ─── Tailwind Theme Extension ──────────────────────────────── */
+@theme inline {
+  /* Brand utilities (e.g. bg-pw-primary, text-pw-muted) */
+  --color-pw-primary: var(--pw-primary);
+  --color-pw-secondary: var(--pw-secondary);
+  --color-pw-bg: var(--pw-bg);
+  --color-pw-surface: var(--pw-surface);
+  --color-pw-muted: var(--pw-muted);
+  --color-pw-success: var(--pw-success);
+  --color-pw-warning: var(--pw-warning);
+  --color-pw-danger: var(--pw-danger);
+  --color-pw-text: var(--pw-text);
+  --color-pw-cyan: var(--pw-cyan);
+
+  /* Font families */
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  /* Radii */
+  --radius-card: 1rem;
+  --radius-btn: 0.625rem;
+
+  /* === shadcn token → Tailwind class bridge === */
+  --font-heading: var(--font-display);
+  --font-sans: var(--font-body);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ─── Base ──────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  transition: all ease 400ms;
+}
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--pw-bg);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 20%, #5c6fff18 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, #22d4fd12 0%, transparent 60%);
+  background-attachment: fixed;
+  color: var(--pw-text);
+  font-family: var(--font-body);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Custom Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--pw-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: #5c6fff55;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5c6fffaa;
+}
+
+/* ─── Typography ────────────────────────────────────────────── */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--pw-text);
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--font-mono);
+}
+
+/* ─── Glass Morphism ────────────────────────────────────────── */
+.glass {
+  background: rgba(18, 21, 46, 0.6);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(92, 111, 255, 0.15);
+}
+
+.bkblur {
+  -webkit-backdrop-filter: blur(20px) brightness(90%);
+  backdrop-filter: blur(20px) brightness(90%);
+}
+
+.glass-light {
+  background: rgba(18, 21, 46, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(92, 111, 255, 0.1);
+}
+
+/* ─── Card Glow ─────────────────────────────────────────────── */
+.card-glow {
+  background: linear-gradient(145deg, #12152e 0%, #1a1f40 100%);
+  border: 1px solid rgba(92, 111, 255, 0.12);
+  border-radius: var(--radius-card);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(92, 111, 255, 0.05);
+  transition:
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s ease;
+}
+
+.card-glow:hover {
+  box-shadow:
+    0 8px 40px rgba(92, 111, 255, 0.2),
+    0 0 0 1px rgba(92, 111, 255, 0.25);
+  border-color: rgba(92, 111, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* ─── Gradient Text ─────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #cd69ff 0%, #3867ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(135deg, #ffb347 0%, #ff5c7a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Brand Gradient BG ─────────────────────────────────────── */
+.gradient-brand {
+  background: linear-gradient(135deg, #5c6fff 0%, #22d4fd 100%);
+}
+
+.gradient-surface {
+  background: linear-gradient(145deg, #12152e 0%, #1a1f40 100%);
+}
+
+/* ─── Primary Button + Shimmer ──────────────────────────────── */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #5c6fff 0%, #22d4fd 100%);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border: none;
+  border-radius: var(--radius-btn);
+  padding: 0.6875rem 1.75rem;
+  cursor: pointer;
+  transition:
+    opacity 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.2s ease;
+  box-shadow: 0 0 20px rgba(92, 111, 255, 0.3);
+}
+
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+  box-shadow: 0 0 36px rgba(92, 111, 255, 0.55);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 0 16px rgba(92, 111, 255, 0.3);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--pw-text);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  border: 1px solid rgba(92, 111, 255, 0.25);
+  border-radius: var(--radius-btn);
+  padding: 0.6875rem 1.75rem;
+  cursor: pointer;
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.btn-ghost:hover {
+  border-color: rgba(92, 111, 255, 0.6);
+  background: rgba(92, 111, 255, 0.08);
+  box-shadow: 0 0 20px rgba(92, 111, 255, 0.15);
+}
+
+/* ─── Input ──────────────────────────────────────────────────── */
+.input-base {
+  background: var(--pw-surface);
+  border: 1px solid rgba(139, 146, 184, 0.2);
+  border-radius: var(--radius-btn);
+  color: var(--pw-text);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  padding: 0.6875rem 1rem;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+  outline: none;
+  width: 100%;
+}
+
+.input-base::placeholder {
+  color: var(--pw-muted);
+}
+
+.input-base:focus {
+  border-color: var(--pw-primary);
+  box-shadow: 0 0 0 3px rgba(92, 111, 255, 0.15);
+}
+
+/* ─── Glow Ring (focus-visible) ─────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #5c6fff;
+  outline-offset: 2px;
+}
+
+/* ─── Animations ────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(92, 111, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(92, 111, 255, 0.6);
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease forwards;
+}
+.animate-fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+.animate-spin-slow {
+  animation: spin-slow 12s linear infinite;
+}
+.animate-shimmer {
+  animation: shimmer 2.4s linear infinite;
+}
+
+.stagger-1 {
+  animation-delay: 0.05s;
+}
+.stagger-2 {
+  animation-delay: 0.1s;
+}
+.stagger-3 {
+  animation-delay: 0.15s;
+}
+.stagger-4 {
+  animation-delay: 0.2s;
+}
+.stagger-5 {
+  animation-delay: 0.25s;
+}
+.stagger-6 {
+  animation-delay: 0.3s;
+}
+
+/* ─── Noise Texture Overlay ─────────────────────────────────── */
+.noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+/* ─── Divider ────────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(92, 111, 255, 0.3),
+    transparent
+  );
+}
+
+/* ─── Badge ──────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  border: 1px solid rgba(92, 111, 255, 0.3);
+  background: rgba(92, 111, 255, 0.1);
+  color: var(--pw-primary);
+}
+
+.badge-success {
+  border-color: rgba(34, 201, 133, 0.3);
+  background: rgba(34, 201, 133, 0.1);
+  color: var(--pw-success);
+}
+
+.badge-warning {
+  border-color: rgba(255, 179, 71, 0.3);
+  background: rgba(255, 179, 71, 0.1);
+  color: var(--pw-warning);
+}
+
+/* ─── Skeleton ───────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(139, 146, 184, 0.08) 25%,
+    rgba(139, 146, 184, 0.16) 50%,
+    rgba(139, 146, 184, 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+  border-radius: 0.5rem;
+}
+
+/* ─── Scrollable row ─────────────────────────────────────────── */
+.scrollable-row {
+  display: flex;
+  overflow-x: auto;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  scrollbar-width: none;
+}
+.scrollable-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Glow Orb (decorative) ─────────────────────────────────── */
+.orb {
+  position: absolute;
+  border-radius: 40%;
+  filter: blur(1px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.orb-primary {
+  background: rgba(92, 111, 255, 0.25);
+}
+
+.orb-secondary {
+  background: rgba(34, 212, 253, 0.15);
+}
+
+.orb-accent {
+  background: rgba(213, 85, 255, 0.15);
+}
+
+.globe-div {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  justify-items: center;
+  bottom: 0;
+}
+
+.globe {
+  pointer-events: none;
+  z-index: -0;
+  width: 95vmin;
+  height: 95vmin;
+  border-radius: 50%;
+  background: rgb(0, 0, 0);
+  border: 15vmin solid;
+  border-top-color: var(--accent);
+  border-right-color: rgb(175, 175, 0);
+  border-left-color: var(--pw-cyan);
+  border-bottom-color: rgb(84, 0, 34);
+  box-shadow: 0px 0px 10vmin 20vmin rgba(0, 45, 35, 0.4);
+  filter: blur(80px) brightness(30%) opacity(0.6);
+}
+
+/*------ blur styles ----------*/
+.blur-1 {
+  filter: blur(1px);
+}
+
+.blur-2 {
+  filter: blur(2px);
+}
+
+.blur-3 {
+  filter: blur(3px);
+}
+
+.blur-4 {
+  filter: blur(4px);
+}
+
+.blur-5 {
+  filter: blur(5px);
+}
+
+.blur-6 {
+  filter: blur(6px);
+}
+
+.blur-sm {
+  filter: blur(10px);
+}
+
+.blur-mid {
+  filter: blur(20px);
+}
+
+.blur-lg {
+  filter: blur(30px);
+}
+
+.blur-xl {
+  filter: blur(40px);
+}
+
+.blur-2xl {
+  filter: blur(50px);
+}
+
+.blur-all {
+  filter: blur(100px);
+}
+
+/* ─── shadcn Base Layer ─────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
