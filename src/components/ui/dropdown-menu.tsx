@@ -105,10 +105,10 @@ function DropdownMenuItem({
 }: MenuPrimitive.Item.Props & {
   inset?: boolean;
   variant?: 'default' | 'destructive';
-  href: any;
+  href?: any;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(href + '/');
+  const active = pathname === href || pathname.startsWith(href + '/') || false;
 
   return (
     <MenuPrimitive.Item

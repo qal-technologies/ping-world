@@ -117,8 +117,9 @@ export default function CanvasEditor() {
   const exportImage = () => {
     if (!canvas) return;
     const dataURL = canvas.toDataURL({
-      format: "png",
+      format: 'png',
       quality: 1,
+      multiplier: 1,
     });
     saveAs(dataURL, "pingworld-post.png");
     toast.success("Image exported!");

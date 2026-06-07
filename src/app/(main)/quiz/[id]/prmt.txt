@@ -19,5 +19,11 @@ typedefs.d.ts(85, 5): 'multiplier' is declared here.
  
 6. Add thse locally saved quiz to the cards so the edit can continue, add add atag to show if the quiz had been uploaded or just a draft.
 
+7. look at the tool path and work on the features functions. Make them actuallly work.
 
-check these errors and so these requests too.
+8. Look into the comments I made on pages to further understand what to do. 
+
+9. On the landing page, make the planet rotate on load, (Trying to make a blackhole effect).
+10. Look into other tweaks and add subtle background objects that  beautifies the page.
+
+check these errors and do these requests too.

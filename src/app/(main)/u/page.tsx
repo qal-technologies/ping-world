@@ -1,125 +1,97 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Send, 
-  MessageSquare, 
-  ShieldCheck, 
-  User, 
-  ArrowLeft,
-  CheckCircle2,
-  Lock
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import Link from "next/link";
-import { toast } from "sonner";
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  Puzzle,
+  MessageSquare,
+  Image as ImageIcon,
+  Settings2,
+  ChevronRight,
+  User as UserIcon,
+} from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
-export default function PublicUserMessagePage({ params }: { params: { username: string } }) {
-  const [content, setContent] = useState("");
-  const [isSent, setIsSent] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+const FEATURE_LINKS = [
+  {
+    title: 'Quiz Engine',
+    description: 'Build and manage your professional quizzes.',
+    icon: Puzzle,
+    href: '/quiz',
+    color: 'text-pw-primary',
+  },
+  {
+    title: 'AnonLink',
+    description: 'View and share your anonymous message links.',
+    icon: MessageSquare,
+    href: '/message',
+    color: 'text-pw-secondary',
+  },
+  {
+    title: 'Image Toolkit',
+    description: 'Enhance and process images in-browser.',
+    icon: ImageIcon,
+    href: '/image',
+    color: 'text-pw-success',
+  },
+  {
+    title: 'Account Settings',
+    description: 'Manage your profile and synchronization.',
+    icon: Settings2,
+    href: '/settings',
+    color: 'text-pw-muted',
+  },
+];
 
-  const sendMessage = async () => {
-    if (!content.trim()) {
-      toast.error("Please write something first.");
-      return;
-    }
-
-    setIsLoading(true);
-    // Mimic API delay
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Save to local inbox for demo purposes
-    const saved = localStorage.getItem("pingworld_inbox");
-    const inbox = saved ? JSON.parse(saved) : [];
-    inbox.unshift({
-      id: Math.random().toString(36).substr(2, 9),
-      content,
-      isSeen: false,
-      timestamp: new Date().toISOString()
-    });
-    localStorage.setItem("pingworld_inbox", JSON.stringify(inbox));
-
-    setIsLoading(false);
-    setIsSent(true);
-    toast.success("Message delivered anonymously!");
-  };
-
-  if (isSent) {
-    return (
-      <div className="container mx-auto px-6 py-32 max-w-2xl text-center">
-        <motion.div
-           initial={{ opacity: 0, y: 20 }}
-           animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="w-20 h-20 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto mb-8 border border-pw-success/20">
-            <CheckCircle2 className="h-10 w-10 text-pw-success" />
-          </div>
-          <h1 className="text-4xl font-extrabold font-display mb-4">Delivered!</h1>
-          <p className="text-pw-muted text-lg mb-12">Your anonymous message was sent to <span className="text-pw-text font-bold">@{params.username}</span>. They will never know it was you.</p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-             <Button onClick={() => setIsSent(false)} variant="outline" className="h-12 border-white/10">Send Another</Button>
-             <Link href="/" className="btn-primary h-12 flex items-center px-8">Create Your Own Link</Link>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
+export default function UserDashboardPage() {
   return (
-    <div className="container mx-auto px-6 py-20 max-w-3xl">
-      <Link href="/message" className="inline-flex items-center gap-2 text-pw-muted hover:text-pw-primary mb-12 transition-colors">
-         <ArrowLeft className="h-4 w-4" /> Back to AnonLink
-      </Link>
-
-      <div className="flex flex-col items-center mb-12 text-center">
-        <div className="relative mb-6">
-           <div className="w-24 h-24 rounded-[30%] gradient-brand flex items-center justify-center shadow-2xl shadow-pw-primary/20">
-              <User className="h-12 w-12 text-white" />
-           </div>
-           <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-pw-surface border-4 border-pw-background flex items-center justify-center">
-              <Lock className="h-4 w-4 text-pw-primary" />
-           </div>
+    <div className='container mx-auto px-6 py-12 max-w-5xl min-h-[calc(100vh-64px)]'>
+      <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12'>
+        <div>
+          <div className='badge mb-4'>
+            <UserIcon className='h-3.5 w-3.5' />
+            Dashboard
+          </div>
+          <h1 className='text-4xl font-extrabold font-display leading-[1.1]'>
+            Welcome Back, <span className='gradient-text'>World.</span>
+          </h1>
+          <p className='mt-2 text-pw-muted'>
+            Manage your tools and track your digital footprint.
+          </p>
         </div>
-        <h1 className="text-3xl font-extrabold font-display">Send @{params.username} a secret</h1>
-        <p className="text-pw-muted mt-2">Honest feedback, secret crush, or just a friendly hello. It&apos;s 100% anonymous.</p>
       </div>
 
-      <Card className="card-glow p-8 md:p-10 bg-pw-surface border-white/10">
-        <div className="flex items-center gap-2 text-xs font-bold text-pw-muted uppercase mb-6 tracking-widest">
-           <ShieldCheck className="h-4 w-4 text-pw-success" /> End-to-End Anonymous
-        </div>
-        
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Type your anonymous message here..."
-          className="w-full h-48 bg-white/5 border border-white/10 rounded-2xl p-6 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-white/10"
-        />
-        
-        <div className="mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2 text-xs text-pw-muted font-medium">
-             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-             Always free, always private.
-          </div>
-          <Button 
-            onClick={sendMessage} 
-            disabled={isLoading}
-            className="btn-primary h-14 px-12 text-lg w-full md:w-auto shadow-xl shadow-pw-primary/10"
-          >
-            {isLoading ? "Sending..." : "Send Securely"}
-            <Send className="h-5 w-5 ml-2" />
-          </Button>
-        </div>
-      </Card>
-      
-      <p className="text-center text-[10px] text-pw-muted uppercase tracking-[0.2em] mt-16 opacity-30">
-        Built by Ping World — Empowering Anonymous Expression
-      </p>
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+        {FEATURE_LINKS.map((feature, i) => (
+          <motion.div
+            key={feature.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}>
+            <Link href={feature.href}>
+              <Card className='card-glow p-8 h-full bg-pw-surface/50 border-white/5 hover:border-pw-primary/30 transition-all group'>
+                <div className='flex items-start justify-between'>
+                  <div
+                    className={`p-4 rounded-2xl bg-white/5 border border-white/10 ${feature.color}`}>
+                    <feature.icon className='h-8 w-8' />
+                  </div>
+                  <div className='w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-pw-primary/10'>
+                    <ChevronRight className='h-5 w-5 text-pw-primary' />
+                  </div>
+                </div>
+                <h3 className='text-2xl font-bold mt-6 mb-2'>
+                  {feature.title}
+                </h3>
+                <p className='text-pw-muted text-sm leading-relaxed'>
+                  {feature.description}
+                </p>
+              </Card>
+            </Link>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }

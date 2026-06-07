@@ -103,6 +103,17 @@ export const HeroSection = () => {
         <div className='globe ' />
       </div>
 
+      {/* Decorative Beauty Objects */}
+      <div className='beauty-obj w-32 h-32 top-[10%] left-[15%] opacity-10' />
+      <div
+        className='beauty-obj w-48 h-48 bottom-[20%] right-[10%] opacity-5'
+        style={{ animationDelay: '-3s' }}
+      />
+      <div
+        className='beauty-obj w-20 h-20 top-[40%] right-[25%] opacity-10'
+        style={{ animationDelay: '-7s' }}
+      />
+
       {/* Background orbs */}
       <div className='orb orb-accent w-[500px] h-[500px] -top-40 -left-40 opacity-40 blur-all' />
       <div className='orb orb-secondary w-[400px] h-[400px] -bottom-20 -right-20 opacity-30 blur-all' />
