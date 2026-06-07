@@ -22,6 +22,10 @@ import {
   ChevronDown,
   Check,
   Type,
+  ShieldCheck,
+  Clock,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -118,9 +122,22 @@ const QuizBuilder = ({
   };
 
   const updateQuestion = (index: number, updated: Question) => {
-    const newQuestions = [...editedQuiz.questions];
+    const newQuestions = [...(editedQuiz?.questions || [])];
     newQuestions[index] = updated;
     setEditedQuiz({ ...editedQuiz, questions: newQuestions });
+  };
+
+  const moveQuestion = (index: number, direction: 'up' | 'down') => {
+    const newQuestions = [...editedQuiz.questions];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newQuestions.length) return;
+
+    [newQuestions[index], newQuestions[targetIndex]] = [
+      newQuestions[targetIndex],
+      newQuestions[index],
+    ];
+    setEditedQuiz({ ...editedQuiz, questions: newQuestions });
+    setCurrentStep(targetIndex);
   };
 
   return (
@@ -323,6 +340,25 @@ const QuizBuilder = ({
                     Question {currentStep + 1}
                   </h3>
                   <div className='flex gap-2'>
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      onClick={() => moveQuestion(currentStep, 'up')}
+                      disabled={currentStep === 0}
+                      className='h-9 w-9 text-pw-muted hover:text-pw-primary'>
+                      <ArrowUp className='h-4 w-4' />
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      onClick={() => moveQuestion(currentStep, 'down')}
+                      disabled={currentStep === editedQuiz.questions.length - 1}
+                      className='h-9 w-9 text-pw-muted hover:text-pw-primary'>
+                      <ArrowDown className='h-4 w-4' />
+                    </Button>
+
+                    <div className='w-[1px] h-9 bg-white/5 mx-2' />
+
                     <DropdownMenu>
                       <DropdownMenuTrigger>
                         <Button
@@ -352,10 +388,18 @@ const QuizBuilder = ({
                                 ...editedQuiz.questions[currentStep],
                                 type,
                               };
-                              // Reset options/correct for some types
-                              if (type === 'true_false')
+                              // Reset options/correct Index for new type
+                              if (type === 'true_false') {
                                 q.options = ['True', 'False'];
-                              if (type === 'input') q.options = [];
+                                q.correctIndex = 0;
+                              } else if (type === 'input') {
+                                q.options = [];
+                                q.correctIndex = '';
+                              } else if (type === 'checkbox') {
+                                q.correctIndex = [];
+                              } else {
+                                q.correctIndex = 0;
+                              }
                               updateQuestion(currentStep, q);
                             }}>
                             {type.replace('_', ' ')}
@@ -421,135 +465,205 @@ const QuizBuilder = ({
                   </div>
                 </div>
 
-                  {/* Question Content based on Type */}
-                  <div className='space-y-4'>
-                    <div className='space-y-2'>
-                      <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
-                        Question Text
-                      </label>
-                      <textarea
-                        value={editedQuiz.questions[currentStep].text}
-                        onChange={(e) =>
-                          updateQuestion(currentStep, {
-                            ...editedQuiz.questions[currentStep],
-                            text: e.target.value,
-                          })
-                        }
-                        placeholder='Enter your question'
-                        className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-pw-primary focus:outline-none resize-none transition-all'
-                      />
-                    </div>
+                {/* Question Content based on Type */}
+                <div className='space-y-4'>
+                  <div className='space-y-2'>
+                    <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
+                      Question Text
+                    </label>
+                    <textarea
+                      value={editedQuiz.questions[currentStep].text}
+                      onChange={(e) =>
+                        updateQuestion(currentStep, {
+                          ...editedQuiz.questions[currentStep],
+                          text: e.target.value,
+                        })
+                      }
+                      placeholder='Enter your question'
+                      className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-pw-primary focus:outline-none resize-none transition-all'
+                    />
+                  </div>
 
-                    <div className='space-y-3'>
-                      <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
-                        Answers & Logic
-                      </label>
+                  <div className='space-y-3'>
+                    <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
+                      Answers & Logic
+                    </label>
 
-                      {editedQuiz.questions[currentStep].type === 'input' ? (
-                        <div className="space-y-4">
-                          <div className="bg-pw-primary/5 p-8 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4">
-                             <Type className="h-8 w-8 text-pw-primary opacity-50" />
-                             <div>
-                               <p className="text-sm text-pw-primary font-bold">Text Input Mode</p>
-                               <p className="text-[10px] text-pw-muted max-w-[250px] mt-1">Takers will type their answer. Perfect for open-ended feedback or exact keyword matching.</p>
-                             </div>
+                    {editedQuiz.questions[currentStep].type === 'input' ?
+                      <div className='space-y-4'>
+                        <div className='bg-pw-primary/5 p-8 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4'>
+                          <Type className='h-8 w-8 text-pw-primary opacity-50' />
+                          <div>
+                            <p className='text-sm text-pw-primary font-bold'>
+                              Text Input Mode
+                            </p>
+                            <p className='text-[10px] text-pw-muted max-w-[250px] mt-1'>
+                              Takers will type their answer. Perfect for
+                              open-ended feedback or exact keyword matching.
+                            </p>
                           </div>
-                          
-                          {editedQuiz.type === 'quiz' && (
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1">Correct Answer (Model)</label>
-                              <Input
-                                value={editedQuiz.questions[currentStep].correctIndex || ''}
-                                onChange={(e) => updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], correctIndex: e.target.value })}
-                                placeholder="The answer to match..."
-                                className="bg-white/5 border-white/10 h-12 focus:border-pw-primary"
-                              />
-                            </div>
-                          )}
                         </div>
-                      ) : editedQuiz.questions[currentStep].type === 'true_false' ? (
-                        <div className="grid grid-cols-2 gap-4">
-                          {['True', 'False'].map((val, idx) => (
-                            <Button 
-                              key={val}
-                              variant={editedQuiz.questions[currentStep].correctIndex === idx ? 'default' : 'outline'}
-                              onClick={() => updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], correctIndex: idx })}
-                              className={cn("h-16 text-lg font-bold border-white/5", editedQuiz.questions[currentStep].correctIndex === idx && "bg-pw-primary shadow-xl shadow-pw-primary/20")}
-                            >
-                              {val}
-                            </Button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {editedQuiz.questions[currentStep].options.map((opt, idx) => (
-                            <div key={idx} className='flex gap-3'>
-                              <button
-                                onClick={() =>
-                                  updateQuestion(currentStep, {
-                                    ...editedQuiz.questions[currentStep],
-                                    correctIndex: idx,
-                                  })
-                                }
-                                className={cn(
-                                  'w-10 h-10 rounded-lg border flex items-center justify-center transition-all shrink-0',
-                                  editedQuiz.questions[currentStep].correctIndex === idx
-                                    ? 'bg-pw-primary border-pw-primary text-white shadow-lg'
-                                    : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/20',
-                                )}>
-                                {editedQuiz.questions[currentStep].correctIndex === idx ?
-                                  <Check className='h-4 w-4' />
-                                : idx + 1}
-                              </button>
-                              <Input
-                                value={opt}
-                                onChange={(e) => {
-                                  const newOptions = [...editedQuiz.questions[currentStep].options];
-                                  newOptions[idx] = e.target.value;
-                                  updateQuestion(currentStep, {
-                                    ...editedQuiz.questions[currentStep],
-                                    options: newOptions,
-                                  });
-                                }}
-                                placeholder={`Option ${idx + 1}`}
-                                className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
-                              />
-                              <Button
-                                variant='ghost'
-                                size='icon'
-                                onClick={() => {
-                                  const newOptions = editedQuiz.questions[currentStep].options.filter((_, i) => i !== idx);
-                                  updateQuestion(currentStep, {
-                                    ...editedQuiz.questions[currentStep],
-                                    options: newOptions,
-                                  });
-                                }}
-                                className='h-10 w-10 text-pw-muted hover:text-pw-danger'>
-                                <Trash2 className='h-4 w-4' />
-                              </Button>
-                            </div>
-                          ))}
+
+                        {editedQuiz.type === 'quiz' && (
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
+                              Correct Answer (Model)
+                            </label>
+                            <Input
+                              value={
+                                editedQuiz.questions[currentStep]
+                                  .correctIndex || ''
+                              }
+                              onChange={(e) =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  correctIndex: e.target.value,
+                                })
+                              }
+                              placeholder='The answer to match...'
+                              className='bg-white/5 border-white/10 h-12 focus:border-pw-primary'
+                            />
+                          </div>
+                        )}
+                      </div>
+                    : editedQuiz.questions[currentStep].type === 'true_false' ?
+                      <div className='grid grid-cols-2 gap-4'>
+                        {['True', 'False'].map((val, idx) => (
                           <Button
-                            variant='outline'
-                            onClick={() => {
+                            key={val}
+                            variant={
+                              (
+                                editedQuiz.questions[currentStep]
+                                  .correctIndex === idx
+                              ) ?
+                                'default'
+                              : 'outline'
+                            }
+                            onClick={() =>
                               updateQuestion(currentStep, {
                                 ...editedQuiz.questions[currentStep],
-                                options: [...editedQuiz.questions[currentStep].options, ''],
-                              });
-                            }}
-                            className='w-full border-dashed border-white/10 hover:bg-white/5 h-10 text-xs gap-2'>
-                            <Plus className='h-3 w-3' /> Add Option
+                                correctIndex: idx,
+                              })
+                            }
+                            className={cn(
+                              'h-16 text-lg font-bold border-white/5',
+                              editedQuiz.questions[currentStep].correctIndex ===
+                                idx &&
+                                'bg-pw-primary shadow-xl shadow-pw-primary/20',
+                            )}>
+                            {val}
                           </Button>
-                        </div>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    : <div className='space-y-3'>
+                        {editedQuiz.questions[currentStep].options.map(
+                          (opt, idx) => {
+                            const q = editedQuiz.questions[currentStep];
+                            return (
+                              <div
+                                key={idx}
+                                className='flex gap-3'>
+                                <button
+                                  onClick={() => {
+                                    if (q.type === 'checkbox') {
+                                      const current =
+                                        Array.isArray(q.correctIndex) ?
+                                          q.correctIndex
+                                        : [];
+                                      const next =
+                                        current.includes(idx) ?
+                                          current.filter((i) => i !== idx)
+                                        : [...current, idx];
+                                      updateQuestion(currentStep, {
+                                        ...q,
+                                        correctIndex: next,
+                                      });
+                                    } else {
+                                      updateQuestion(currentStep, {
+                                        ...q,
+                                        correctIndex: idx,
+                                      });
+                                    }
+                                  }}
+                                  className={cn(
+                                    'w-10 h-10 rounded-lg border flex items-center justify-center transition-all shrink-0',
+                                    (
+                                      q.type === 'checkbox' ?
+                                        Array.isArray(q.correctIndex) &&
+                                        q.correctIndex.includes(idx)
+                                      : q.correctIndex === idx
+                                    ) ?
+                                      'bg-pw-primary border-pw-primary text-white shadow-lg'
+                                    : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/20',
+                                  )}>
+                                  {(
+                                    q.type === 'checkbox' ?
+                                      Array.isArray(q.correctIndex) &&
+                                      q.correctIndex.includes(idx)
+                                    : q.correctIndex === idx
+                                  ) ?
+                                    <Check className='h-4 w-4' />
+                                  : idx + 1}
+                                </button>
+                                <Input
+                                  value={opt}
+                                  onChange={(e) => {
+                                    const newOptions = [
+                                      ...editedQuiz.questions[currentStep]
+                                        .options,
+                                    ];
+                                    newOptions[idx] = e.target.value;
+                                    updateQuestion(currentStep, {
+                                      ...editedQuiz.questions[currentStep],
+                                      options: newOptions,
+                                    });
+                                  }}
+                                  placeholder={`Option ${idx + 1}`}
+                                  className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
+                                />
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  onClick={() => {
+                                    const newOptions = editedQuiz.questions[
+                                      currentStep
+                                    ].options.filter((_, i) => i !== idx);
+                                    updateQuestion(currentStep, {
+                                      ...editedQuiz.questions[currentStep],
+                                      options: newOptions,
+                                    });
+                                  }}
+                                  className='h-10 w-10 text-pw-muted hover:text-pw-danger'>
+                                  <Trash2 className='h-4 w-4' />
+                                </Button>
+                              </div>
+                            );
+                          },
+                        )}
+                        <Button
+                          variant='outline'
+                          onClick={() => {
+                            updateQuestion(currentStep, {
+                              ...editedQuiz.questions[currentStep],
+                              options: [
+                                ...editedQuiz.questions[currentStep].options,
+                                '',
+                              ],
+                            });
+                          }}
+                          className='w-full border-dashed border-white/10 hover:bg-white/5 h-10 text-xs gap-2'>
+                          <Plus className='h-3 w-3' /> Add Option
+                        </Button>
+                      </div>
+                    }
                   </div>
                 </div>
-              }
-            </Card>
-          </div>
+              </div>
+            }
+          </Card>
         </div>
-      </div>    
+      </div>
+    </div>
   );
 };
 
@@ -561,16 +675,23 @@ export default function QuizPage() {
   // Load from hybrid storage
   useEffect(() => {
     const loadQuizzes = async () => {
+      // Migrate legacy keys to underscored ones
+      const legacy = localStorage.getItem('pingworld-quizzes');
+      if (legacy) {
+        const standard = localStorage.getItem('pingworld_quizzes');
+        if (!standard) {
+          localStorage.setItem('pingworld_quizzes', legacy);
+          localStorage.removeItem('pingworld-quizzes');
+        }
+      }
+
       const data = await HybridStorage.getAll('quiz');
       setQuizzes(data);
     };
     loadQuizzes();
   }, []);
 
-  const saveToLocal = (newQuizzes: Quiz[]) => {
-    setQuizzes(newQuizzes);
-    localStorage.setItem('pingworld-quizzes', JSON.stringify(newQuizzes));
-  };
+  // Managed by HybridStorage exclusively
 
   const handleStartNew = () => {
     const newQuiz: Quiz = {
@@ -718,7 +839,7 @@ export default function QuizPage() {
             </div>
 
             {quizzes.length > 0 ?
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6'>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
                 {quizzes.map((quiz, i) => (
                   <motion.div
                     key={quiz.id}
@@ -731,15 +852,17 @@ export default function QuizPage() {
                           <FileJson className='h-3 w-3 text-pw-primary' />
                           {quiz?.questions?.length} Questions
                           {(quiz as any).is_synced ?
-                            <span className='text-pw-success flex items-center gap-1'>
-                              • Synced
+                            <span className='text-pw-success flex items-center gap-1.5'>
+                              <ShieldCheck className='h-3 w-3' />
+                              Synced
                             </span>
-                          : <span className='text-pw-warning flex items-center gap-1'>
-                              • Draft
+                          : <span className='text-pw-warning flex items-center gap-1.5'>
+                              <Clock className='h-3 w-3' />
+                              Draft
                             </span>
                           }
                         </div>
-                        <div className='flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                        <div className='flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity'>
                           <Button
                             variant='ghost'
                             size='icon'
@@ -772,15 +895,15 @@ export default function QuizPage() {
                       <p className='text-sm text-pw-muted line-clamp-2 mb-8 flex-1'>
                         {quiz.description || 'No description provided.'}
                       </p>
-                      <div className='flex gap-3'>
+                      <div className='flex gap-3 flex-wrap sm:flex-nowrap'>
                         <Button
                           onClick={() => playQuiz(quiz.id)}
-                          className='btn-primary flex-1 h-10 gap-2'>
+                          className='btn-primary flex-1 h-10 gap-2 min-w-[120px]'>
                           <Eye className='h-4 w-4' /> Play Quiz
                         </Button>
                         <Button
                           variant='outline'
-                          className='h-10 px-4 border-pw-primary/20 hover:bg-pw-primary/5'>
+                          className='h-10 px-4 border-pw-primary/20 hover:bg-pw-primary/5 shrink-0'>
                           <Share2 className='h-4 w-4' />
                         </Button>
                       </div>

@@ -17,7 +17,7 @@ export const HybridStorage = {
   /**
    * Save a resource to the available storage
    */
-  async save(key: string, content: any, type: StorageItem["type"]) {
+  async save(key: string, content: any, type: StorageItem['type']) {
     const timestamp = new Date().toISOString();
     const item: StorageItem = {
       id: content.id || Math.random().toString(36).substr(2, 9),
@@ -29,28 +29,30 @@ export const HybridStorage = {
 
     // 1. Try Supabase if user is logged in
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
+        const tableName = item.type === 'quiz' ? 'quizzes' : item.type + 's';
         // Save to Supabase (assuming tables are ready)
-        const { error } = await supabase
-          .from(item.type + "s") // pluralize
-          .upsert({
-            id: item.id,
-            user_id: session.user.id,
-            ...content,
-            updated_at: timestamp,
-          });
+        const { error } = await supabase.from(tableName).upsert({
+          id: item.id,
+          user_id: session.user.id,
+          ...content,
+          updated_at: timestamp,
+        });
 
         if (!error) {
           item.is_synced = true;
         }
       }
     } catch (e) {
-      console.warn("Supabase save failed, falling back to local:", e);
+      console.warn('Supabase save failed, falling back to local:', e);
     }
 
     // 2. Always save to LocalStorage as a local cache/draft
-    const saved = localStorage.getItem(`pingworld_${item.type}s`);
+    const keyPrefix = item.type === 'quiz' ? 'quizzes' : item.type + 's';
+    const saved = localStorage.getItem(`pingworld_${keyPrefix}`);
     const list = saved ? JSON.parse(saved) : [];
     const index = list.findIndex((i: any) => i.id === item.id);
 
@@ -60,44 +62,49 @@ export const HybridStorage = {
       list.unshift(item);
     }
 
-    localStorage.setItem(`pingworld_${item.type}s`, JSON.stringify(list));
+    localStorage.setItem(`pingworld_${keyPrefix}`, JSON.stringify(list));
     return item;
   },
 
   /**
    * Retrieve all items of a certain type
    */
-  async getAll(type: StorageItem["type"]) {
+  async getAll(type: StorageItem['type']) {
     let remoteItems: any[] = [];
-    
+
     // 1. Try to get from Supabase
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
+        const tableName = type === 'quiz' ? 'quizzes' : type + 's';
         const { data, error } = await supabase
-          .from(type + "s")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .order("updated_at", { ascending: false });
+          .from(tableName)
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('updated_at', { ascending: false });
 
         if (!error && data) {
-          remoteItems = data.map(i => ({ ...i, is_synced: true }));
+          remoteItems = data.map((i) => ({ ...i, is_synced: true }));
         }
       }
     } catch (e) {
-      console.warn("Supabase fetch failed, relying on local:", e);
+      console.warn('Supabase fetch failed, relying on local:', e);
     }
 
     // 2. Get from LocalStorage
-    const saved = localStorage.getItem(`pingworld_${type}s`);
+    const keyPrefix = type === 'quiz' ? 'quizzes' : type + 's';
+    const saved = localStorage.getItem(`pingworld_${keyPrefix}`);
     const localItems = saved ? JSON.parse(saved) : [];
 
     // Merge logic: prefer remote if synced, otherwise use local drafts
-    // For now, we'll just return a combined list with duplicates handled by ID
     const merged = [...remoteItems];
     localItems.forEach((local: any) => {
-      if (!merged.find(remote => remote.id === local.id)) {
-        merged.push(local);
+      // Unwrap the content for local items
+      const rawContent = local.content || local;
+      if (!merged.find((remote) => remote.id === (rawContent.id || local.id))) {
+        merged.push({ ...rawContent, is_synced: !!local.is_synced });
       }
     });
 
@@ -107,22 +114,26 @@ export const HybridStorage = {
   /**
    * Delete an item
    */
-  async delete(id: string, type: StorageItem["type"]) {
-    // 1. Try remote delete
+  async delete(id: string, type: StorageItem['type']) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
-        await supabase.from(type + "s").delete().eq("id", id);
+        const tableName = type === 'quiz' ? 'quizzes' : type + 's';
+        await supabase.from(tableName).delete().eq('id', id);
       }
     } catch (e) {
-      console.error("Remote delete failed:", e);
+      console.error('Remote delete failed:', e);
     }
 
     // 2. Local delete
-    const saved = localStorage.getItem(`pingworld_${type}s`);
+    const keyPrefix = type === 'quiz' ? 'quizzes' : type + 's';
+    const saved = localStorage.getItem(`pingworld_${keyPrefix}`);
     if (saved) {
       const list = JSON.parse(saved).filter((i: any) => i.id !== id);
-      localStorage.setItem(`pingworld_${type}s`, JSON.stringify(list));
+      localStorage.setItem(`pingworld_${keyPrefix}`, JSON.stringify(list));
+      return true;
     }
-  }
+  },
 };

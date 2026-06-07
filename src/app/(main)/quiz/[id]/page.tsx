@@ -8,13 +8,21 @@ import {
   ChevronRight,
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { HybridStorage } from '@/lib/storage-utils';
+import { cn } from '@/lib/utils';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -106,14 +114,26 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<number[]>([]);
   const [content, setContent] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
 
   useEffect(() => {
     const loadQuiz = async () => {
+      // Internal Migration: Ensure hyphenated keys are moved to underscored keys
+      const legacyData = localStorage.getItem('pingworld-quizzes');
+      if (legacyData) {
+        const standardData = localStorage.getItem('pingworld_quizzes');
+        if (!standardData) {
+          localStorage.setItem('pingworld_quizzes', legacyData);
+          localStorage.removeItem('pingworld-quizzes');
+        }
+      }
+
       const data = await HybridStorage.getAll('quiz');
-      const target = data.find((q: any) => q.id === params.id);
+      const target = data.find((q: any) => String(q.id) === String(params.id));
 
       if (target) {
         setQuiz(target);
@@ -142,7 +162,15 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
   const q = quiz?.questions[currentQuestion];
 
   const handleNext = () => {
-    if (selectedOption === null && q?.type !== 'input') {
+    if (q?.type === 'checkbox' && selectedOptions.length === 0) {
+      toast.error('Please select at least one answer');
+      return;
+    }
+    if (
+      selectedOption === null &&
+      q?.type !== 'input' &&
+      q?.type !== 'checkbox'
+    ) {
       toast.error('Please select an answer');
       return;
     }
@@ -150,10 +178,21 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
     // Scoring logic (only if type is quiz)
     let correct = false;
     if (quiz?.type === 'quiz' && q) {
-      if (q.type === 'input') {
+      if (q.type === 'checkbox') {
+        const correctIndices =
+          Array.isArray(q.correctIndex) ? q.correctIndex
+          : typeof q.correctIndex === 'number' ? [q.correctIndex]
+          : [];
+
+        correct =
+          selectedOptions.length === correctIndices.length &&
+          selectedOptions.every((val) => correctIndices.includes(val));
+      } else if (q.type === 'input') {
         correct =
           content.toLowerCase().trim() ===
-          (q.correctIndex as string).toLowerCase().trim();
+          String(q.correctIndex || '')
+            .toLowerCase()
+            .trim();
       } else {
         correct = selectedOption === q.correctIndex;
       }
@@ -176,6 +215,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
     if (quiz && currentQuestion + 1 < quiz.questions.length) {
       setCurrentQuestion((c) => c + 1);
       setSelectedOption(null);
+      setSelectedOptions([]);
       setContent('');
     } else {
       setIsFinished(true);
@@ -320,7 +360,35 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}>
-                {q?.type === 'input' ?
+                {q?.type === 'dropdown' ?
+                  <div className='flex justify-center py-8'>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <Button
+                          variant='outline'
+                          className='h-14 px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-lg'>
+                          {selectedOption !== null ?
+                            q.options[selectedOption]
+                          : 'Select an answer...'}
+                          <ChevronDown className='h-5 w-5 text-pw-muted' />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-72 p-2'>
+                        {q.options?.map((opt, idx) => (
+                          <DropdownMenuItem
+                            key={idx}
+                            onClick={() => setSelectedOption(idx)}
+                            className='h-12 text-base gap-3 focus:bg-pw-primary/10 rounded-lg cursor-pointer'>
+                            {selectedOption === idx && (
+                              <Check className='h-4 w-4 text-pw-primary' />
+                            )}
+                            {opt}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                : q?.type === 'input' ?
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
@@ -330,33 +398,50 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
                 : <div
                     className={cn(
                       'grid gap-3',
-                      q?.type === 'multiple_choice' || q?.type === 'dropdown' ?
+                      q?.type === 'multiple_choice' ?
                         'grid-cols-1'
                       : 'grid-cols-2',
                     )}>
-                    {q?.options?.map((opt, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedOption(idx)}
-                        className={cn(
-                          'w-full p-4 md:p-5 text-left rounded-2xl border transition-all duration-200 flex items-center justify-between group',
-                          selectedOption === idx ?
-                            'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
-                          : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                        )}>
-                        <span className='font-medium text-sm md:text-base'>
-                          {opt}
-                        </span>
-                        <ChevronRight
+                    {q?.options?.map((opt, idx) => {
+                      const isSelected =
+                        q.type === 'checkbox' ?
+                          selectedOptions.includes(idx)
+                        : selectedOption === idx;
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            if (q.type === 'checkbox') {
+                              setSelectedOptions((prev) =>
+                                prev.includes(idx) ?
+                                  prev.filter((i) => i !== idx)
+                                : [...prev, idx],
+                              );
+                            } else {
+                              setSelectedOption(idx);
+                            }
+                          }}
                           className={cn(
-                            'h-4 w-4 transition-all opacity-0',
-                            selectedOption === idx ?
-                              'opacity-100 translate-x-0'
-                            : 'group-hover:opacity-50 -translate-x-2',
-                          )}
-                        />
-                      </button>
-                    ))}
+                            'w-full p-4 md:p-5 text-left rounded-2xl border transition-all duration-200 flex items-center justify-between group',
+                            isSelected ?
+                              'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
+                            : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                          )}>
+                          <span className='font-medium text-sm md:text-base'>
+                            {opt}
+                          </span>
+                          <ChevronRight
+                            className={cn(
+                              'h-4 w-4 transition-all opacity-0',
+                              isSelected ?
+                                'opacity-100 translate-x-0'
+                              : 'group-hover:opacity-50 -translate-x-2',
+                            )}
+                          />
+                        </button>
+                      );
+                    })}
                   </div>
                 }
               </motion.div>
