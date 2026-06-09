@@ -197,9 +197,9 @@ pre {
 
 /* ─── Glass Morphism ────────────────────────────────────────── */
 .glass {
-  background: rgba(18, 21, 46, 0.6);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background: rgba(13, 15, 35, 0.6);
+  -webkit-backdrop-filter: blur(20px) brightness(40%);
+  backdrop-filter: blur(20px) brightness(40%);
   border: 1px solid rgba(92, 111, 255, 0.15);
 }
 
@@ -583,7 +583,7 @@ pre {
   border-radius: 50%;
   background: black;
   border: 1px solid rgba(152, 92, 255, 0.1);
-  box-shadow: 
+  box-shadow:
     0 0 100px 20px rgba(92, 255, 241, 0.2),
     inset 0 0 100px 20px rgba(34, 85, 253, 0.2);
   filter: blur(60px);
@@ -603,14 +603,25 @@ pre {
 }
 
 @keyframes blackhole-spin {
-  from { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(180deg) scale(1.1); }
-  to { transform: rotate(360deg) scale(1); }
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0); }
-  50% { transform: translateY(-20px) rotate(10deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-20px) rotate(10deg);
+  }
 }
 
 /*------ blur styles ----------*/
@@ -670,4 +681,10 @@ pre {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+a,
+button,
+.pointer {
+  cursor: pointer;
 }

@@ -72,8 +72,8 @@ export const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className='fixed top-0 left-0 right-0 z-50 glass border-b border-white/5 h-[10vh] pt-1'>
-      <nav className='mx-auto flex max-w-7xl items-center justify-between px-6 py-4'>
+    <header className='fixed top-0 left-0 right-0 z-50 border-b border-white/5 h-[10vh] glass'>
+      <nav className='mx-auto w-[100%] flex items-center justify-between px-6 py-4'>
         {/* Logo */}
         <Link
           href='/'
@@ -182,10 +182,10 @@ export const Navbar = () => {
       {mobileOpen && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
+          animate={{ opacity: 1, height: 'auto', overflow:'hidden' }}
           exit={{ opacity: 0, height: 0 }}
           className='lg:hidden border-t border-white/5 glass'>
-          <div className='flex flex-col gap-1 px-6 py-6'>
+          <div className='flex flex-col gap-1 px-6 py-6 glass'>
             {[...navLinks].map((link) => {
               const isActive =
                 pathname === link.href || pathname.startsWith(link.href + '/');

@@ -335,11 +335,11 @@ const QuizBuilder = ({
                 </div>
               </div>
             : <div className='space-y-8'>
-                <div className='flex items-center justify-between'>
+                <div className='flex items-center justify-between flex-wrap'>
                   <h3 className='text-xl font-bold'>
                     Question {currentStep + 1}
                   </h3>
-                  <div className='flex gap-2'>
+                  <div className='flex gap-2 flex-wrap'>
                     <Button
                       variant='ghost'
                       size='icon'
@@ -364,10 +364,9 @@ const QuizBuilder = ({
                         <Button
                           variant='outline'
                           className='h-9 gap-2 text-xs bg-white/5 border-white/10'>
-                          {editedQuiz.questions[currentStep].type.replace(
-                            '_',
-                            ' ',
-                          )}{' '}
+                          {editedQuiz.questions[currentStep].type
+                            .replace('_', ' ')
+                            .toUpperCase()}{' '}
                           <ChevronDown className='h-3 w-3' />
                         </Button>
                       </DropdownMenuTrigger>
@@ -402,7 +401,7 @@ const QuizBuilder = ({
                               }
                               updateQuestion(currentStep, q);
                             }}>
-                            {type.replace('_', ' ')}
+                            {type.replace('_', ' ').toUpperCase()}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
@@ -437,31 +436,34 @@ const QuizBuilder = ({
 
                     <div className='w-[1px] h-9 bg-white/5 mx-2' />
 
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      onClick={() =>
-                        setCurrentStep(Math.max(0, currentStep - 1))
-                      }
-                      disabled={currentStep === 0}>
-                      <ChevronLeft className='h-5 w-5' />
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      onClick={() =>
-                        setCurrentStep(
-                          Math.min(
-                            editedQuiz.questions.length - 1,
-                            currentStep + 1,
-                          ),
-                        )
-                      }
-                      disabled={
-                        currentStep === editedQuiz.questions.length - 1
-                      }>
-                      <ChevronRight className='h-5 w-5' />
-                    </Button>
+                    <div className='gap-2 flex'>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        onClick={() =>
+                          setCurrentStep(Math.max(0, currentStep - 1))
+                        }
+                        disabled={currentStep === 0}>
+                        <ChevronLeft className='h-5 w-5' />
+                      </Button>
+
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        onClick={() =>
+                          setCurrentStep(
+                            Math.min(
+                              editedQuiz.questions.length - 1,
+                              currentStep + 1,
+                            ),
+                          )
+                        }
+                        disabled={
+                          currentStep === editedQuiz.questions.length - 1
+                        }>
+                        <ChevronRight className='h-5 w-5' />
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -491,7 +493,7 @@ const QuizBuilder = ({
 
                     {editedQuiz.questions[currentStep].type === 'input' ?
                       <div className='space-y-4'>
-                        <div className='bg-pw-primary/5 p-8 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4'>
+                        <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4'>
                           <Type className='h-8 w-8 text-pw-primary opacity-50' />
                           <div>
                             <p className='text-sm text-pw-primary font-bold'>
@@ -643,13 +645,20 @@ const QuizBuilder = ({
                         <Button
                           variant='outline'
                           onClick={() => {
-                            updateQuestion(currentStep, {
-                              ...editedQuiz.questions[currentStep],
-                              options: [
-                                ...editedQuiz.questions[currentStep].options,
-                                '',
-                              ],
-                            });
+                            const options =
+                              editedQuiz.questions[currentStep].options.length;
+                            if (options >= 5) {
+                              toast.info('Maximum of 5 options per question');
+                              return;
+                            } else {
+                              updateQuestion(currentStep, {
+                                ...editedQuiz.questions[currentStep],
+                                options: [
+                                  ...editedQuiz.questions[currentStep].options,
+                                  '',
+                                ],
+                              });
+                            }
                           }}
                           className='w-full border-dashed border-white/10 hover:bg-white/5 h-10 text-xs gap-2'>
                           <Plus className='h-3 w-3' /> Add Option
@@ -675,16 +684,6 @@ export default function QuizPage() {
   // Load from hybrid storage
   useEffect(() => {
     const loadQuizzes = async () => {
-      // Migrate legacy keys to underscored ones
-      const legacy = localStorage.getItem('pingworld-quizzes');
-      if (legacy) {
-        const standard = localStorage.getItem('pingworld_quizzes');
-        if (!standard) {
-          localStorage.setItem('pingworld_quizzes', legacy);
-          localStorage.removeItem('pingworld-quizzes');
-        }
-      }
-
       const data = await HybridStorage.getAll('quiz');
       setQuizzes(data);
     };
@@ -847,21 +846,20 @@ export default function QuizPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}>
                     <Card className='card-glow h-full flex flex-col p-6 group'>
-                      <div className='flex justify-between items-start mb-4'>
+                      <div className='flex justify-between items-start mb-4 flex-wrap gap-2'>
                         <div className='flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest'>
                           <FileJson className='h-3 w-3 text-pw-primary' />
                           {quiz?.questions?.length} Questions
                           {(quiz as any).is_synced ?
                             <span className='text-pw-success flex items-center gap-1.5'>
                               <ShieldCheck className='h-3 w-3' />
-                              Synced
                             </span>
                           : <span className='text-pw-warning flex items-center gap-1.5'>
                               <Clock className='h-3 w-3' />
-                              Draft
                             </span>
                           }
                         </div>
+
                         <div className='flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity'>
                           <Button
                             variant='ghost'

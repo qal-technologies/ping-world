@@ -122,16 +122,6 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     const loadQuiz = async () => {
-      // Internal Migration: Ensure hyphenated keys are moved to underscored keys
-      const legacyData = localStorage.getItem('pingworld-quizzes');
-      if (legacyData) {
-        const standardData = localStorage.getItem('pingworld_quizzes');
-        if (!standardData) {
-          localStorage.setItem('pingworld_quizzes', legacyData);
-          localStorage.removeItem('pingworld-quizzes');
-        }
-      }
-
       const data = await HybridStorage.getAll('quiz');
       const target = data.find((q: any) => String(q.id) === String(params.id));
 
@@ -140,6 +130,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
       } else if (params.id === 'demo') {
         setQuiz({
           title: 'Demo Quiz',
+          type: 'quiz',
           questions: [
             {
               id: 'demo',
@@ -228,7 +219,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl font-bold'>Quiz Not Found</h2>
         <p className='text-pw-muted mt-2'>
-          The quiz you are looking for does not exist or has been removed.
+          The quiz you are looking for does not exist or has been removed. ()
         </p>
         <Link
           href='/tools'

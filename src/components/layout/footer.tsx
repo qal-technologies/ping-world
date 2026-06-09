@@ -76,12 +76,12 @@ export const Footer = () => {
 
         <div className="divider mt-10 mb-6" />
 
-        <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+        <div className="flex flex-col items-center justify-between gap-5 md:flex-row">
           <p className="text-xs text-pw-muted">
             &copy; {new Date().getFullYear()} Ping World. All rights reserved.
           </p>
           <p className="text-xs text-pw-muted">
-            Made with ⚡ by the Ping World team
+            Made by PasCodez
           </p>
         </div>
       </div>

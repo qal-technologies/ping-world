@@ -267,7 +267,7 @@ export default function ImageToolkitPage() {
                       value={[filters.brightness]}
                       max={200}
                       step={1}
-                      onValueChange={(vals: number[]) =>
+                      onValueChange={(vals: any) =>
                         setFilters({ ...filters, brightness: vals[0] })
                       }
                     />
@@ -286,7 +286,7 @@ export default function ImageToolkitPage() {
                       value={[filters.contrast]}
                       max={200}
                       step={1}
-                      onValueChange={(vals: number[]) =>
+                      onValueChange={(vals: any) =>
                         setFilters({ ...filters, contrast: vals[0] })
                       }
                     />
@@ -305,7 +305,7 @@ export default function ImageToolkitPage() {
                       value={[filters.saturate]}
                       max={200}
                       step={1}
-                      onValueChange={(vals: number[]) =>
+                      onValueChange={(vals: any) =>
                         setFilters({ ...filters, saturate: vals[0] })
                       }
                     />
@@ -324,7 +324,7 @@ export default function ImageToolkitPage() {
                       value={[filters.blur]}
                       max={20}
                       step={1}
-                      onValueChange={(vals: number[]) =>
+                      onValueChange={(vals: any) =>
                         setFilters({ ...filters, blur: vals[0] })
                       }
                     />
@@ -376,7 +376,7 @@ export default function ImageToolkitPage() {
                   <p className='text-xs text-pw-muted mb-4 uppercase font-bold tracking-widest'>
                     Presets
                   </p>
-                  <div className='grid grid-cols-2 gap-3'>
+                  {/* {<div className='grid grid-cols-2 gap-3'>
                     <Button
                       variant='outline'
                       onClick={() => setAspectRatio(null)}
@@ -393,7 +393,7 @@ export default function ImageToolkitPage() {
                       className={cn(
                         'h-12 border-white/10',
                         aspectRatio === 1 &&
-                          'border-pw-primary bg-pw-primary/5',
+                        'border-pw-primary bg-pw-primary/5',
                       )}>
                       {' '}
                       1:1 Square{' '}
@@ -404,7 +404,7 @@ export default function ImageToolkitPage() {
                       className={cn(
                         'h-12 border-white/10',
                         aspectRatio === 16 / 9 &&
-                          'border-pw-primary bg-pw-primary/5',
+                        'border-pw-primary bg-pw-primary/5',
                       )}>
                       {' '}
                       16:9 HD{' '}
@@ -415,12 +415,12 @@ export default function ImageToolkitPage() {
                       className={cn(
                         'h-12 border-white/10',
                         aspectRatio === 4 / 5 &&
-                          'border-pw-primary bg-pw-primary/5',
+                        'border-pw-primary bg-pw-primary/5',
                       )}>
                       {' '}
                       4:5 Post{' '}
                     </Button>
-                  </div>
+                  </div>} */}
 
                   <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-xl p-4 mt-10'>
                     <p className='text-xs text-pw-primary font-medium flex items-center gap-2'>
