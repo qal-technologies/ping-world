@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Check,
   CheckCircle,
+  ChevronLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,6 +27,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import type { Quiz } from '../page';
+import { useParams } from 'next/navigation';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -101,7 +103,10 @@ const Calculator = () => {
   );
 };
 
-export default function PublicQuizPage({ params }: { params: { id: string } }) {
+export default function PublicQuizPage() {
+  const params = useParams();
+  const { id: quizId } = params;
+
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
@@ -112,14 +117,17 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
 
+  const [isLoading, setLoading] = useState(true);
+
   useEffect(() => {
     const loadQuiz = async () => {
+      setLoading(true);
       const data = await HybridStorage.getAll('quiz');
-      const target = data.find((q: any) => String(q.id) === String(params.id));
+      const target = data.find((q: any) => String(q.id) === String(quizId));
 
       if (target) {
         setQuiz(target);
-      } else if (params.id === 'demo') {
+      } else if (quizId === 'demo') {
         setQuiz({
           title: 'Demo Quiz',
           type: 'quiz',
@@ -142,6 +150,8 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
           },
         });
       }
+
+      setLoading(false);
     };
     loadQuiz();
   }, []);
@@ -208,6 +218,31 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
       setIsFinished(true);
     }
   };
+
+  const GoBack = () => {
+    setShowFeedback(false);
+    if (quiz && currentQuestion + 1 > 1) {
+      setCurrentQuestion((c) => c - 1);
+      setSelectedOption(null);
+      setSelectedOptions([]);
+      setContent('');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
+        <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
+        <h2 className='text-2xl font-bold mb-2'>Loading...</h2>
+
+        <div className='loader spinner'></div>
+
+        <h4 className='text-sm mt-8'>
+          Please wait while we fetch your program.
+        </h4>
+      </div>
+    );
+  }
 
   if (!quiz) {
     return (
@@ -436,16 +471,29 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
             </AnimatePresence>
           </Card>
 
-          <div className='flex justify-end'>
-            <Button
-              onClick={handleNext}
-              className='btn-primary h-12 w-[20vmin] text-lg gap-2'>
-              {currentQuestion + 1 === quiz.questions.length ?
-                'Finish'
-              : 'Next'}
-              <ArrowRight className='h-5 w-5' />
-            </Button>
-          </div>
+          <AnimatePresence mode='wait' >
+            <div className='flex justify-between gap-2 flex-wrap'>
+              {quiz.canGoBack && currentQuestion + 1 !== 1 && (
+                <Button
+                  onClick={GoBack}
+                  className='btn-ghost h-10 w-[25vmin] text-lg gap-2'>
+                  <ChevronLeft className='h-5 w-5' />
+                  {currentQuestion + 1 === quiz.questions.length ?
+                    'Back'
+                  : 'Previous'}
+                </Button>
+              )}
+
+              <Button
+                onClick={handleNext}
+                className='btn-primary h-10 w-[25vmin] text-lg gap-2'>
+                {currentQuestion + 1 === quiz.questions.length ?
+                  'Finish'
+                : 'Next'}
+                <ChevronRight className='h-5 w-5' />
+              </Button>
+            </div>
+          </AnimatePresence>
         </div>
 
         {/* Sidebar for accessories */}

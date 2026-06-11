@@ -64,6 +64,7 @@ export interface Quiz {
   description: string;
   type: 'quiz' | 'survey';
   questions: Question[];
+  canGoBack?: boolean;
   endScreen: {
     title: string;
     message: string;
