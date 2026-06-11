@@ -97,16 +97,16 @@ const fadeUp: Variants = {
 
 export const HeroSection = () => {
   return (
-    <section className='relative overflow-hidden min-h-[90vh] lg:h-[80vh]'>
+    <section className='relative overflow-hidden min-h-[92vh] lg:h-[80vh]'>
       {/** Black hole effect */}
       <div className='globe-div'>
-        <div className='globe ' />
+        <div className='globe' />
       </div>
 
       {/* Decorative Beauty Objects */}
       <div className='beauty-obj w-32 h-32 top-[10%] left-[15%] opacity-10' />
       <div
-        className='beauty-obj w-48 h-48 bottom-[20%] right-[10%] opacity-5'
+        className='beauty-obj w-48 h-48 bottom-[20%] right-[10%] opacity-5 float'
         style={{ animationDelay: '-3s' }}
       />
       <div

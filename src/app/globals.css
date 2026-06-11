@@ -277,7 +277,8 @@ pre {
   transition:
     opacity 0.3s ease,
     box-shadow 0.3s ease,
-    transform 0.2s ease;
+    transform 0.2s ease,
+    border-radius 0.35s ease;
   box-shadow: 0 0 20px rgba(92, 111, 255, 0.3);
 }
 
@@ -299,6 +300,7 @@ pre {
   opacity: 0.92;
   box-shadow: 0 0 36px rgba(92, 111, 255, 0.55);
   transform: translateY(-1px);
+  border-radius: var(--radius-card);
 }
 
 .btn-primary:active {
@@ -587,7 +589,7 @@ pre {
     0 0 100px 20px rgba(92, 255, 241, 0.2),
     inset 0 0 100px 20px rgba(34, 85, 253, 0.2);
   filter: blur(60px);
-  animation: blackhole-spin 20s linear infinite;
+  animation: blackhole-spin 10s ease-in-out infinite;
   opacity: 0.6;
 }
 

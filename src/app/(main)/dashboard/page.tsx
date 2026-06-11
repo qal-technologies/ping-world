@@ -163,7 +163,7 @@ export default function GeneralDashboard() {
                       </div>
                       <div>
                         <div className='text-sm font-bold'>
-                          {item.content.title || item.label}
+                          {item.content?.title || item.label}
                         </div>
                         <div className='text-xs text-pw-muted uppercase font-mono mt-0.5'>
                           {new Date(item.updated_at).toLocaleDateString()}

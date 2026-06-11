@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Image as ImageIcon, 
-  Upload, 
-  Crop, 
-  Layers, 
-  Download, 
-  RefreshCw, 
-  Trash2, 
-  Maximize, 
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Image as ImageIcon,
+  Upload,
+  Crop,
+  Layers,
+  Download,
+  RefreshCw,
+  Trash2,
+  Maximize,
   Minimize,
   Palette,
   Check,
   Scaling,
-  Scissors
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+  Scissors,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // --- Types ---
 interface Filter {
@@ -39,8 +39,8 @@ interface Filter {
 }
 
 const DEFAULT_FILTER: Filter = {
-  name: "Normal",
-  className: "",
+  name: 'Normal',
+  className: '',
   values: {
     brightness: 100,
     contrast: 100,
@@ -54,17 +54,44 @@ const DEFAULT_FILTER: Filter = {
 
 const PRESET_FILTERS: Filter[] = [
   DEFAULT_FILTER,
-  { name: "Vintage", className: "sepia-[0.5] contrast-[1.1]", values: { ...DEFAULT_FILTER.values, sepia: 50, contrast: 110 } },
-  { name: "Noir", className: "grayscale contrast-[1.2]", values: { ...DEFAULT_FILTER.values, grayscale: 100, contrast: 120 } },
-  { name: "Vibrant", className: "saturate-[1.5]", values: { ...DEFAULT_FILTER.values, saturate: 150 } },
-  { name: "Fade", className: "brightness-[1.1] contrast-[0.9] saturate-[0.8]", values: { ...DEFAULT_FILTER.values, brightness: 110, contrast: 90, saturate: 80 } },
-  { name: "Cold", className: "hue-rotate-[180deg] saturate-[1.2]", values: { ...DEFAULT_FILTER.values, hueRotate: 180, saturate: 120 } },
+  {
+    name: 'Vintage',
+    className: 'sepia-[0.5] contrast-[1.1]',
+    values: { ...DEFAULT_FILTER.values, sepia: 50, contrast: 110 },
+  },
+  {
+    name: 'Noir',
+    className: 'grayscale contrast-[1.2]',
+    values: { ...DEFAULT_FILTER.values, grayscale: 100, contrast: 120 },
+  },
+  {
+    name: 'Vibrant',
+    className: 'saturate-[1.5]',
+    values: { ...DEFAULT_FILTER.values, saturate: 150 },
+  },
+  {
+    name: 'Fade',
+    className: 'brightness-[1.1] contrast-[0.9] saturate-[0.8]',
+    values: {
+      ...DEFAULT_FILTER.values,
+      brightness: 110,
+      contrast: 90,
+      saturate: 80,
+    },
+  },
+  {
+    name: 'Cold',
+    className: 'hue-rotate-[180deg] saturate-[1.2]',
+    values: { ...DEFAULT_FILTER.values, hueRotate: 180, saturate: 120 },
+  },
 ];
 
 export default function ImageToolkitPage() {
   const [image, setImage] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"adjust" | "filters" | "crop">("adjust");
+  const [fileName, setFileName] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'adjust' | 'filters' | 'crop'>(
+    'adjust',
+  );
   const [filters, setFilters] = useState(DEFAULT_FILTER.values);
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,8 +101,8 @@ export default function ImageToolkitPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      return toast.error("Please upload an image file.");
+    if (!file.type.startsWith('image/')) {
+      return toast.error('Please upload an image file.');
     }
 
     setFileName(file.name);
@@ -95,7 +122,7 @@ export default function ImageToolkitPage() {
     if (!image || !canvasRef.current || !imgRef.current) return;
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const img = imgRef.current;
@@ -115,9 +142,9 @@ export default function ImageToolkitPage() {
 
     ctx.drawImage(img, 0, 0);
 
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.download = `pingworld-edited-${fileName}`;
-    link.href = canvas.toDataURL("image/png");
+    link.href = canvas.toDataURL('image/png');
     link.click();
   };
 
@@ -147,8 +174,8 @@ export default function ImageToolkitPage() {
             uploads.
           </p>
         </div>
-        <div className='flex gap-3'>
-          {image && (
+        {image && (
+          <div className='flex gap-3'>
             <>
               <Button
                 variant='outline'
@@ -165,8 +192,8 @@ export default function ImageToolkitPage() {
                 <Download className='h-4 w-4' /> Download Result
               </Button>
             </>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {!image ?
@@ -176,7 +203,7 @@ export default function ImageToolkitPage() {
           className='relative'>
           <div
             onClick={() => document.getElementById('image-upload')?.click()}
-            className='flex flex-col items-center justify-center py-32 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'>
+            className='flex flex-col items-center justify-center py-30 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'>
             <input
               id='image-upload'
               type='file'
@@ -198,13 +225,13 @@ export default function ImageToolkitPage() {
         </motion.div>
       : <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
           {/* Main Editor Canvas Area */}
-          <div className='lg:col-span-8 flex flex-col gap-6'>
-            <Card className='card-glow overflow-hidden bg-pw-surface/50 border-white/5 min-h-[500px] flex items-center justify-center p-8'>
+          <div className='lg:col-span-7 flex flex-col gap-6'>
+            <Card className='card-glow overflow-hidden bg-pw-surface/50 border-white/5 min-h-[500px] flex items-center justify-center p-2'>
               <div className='relative max-w-full max-h-full'>
                 <img
                   ref={imgRef}
                   src={image}
-                  alt='Editor'
+                  alt='Editing Image'
                   className='max-w-full max-h-[70vh] rounded-lg shadow-2xl transition-all'
                   style={{ filter: filterString }}
                 />
@@ -217,13 +244,13 @@ export default function ImageToolkitPage() {
           </div>
 
           {/* Sidebar Controls */}
-          <div className='lg:col-span-4 flex flex-col gap-6'>
-            <div className='flex p-1 bg-white/5 border border-white/5 rounded-xl'>
+          <div className='lg:col-span-5 flex flex-col gap-6'>
+            <div className='flex p-0.5 gap-1 bg-white/5 border border-white/5 rounded-3xl'>
               <Button
                 variant='ghost'
                 onClick={() => setActiveTab('adjust')}
                 className={cn(
-                  'flex-1 h-10 gap-2',
+                  'flex-1 h-9 gap-2 rounded-2xl',
                   activeTab === 'adjust' &&
                     'bg-pw-primary text-white shadow-lg',
                 )}>
@@ -233,7 +260,7 @@ export default function ImageToolkitPage() {
                 variant='ghost'
                 onClick={() => setActiveTab('filters')}
                 className={cn(
-                  'flex-1 h-10 gap-2',
+                  'flex-1 h-9 gap-2 rounded-2xl',
                   activeTab === 'filters' &&
                     'bg-pw-primary text-white shadow-lg',
                 )}>
@@ -243,7 +270,7 @@ export default function ImageToolkitPage() {
                 variant='ghost'
                 onClick={() => setActiveTab('crop')}
                 className={cn(
-                  'flex-1 h-10 gap-2',
+                  'flex-1 h-9 gap-2 rounded-2xl',
                   activeTab === 'crop' && 'bg-pw-primary text-white shadow-lg',
                 )}>
                 <Scissors className='h-4 w-4' /> Crop
@@ -373,7 +400,7 @@ export default function ImageToolkitPage() {
 
               {activeTab === 'crop' && (
                 <div className='space-y-6'>
-                  <p className='text-xs text-pw-muted mb-4 uppercase font-bold tracking-widest'>
+                  <p className='text-xs text-pw-muted mb-2 uppercase font-bold tracking-widest'>
                     Presets
                   </p>
                   {/* {<div className='grid grid-cols-2 gap-3'>
@@ -422,7 +449,7 @@ export default function ImageToolkitPage() {
                     </Button>
                   </div>} */}
 
-                  <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-xl p-4 mt-10'>
+                  <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-xl p-4 mt-5'>
                     <p className='text-xs text-pw-primary font-medium flex items-center gap-2'>
                       <Maximize className='h-4 w-4' /> Cropping tool coming
                       soon!
@@ -441,6 +468,11 @@ export default function ImageToolkitPage() {
                 <Layers className='h-4 w-4 text-pw-secondary' /> Tool Stats
               </h4>
               <div className='space-y-3'>
+                <div className='flex justify-between text-xs'>
+                  <span className='text-pw-muted'>Image Size</span>
+                  <span className='text-pw-success font-mono'>~{'1MB'}</span>
+                </div>
+
                 <div className='flex justify-between text-xs'>
                   <span className='text-pw-muted'>Browser Engine</span>
                   <span className='text-pw-success font-mono'>

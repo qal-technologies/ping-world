@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -10,6 +10,7 @@ import {
   ArrowRight,
   ChevronDown,
   Check,
+  CheckCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,6 +24,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HybridStorage } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
+import React from 'react';
+import type { Quiz } from '../page';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -38,17 +41,6 @@ interface Question {
   options: string[];
   correctIndex: any;
   accessory?: 'none' | 'calculator';
-}
-
-interface QuizData {
-  title: string;
-  description?: string;
-  type: 'quiz' | 'survey';
-  questions: Question[];
-  endScreen: {
-    title: string;
-    message: string;
-  };
 }
 
 // --- Accessory Components ---
@@ -110,7 +102,7 @@ const Calculator = () => {
 };
 
 export default function PublicQuizPage({ params }: { params: { id: string } }) {
-  const [quiz, setQuiz] = useState<QuizData | null>(null);
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
@@ -131,6 +123,10 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
         setQuiz({
           title: 'Demo Quiz',
           type: 'quiz',
+          createdAt: Date.now(),
+          description: 'This is a description',
+          id: 'tttvvrb34cr',
+          correctOption: true,
           questions: [
             {
               id: 'demo',
@@ -148,7 +144,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
       }
     };
     loadQuiz();
-  }, [params.id]);
+  }, []);
 
   const q = quiz?.questions[currentQuestion];
 
@@ -219,7 +215,8 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl font-bold'>Quiz Not Found</h2>
         <p className='text-pw-muted mt-2'>
-          The quiz you are looking for does not exist or has been removed. ()
+          The quiz you are looking for does not exist or has been removed. (
+          {String(params)})
         </p>
         <Link
           href='/tools'
@@ -230,7 +227,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (isFinished) {
+  if (isFinished && quiz?.endScreen) {
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
         <div className='globe-div fixed inset-0'>
@@ -251,8 +248,8 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
               {quiz.endScreen.message}
             </p>
 
-            {quiz.type === 'quiz' && (
-              <Card className='card-glow p-8 mb-8 bg-white/5 border-white/10'>
+            {quiz.type === 'quiz' && quiz.endScreen.showPerformance && (
+              <Card className='card-glow p-5 mb-8 bg-white/5 border-white/10'>
                 <div className='text-sm font-bold text-pw-muted uppercase mb-2'>
                   Your Performance
                 </div>
@@ -275,7 +272,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
               <Button
                 onClick={() => window.location.reload()}
                 variant='outline'
-                className='h-12 border-white/10'>
+                className='h-12 px-4 border-white/10'>
                 Try Again
               </Button>
               <Link
@@ -297,7 +294,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
         <div className='globe opacity-40' />
       </div>
 
-      <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-20 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12'>
+      <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12'>
         <div className='lg:col-span-8'>
           <div className='mb-12'>
             <div className='flex justify-between items-end mb-6'>
@@ -325,12 +322,12 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          <Card className='card-glow p-8 md:p-12 mb-8 bg-pw-surface border-white/10'>
-            <div className='flex justify-between items-start mb-10'>
-              <h2 className='text-lg md:text-2xl font-bold leading-relaxed flex-1'>
+          <Card className='card-glow p-2 md:p-4 mb-8 bg-pw-surface border-white/10'>
+            <div className='flex justify-between items-start mb-4'>
+              <h2 className='text-lg md:text-2xl pt-4 font-bold leading-relaxed flex-1'>
                 {q?.text}
               </h2>
-              {showFeedback && (
+              {quiz.correctOption && showFeedback && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -414,7 +411,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
                             }
                           }}
                           className={cn(
-                            'w-full p-4 md:p-5 text-left rounded-2xl border transition-all duration-200 flex items-center justify-between group',
+                            'w-full p-2 md:p-3 text-left rounded-2xl border transition-all duration-200 flex items-center justify-between group',
                             isSelected ?
                               'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
                             : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
@@ -422,7 +419,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
                           <span className='font-medium text-sm md:text-base'>
                             {opt}
                           </span>
-                          <ChevronRight
+                          <CheckCircle
                             className={cn(
                               'h-4 w-4 transition-all opacity-0',
                               isSelected ?
@@ -442,7 +439,7 @@ export default function PublicQuizPage({ params }: { params: { id: string } }) {
           <div className='flex justify-end'>
             <Button
               onClick={handleNext}
-              className='btn-primary h-14 px-10 text-lg gap-2'>
+              className='btn-primary h-12 w-[20vmin] text-lg gap-2'>
               {currentQuestion + 1 === quiz.questions.length ?
                 'Finish'
               : 'Next'}

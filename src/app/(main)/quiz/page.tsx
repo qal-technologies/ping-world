@@ -53,6 +53,7 @@ export interface Question {
   type: QuestionType;
   text: string;
   options: string[];
+  correctExplanation?: string;
   correctIndex: any; // index, bool, or string
   accessory?: 'none' | 'calculator';
 }
@@ -66,7 +67,10 @@ export interface Quiz {
   endScreen: {
     title: string;
     message: string;
+    showPerformance?: boolean;
   };
+  correctOption?: boolean;
+  correctOptionDes?: boolean;
   createdAt: number;
 }
 
