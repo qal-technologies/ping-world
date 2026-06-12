@@ -254,7 +254,7 @@ export const ToolsGrid = () => {
             },
             {
               title: 'Post Composer',
-              desc: 'The ultimate social canvas. Design beautiful post cards and export them for X, IG, and FB.',
+              desc: 'The ultimate social canvas. Design beautiful post cards and export them for X, Instagram, and Facebook.',
               icon: Type,
               href: '/editor',
               color: '#22D4FD',
@@ -284,7 +284,7 @@ export const ToolsGrid = () => {
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}>
               <Link href={tool.href}>
-                <Card className='card-glow p-10 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden'>
+                <Card className='card-glow p-8 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden'>
                   <div className='absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity'>
                     <tool.icon
                       className='h-24 w-24'
@@ -299,7 +299,7 @@ export const ToolsGrid = () => {
                     />
                   </div>
 
-                  <div className='flex items-center gap-3 mb-3'>
+                  <div className='flex items-center gap-3'>
                     <h3 className='text-2xl font-bold font-display group-hover:text-pw-primary transition-colors'>
                       {tool.title}
                     </h3>
@@ -312,8 +312,8 @@ export const ToolsGrid = () => {
                     {tool.desc}
                   </p>
 
-                  <div className='mt-10 pt-6 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/20 transition-all'>
-                    <div className='flex items-center gap-2 text-sm font-bold text-pw-text group-hover:text-pw-primary transition-colors'>
+                  <div className='mt-6 pt-6 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/20 transition-all'>
+                    <div className='flex items-center gap-2 text-sm font-bold text-pw-text group-hover:text-pw-cyan transition-colors'>
                       Demo Tool{' '}
                       <ArrowRight className='h-4 w-4 transition-transform group-hover:translate-x-2' />
                     </div>

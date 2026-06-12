@@ -121,7 +121,7 @@ export default function ComposerPage() {
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder={`What&apos;s on your mind for ${currentTemplate.name}?`}
+                  placeholder={`What's on your mind for ${currentTemplate.name}?`}
                   className={cn(
                     "w-full h-80 bg-transparent text-xl font-medium placeholder:text-pw-muted/30 focus:outline-none resize-none custom-scrollbar leading-relaxed",
                     isOverLimit ? "text-pw-danger" : "text-pw-text"

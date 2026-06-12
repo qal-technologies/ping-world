@@ -12,6 +12,8 @@ import {
   Check,
   CheckCircle,
   ChevronLeft,
+  Brain,
+  MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -49,8 +51,8 @@ interface Question {
 const Calculator = () => {
   const [val, setVal] = useState('');
   return (
-    <Card className='p-4 bg-pw-surface border-white/10 shadow-2xl w-64'>
-      <div className='bg-black/20 p-2 rounded mb-2 text-right font-mono text-lg min-h-[40px] break-all'>
+    <Card className='p-4 bg-pw bkblur border-white/10 shadow-2xl w-70 m-2'>
+      <div className='bg-black/20 p-2 py-4 rounded-lg mb-2 text-right font-mono text-lg min-h-[40px] break-all border-white/10'>
         {val || '0'}
       </div>
       <div className='grid grid-cols-4 gap-1'>
@@ -69,35 +71,71 @@ const Calculator = () => {
           '-',
           '0',
           '.',
-          '=',
           '+',
-        ].map((btn) => (
-          <Button
-            key={btn}
-            variant='ghost'
-            size='sm'
-            className='h-8 p-0'
-            onClick={() => {
-              if (btn === '=') {
-                try {
-                  setVal(eval(val).toString());
-                } catch {
-                  setVal('Error');
-                }
-              } else {
+          'C',
+          '=',
+          'del',
+        ].map((btn) => {
+          if (btn === '=') {
+            return (
+              <Button
+                key={btn}
+                variant='secondary'
+                size='sm'
+                className='mt-2 col-span-3 text-white text-[18px] h-8 p-0 border-white/10'
+                onClick={() => {
+                  try {
+                    setVal(eval(val).toString());
+                  } catch {
+                    setVal('Error');
+                  }
+                }}>
+                {btn}
+              </Button>
+            );
+          }
+          if (btn === 'del') {
+            return (
+              <Button
+                key={btn}
+                variant='destructive'
+                size='sm'
+                className='mt-2 h-8 p-0'
+                onClick={() => {
+                  try {
+                    setVal((e) => e.slice(0, e.length - 1));
+                  } catch {
+                    setVal('Error');
+                  }
+                }}>
+                {btn}
+              </Button>
+            );
+          }
+          if (btn === 'C') {
+            return (
+              <Button
+                size='sm'
+                className='h-8 text-[10px]'
+                onClick={() => setVal('')}>
+                {btn}
+              </Button>
+            );
+          }
+          return (
+            <Button
+              key={btn}
+              variant='outline'
+              size='sm'
+              className='h-8 p-0 border-white/10'
+              onClick={() => {
+                if (val === 'Error') setVal('');
                 setVal((v) => v + btn);
-              }
-            }}>
-            {btn}
-          </Button>
-        ))}
-        <Button
-          variant='ghost'
-          size='sm'
-          className='col-span-4 h-8 text-[10px]'
-          onClick={() => setVal('')}>
-          CLEAR
-        </Button>
+              }}>
+              {btn}
+            </Button>
+          );
+        })}
       </div>
     </Card>
   );
@@ -116,6 +154,8 @@ export default function PublicQuizPage() {
   const [content, setContent] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+
+  const [started, setStart] = useState(false);
 
   const [isLoading, setLoading] = useState(true);
 
@@ -323,203 +363,243 @@ export default function PublicQuizPage() {
   }
 
   return (
-    <div className='relative min-h-screen overflow-hidden bg-pw-bg'>
+    <div className='relative min-h-screen flex overflow-hidden bg-pw-bg'>
       {/* Planetary Background */}
       <div className='globe-div fixed inset-0'>
-        <div className='globe opacity-40' />
+        <div className='globe opacity-10' />
       </div>
 
-      <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12'>
-        <div className='lg:col-span-8'>
-          <div className='mb-12'>
-            <div className='flex justify-between items-end mb-6'>
-              <div>
-                <div className='badge mb-4'>
-                  Question {currentQuestion + 1} of {quiz.questions.length}
+      {/* Background orbs */}
+      <div className='orb orb-accent w-[500px] h-[500px] -top-40 -left-40 opacity-40 blur-xl float' />
+      <div className='orb orb-primary w-[400px] h-[400px] -bottom-20 -right-20 opacity-30 blur-all float' />
+
+      {quiz.description && !started && (
+        <div
+          className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-10 max-w-5xl flex flex-col gap-3 align-center justify-center min-h-[40vh]'
+          style={{ justifySelf: 'center', alignSelf: 'center' }}>
+          <div
+            className='flex gap-2 text-center w-full'
+            style={{ justifyContent: 'center', alignItems: 'center' }}>
+            {quiz.type === 'quiz' ?
+              <Brain size={45} />
+            : <MessageCircle size={45} />}
+
+            <h1 className='font-bold text-[1.5rem]'>
+              {quiz.title.toUpperCase()}
+            </h1>
+          </div>
+
+            <p className='text-center w-full h-full overflow-auto max-h-[300px] text-[14px]'>
+              {quiz.description}
+          </p>
+          
+          <div className='w-full justify-center mt-4 flex'>
+            <Button
+              className={'btn-primary h-11 w-50'}
+              onClick={() => setStart(true)}>
+              START {quiz.type.toUpperCase()}
+            </Button>
+          </div>
+        </div>
+      )}
+      {started && (
+        <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12'>
+          <div className='lg:col-span-8'>
+            <div className='mb-12'>
+              <div className='flex justify-between items-end mb-6'>
+                <div>
+                  <div className='badge mb-4'>
+                    Question {currentQuestion + 1} of {quiz.questions.length}
+                  </div>
+                  <h1 className='text-3xl font-bold font-display'>
+                    {quiz.title}
+                  </h1>
                 </div>
-                <h1 className='text-3xl font-bold font-display'>
-                  {quiz.title}
-                </h1>
+                {quiz.type === 'quiz' && quiz.showScore && (
+                  <div className='text-[10px] font-bold text-pw-muted uppercase tracking-widest text-right'>
+                    Score: {score}
+                  </div>
+                )}
               </div>
-              {quiz.type === 'quiz' && (
-                <div className='text-[10px] font-bold text-pw-muted uppercase tracking-widest text-right'>
-                  Score: {score}
-                </div>
-              )}
-            </div>
-            <div className='w-full h-1 bg-white/5 rounded-full overflow-hidden'>
-              <motion.div
-                className='h-full bg-pw-primary'
-                animate={{
-                  width: `${(currentQuestion / quiz.questions.length) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <Card className='card-glow p-2 md:p-4 mb-8 bg-pw-surface border-white/10'>
-            <div className='flex justify-between items-start mb-4'>
-              <h2 className='text-lg md:text-2xl pt-4 font-bold leading-relaxed flex-1'>
-                {q?.text}
-              </h2>
-              {quiz.correctOption && showFeedback && (
+              <div className='w-full h-1.5 bg-white/5 rounded-full overflow-hidden'>
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className={cn(
-                    'ml-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border',
-                    isCorrect ?
-                      'bg-pw-success/10 border-pw-success text-pw-success'
-                    : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                  )}>
-                  {isCorrect ? 'Correct' : 'Incorrect'}
-                </motion.div>
-              )}
+                  className='h-full gradient-brand rounded-full'
+                  animate={{
+                    width: `${(currentQuestion / quiz.questions.length) * 100}%`,
+                  }}
+                />
+              </div>
             </div>
 
-            <AnimatePresence mode='wait'>
-              <motion.div
-                key={currentQuestion}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}>
-                {q?.type === 'dropdown' ?
-                  <div className='flex justify-center py-8'>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button
-                          variant='outline'
-                          className='h-14 px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-lg'>
-                          {selectedOption !== null ?
-                            q.options[selectedOption]
-                          : 'Select an answer...'}
-                          <ChevronDown className='h-5 w-5 text-pw-muted' />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-72 p-2'>
-                        {q.options?.map((opt, idx) => (
-                          <DropdownMenuItem
-                            key={idx}
-                            onClick={() => setSelectedOption(idx)}
-                            className='h-12 text-base gap-3 focus:bg-pw-primary/10 rounded-lg cursor-pointer'>
-                            {selectedOption === idx && (
-                              <Check className='h-4 w-4 text-pw-primary' />
-                            )}
-                            {opt}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                : q?.type === 'input' ?
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder='Type your answer here...'
-                    className='w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-6 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all'
-                  />
-                : <div
+            <Card className='glass bkblur rounded-3xl card p-4 mb-8 bg-pw-surface border-white/10'>
+              <div className='flex justify-between items-start'>
+                <h2 className='text-lg md:text-2xl pt-1 font-bold leading-relaxed flex-1'>
+                  {q?.text}
+                </h2>
+                {quiz.correctOption && showFeedback && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     className={cn(
-                      'grid gap-3',
-                      q?.type === 'multiple_choice' ?
-                        'grid-cols-1'
-                      : 'grid-cols-2',
+                      'ml-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border',
+                      isCorrect ?
+                        'bg-pw-success/10 border-pw-success text-pw-success'
+                      : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
                     )}>
-                    {q?.options?.map((opt, idx) => {
-                      const isSelected =
-                        q.type === 'checkbox' ?
-                          selectedOptions.includes(idx)
-                        : selectedOption === idx;
+                    {isCorrect ? 'Correct' : 'Incorrect'}
+                  </motion.div>
+                )}
+              </div>
 
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            if (q.type === 'checkbox') {
-                              setSelectedOptions((prev) =>
-                                prev.includes(idx) ?
-                                  prev.filter((i) => i !== idx)
-                                : [...prev, idx],
-                              );
-                            } else {
-                              setSelectedOption(idx);
-                            }
-                          }}
-                          className={cn(
-                            'w-full p-2 md:p-3 text-left rounded-2xl border transition-all duration-200 flex items-center justify-between group',
-                            isSelected ?
-                              'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
-                            : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                          )}>
-                          <span className='font-medium text-sm md:text-base'>
-                            {opt}
-                          </span>
-                          <CheckCircle
+              <AnimatePresence mode='sync'>
+                <motion.div
+                  key={currentQuestion}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}>
+                  {q?.type === 'dropdown' ?
+                    <div className='flex justify-center py-8'>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <div
+                            className='h-12 px-8 gap-4 min-w-[200px] bg-white/5 text-lg flex rounded-xl'
+                            style={{
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textAlign: 'center',
+                            }}>
+                            {selectedOption !== null ?
+                              q.options[selectedOption]
+                            : 'Select an answer...'}
+                            <ChevronDown className='h-5 w-5 text-pw-muted' />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-72 p-2'>
+                          {q.options?.map((opt, idx) => (
+                            <DropdownMenuItem
+                              key={idx}
+                              onClick={() => setSelectedOption(idx)}
+                              className='h-12 text-base gap-3 focus:bg-pw-primary/10 rounded-lg cursor-pointer'>
+                              {selectedOption === idx && (
+                                <Check className='h-4 w-4 text-pw-primary' />
+                              )}
+                              {opt}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  : q?.type === 'input' ?
+                    <textarea
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder='Type your answer here...'
+                      className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-2 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all'
+                    />
+                  : <div
+                      className={cn(
+                        'grid gap-3',
+                        q?.type === 'multiple_choice' ?
+                          'grid-cols-1'
+                        : 'grid-cols-2',
+                      )}>
+                      {q?.options?.map((opt, idx) => {
+                        const isSelected =
+                          q.type === 'checkbox' ?
+                            selectedOptions.includes(idx)
+                          : selectedOption === idx;
+
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              if (q.type === 'checkbox') {
+                                setSelectedOptions((prev) =>
+                                  prev.includes(idx) ?
+                                    prev.filter((i) => i !== idx)
+                                  : [...prev, idx],
+                                );
+                              } else {
+                                setSelectedOption(idx);
+                              }
+                            }}
                             className={cn(
-                              'h-4 w-4 transition-all opacity-0',
+                              'w-full p-2 px-4 md:p-3 text-left rounded-xl border transition-all duration-200 flex items-center justify-between group',
                               isSelected ?
-                                'opacity-100 translate-x-0'
-                              : 'group-hover:opacity-50 -translate-x-2',
-                            )}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                }
-              </motion.div>
-            </AnimatePresence>
-          </Card>
+                                'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
+                              : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                            )}>
+                            <span className='font-medium text-sm md:text-base'>
+                              {opt}
+                            </span>
+                            <CheckCircle
+                              className={cn(
+                                'h-4 w-4 transition-all opacity-0',
+                                isSelected ?
+                                  'opacity-100 translate-x-0'
+                                : 'group-hover:opacity-50 -translate-x-2',
+                              )}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  }
+                </motion.div>
+              </AnimatePresence>
+            </Card>
 
-          <AnimatePresence mode='wait' >
             <div className='flex justify-between gap-2 flex-wrap'>
-              {quiz.canGoBack && currentQuestion + 1 !== 1 && (
+              <AnimatePresence mode='sync'>
+                {quiz.canGoBack ||
+                  (currentQuestion + 1 !== 1 && (
+                    <Button
+                      onClick={GoBack}
+                      className='btn-ghost h-10 w-[25vmin] text-lg gap-2'>
+                      <ChevronLeft className='h-5 w-5' />
+                      {currentQuestion + 1 === quiz.questions.length ?
+                        'Back'
+                      : 'Previous'}
+                    </Button>
+                  ))}
+
                 <Button
-                  onClick={GoBack}
-                  className='btn-ghost h-10 w-[25vmin] text-lg gap-2'>
-                  <ChevronLeft className='h-5 w-5' />
+                  onClick={handleNext}
+                  className='btn-primary h-10 w-[25vmin] text-lg gap-2'>
                   {currentQuestion + 1 === quiz.questions.length ?
-                    'Back'
-                  : 'Previous'}
+                    'Finish'
+                  : 'Next'}
+                  <ChevronRight className='h-5 w-5' />
                 </Button>
-              )}
-
-              <Button
-                onClick={handleNext}
-                className='btn-primary h-10 w-[25vmin] text-lg gap-2'>
-                {currentQuestion + 1 === quiz.questions.length ?
-                  'Finish'
-                : 'Next'}
-                <ChevronRight className='h-5 w-5' />
-              </Button>
+              </AnimatePresence>
             </div>
-          </AnimatePresence>
-        </div>
+          </div>
 
-        {/* Sidebar for accessories */}
-        <div className='lg:col-span-4 space-y-6'>
-          {q?.accessory === 'calculator' && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}>
-              <h4 className='text-[10px] font-bold text-pw-muted uppercase tracking-widest mb-3 px-1'>
-                Tool Assistant
+          {/* Sidebar for accessories */}
+          <div className='lg:col-span-4 space-y-6'>
+            {q?.accessory === 'calculator' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}>
+                <h4 className='text-[10px] font-bold text-pw-muted uppercase tracking-widest mb-3 px-1'>
+                  Tool Assistant
+                </h4>
+                <Calculator />
+              </motion.div>
+            )}
+
+            <div className='p-6 bg-white/5 border border-white/5 rounded-2xl'>
+              <h4 className='text-xs font-bold mb-4 flex items-center gap-2'>
+                <Puzzle className='h-4 w-4 text-pw-primary' /> Quiz Info
               </h4>
-              <Calculator />
-            </motion.div>
-          )}
-
-          <div className='p-6 bg-white/5 border border-white/5 rounded-2xl'>
-            <h4 className='text-xs font-bold mb-4 flex items-center gap-2'>
-              <Puzzle className='h-4 w-4 text-pw-primary' /> Quiz Info
-            </h4>
-            <p className='text-xs text-pw-muted leading-relaxed'>
-              {quiz.description ||
-                'Interactive assessment built on Ping World platform.'}
-            </p>
+              <p className='text-xs text-pw-muted leading-relaxed'>
+                {quiz.description ||
+                  'Interactive assessment built on Ping World platform.'}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

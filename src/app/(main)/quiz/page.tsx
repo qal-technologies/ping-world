@@ -58,6 +58,10 @@ export interface Question {
   accessory?: 'none' | 'calculator';
 }
 
+interface Details {
+  title: string;
+  type: 'name' | 'sex' | 'input' | 'number' | 'tel' | 'others';
+}
 export interface Quiz {
   id: string;
   title: string;
@@ -65,6 +69,10 @@ export interface Quiz {
   type: 'quiz' | 'survey';
   questions: Question[];
   canGoBack?: boolean;
+  showScore?: boolean;
+  askDetails?: Details[];
+  //default time is 10mins 
+  hasTimer?: boolean| string | number;
   endScreen: {
     title: string;
     message: string;
@@ -233,18 +241,18 @@ const QuizBuilder = ({
                     <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
                       Quiz Type
                     </label>
-                    <div className='flex gap-2 p-1 bg-white/5 border border-white/5 rounded-lg'>
+                    <div className='flex gap-2 p-0.5 bg-white/5 border border-white/5 rounded-xl'>
                       <Button
                         variant='ghost'
                         onClick={() =>
                           setEditedQuiz({ ...editedQuiz, type: 'quiz' })
                         }
                         className={cn(
-                          'flex-1 h-9 text-xs',
+                          'flex-1 h-8 text-xs',
                           editedQuiz.type === 'quiz' &&
                             'bg-pw-primary text-white shadow-lg',
                         )}>
-                        Knowledge Quiz
+                        Quiz
                       </Button>
                       <Button
                         variant='ghost'
@@ -252,11 +260,11 @@ const QuizBuilder = ({
                           setEditedQuiz({ ...editedQuiz, type: 'survey' })
                         }
                         className={cn(
-                          'flex-1 h-9 text-xs',
+                          'flex-1 h-8 text-xs',
                           editedQuiz.type === 'survey' &&
                             'bg-pw-primary text-white shadow-lg',
                         )}>
-                        Survey / Info
+                        Survey
                       </Button>
                     </div>
                   </div>
