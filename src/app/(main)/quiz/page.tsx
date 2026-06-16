@@ -27,6 +27,7 @@ import {
   ArrowUp,
   ArrowDown,
   MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -49,13 +50,18 @@ export type QuestionType =
   | 'checkbox'
   | 'input';
 
+export interface QuizOption {
+  id: string; // questionId-index or uuid
+  text: string;
+}
+
 export interface Question {
   id: string;
   type: QuestionType;
   text: string;
-  options: string[];
+  options: (string | QuizOption)[];
   correctExplanation?: string;
-  correctIndex: any; // index, bool, or string
+  correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
   accessory?: 'none' | 'calculator';
 }
 
@@ -93,6 +99,7 @@ export interface Quiz {
   askDetails?: Details[];
   //default time is 10mins
   hasTimer?: boolean | string | number;
+  randomizeOptions?: boolean;
   endScreen: {
     title: string;
     message: string;
@@ -132,12 +139,16 @@ const QuizBuilder = ({
   }, [editedQuiz]);
 
   const addQuestion = () => {
+    const qId = Math.random().toString(36).substr(2, 9);
     const newQuestion: Question = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: qId,
       type: 'multiple_choice',
       text: '',
-      options: ['', ''],
-      correctIndex: 0,
+      options: [
+        { id: `${qId}-opt-0`, text: '' },
+        { id: `${qId}-opt-1`, text: '' },
+      ],
+      correctIndex: `${qId}-opt-0`,
       accessory: 'none',
     };
     setEditedQuiz({
@@ -380,47 +391,79 @@ const QuizBuilder = ({
                         </div>
                       </div>
 
-                      <div className='space-y-2'>
-                        <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                          Timer (Minutes)
-                        </label>
-                        <div className='flex items-center gap-3'>
-                          <Input
-                            type='number'
-                            value={
-                              typeof editedQuiz.hasTimer === 'number' ?
-                                editedQuiz.hasTimer
-                              : ''
-                            }
-                            onChange={(e) =>
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                hasTimer:
-                                  e.target.value ?
-                                    parseInt(e.target.value)
-                                  : false,
-                              })
-                            }
-                            placeholder='10 (opt) '
-                            className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
-                          />
+                      <div className='grid grid-cols-2 gap-4 pb-4'>
+                        <div className='space-y-2'>
+                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                            Timer (Minutes)
+                          </label>
+                          <div className='flex items-center gap-3'>
+                            <Input
+                              type='number'
+                              value={
+                                typeof editedQuiz.hasTimer === 'number' ?
+                                  editedQuiz.hasTimer
+                                : ''
+                              }
+                              onChange={(e) =>
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  hasTimer:
+                                    e.target.value ?
+                                      parseInt(e.target.value)
+                                    : false,
+                                })
+                              }
+                              placeholder='10 (opt) '
+                              className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
+                            />
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={() =>
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  hasTimer: !editedQuiz.hasTimer,
+                                })
+                              }
+                              className={cn(
+                                'h-10 px-4',
+                                editedQuiz.hasTimer ? 'text-pw-primary' : (
+                                  'text-pw-muted'
+                                ),
+                              )}>
+                              <Clock className='h-4 w-4 mr-2' />{' '}
+                              {editedQuiz.hasTimer ? 'On' : 'Off'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className='space-y-2'>
+                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                            Shuffle Options
+                          </label>
                           <Button
-                            variant='ghost'
+                            variant='outline'
                             size='sm'
                             onClick={() =>
                               setEditedQuiz({
                                 ...editedQuiz,
-                                hasTimer: !editedQuiz.hasTimer,
+                                randomizeOptions: !editedQuiz.randomizeOptions,
                               })
                             }
                             className={cn(
-                              'h-10 px-4',
-                              editedQuiz.hasTimer ? 'text-pw-primary' : (
-                                'text-pw-muted'
-                              ),
+                              'w-full h-10 gap-2 font-bold transition-all',
+                              editedQuiz.randomizeOptions ?
+                                'bg-pw-cyan/10 border-pw-cyan text-pw-cyan'
+                              : 'bg-white/5 border-white/10',
                             )}>
-                            <Clock className='h-4 w-4 mr-2' />{' '}
-                            {editedQuiz.hasTimer ? 'On' : 'Off'}
+                            <RefreshCw
+                              className={cn(
+                                'h-4 w-4',
+                                editedQuiz.randomizeOptions &&
+                                  'animate-spin-slow',
+                              )}
+                            />
+                            {editedQuiz.randomizeOptions ? 'ON' : 'OFF'}
                           </Button>
                         </div>
                       </div>
@@ -748,15 +791,29 @@ const QuizBuilder = ({
                               };
                               // Reset options/correct Index for new type
                               if (type === 'true_false') {
-                                q.options = ['True', 'False'];
-                                q.correctIndex = 0;
+                                q.options = [
+                                  { id: 'true', text: 'True' },
+                                  { id: 'false', text: 'False' },
+                                ];
+                                q.correctIndex = 'true';
                               } else if (type === 'input') {
                                 q.options = [];
                                 q.correctIndex = '';
                               } else if (type === 'checkbox') {
                                 q.correctIndex = [];
                               } else {
-                                q.correctIndex = 0;
+                                // For MC/Dropdown, ensure options are objects
+                                if (
+                                  q.options.length > 0 &&
+                                  typeof q.options[0] === 'string'
+                                ) {
+                                  q.options = q.options.map((opt, idx) => ({
+                                    id: `${q.id}-opt-${idx}`,
+                                    text: opt as string,
+                                  }));
+                                }
+                                q.correctIndex =
+                                  (q.options[0] as QuizOption)?.id || '';
                               }
                               updateQuestion(currentStep, q);
                             }}>
@@ -910,13 +967,15 @@ const QuizBuilder = ({
                       </div>
                     : editedQuiz.questions[currentStep].type === 'true_false' ?
                       <div className='grid grid-cols-2 gap-4'>
-                        {['True', 'False'].map((val, idx) => (
+                        {['True', 'False'].map((val) => (
                           <Button
                             key={val}
                             variant={
                               (
-                                editedQuiz.questions[currentStep]
-                                  .correctIndex === idx
+                                String(
+                                  editedQuiz.questions[currentStep]
+                                    .correctIndex,
+                                ).toLowerCase() === val.toLowerCase()
                               ) ?
                                 'default'
                               : 'outline'
@@ -924,13 +983,14 @@ const QuizBuilder = ({
                             onClick={() =>
                               updateQuestion(currentStep, {
                                 ...editedQuiz.questions[currentStep],
-                                correctIndex: idx,
+                                correctIndex: val.toLowerCase(),
                               })
                             }
                             className={cn(
                               'h-16 text-lg font-bold border-white/5',
-                              editedQuiz.questions[currentStep].correctIndex ===
-                                idx &&
+                              String(
+                                editedQuiz.questions[currentStep].correctIndex,
+                              ).toLowerCase() === val.toLowerCase() &&
                                 'bg-pw-primary shadow-xl shadow-pw-primary/20',
                             )}>
                             {val}
@@ -941,9 +1001,19 @@ const QuizBuilder = ({
                         {editedQuiz.questions[currentStep].options.map(
                           (opt, idx) => {
                             const q = editedQuiz.questions[currentStep];
+                            const optObj =
+                              typeof opt === 'string' ?
+                                { id: `${q.id}-opt-${idx}`, text: opt }
+                              : opt;
+                            const isCorrect =
+                              q.type === 'checkbox' ?
+                                Array.isArray(q.correctIndex) &&
+                                q.correctIndex.includes(optObj.id)
+                              : q.correctIndex === optObj.id;
+
                             return (
                               <div
-                                key={idx}
+                                key={optObj.id || idx}
                                 className='flex gap-3'>
                                 <button
                                   onClick={() => {
@@ -953,9 +1023,11 @@ const QuizBuilder = ({
                                           q.correctIndex
                                         : [];
                                       const next =
-                                        current.includes(idx) ?
-                                          current.filter((i) => i !== idx)
-                                        : [...current, idx];
+                                        current.includes(optObj.id) ?
+                                          current.filter(
+                                            (id) => id !== optObj.id,
+                                          )
+                                        : [...current, optObj.id];
                                       updateQuestion(currentStep, {
                                         ...q,
                                         correctIndex: next,
@@ -963,38 +1035,31 @@ const QuizBuilder = ({
                                     } else {
                                       updateQuestion(currentStep, {
                                         ...q,
-                                        correctIndex: idx,
+                                        correctIndex: optObj.id,
                                       });
                                     }
                                   }}
                                   className={cn(
                                     'w-10 h-10 rounded-lg border flex items-center justify-center transition-all shrink-0',
-                                    (
-                                      q.type === 'checkbox' ?
-                                        Array.isArray(q.correctIndex) &&
-                                        q.correctIndex.includes(idx)
-                                      : q.correctIndex === idx
-                                    ) ?
+                                    isCorrect ?
                                       'bg-pw-primary border-pw-primary text-white shadow-lg'
                                     : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/20',
                                   )}>
-                                  {(
-                                    q.type === 'checkbox' ?
-                                      Array.isArray(q.correctIndex) &&
-                                      q.correctIndex.includes(idx)
-                                    : q.correctIndex === idx
-                                  ) ?
+                                  {isCorrect ?
                                     <Check className='h-4 w-4' />
                                   : idx + 1}
                                 </button>
                                 <Input
-                                  value={opt}
+                                  value={optObj.text}
                                   onChange={(e) => {
                                     const newOptions = [
                                       ...editedQuiz.questions[currentStep]
                                         .options,
                                     ];
-                                    newOptions[idx] = e.target.value;
+                                    newOptions[idx] = {
+                                      ...optObj,
+                                      text: e.target.value,
+                                    };
                                     updateQuestion(currentStep, {
                                       ...editedQuiz.questions[currentStep],
                                       options: newOptions,
@@ -1025,17 +1090,17 @@ const QuizBuilder = ({
                         <Button
                           variant='outline'
                           onClick={() => {
-                            const options =
-                              editedQuiz.questions[currentStep].options.length;
-                            if (options >= 5) {
+                            const q = editedQuiz.questions[currentStep];
+                            if (q.options.length >= 5) {
                               toast.info('Maximum of 5 options per question');
                               return;
                             } else {
+                              const newOptId = `${q.id}-opt-${q.options.length}-${Math.random().toString(36).substr(2, 4)}`;
                               updateQuestion(currentStep, {
-                                ...editedQuiz.questions[currentStep],
+                                ...q,
                                 options: [
-                                  ...editedQuiz.questions[currentStep].options,
-                                  '',
+                                  ...q.options,
+                                  { id: newOptId, text: '' },
                                 ],
                               });
                             }
@@ -1061,6 +1126,7 @@ export default function QuizPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
+  const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
 
   const exportResponsesAsCSV = (quiz: Quiz) => {
     if (!quiz.responses || quiz.responses.length === 0) return;
@@ -1433,9 +1499,13 @@ export default function QuizPage() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               className='relative h-full w-full max-w-xl bg-pw-surface border-l border-white/10 p-8 shadow-2xl overflow-y-auto'>
-              <div className='flex justify-between items-center mb-8'>
+              <div className='flex justify-between items-center mb-8 flex-wrap'>
                 <div>
-                  <h2 className='text-2xl font-bold'>Responses</h2>
+                  <h2 className='text-2xl font-bold'>
+                    Feedback{' '}
+                    {viewingResponses.responses &&
+                      `(${viewingResponses.responses?.length})`}
+                  </h2>
                   <p className='text-sm text-pw-muted'>
                     {viewingResponses.title}
                   </p>
@@ -1467,7 +1537,10 @@ export default function QuizPage() {
                   <Button
                     variant='ghost'
                     size='icon'
-                    onClick={() => setViewingResponses(null)}>
+                    onClick={() => {
+                      setViewingResponses(null);
+                      setExpandedResponse(null);
+                    }}>
                     <X />
                   </Button>
                 </div>
@@ -1485,60 +1558,157 @@ export default function QuizPage() {
                     />
                     <p>No responses yet.</p>
                   </div>
-                : viewingResponses.responses.map((resp, idx) => (
-                    <Card
-                      key={idx}
-                      className='p-4 bg-white/5 border-white/10 space-y-3'>
-                      <div className='flex justify-between items-start'>
-                        <div>
-                          <p className='font-bold text-pw-cyan'>
-                            {resp.userData.name ||
-                              resp.userData.Email ||
-                              'Anonymous'}
-                          </p>
-                          <p className='text-[10px] text-pw-muted italic'>
-                            {new Date(resp.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className='bg-pw-primary/10 px-2 py-1 rounded text-[10px] font-bold text-pw-primary'>
-                          Score: {resp.score} / {resp.totalQuestions}
-                        </div>
-                      </div>
-
-                      <div className='grid grid-cols-2 gap-2 text-[10px]'>
-                        {Object.entries(resp.userData).map(([key, val]) => (
-                          <div
-                            key={key}
-                            className='flex gap-2'>
-                            <span className='text-pw-muted uppercase font-bold'>
-                              {key}:
-                            </span>
-                            <span>{val}</span>
+                : [...(viewingResponses.responses || [])]
+                    .reverse()
+                    .map((resp, idx) => (
+                      <Card
+                        key={idx}
+                        className='p-4 bg-white/5 border-white/10 space-y-0.5 relative overflow-hidden'>
+                        <div className='flex justify-between items-start'>
+                          <div>
+                            <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
+                              {resp.userData.name ||
+                                resp.userData.email ||
+                                'Anonymous'}
+                            </p>
+                            <p className='text-[10px] text-pw-muted italic'>
+                              {new Date(resp.timestamp).toLocaleString()}
+                            </p>
                           </div>
-                        ))}
-                      </div>
+                          <div className='bg-pw-primary/10 px-2.5 py-1 rounded-full text-[10px] font-bold text-pw-primary border border-pw-primary/20 shrink-0'>
+                            {resp.score} / {resp.totalQuestions}
+                          </div>
+                        </div>
 
-                      <div className='pt-2 border-t border-white/5'>
-                        <p className='text-[10px] font-bold text-pw-muted uppercase mb-1'>
-                          Answers
-                        </p>
-                        <div className='flex gap-1 flex-wrap'>
-                          {resp.answers.map((a, i) => (
+                        <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5'>
+                          {Object.entries(resp.userData).map(([key, val]) => (
                             <div
-                              key={i}
-                              className={cn(
-                                'w-5 h-5 rounded flex items-center justify-center text-[8px] font-bold',
-                                a.correct ?
-                                  'bg-pw-success/20 text-pw-success'
-                                : 'bg-pw-danger/20 text-pw-danger',
-                              )}>
-                              {i + 1}
+                              key={key}
+                              className='flex gap-1.5 text-[11px]'>
+                              <span className='text-pw-muted font-bold uppercase'>
+                                {key}:
+                              </span>
+                              <span className='text-white'>{val}</span>
                             </div>
                           ))}
                         </div>
-                      </div>
-                    </Card>
-                  ))
+
+                        <div>
+                          <div className='flex justify-between items-center'>
+                            <div className='flex gap-1 flex-wrap'>
+                              {resp.answers.map((a, i) => (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    'w-5 h-5 rounded-sm flex items-center justify-center text-[7px] font-bold',
+                                    a.correct === undefined ?
+                                      'bg-white/10 text-white/40'
+                                    : a.correct ?
+                                      'bg-pw-success/20 text-pw-success'
+                                    : 'bg-pw-danger/20 text-pw-danger',
+                                  )}>
+                                  {i + 1}
+                                </div>
+                              ))}
+                            </div>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-7 text-[10px] text-pw-cyan font-bold p-0 px-2'
+                              onClick={() =>
+                                setExpandedResponse(
+                                  expandedResponse === idx ? null : idx,
+                                )
+                              }>
+                              {expandedResponse === idx ?
+                                'HIDE'
+                              : 'VIEW DETAILS'}
+                            </Button>
+                          </div>
+
+                          <AnimatePresence>
+                            {expandedResponse === idx && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className='overflow-hidden space-y-1 pt-2'>
+                                {resp.answers.map((ans, i) => {
+                                  const question =
+                                    viewingResponses.questions.find(
+                                      (q) => q.id === ans.questionId,
+                                    );
+
+                                  // Resolve ID to text logic
+                                  const resolveAnswer = (val: any) => {
+                                    if (!question) return String(val);
+                                    if (question.type === 'input')
+                                      return String(val);
+
+                                    const options = question.options;
+                                    const findText = (idOrIdx: any) => {
+                                      const found = options.find((o) =>
+                                        typeof o === 'string' ? false : (
+                                          o.id === String(idOrIdx)
+                                        ),
+                                      );
+                                      if (found && typeof found !== 'string')
+                                        return found.text;
+                                      // Fallback for legacy numeric indices
+                                      if (
+                                        typeof idOrIdx === 'number' &&
+                                        options[idOrIdx]
+                                      ) {
+                                        const opt = options[idOrIdx];
+                                        return typeof opt === 'string' ? opt : (
+                                            opt.text
+                                          );
+                                      }
+                                      return String(idOrIdx);
+                                    };
+
+                                    if (Array.isArray(val)) {
+                                      return val
+                                        .map((v) => findText(v))
+                                        .join(', ');
+                                    }
+                                    return findText(val);
+                                  };
+
+                                  return (
+                                    <div
+                                      key={i}
+                                      className='p-2.5 bg-black/40 rounded-xl border border-white/5 space-y-0.5'>
+                                      <p className='text-[10px] font-bold text-pw-muted uppercase'>
+                                        Question {i + 1}
+                                      </p>
+                                      <p className='text-xs font-medium leading-relaxed'>
+                                        {question?.text || 'Question removed.'}
+                                      </p>
+                                      <div className='flex items-start gap-2 pt-1'>
+                                        <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
+                                          ANSWER:
+                                        </p>
+                                        <p
+                                          className={cn(
+                                            'text-[11px] font-mono',
+                                            ans.correct === undefined ?
+                                              'text-white/80'
+                                            : ans.correct ? 'text-pw-success'
+                                            : 'text-pw-danger',
+                                          )}>
+                                          {resolveAnswer(ans.answer)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </Card>
+                    ))
                 }
               </div>
             </motion.div>

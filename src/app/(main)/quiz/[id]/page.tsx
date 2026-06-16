@@ -39,13 +39,19 @@ export type QuestionType =
   | 'checkbox'
   | 'input';
 
+export interface QuizOption {
+  id: string;
+  text: string;
+}
+
 interface Question {
   id: string;
   type: QuestionType;
   text: string;
-  options: string[];
+  options: (string | QuizOption)[];
   correctIndex: any;
   accessory?: 'none' | 'calculator';
+  correctExplanation?: string;
 }
 
 // --- Accessory Components ---
@@ -150,11 +156,14 @@ export default function PublicQuizPage() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [selectedOptions, setSelectedOptions] = useState<number[]>([]);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [content, setContent] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+  const [shuffledOptions, setShuffledOptions] = useState<
+    Record<string, (string | QuizOption)[]>
+  >({});
 
   const [started, setStart] = useState(false);
 
@@ -195,10 +204,57 @@ export default function PublicQuizPage() {
     const loadQuiz = async () => {
       setLoading(true);
       const data = await HybridStorage.getAll('quiz');
-      const target = data.find((q: any) => String(q.id) === String(quizId));
+      const target = (data.find((q: any) => String(q.id) === String(quizId)) ||
+        null) as Quiz | null;
 
       if (target) {
-        setQuiz(target);
+        // Migration: Ensure options have IDs
+        const migratedQuestions = target.questions.map((q) => {
+          if (q.options.length > 0 && typeof q.options[0] === 'string') {
+            const optionsWithIds = q.options.map((opt, idx) => ({
+              id: `${q.id}-opt-${idx}`,
+              text: opt as string,
+            }));
+
+            // If correctIndex was a number, migrate it to the new ID
+            let newCorrectIndex = q.correctIndex;
+            if (typeof q.correctIndex === 'number' && target.type === 'quiz') {
+              newCorrectIndex = optionsWithIds[q.correctIndex]?.id;
+            } else if (
+              Array.isArray(q.correctIndex) &&
+              q.correctIndex.length > 0 &&
+              typeof q.correctIndex[0] === 'number'
+            ) {
+              newCorrectIndex = q.correctIndex.map(
+                (idx) => optionsWithIds[idx]?.id,
+              );
+            }
+
+            return {
+              ...q,
+              options: optionsWithIds,
+              correctIndex: newCorrectIndex,
+            };
+          }
+          return q;
+        });
+
+        const finalQuiz = { ...target, questions: migratedQuestions };
+        setQuiz(finalQuiz);
+
+        // Pre-shuffle if needed
+        if (finalQuiz.randomizeOptions) {
+          const shuffled: Record<string, (string | QuizOption)[]> = {};
+          finalQuiz.questions.forEach((question) => {
+            const opts = [...question.options];
+            for (let i = opts.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [opts[i], opts[j]] = [opts[j], opts[i]];
+            }
+            shuffled[question.id] = opts;
+          });
+          setShuffledOptions(shuffled);
+        }
       } else if (quizId === 'demo') {
         setQuiz({
           title: 'Demo Quiz',
@@ -209,11 +265,16 @@ export default function PublicQuizPage() {
           correctOption: true,
           questions: [
             {
-              id: 'demo',
+              id: 'demo-q1',
               type: 'multiple_choice',
               text: 'Welcome to Ping World! Is this tool free?',
-              options: ['Yes, absolutely', 'No', 'Maybe', "I don't know"],
-              correctIndex: 0,
+              options: [
+                { id: 'demo-opt-0', text: 'Yes, absolutely' },
+                { id: 'demo-opt-1', text: 'No' },
+                { id: 'demo-opt-2', text: 'Maybe' },
+                { id: 'demo-opt-3', text: "I don't know" },
+              ],
+              correctIndex: 'demo-opt-0',
             },
           ],
           endScreen: {
@@ -228,7 +289,7 @@ export default function PublicQuizPage() {
     loadQuiz();
   }, []);
 
-  const q = quiz?.questions[currentQuestion];
+  const q = quiz?.questions[currentQuestion] as Question;
 
   const handleNext = () => {
     if (q?.type === 'checkbox' && selectedOptions.length === 0) {
@@ -248,20 +309,21 @@ export default function PublicQuizPage() {
     let correct = false;
     if (quiz?.type === 'quiz' && q) {
       if (q.type === 'checkbox') {
-        const correctIndices =
-          Array.isArray(q.correctIndex) ? q.correctIndex
-          : typeof q.correctIndex === 'number' ? [q.correctIndex]
-          : [];
-
+        const correctIds =
+          Array.isArray(q.correctIndex) ? q.correctIndex : [q.correctIndex];
         correct =
-          selectedOptions.length === correctIndices.length &&
-          selectedOptions.every((val) => correctIndices.includes(val));
+          selectedOptions.length === correctIds.length &&
+          selectedOptions.every((val) => correctIds.includes(val));
       } else if (q.type === 'input') {
         correct =
           content.toLowerCase().trim() ===
           String(q.correctIndex || '')
             .toLowerCase()
             .trim();
+      } else if (q.type === 'true_false') {
+        correct =
+          String(selectedOption).toLowerCase() ===
+          String(q.correctIndex).toLowerCase();
       } else {
         correct = selectedOption === q.correctIndex;
       }
@@ -276,19 +338,23 @@ export default function PublicQuizPage() {
         : selectedOption;
 
       const qId = q.id;
-      setUserAnswers((prev) => [...prev, { questionId: qId, answer, correct }]);
+      const updatedAnswers = [
+        ...userAnswers,
+        { questionId: qId, answer, correct },
+      ];
+      setUserAnswers(updatedAnswers);
 
       if (quiz?.correctOption) {
         setShowFeedback(true);
         // Delay for feedback if enabled
         setTimeout(
           () => {
-            proceedToNext();
+            proceedToNext(updatedAnswers);
           },
           quiz?.correctOptionDes && q.correctExplanation ? 4000 : 1500,
         );
       } else {
-        proceedToNext();
+        proceedToNext(updatedAnswers);
       }
     } else if (q) {
       // Store neutral answer for surveys
@@ -297,30 +363,33 @@ export default function PublicQuizPage() {
         : q.type === 'input' ? content
         : selectedOption;
       const qId = q.id;
-      setUserAnswers((prev) => [...prev, { questionId: qId, answer }]);
-      proceedToNext();
+      const updatedAnswers = [...userAnswers, { questionId: qId, answer }];
+      setUserAnswers(updatedAnswers);
+      proceedToNext(updatedAnswers);
     }
   };
 
-  const proceedToNext = () => {
+  const proceedToNext = (latestAnswers?: any[]) => {
     setShowFeedback(false);
+    const answersToSave = latestAnswers || userAnswers;
+
     if (quiz && currentQuestion + 1 < quiz.questions.length) {
       setCurrentQuestion((c) => c + 1);
       setSelectedOption(null);
       setSelectedOptions([]);
       setContent('');
     } else {
-      finalizeQuiz();
+      finalizeQuiz(answersToSave);
     }
   };
 
-  const finalizeQuiz = async () => {
+  const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     if (quiz) {
       try {
         await HybridStorage.saveResponse(quiz.id, {
           userData,
-          answers: userAnswers,
+          answers: finalAnswers,
           score,
           totalQuestions: quiz.questions.length,
         });
@@ -509,7 +578,8 @@ export default function PublicQuizPage() {
                         <p className='title font-bold'>{detail.title}</p>
 
                         <DropdownMenu>
-                          <DropdownMenuTrigger className={'w-[40%] min-w-[100px] overflow-hidden'}>
+                          <DropdownMenuTrigger
+                            className={'w-[40%] min-w-[100px] overflow-hidden'}>
                             <Button
                               variant='outline'
                               className='h-10 text-xs w-full flex justify-between'>
@@ -676,23 +746,39 @@ export default function PublicQuizPage() {
                               textAlign: 'center',
                             }}>
                             {selectedOption !== null ?
-                              q.options[selectedOption]
+                              (
+                                q.options.find(
+                                  (o) =>
+                                    (typeof o === 'string' ? o : o.id) ===
+                                    selectedOption,
+                                ) as any
+                              )?.text || selectedOption
                             : 'Select an answer...'}
                             <ChevronDown className='h-5 w-5 text-pw-muted' />
                           </div>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className='bg-pw-surface border-white/10 w-72 p-2'>
-                          {q.options?.map((opt, idx) => (
-                            <DropdownMenuItem
-                              key={idx}
-                              onClick={() => setSelectedOption(idx)}
-                              className='h-12 text-base gap-3 focus:bg-pw-primary/10 rounded-lg cursor-pointer'>
-                              {selectedOption === idx && (
-                                <Check className='h-4 w-4 text-pw-primary' />
-                              )}
-                              {opt}
-                            </DropdownMenuItem>
-                          ))}
+                          {(shuffledOptions[q.id] || q.options)?.map(
+                            (opt, idx) => {
+                              const optId =
+                                typeof opt === 'string' ?
+                                  idx.toString()
+                                : opt.id;
+                              const optText =
+                                typeof opt === 'string' ? opt : opt.text;
+                              return (
+                                <DropdownMenuItem
+                                  key={optId}
+                                  onClick={() => setSelectedOption(optId)}
+                                  className='h-12 text-base gap-3 focus:bg-pw-primary/10 rounded-lg cursor-pointer'>
+                                  {selectedOption === optId && (
+                                    <Check className='h-4 w-4 text-pw-primary' />
+                                  )}
+                                  {optText}
+                                </DropdownMenuItem>
+                              );
+                            },
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -710,24 +796,28 @@ export default function PublicQuizPage() {
                           'grid-cols-1'
                         : 'grid-cols-2',
                       )}>
-                      {q?.options?.map((opt, idx) => {
+                      {(shuffledOptions[q.id] || q?.options)?.map((opt, idx) => {
+                        const optId =
+                          typeof opt === 'string' ? idx.toString() : opt?.id;
+                        const optText =
+                          typeof opt === 'string' ? opt : opt?.text;
                         const isSelected =
-                          q.type === 'checkbox' ?
-                            selectedOptions.includes(idx)
-                          : selectedOption === idx;
+                          q?.type === 'checkbox' ?
+                            selectedOptions.includes(optId)
+                          : selectedOption === optId;
 
                         return (
                           <button
-                            key={idx}
+                            key={optId}
                             onClick={() => {
-                              if (q.type === 'checkbox') {
+                              if (q?.type === 'checkbox') {
                                 setSelectedOptions((prev) =>
-                                  prev.includes(idx) ?
-                                    prev.filter((i) => i !== idx)
-                                  : [...prev, idx],
+                                  prev.includes(optId) ?
+                                    prev.filter((id) => id !== optId)
+                                  : [...prev, optId],
                                 );
                               } else {
-                                setSelectedOption(idx);
+                                setSelectedOption(optId);
                               }
                             }}
                             className={cn(
@@ -737,7 +827,7 @@ export default function PublicQuizPage() {
                               : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
                             )}>
                             <span className='font-medium text-sm md:text-base'>
-                              {opt}
+                              {optText}
                             </span>
                             <CheckCircle
                               className={cn(

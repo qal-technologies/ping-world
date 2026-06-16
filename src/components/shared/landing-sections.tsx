@@ -204,7 +204,7 @@ export const HeroSection = () => {
 
 export const ToolsGrid = () => {
   return (
-    <section className='relative py-32 md:py-48 px-6 overflow-hidden'>
+    <section className='relative py-30 md:py-48 px-6 overflow-hidden'>
       <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-pw-primary/5 rounded-full blur-[150px] -z-10' />
 
       <div className='mx-auto max-w-7xl'>
