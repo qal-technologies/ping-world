@@ -28,6 +28,8 @@ import {
   ArrowDown,
   MessageSquare,
   RefreshCw,
+  Brain,
+  BadgeQuestionMark,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -100,6 +102,8 @@ export interface Quiz {
   //default time is 10mins
   hasTimer?: boolean | string | number;
   randomizeOptions?: boolean;
+  randomizeQuestions?: boolean;
+  allowRetry?: boolean;
   endScreen: {
     title: string;
     message: string;
@@ -391,7 +395,7 @@ const QuizBuilder = ({
                         </div>
                       </div>
 
-                      <div className='grid grid-cols-2 gap-4 pb-4'>
+                      <div className='grid grid-cols-2 gap-4'>
                         <div className='space-y-2'>
                           <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
                             Timer (Minutes)
@@ -439,6 +443,32 @@ const QuizBuilder = ({
 
                         <div className='space-y-2'>
                           <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                            Allow Retry
+                          </label>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                allowRetry: !editedQuiz.allowRetry,
+                              })
+                            }
+                            className={cn(
+                              'w-full h-10 gap-2 font-bold transition-all',
+                              editedQuiz.allowRetry ?
+                                'bg-pw-success/10 border-pw-success text-pw-success'
+                              : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                            )}>
+                            <ShieldCheck className='h-4 w-4' />
+                            {editedQuiz.allowRetry ? 'ALLOWED' : 'DISABLED'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className='grid grid-cols-2 gap-4 pb-2'>
+                        <div className='space-y-2'>
+                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
                             Shuffle Options
                           </label>
                           <Button
@@ -464,6 +494,37 @@ const QuizBuilder = ({
                               )}
                             />
                             {editedQuiz.randomizeOptions ? 'ON' : 'OFF'}
+                          </Button>
+                        </div>
+
+                        <div className='space-y-2'>
+                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                            Shuffle Questions
+                          </label>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                randomizeQuestions:
+                                  !editedQuiz.randomizeQuestions,
+                              })
+                            }
+                            className={cn(
+                              'w-full h-10 gap-2 font-bold transition-all',
+                              editedQuiz.randomizeQuestions ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            <BadgeQuestionMark
+                              className={cn(
+                                'h-4 w-4',
+                                editedQuiz.randomizeQuestions &&
+                                  'animate-pulse',
+                              )}
+                            />
+                            {editedQuiz.randomizeQuestions ? 'ON' : 'OFF'}
                           </Button>
                         </div>
                       </div>
@@ -1391,7 +1452,32 @@ export default function QuizPage() {
                           <Button
                             variant='ghost'
                             size='icon'
-                            onClick={() => setViewingResponses(quiz)}
+                            onClick={() => {
+                              // Migration: Ensure options have IDs if legacy
+                              const migratedQuestions = quiz.questions.map(
+                                (question: any) => {
+                                  if (
+                                    question.options.length > 0 &&
+                                    typeof question.options[0] === 'string'
+                                  ) {
+                                    return {
+                                      ...question,
+                                      options: question.options.map(
+                                        (opt: string, idx: number) => ({
+                                          id: `${question.id}-opt-${idx}`,
+                                          text: opt,
+                                        }),
+                                      ),
+                                    };
+                                  }
+                                  return question;
+                                },
+                              );
+                              setViewingResponses({
+                                ...quiz,
+                                questions: migratedQuestions,
+                              });
+                            }}
                             className='h-8 w-8 text-pw-muted hover:text-pw-cyan'>
                             <MessageSquare className='h-4 w-4' />
                           </Button>

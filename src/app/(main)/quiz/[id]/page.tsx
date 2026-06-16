@@ -15,6 +15,7 @@ import {
   Brain,
   MessageCircle,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -164,6 +165,8 @@ export default function PublicQuizPage() {
   const [shuffledOptions, setShuffledOptions] = useState<
     Record<string, (string | QuizOption)[]>
   >({});
+  const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
+  const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
 
   const [started, setStart] = useState(false);
 
@@ -242,10 +245,31 @@ export default function PublicQuizPage() {
         const finalQuiz = { ...target, questions: migratedQuestions };
         setQuiz(finalQuiz);
 
-        // Pre-shuffle if needed
+        // Check if already completed and retry is restricted
+        const completionMarker = localStorage.getItem(
+          `completed_quiz_${finalQuiz.id}`,
+        );
+        if (completionMarker && !finalQuiz.allowRetry) {
+          setHasAlreadyCompleted(true);
+        }
+
+        // Prepare Questions (shuffle if needed)
+        let questionsToUse = [...migratedQuestions];
+        if (finalQuiz.randomizeQuestions) {
+          for (let i = questionsToUse.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [questionsToUse[i], questionsToUse[j]] = [
+              questionsToUse[j],
+              questionsToUse[i],
+            ];
+          }
+        }
+        setActiveQuestions(questionsToUse);
+
+        // Pre-shuffle options if needed
         if (finalQuiz.randomizeOptions) {
           const shuffled: Record<string, (string | QuizOption)[]> = {};
-          finalQuiz.questions.forEach((question) => {
+          questionsToUse.forEach((question) => {
             const opts = [...question.options];
             for (let i = opts.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
@@ -289,7 +313,7 @@ export default function PublicQuizPage() {
     loadQuiz();
   }, []);
 
-  const q = quiz?.questions[currentQuestion] as Question;
+  const q = activeQuestions[currentQuestion] as Question;
 
   const handleNext = () => {
     if (q?.type === 'checkbox' && selectedOptions.length === 0) {
@@ -331,18 +355,28 @@ export default function PublicQuizPage() {
       if (correct) setScore((s) => s + 1);
       setIsCorrect(correct);
 
-      // Store answer
+      // Store answer (Idempotent)
       const answer =
         q.type === 'checkbox' ? selectedOptions
         : q.type === 'input' ? content
         : selectedOption;
 
       const qId = q.id;
-      const updatedAnswers = [
-        ...userAnswers,
-        { questionId: qId, answer, correct },
-      ];
+      const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
+
+      let updatedAnswers;
+      if (existingIdx > -1) {
+        updatedAnswers = [...userAnswers];
+        updatedAnswers[existingIdx] = { questionId: qId, answer, correct };
+      } else {
+        updatedAnswers = [...userAnswers, { questionId: qId, answer, correct }];
+      }
+
       setUserAnswers(updatedAnswers);
+
+      // Dynamic score recalculation
+      const newScore = updatedAnswers.filter((a) => a.correct).length;
+      setScore(newScore);
 
       if (quiz?.correctOption) {
         setShowFeedback(true);
@@ -357,13 +391,22 @@ export default function PublicQuizPage() {
         proceedToNext(updatedAnswers);
       }
     } else if (q) {
-      // Store neutral answer for surveys
+      // Store neutral answer for surveys (Idempotent)
       const answer =
         q.type === 'checkbox' ? selectedOptions
         : q.type === 'input' ? content
         : selectedOption;
       const qId = q.id;
-      const updatedAnswers = [...userAnswers, { questionId: qId, answer }];
+
+      const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
+      let updatedAnswers;
+      if (existingIdx > -1) {
+        updatedAnswers = [...userAnswers];
+        updatedAnswers[existingIdx] = { questionId: qId, answer };
+      } else {
+        updatedAnswers = [...userAnswers, { questionId: qId, answer }];
+      }
+
       setUserAnswers(updatedAnswers);
       proceedToNext(updatedAnswers);
     }
@@ -373,7 +416,7 @@ export default function PublicQuizPage() {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
-    if (quiz && currentQuestion + 1 < quiz.questions.length) {
+    if (quiz && currentQuestion + 1 < activeQuestions.length) {
       setCurrentQuestion((c) => c + 1);
       setSelectedOption(null);
       setSelectedOptions([]);
@@ -386,12 +429,15 @@ export default function PublicQuizPage() {
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     if (quiz) {
+      // Mark as completed on this device
+      localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+
       try {
         await HybridStorage.saveResponse(quiz.id, {
           userData,
           answers: finalAnswers,
           score,
-          totalQuestions: quiz.questions.length,
+          totalQuestions: activeQuestions.length,
         });
       } catch (e) {
         console.error('Failed to save response:', e);
@@ -421,6 +467,29 @@ export default function PublicQuizPage() {
         <h4 className='text-sm mt-8'>
           Please wait while we fetch your program.
         </h4>
+      </div>
+    );
+  }
+
+  if (hasAlreadyCompleted && quiz) {
+    return (
+      <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
+        <div className='globe-div fixed inset-0'>
+          <div className='globe opacity-20' />
+        </div>
+        <div className='container relative z-10 mx-auto px-6 py-20 max-w-2xl text-center'>
+          <ShieldCheck className='h-20 w-20 text-pw-danger mx-auto mb-8 opacity-50' />
+          <h1 className='text-3xl font-bold mb-4'>Access Restricted</h1>
+          <p className='text-pw-muted text-lg mb-8'>
+            You have already completed this {quiz.type}. Multiple attempts are
+            not allowed for this session.
+          </p>
+          <Link
+            href='/quiz'
+            className='btn-primary h-12 inline-flex items-center px-8'>
+            Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -485,16 +554,18 @@ export default function PublicQuizPage() {
             )}
 
             <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-              <Button
-                onClick={() => window.location.reload()}
-                variant='outline'
-                className='h-12 px-4 border-white/10'>
-                Try Again
-              </Button>
+              {(quiz.allowRetry !== false || quiz.type === 'survey') && (
+                <Button
+                  onClick={() => window.location.reload()}
+                  variant='outline'
+                  className='h-12 px-4 border-white/10'>
+                  Try Again
+                </Button>
+              )}
               <Link
-                href='/tools'
+                href='/quiz'
                 className='btn-primary h-12 flex items-center px-8'>
-                Browse More Tools
+                Close Quiz
               </Link>
             </div>
           </motion.div>
@@ -657,7 +728,7 @@ export default function PublicQuizPage() {
               <div className='flex justify-between items-end mb-6'>
                 <div>
                   <div className='badge mb-4'>
-                    Question {currentQuestion + 1} / {quiz.questions.length}
+                    Question {currentQuestion + 1} / {activeQuestions.length}
                   </div>
                   <h1 className='text-3xl font-bold font-display'>
                     {quiz.title}
@@ -687,7 +758,7 @@ export default function PublicQuizPage() {
                 <motion.div
                   className='h-full gradient-brand rounded-full'
                   animate={{
-                    width: `${(currentQuestion / quiz.questions.length) * 100}%`,
+                    width: `${(currentQuestion / activeQuestions.length) * 100}%`,
                   }}
                 />
               </div>
@@ -796,50 +867,52 @@ export default function PublicQuizPage() {
                           'grid-cols-1'
                         : 'grid-cols-2',
                       )}>
-                      {(shuffledOptions[q.id] || q?.options)?.map((opt, idx) => {
-                        const optId =
-                          typeof opt === 'string' ? idx.toString() : opt?.id;
-                        const optText =
-                          typeof opt === 'string' ? opt : opt?.text;
-                        const isSelected =
-                          q?.type === 'checkbox' ?
-                            selectedOptions.includes(optId)
-                          : selectedOption === optId;
+                      {(shuffledOptions[q.id] || q?.options)?.map(
+                        (opt, idx) => {
+                          const optId =
+                            typeof opt === 'string' ? idx.toString() : opt?.id;
+                          const optText =
+                            typeof opt === 'string' ? opt : opt?.text;
+                          const isSelected =
+                            q?.type === 'checkbox' ?
+                              selectedOptions.includes(optId)
+                            : selectedOption === optId;
 
-                        return (
-                          <button
-                            key={optId}
-                            onClick={() => {
-                              if (q?.type === 'checkbox') {
-                                setSelectedOptions((prev) =>
-                                  prev.includes(optId) ?
-                                    prev.filter((id) => id !== optId)
-                                  : [...prev, optId],
-                                );
-                              } else {
-                                setSelectedOption(optId);
-                              }
-                            }}
-                            className={cn(
-                              'w-full p-2 px-4 md:p-3 text-left rounded-xl border transition-all duration-200 flex items-center justify-between group',
-                              isSelected ?
-                                'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
-                              : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                            )}>
-                            <span className='font-medium text-sm md:text-base'>
-                              {optText}
-                            </span>
-                            <CheckCircle
+                          return (
+                            <button
+                              key={optId}
+                              onClick={() => {
+                                if (q?.type === 'checkbox') {
+                                  setSelectedOptions((prev) =>
+                                    prev.includes(optId) ?
+                                      prev.filter((id) => id !== optId)
+                                    : [...prev, optId],
+                                  );
+                                } else {
+                                  setSelectedOption(optId);
+                                }
+                              }}
                               className={cn(
-                                'h-4 w-4 transition-all opacity-0',
+                                'w-full p-2 px-4 md:p-3 text-left rounded-xl border transition-all duration-200 flex items-center justify-between group',
                                 isSelected ?
-                                  'opacity-100 translate-x-0'
-                                : 'group-hover:opacity-50 -translate-x-2',
-                              )}
-                            />
-                          </button>
-                        );
-                      })}
+                                  'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
+                                : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                              )}>
+                              <span className='font-medium text-sm md:text-base'>
+                                {optText}
+                              </span>
+                              <CheckCircle
+                                className={cn(
+                                  'h-4 w-4 transition-all opacity-0',
+                                  isSelected ?
+                                    'opacity-100 translate-x-0'
+                                  : 'group-hover:opacity-50 -translate-x-2',
+                                )}
+                              />
+                            </button>
+                          );
+                        },
+                      )}
                     </div>
                   }
                 </motion.div>
