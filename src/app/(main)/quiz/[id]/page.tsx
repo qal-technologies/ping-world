@@ -162,6 +162,7 @@ export default function PublicQuizPage() {
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [userAnswers, setUserAnswers] = useState<any[]>([]);
 
   useEffect(() => {
     if (started && quiz?.hasTimer && !isFinished) {
@@ -268,6 +269,15 @@ export default function PublicQuizPage() {
       if (correct) setScore((s) => s + 1);
       setIsCorrect(correct);
 
+      // Store answer
+      const answer =
+        q.type === 'checkbox' ? selectedOptions
+        : q.type === 'input' ? content
+        : selectedOption;
+
+      const qId = q.id;
+      setUserAnswers((prev) => [...prev, { questionId: qId, answer, correct }]);
+
       if (quiz?.correctOption) {
         setShowFeedback(true);
         // Delay for feedback if enabled
@@ -280,7 +290,14 @@ export default function PublicQuizPage() {
       } else {
         proceedToNext();
       }
-    } else {
+    } else if (q) {
+      // Store neutral answer for surveys
+      const answer =
+        q.type === 'checkbox' ? selectedOptions
+        : q.type === 'input' ? content
+        : selectedOption;
+      const qId = q.id;
+      setUserAnswers((prev) => [...prev, { questionId: qId, answer }]);
       proceedToNext();
     }
   };
@@ -293,7 +310,23 @@ export default function PublicQuizPage() {
       setSelectedOptions([]);
       setContent('');
     } else {
-      setIsFinished(true);
+      finalizeQuiz();
+    }
+  };
+
+  const finalizeQuiz = async () => {
+    setIsFinished(true);
+    if (quiz) {
+      try {
+        await HybridStorage.saveResponse(quiz.id, {
+          userData,
+          answers: userAnswers,
+          score,
+          totalQuestions: quiz.questions.length,
+        });
+      } catch (e) {
+        console.error('Failed to save response:', e);
+      }
     }
   };
 

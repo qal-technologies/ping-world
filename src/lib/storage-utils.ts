@@ -112,6 +112,27 @@ export const HybridStorage = {
   },
 
   /**
+   * Add a response to a quiz
+   */
+  async saveResponse(quizId: string, response: any) {
+    const quizzes = await this.getAll('quiz');
+    const index = quizzes.findIndex(
+      (q: any) => String(q.id) === String(quizId),
+    );
+
+    if (index === -1) return null;
+
+    const quiz = quizzes[index];
+    if (!quiz.responses) quiz.responses = [];
+    quiz.responses.push({
+      ...response,
+      timestamp: new Date().toISOString(),
+    });
+
+    return await this.save(quizId, quiz, 'quiz');
+  },
+
+  /**
    * Delete an item
    */
   async delete(id: string, type: StorageItem['type']) {
@@ -135,5 +156,44 @@ export const HybridStorage = {
       localStorage.setItem(`pingworld_${keyPrefix}`, JSON.stringify(list));
       return true;
     }
+  },
+
+  /**
+   * Sync unsynced local items to remote
+   */
+  async syncLocalToRemote(type: StorageItem['type']) {
+    const keyPrefix = type === 'quiz' ? 'quizzes' : type + 's';
+    const saved = localStorage.getItem(`pingworld_${keyPrefix}`);
+    if (!saved) return;
+
+    const list = JSON.parse(saved);
+    const unsynced = list.filter((i: any) => !i.is_synced);
+
+    if (unsynced.length === 0) return;
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+
+    for (const item of unsynced) {
+      try {
+        const tableName = item.type === 'quiz' ? 'quizzes' : item.type + 's';
+        const { error } = await supabase.from(tableName).upsert({
+          id: item.id,
+          user_id: session.user.id,
+          ...item.content,
+          updated_at: new Date().toISOString(),
+        });
+
+        if (!error) {
+          item.is_synced = true;
+        }
+      } catch (e) {
+        console.error(`Failed to sync item ${item.id}:`, e);
+      }
+    }
+
+    localStorage.setItem(`pingworld_${keyPrefix}`, JSON.stringify(list));
   },
 };

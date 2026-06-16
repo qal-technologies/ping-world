@@ -26,6 +26,7 @@ import {
   Clock,
   ArrowUp,
   ArrowDown,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -60,8 +61,17 @@ export interface Question {
 
 interface Details {
   title: string;
-  type: 'name' | 'sex' | 'input' | 'number' | 'tel' |'email' | 'others';
+  type: 'name' | 'sex' | 'input' | 'number' | 'tel' | 'email' | 'others';
 }
+
+export interface QuizTakerResponse {
+  userData: Record<string, string>;
+  answers: any[];
+  score: number;
+  totalQuestions: number;
+  timestamp: string;
+}
+
 export interface Quiz {
   id: string;
   title: string;
@@ -81,6 +91,7 @@ export interface Quiz {
   correctOption?: boolean;
   correctOptionDes?: boolean;
   createdAt: number;
+  responses?: QuizTakerResponse[];
 }
 
 // --- Components ---
@@ -1007,14 +1018,86 @@ export default function QuizPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
+  const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
+
+  const exportResponsesAsCSV = (quiz: Quiz) => {
+    if (!quiz.responses || quiz.responses.length === 0) return;
+
+    // Header
+    const headers = [
+      'Timestamp',
+      'Score',
+      'Total',
+      ...Object.keys(quiz.responses[0].userData),
+      ...quiz.questions.map((_, i) => `Q${i + 1}`),
+    ];
+
+    // Rows
+    const rows = quiz.responses.map((resp) => [
+      new Date(resp.timestamp).toLocaleString(),
+      resp.score,
+      resp.totalQuestions,
+      ...Object.values(resp.userData),
+      ...resp.answers.map((a) =>
+        typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer,
+      ),
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((v) => `"${v}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${quiz.title}_responses.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Responses exported to CSV!');
+  };
+
+  const clearResponses = async (quizId: string) => {
+    if (
+      !confirm(
+        'Are you sure you want to clear all responses? This cannot be undone.',
+      )
+    )
+      return;
+
+    const data = await HybridStorage.getAll('quiz');
+    const index = data.findIndex((q: any) => q.id === quizId);
+    if (index !== -1) {
+      data[index].responses = [];
+      await HybridStorage.save(quizId, data[index], 'quiz');
+      setQuizzes([...data]);
+      if (viewingResponses?.id === quizId) {
+        setViewingResponses({ ...data[index] });
+      }
+      toast.success('Responses cleared!');
+    }
+  };
 
   // Load from hybrid storage
   useEffect(() => {
     const loadQuizzes = async () => {
+      // Background Sync trigger
+      try {
+        await HybridStorage.syncLocalToRemote('quiz');
+      } catch (e) {
+        console.warn('Sync failed:', e);
+      }
+
       const data = await HybridStorage.getAll('quiz');
       setQuizzes(data);
     };
     loadQuizzes();
+
+    // Listen for online events to re-sync
+    const handleOnline = () => loadQuizzes();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   // Managed by HybridStorage exclusively
@@ -1174,9 +1257,11 @@ export default function QuizPage() {
                     transition={{ delay: i * 0.05 }}>
                     <Card className='card-glow h-full flex flex-col p-6 group'>
                       <div className='flex justify-between items-start mb-4 flex-wrap gap-2'>
-                        <div className='flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest'>
+                        <div className={cn('flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest')}>
                           <FileJson className='h-3 w-3 text-pw-primary' />
-                          {quiz?.questions?.length} Questions
+                          {quiz?.questions?.length} Qts
+                          {quiz?.responses?.length && quiz?.responses?.length > 0 && <span className='text-pw-primary'>{(quiz as any).responses?.length || 0} Ans</span>}
+
                           {(quiz as any).is_synced ?
                             <span className='text-pw-success flex items-center gap-1.5'>
                               <ShieldCheck className='h-3 w-3' />
@@ -1188,6 +1273,13 @@ export default function QuizPage() {
                         </div>
 
                         <div className='flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => setViewingResponses(quiz)}
+                            className='h-8 w-8 text-pw-muted hover:text-pw-cyan'>
+                            <MessageSquare className='h-4 w-4' />
+                          </Button>
                           <Button
                             variant='ghost'
                             size='icon'
@@ -1275,6 +1367,134 @@ export default function QuizPage() {
             />
           </motion.div>
         }
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewingResponses && (
+          <div className='fixed inset-0 z-50 flex items-center justify-end'>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewingResponses(null)}
+              className='absolute inset-0 bg-black/60 backdrop-blur-sm'
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className='relative h-full w-full max-w-xl bg-pw-surface border-l border-white/10 p-8 shadow-2xl overflow-y-auto'>
+              <div className='flex justify-between items-center mb-8'>
+                <div>
+                  <h2 className='text-2xl font-bold'>Responses</h2>
+                  <p className='text-sm text-pw-muted'>
+                    {viewingResponses.title}
+                  </p>
+                </div>
+                <div className='flex gap-2'>
+                  {viewingResponses.responses &&
+                    viewingResponses.responses.length > 0 && (
+                      <>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => exportResponsesAsCSV(viewingResponses)}
+                          className='bg-pw-success/10 border-pw-success/20 text-pw-success hover:bg-pw-success/20 h-9'>
+                          <Download
+                            size={16}
+                            className='mr-2'
+                          />{' '}
+                          Export CSV
+                        </Button>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => clearResponses(viewingResponses.id)}
+                          className='bg-pw-danger/10 border-pw-danger/20 text-pw-danger hover:bg-pw-danger/20 h-9'>
+                          <Trash2 size={16} />
+                        </Button>
+                      </>
+                    )}
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={() => setViewingResponses(null)}>
+                    <X />
+                  </Button>
+                </div>
+              </div>
+
+              <div className='space-y-4 pb-20'>
+                {(
+                  !viewingResponses.responses ||
+                  viewingResponses.responses.length === 0
+                ) ?
+                  <div className='py-20 text-center opacity-40'>
+                    <MessageSquare
+                      size={40}
+                      className='mx-auto mb-4'
+                    />
+                    <p>No responses yet.</p>
+                  </div>
+                : viewingResponses.responses.map((resp, idx) => (
+                    <Card
+                      key={idx}
+                      className='p-4 bg-white/5 border-white/10 space-y-3'>
+                      <div className='flex justify-between items-start'>
+                        <div>
+                          <p className='font-bold text-pw-cyan'>
+                            {resp.userData.name ||
+                              resp.userData.Email ||
+                              'Anonymous'}
+                          </p>
+                          <p className='text-[10px] text-pw-muted italic'>
+                            {new Date(resp.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className='bg-pw-primary/10 px-2 py-1 rounded text-[10px] font-bold text-pw-primary'>
+                          Score: {resp.score} / {resp.totalQuestions}
+                        </div>
+                      </div>
+
+                      <div className='grid grid-cols-2 gap-2 text-[10px]'>
+                        {Object.entries(resp.userData).map(([key, val]) => (
+                          <div
+                            key={key}
+                            className='flex gap-2'>
+                            <span className='text-pw-muted uppercase font-bold'>
+                              {key}:
+                            </span>
+                            <span>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className='pt-2 border-t border-white/5'>
+                        <p className='text-[10px] font-bold text-pw-muted uppercase mb-1'>
+                          Answers
+                        </p>
+                        <div className='flex gap-1 flex-wrap'>
+                          {resp.answers.map((a, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                'w-5 h-5 rounded flex items-center justify-center text-[8px] font-bold',
+                                a.correct ?
+                                  'bg-pw-success/20 text-pw-success'
+                                : 'bg-pw-danger/20 text-pw-danger',
+                              )}>
+                              {i + 1}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                }
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );
