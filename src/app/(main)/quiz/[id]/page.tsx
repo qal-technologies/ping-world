@@ -499,6 +499,40 @@ export default function PublicQuizPage() {
                           </Button>
                         ))}
                       </div>
+                    : detail.type === 'dropdown' ?
+                      <div
+                        className='flex gap-2 w-full'
+                        style={{
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}>
+                        <p className='title font-bold'>{detail.title}</p>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className={'w-[40%] min-w-[100px] overflow-hidden'}>
+                            <Button
+                              variant='outline'
+                              className='h-10 text-xs w-full flex justify-between'>
+                              {userData[detail.title] || 'Select'}
+                              <ChevronDown className='h-2 w-2' />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className='w-full rounded-xl'>
+                            {detail.options?.map((option) => (
+                              <DropdownMenuItem
+                                key={option}
+                                onClick={() =>
+                                  setUserData({
+                                    ...userData,
+                                    [detail.title]: option,
+                                  })
+                                }>
+                                {option}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     : <input
                         type={
                           detail.type === 'number' ? 'number'

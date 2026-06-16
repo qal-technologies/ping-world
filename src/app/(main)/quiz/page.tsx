@@ -61,7 +61,17 @@ export interface Question {
 
 interface Details {
   title: string;
-  type: 'name' | 'sex' | 'input' | 'number' | 'tel' | 'email' | 'others';
+  type:
+    | 'name'
+    | 'sex'
+    | 'input'
+    | 'number'
+    | 'tel'
+    | 'email'
+    | 'dropdown'
+    | 'others';
+  //necessary for dropdown
+  options?: string[];
 }
 
 export interface QuizTakerResponse {
@@ -240,7 +250,7 @@ const QuizBuilder = ({
 
         {/* Editor Area */}
         <div className='lg:col-span-3'>
-          <Card className='card-glow p-8 min-h-[450px]'>
+          <Card className='card-glow p-4 lg:p-8 min-h-[450px]'>
             {currentStep === -1 ?
               <div className='space-y-6 max-w-xl'>
                 <h3 className='text-xl font-bold flex items-center gap-2'>
@@ -259,7 +269,7 @@ const QuizBuilder = ({
                           setEditedQuiz({ ...editedQuiz, type: 'quiz' })
                         }
                         className={cn(
-                          'flex-1 h-8 text-xs',
+                          'flex-1 h-8 text-xs rounded-xl',
                           editedQuiz.type === 'quiz' &&
                             'bg-pw-primary text-white shadow-lg',
                         )}>
@@ -271,7 +281,7 @@ const QuizBuilder = ({
                           setEditedQuiz({ ...editedQuiz, type: 'survey' })
                         }
                         className={cn(
-                          'flex-1 h-8 text-xs',
+                          'flex-1 h-8 text-xs rounded-xl',
                           editedQuiz.type === 'survey' &&
                             'bg-pw-primary text-white shadow-lg',
                         )}>
@@ -305,7 +315,7 @@ const QuizBuilder = ({
                         })
                       }
                       placeholder='What is this quiz about?'
-                      className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-4 text-sm focus:border-pw-primary focus:outline-none focus:ring-0 resize-none'
+                      className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-2 text-sm focus:border-pw-primary focus:outline-none focus:ring-0 resize-none'
                     />
                   </div>
 
@@ -391,7 +401,7 @@ const QuizBuilder = ({
                                   : false,
                               })
                             }
-                            placeholder='e.g. 10 (Optional)'
+                            placeholder='10 (opt) '
                             className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
                           />
                           <Button
@@ -410,7 +420,7 @@ const QuizBuilder = ({
                               ),
                             )}>
                             <Clock className='h-4 w-4 mr-2' />{' '}
-                            {editedQuiz.hasTimer ? 'Active' : 'Off'}
+                            {editedQuiz.hasTimer ? 'On' : 'Off'}
                           </Button>
                         </div>
                       </div>
@@ -444,77 +454,109 @@ const QuizBuilder = ({
 
                     <div className='space-y-2'>
                       {(editedQuiz.askDetails || []).map((detail, idx) => (
-                        <div
-                          key={idx}
-                          className='flex gap-2 items-center bg-white/5 p-1 rounded-xl border border-white/5'>
-                          <Input
-                            value={detail.title}
-                            onChange={(e) => {
-                              const newDetails = [
-                                ...(editedQuiz.askDetails || []),
-                              ];
-                              newDetails[idx].title = e.target.value;
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                askDetails: newDetails,
-                              });
-                            }}
-                            className='bg-transparent border-none h-8 text-xs focus-visible:ring-0'
-                            placeholder='Field Label'
-                          />
-                          <DropdownMenu>
-                            <DropdownMenuTrigger>
-                              <Button
-                                variant='ghost'
-                                size='sm'
-                                className='h-6 text-[10px] uppercase font-bold tracking-tighter bg-white/5'>
-                                {detail.type}
-                                <ChevronDown size={18} />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className='bg-pw-surface border-white/10 min-w-[100px]'>
-                              {[
-                                'name',
-                                'sex',
-                                'input',
-                                'number',
-                                'tel',
-                                'email',
-                                'others',
-                              ].map((t) => (
-                                <DropdownMenuItem
-                                  key={t}
-                                  onClick={() => {
+                        <>
+                          <div
+                            key={idx}
+                            className='flex gap-2 items-center bg-white/5 p-1 rounded-xl border border-white/5'>
+                            <Input
+                              value={detail.title}
+                              minLength={1}
+                              //for number input
+                              min={0}
+                              onChange={(e) => {
+                                const newDetails = [
+                                  ...(editedQuiz.askDetails || []),
+                                ];
+                                newDetails[idx].title = e.target.value;
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  askDetails: newDetails,
+                                });
+                              }}
+                              className='bg-transparent border-none h-8 text-xs focus-visible:ring-0'
+                              placeholder='Field Label'
+                            />
+                            <DropdownMenu>
+                              <DropdownMenuTrigger>
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  className='h-6 text-[10px] uppercase font-bold tracking-tighter bg-white/5'>
+                                  {detail.type}
+                                  <ChevronDown size={18} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className='bg-pw-surface border-white/10 min-w-[100px]'>
+                                {[
+                                  'name',
+                                  'sex',
+                                  'input',
+                                  'number',
+                                  'tel',
+                                  'email',
+                                  'dropdown',
+                                  'others',
+                                ].map((t) => (
+                                  <DropdownMenuItem
+                                    key={t}
+                                    onClick={() => {
+                                      const newDetails = [
+                                        ...(editedQuiz.askDetails || []),
+                                      ];
+                                      newDetails[idx].type = t as any;
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        askDetails: newDetails,
+                                      });
+                                    }}>
+                                    {t.toUpperCase()}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              className='h-8 w-8 text-pw-danger/50 hover:text-pw-danger'
+                              onClick={() => {
+                                const newDetails = (
+                                  editedQuiz.askDetails || []
+                                ).filter((_, i) => i !== idx);
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  askDetails: newDetails,
+                                });
+                              }}>
+                              <Trash2 className='h-3.5 w-3.5' />
+                            </Button>
+                          </div>
+                          {editedQuiz?.askDetails &&
+                            editedQuiz?.askDetails[idx].type === 'dropdown' && (
+                              <>
+                                <Input
+                                  placeholder='Add dropdown options here'
+                                  className='h-9 text-xs focus-visible:ring-0'
+                                  value={editedQuiz?.askDetails[
+                                    idx
+                                  ].options?.join(',')}
+                                  onChange={(e) => {
                                     const newDetails = [
                                       ...(editedQuiz.askDetails || []),
                                     ];
-                                    newDetails[idx].type = t as any;
+                                    newDetails[idx].options =
+                                      e.target.value.split(',');
                                     setEditedQuiz({
                                       ...editedQuiz,
                                       askDetails: newDetails,
                                     });
-                                  }}>
-                                  {t.toUpperCase()}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            className='h-8 w-8 text-pw-danger/50 hover:text-pw-danger'
-                            onClick={() => {
-                              const newDetails = (
-                                editedQuiz.askDetails || []
-                              ).filter((_, i) => i !== idx);
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                askDetails: newDetails,
-                              });
-                            }}>
-                            <Trash2 className='h-3.5 w-3.5' />
-                          </Button>
-                        </div>
+                                  }}
+                                />
+                                <p className='text-xs opacity-60 mb-6 px-2'>
+                                  Seperate each option with a comma
+                                </p>
+                              </>
+                            )}
+                        </>
                       ))}
                       {(editedQuiz.askDetails?.length || 0) === 0 && (
                         <p className='text-[10px] text-pw-muted italic'>
@@ -645,7 +687,7 @@ const QuizBuilder = ({
                           })
                         }
                         placeholder='e.g., You nailed it! Feel free to share your score.'
-                        className='w-full h-20 bg-white/5 border border-white/10 rounded-lg p-4 text-xs focus:border-pw-primary focus:outline-none focus:ring-0 resize-none'
+                        className='w-full h-20 bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:border-pw-primary focus:outline-none focus:ring-0 resize-none'
                       />
                     </div>
                   </div>
@@ -1111,7 +1153,7 @@ export default function QuizPage() {
       questions: [],
       endScreen: {
         title: 'Thank You!',
-        message: 'You have completed the quiz.',
+        message: 'You have completed the task.',
       },
       createdAt: Date.now(),
     };
@@ -1257,11 +1299,18 @@ export default function QuizPage() {
                     transition={{ delay: i * 0.05 }}>
                     <Card className='card-glow h-full flex flex-col p-6 group'>
                       <div className='flex justify-between items-start mb-4 flex-wrap gap-2'>
-                        <div className={cn('flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest')}>
+                        <div
+                          className={cn(
+                            'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest',
+                          )}>
                           <FileJson className='h-3 w-3 text-pw-primary' />
                           {quiz?.questions?.length} Qts
-                          {quiz?.responses?.length && quiz?.responses?.length > 0 && <span className='text-pw-primary'>{(quiz as any).responses?.length || 0} Ans</span>}
-
+                          {quiz?.responses?.length &&
+                            quiz?.responses?.length > 0 && (
+                              <span className='text-pw-primary'>
+                                {(quiz as any).responses?.length || 0} Ans
+                              </span>
+                            )}
                           {(quiz as any).is_synced ?
                             <span className='text-pw-success flex items-center gap-1.5'>
                               <ShieldCheck className='h-3 w-3' />
