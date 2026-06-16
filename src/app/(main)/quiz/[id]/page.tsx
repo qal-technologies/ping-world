@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   Brain,
   MessageCircle,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -158,6 +159,36 @@ export default function PublicQuizPage() {
   const [started, setStart] = useState(false);
 
   const [isLoading, setLoading] = useState(true);
+  const [detailsCollected, setDetailsCollected] = useState(false);
+  const [userData, setUserData] = useState<Record<string, string>>({});
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (started && quiz?.hasTimer && !isFinished) {
+      const minutes = typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10;
+      setTimeLeft(minutes * 60);
+    }
+  }, [started, quiz]);
+
+  useEffect(() => {
+    if (timeLeft === null || timeLeft <= 0 || isFinished) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev && prev > 1) return prev - 1;
+        setIsFinished(true); // Auto-finish
+        return 0;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft, isFinished]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     const loadQuiz = async () => {
@@ -236,12 +267,19 @@ export default function PublicQuizPage() {
 
       if (correct) setScore((s) => s + 1);
       setIsCorrect(correct);
-      setShowFeedback(true);
 
-      // Delay for feedback
-      setTimeout(() => {
+      if (quiz?.correctOption) {
+        setShowFeedback(true);
+        // Delay for feedback if enabled
+        setTimeout(
+          () => {
+            proceedToNext();
+          },
+          quiz?.correctOptionDes && q.correctExplanation ? 4000 : 1500,
+        );
+      } else {
         proceedToNext();
-      }, 1500);
+      }
     } else {
       proceedToNext();
     }
@@ -261,7 +299,8 @@ export default function PublicQuizPage() {
 
   const GoBack = () => {
     setShowFeedback(false);
-    if (quiz && currentQuestion + 1 > 1) {
+    if (!quiz?.canGoBack) return; // Strict check
+    if (quiz && currentQuestion > 0) {
       setCurrentQuestion((c) => c - 1);
       setSelectedOption(null);
       setSelectedOptions([]);
@@ -331,13 +370,13 @@ export default function PublicQuizPage() {
                 <div className='text-3xl font-bold mb-4'>
                   {score} / {quiz.questions.length}
                 </div>
-                <div className='w-full h-4 bg-pw-surface rounded-full overflow-hidden border border-white/5 mb-4'>
+                <div className='w-full h-3 bg-pw-surface rounded-full overflow-hidden border border-white/5 mb-4'>
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
                       width: `${(score / quiz.questions.length) * 100}%`,
                     }}
-                    className='h-full gradient-brand'
+                    className='h-full gradient-brand rounded-full'
                   />
                 </div>
               </Card>
@@ -389,17 +428,89 @@ export default function PublicQuizPage() {
             </h1>
           </div>
 
-            <p className='text-center w-full h-full overflow-auto max-h-[300px] text-[14px]'>
-              {quiz.description}
+          <p className='text-center w-full h-full overflow-auto max-h-[300px] text-[14px] opacity-80'>
+            {quiz.description}
           </p>
-          
-          <div className='w-full justify-center mt-4 flex'>
-            <Button
-              className={'btn-primary h-11 w-50'}
-              onClick={() => setStart(true)}>
-              START {quiz.type.toUpperCase()}
-            </Button>
-          </div>
+
+          <div className='divider my-2 opacity-60'></div>
+
+          {quiz.askDetails && quiz.askDetails.length > 0 && !detailsCollected ?
+            <div className='w-full max-w-md bkblur mx-auto mt-8 bg-white/5 p-6 rounded-3xl border border-white/10'>
+              <h3 className='text-sm font-bold mb-4 uppercase tracking-widest text-pw-cyan'>
+                Enter your details
+              </h3>
+              <div className='space-y-4'>
+                {quiz.askDetails.map((detail, idx) => (
+                  <div
+                    key={idx}
+                    className='space-y-1'>
+                    <label className='text-[10px] font-bold text-pw-muted uppercase ml-1'>
+                      {detail.title}
+                    </label>
+                    {detail.type === 'sex' ?
+                      <div className='flex gap-2'>
+                        {['Male', 'Female'].map((s) => (
+                          <Button
+                            key={s}
+                            variant='outline'
+                            onClick={() =>
+                              setUserData({ ...userData, [detail.title]: s })
+                            }
+                            className={cn(
+                              'flex-1 h-10 text-xs',
+                              userData[detail.title] === s ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-black/20',
+                            )}>
+                            {s}
+                          </Button>
+                        ))}
+                      </div>
+                    : <input
+                        type={
+                          detail.type === 'number' ? 'number'
+                          : detail.type === 'tel' ?
+                            'tel'
+                          : detail.type === 'email' ?
+                            'email'
+                          : 'text'
+                        }
+                        className='w-full h-10 bg-black/20 border border-white/10 rounded-xl px-4 text-sm focus:border-pw-primary outline-none'
+                        placeholder={`Enter ${detail.title.toLowerCase()}`}
+                        value={userData[detail.title] || ''}
+                        onChange={(e) =>
+                          setUserData({
+                            ...userData,
+                            [detail.title]: e.target.value,
+                          })
+                        }
+                      />
+                    }
+                  </div>
+                ))}
+                <Button
+                  className={'btn-primary h-11 w-full mt-4'}
+                  onClick={() => {
+                    const complete = quiz.askDetails?.every(
+                      (d) => userData[d.title],
+                    );
+                    if (!complete)
+                      return toast.error('Please fill in all details');
+                    setDetailsCollected(true);
+                    setStart(true);
+                  }}>
+                  START {quiz.type.toUpperCase()}
+                </Button>
+              </div>
+            </div>
+          : <div className='w-full justify-center mt-4 flex'>
+              <Button
+                className={'btn-primary h-11 w-50'}
+                onClick={() => setStart(true)}>
+                START {quiz.type.toUpperCase()}
+              </Button>
+            </div>
+          }
         </div>
       )}
       {started && (
@@ -409,17 +520,31 @@ export default function PublicQuizPage() {
               <div className='flex justify-between items-end mb-6'>
                 <div>
                   <div className='badge mb-4'>
-                    Question {currentQuestion + 1} of {quiz.questions.length}
+                    Question {currentQuestion + 1} / {quiz.questions.length}
                   </div>
                   <h1 className='text-3xl font-bold font-display'>
                     {quiz.title}
                   </h1>
                 </div>
-                {quiz.type === 'quiz' && quiz.showScore && (
-                  <div className='text-[10px] font-bold text-pw-muted uppercase tracking-widest text-right'>
-                    Score: {score}
-                  </div>
-                )}
+                <div className='flex flex-col items-end gap-2'>
+                  {quiz.hasTimer && timeLeft !== null && (
+                    <div
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-sm border',
+                        timeLeft < 60 ?
+                          'bg-pw-danger/10 border-pw-danger text-pw-danger animate-pulse'
+                        : 'bg-white/5 border-white/10',
+                      )}>
+                      <Clock className='h-4 w-4' />
+                      {formatTime(timeLeft)}
+                    </div>
+                  )}
+                  {quiz.type === 'quiz' && quiz.showScore && (
+                    <div className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
+                      Score: {score}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className='w-full h-1.5 bg-white/5 rounded-full overflow-hidden'>
                 <motion.div
@@ -432,23 +557,38 @@ export default function PublicQuizPage() {
             </div>
 
             <Card className='glass bkblur rounded-3xl card p-4 mb-8 bg-pw-surface border-white/10'>
-              <div className='flex justify-between items-start'>
-                <h2 className='text-lg md:text-2xl pt-1 font-bold leading-relaxed flex-1'>
-                  {q?.text}
-                </h2>
-                {quiz.correctOption && showFeedback && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className={cn(
-                      'ml-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border',
-                      isCorrect ?
-                        'bg-pw-success/10 border-pw-success text-pw-success'
-                      : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                    )}>
-                    {isCorrect ? 'Correct' : 'Incorrect'}
-                  </motion.div>
-                )}
+              <div className='flex flex-col gap-2'>
+                <div className='flex justify-between items-start'>
+                  <h2 className='text-lg md:text-2xl pt-1 font-bold leading-relaxed flex-1'>
+                    {q?.text}
+                  </h2>
+                  {quiz.correctOption && showFeedback && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={cn(
+                        'ml-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border shrink-0',
+                        isCorrect ?
+                          'bg-pw-success/10 border-pw-success text-pw-success'
+                        : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                      )}>
+                      {isCorrect ? 'Correct' : 'Incorrect'}
+                    </motion.div>
+                  )}
+                </div>
+                {quiz.correctOptionDes &&
+                  showFeedback &&
+                  q?.correctExplanation && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className='p-3 rounded-xl bg-pw-primary/5 border border-pw-primary/10 text-xs text-pw-text leading-relaxed'>
+                      <div className='font-bold text-pw-primary uppercase text-[10px] mb-1 tracking-widest'>
+                        Explanation
+                      </div>
+                      {q.correctExplanation}
+                    </motion.div>
+                  )}
               </div>
 
               <AnimatePresence mode='sync'>
@@ -551,21 +691,18 @@ export default function PublicQuizPage() {
 
             <div className='flex justify-between gap-2 flex-wrap'>
               <AnimatePresence mode='sync'>
-                {quiz.canGoBack ||
-                  (currentQuestion + 1 !== 1 && (
-                    <Button
-                      onClick={GoBack}
-                      className='btn-ghost h-10 w-[25vmin] text-lg gap-2'>
-                      <ChevronLeft className='h-5 w-5' />
-                      {currentQuestion + 1 === quiz.questions.length ?
-                        'Back'
-                      : 'Previous'}
-                    </Button>
-                  ))}
+                {quiz.canGoBack && currentQuestion > 0 && (
+                  <Button
+                    onClick={GoBack}
+                    className='btn-ghost h-10 px-6 text-lg gap-2'>
+                    <ChevronLeft className='h-5 w-5' />
+                    Previous
+                  </Button>
+                )}
 
                 <Button
                   onClick={handleNext}
-                  className='btn-primary h-10 w-[25vmin] text-lg gap-2'>
+                  className='btn-primary h-10 w-[25vmin] text-lg gap-2 ml-auto'>
                   {currentQuestion + 1 === quiz.questions.length ?
                     'Finish'
                   : 'Next'}
@@ -587,16 +724,6 @@ export default function PublicQuizPage() {
                 <Calculator />
               </motion.div>
             )}
-
-            <div className='p-6 bg-white/5 border border-white/5 rounded-2xl'>
-              <h4 className='text-xs font-bold mb-4 flex items-center gap-2'>
-                <Puzzle className='h-4 w-4 text-pw-primary' /> Quiz Info
-              </h4>
-              <p className='text-xs text-pw-muted leading-relaxed'>
-                {quiz.description ||
-                  'Interactive assessment built on Ping World platform.'}
-              </p>
-            </div>
           </div>
         </div>
       )}

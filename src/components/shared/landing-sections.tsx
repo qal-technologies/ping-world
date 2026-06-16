@@ -272,7 +272,7 @@ export const ToolsGrid = () => {
               title: 'Chat Mimic',
               desc: 'Create realistic chat story narratives. High-fidelity iOS/Android message previews with image export.',
               icon: PenTool,
-              href: '/editor',
+              href: '/composer',
               color: '#a855f7',
               tag: 'Narrative',
             },
