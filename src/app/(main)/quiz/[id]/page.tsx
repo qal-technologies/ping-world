@@ -16,7 +16,13 @@ import {
   MessageCircle,
   Clock,
   ShieldCheck,
+  Sun,
+  Moon,
+  EyeOff,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
@@ -123,6 +129,7 @@ const Calculator = () => {
           if (btn === 'C') {
             return (
               <Button
+                key={btn}
                 size='sm'
                 className='h-8 text-[10px]'
                 onClick={() => setVal('')}>
@@ -169,40 +176,17 @@ export default function PublicQuizPage() {
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
 
   const [started, setStart] = useState(false);
-
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
+  const [quizTheme, setQuizTheme] = useState<'dark' | 'light'>('dark');
+  const [cheatAttempts, setCheatAttempts] = useState(0);
+  const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
 
-  useEffect(() => {
-    if (started && quiz?.hasTimer && !isFinished) {
-      const minutes = typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10;
-      setTimeLeft(minutes * 60);
-    }
-  }, [started, quiz]);
-
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0 || isFinished) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev && prev > 1) return prev - 1;
-        setIsFinished(true); // Auto-finish
-        return 0;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft, isFinished]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
+  // 1. Initial Load
   useEffect(() => {
     const loadQuiz = async () => {
       setLoading(true);
@@ -211,6 +195,14 @@ export default function PublicQuizPage() {
         null) as Quiz | null;
 
       if (target) {
+        // Auth check if enabled
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (target.enforceIdentity && !session) {
+          setAuthRequired(true);
+        }
+
         // Migration: Ensure options have IDs
         const migratedQuestions = target.questions.map((q) => {
           if (q.options.length > 0 && typeof q.options[0] === 'string') {
@@ -219,7 +211,6 @@ export default function PublicQuizPage() {
               text: opt as string,
             }));
 
-            // If correctIndex was a number, migrate it to the new ID
             let newCorrectIndex = q.correctIndex;
             if (typeof q.correctIndex === 'number' && target.type === 'quiz') {
               newCorrectIndex = optionsWithIds[q.correctIndex]?.id;
@@ -245,7 +236,7 @@ export default function PublicQuizPage() {
         const finalQuiz = { ...target, questions: migratedQuestions };
         setQuiz(finalQuiz);
 
-        // Check if already completed and retry is restricted
+        // Completion check
         const completionMarker = localStorage.getItem(
           `completed_quiz_${finalQuiz.id}`,
         );
@@ -253,7 +244,7 @@ export default function PublicQuizPage() {
           setHasAlreadyCompleted(true);
         }
 
-        // Prepare Questions (shuffle if needed)
+        // Shuffle questions
         let questionsToUse = [...migratedQuestions];
         if (finalQuiz.randomizeQuestions) {
           for (let i = questionsToUse.length - 1; i > 0; i--) {
@@ -266,7 +257,7 @@ export default function PublicQuizPage() {
         }
         setActiveQuestions(questionsToUse);
 
-        // Pre-shuffle options if needed
+        // Pre-shuffle options
         if (finalQuiz.randomizeOptions) {
           const shuffled: Record<string, (string | QuizOption)[]> = {};
           questionsToUse.forEach((question) => {
@@ -279,39 +270,67 @@ export default function PublicQuizPage() {
           });
           setShuffledOptions(shuffled);
         }
-      } else if (quizId === 'demo') {
-        setQuiz({
-          title: 'Demo Quiz',
-          type: 'quiz',
-          createdAt: Date.now(),
-          description: 'This is a description',
-          id: 'tttvvrb34cr',
-          correctOption: true,
-          questions: [
-            {
-              id: 'demo-q1',
-              type: 'multiple_choice',
-              text: 'Welcome to Ping World! Is this tool free?',
-              options: [
-                { id: 'demo-opt-0', text: 'Yes, absolutely' },
-                { id: 'demo-opt-1', text: 'No' },
-                { id: 'demo-opt-2', text: 'Maybe' },
-                { id: 'demo-opt-3', text: "I don't know" },
-              ],
-              correctIndex: 'demo-opt-0',
-            },
-          ],
-          endScreen: {
-            title: 'Demo Finished!',
-            message: 'Thanks for trying the demo.',
-          },
-        });
       }
-
       setLoading(false);
     };
     loadQuiz();
-  }, []);
+  }, [quizId]);
+
+  // 2. Timer Setup
+  useEffect(() => {
+    if (started && quiz?.hasTimer && !isFinished) {
+      const minutes = typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10;
+      setTimeLeft(minutes * 60);
+    }
+  }, [started, quiz]);
+
+  useEffect(() => {
+    if (timeLeft === null || timeLeft <= 0 || isFinished) return;
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev && prev > 1) return prev - 1;
+        finalizeQuiz(userAnswers);
+        return 0;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft, isFinished, userAnswers]);
+
+  // 3. Security: Multi-Tab Monitoring
+  useEffect(() => {
+    if (!started || !quiz?.enforceSecurity || isFinished) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        const nextAttempts = cheatAttempts + 1;
+        setCheatAttempts(nextAttempts);
+
+        if (nextAttempts >= 3) {
+          toast.error(
+            'Multiple security violations detected. Auto-submitting assessment.',
+          );
+          finalizeQuiz(userAnswers);
+        } else {
+          toast.warning(
+            `Security Warning (${nextAttempts}/3): Tab switching is prohibited. Assessment will auto-submit on 3 violations.`,
+            {
+              duration: 5000,
+            },
+          );
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [started, quiz, cheatAttempts, userAnswers, isFinished]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const q = activeQuestions[currentQuestion] as Question;
 
@@ -329,38 +348,46 @@ export default function PublicQuizPage() {
       return;
     }
 
-    // Scoring logic (only if type is quiz)
     let correct = false;
     if (quiz?.type === 'quiz' && q) {
+      let decodedCorrect: any = q.correctIndex;
+      try {
+        if (typeof q.correctIndex === 'string' && q.correctIndex.length > 0) {
+          decodedCorrect = atob(q.correctIndex);
+        }
+      } catch (e) {
+        decodedCorrect = q.correctIndex;
+      }
+
       if (q.type === 'checkbox') {
         const correctIds =
-          Array.isArray(q.correctIndex) ? q.correctIndex : [q.correctIndex];
+          Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect];
         correct =
           selectedOptions.length === correctIds.length &&
           selectedOptions.every((val) => correctIds.includes(val));
       } else if (q.type === 'input') {
-        correct =
-          content.toLowerCase().trim() ===
-          String(q.correctIndex || '')
-            .toLowerCase()
-            .trim();
+        if (!decodedCorrect || decodedCorrect.trim() === '') {
+          correct = true;
+        } else {
+          correct =
+            content.toLowerCase().trim() ===
+            String(decodedCorrect).toLowerCase().trim();
+        }
       } else if (q.type === 'true_false') {
         correct =
           String(selectedOption).toLowerCase() ===
-          String(q.correctIndex).toLowerCase();
+          String(decodedCorrect).toLowerCase();
       } else {
-        correct = selectedOption === q.correctIndex;
+        correct = String(selectedOption) === String(decodedCorrect);
       }
 
       if (correct) setScore((s) => s + 1);
       setIsCorrect(correct);
 
-      // Store answer (Idempotent)
       const answer =
         q.type === 'checkbox' ? selectedOptions
         : q.type === 'input' ? content
         : selectedOption;
-
       const qId = q.id;
       const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
 
@@ -373,14 +400,11 @@ export default function PublicQuizPage() {
       }
 
       setUserAnswers(updatedAnswers);
-
-      // Dynamic score recalculation
       const newScore = updatedAnswers.filter((a) => a.correct).length;
       setScore(newScore);
 
       if (quiz?.correctOption) {
         setShowFeedback(true);
-        // Delay for feedback if enabled
         setTimeout(
           () => {
             proceedToNext(updatedAnswers);
@@ -391,13 +415,11 @@ export default function PublicQuizPage() {
         proceedToNext(updatedAnswers);
       }
     } else if (q) {
-      // Store neutral answer for surveys (Idempotent)
       const answer =
         q.type === 'checkbox' ? selectedOptions
         : q.type === 'input' ? content
         : selectedOption;
       const qId = q.id;
-
       const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
       let updatedAnswers;
       if (existingIdx > -1) {
@@ -406,7 +428,6 @@ export default function PublicQuizPage() {
       } else {
         updatedAnswers = [...userAnswers, { questionId: qId, answer }];
       }
-
       setUserAnswers(updatedAnswers);
       proceedToNext(updatedAnswers);
     }
@@ -429,9 +450,7 @@ export default function PublicQuizPage() {
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     if (quiz) {
-      // Mark as completed on this device
       localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
-
       try {
         await HybridStorage.saveResponse(quiz.id, {
           userData,
@@ -447,7 +466,7 @@ export default function PublicQuizPage() {
 
   const GoBack = () => {
     setShowFeedback(false);
-    if (!quiz?.canGoBack) return; // Strict check
+    if (!quiz?.canGoBack) return;
     if (quiz && currentQuestion > 0) {
       setCurrentQuestion((c) => c - 1);
       setSelectedOption(null);
@@ -456,17 +475,13 @@ export default function PublicQuizPage() {
     }
   };
 
+  // Rendering
   if (isLoading) {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
-        <h2 className='text-2xl font-bold mb-2'>Loading...</h2>
-
+        <h2 className='text-2xl font-bold mb-2'>Loading Assessment...</h2>
         <div className='loader spinner'></div>
-
-        <h4 className='text-sm mt-8'>
-          Please wait while we fetch your program.
-        </h4>
       </div>
     );
   }
@@ -474,15 +489,12 @@ export default function PublicQuizPage() {
   if (hasAlreadyCompleted && quiz) {
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
-        <div className='globe-div fixed inset-0'>
-          <div className='globe opacity-20' />
-        </div>
         <div className='container relative z-10 mx-auto px-6 py-20 max-w-2xl text-center'>
           <ShieldCheck className='h-20 w-20 text-pw-danger mx-auto mb-8 opacity-50' />
           <h1 className='text-3xl font-bold mb-4'>Access Restricted</h1>
           <p className='text-pw-muted text-lg mb-8'>
             You have already completed this {quiz.type}. Multiple attempts are
-            not allowed for this session.
+            not allowed.
           </p>
           <Link
             href='/quiz'
@@ -498,27 +510,19 @@ export default function PublicQuizPage() {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
-        <h2 className='text-2xl font-bold'>Quiz Not Found</h2>
-        <p className='text-pw-muted mt-2'>
-          The quiz you are looking for does not exist or has been removed. (
-          {String(params)})
-        </p>
+        <h2 className='text-2xl font-bold'>Assessment Not Found</h2>
         <Link
-          href='/tools'
+          href='/quiz'
           className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2'>
-          <ArrowLeft className='h-4 w-4' /> Back to Tools
+          <ArrowLeft className='h-4 w-4' /> Back
         </Link>
       </div>
     );
   }
 
-  if (isFinished && quiz?.endScreen) {
+  if (isFinished && quiz.endScreen) {
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
-        <div className='globe-div fixed inset-0'>
-          <div className='globe opacity-20' />
-        </div>
-
         <div className='container relative z-10 mx-auto px-6 py-20 max-w-2xl text-center'>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -536,16 +540,16 @@ export default function PublicQuizPage() {
             {quiz.type === 'quiz' && quiz.endScreen.showPerformance && (
               <Card className='card-glow p-5 mb-8 bg-white/5 border-white/10'>
                 <div className='text-sm font-bold text-pw-muted uppercase mb-2'>
-                  Your Performance
+                  Result
                 </div>
                 <div className='text-3xl font-bold mb-4'>
-                  {score} / {quiz.questions.length}
+                  {score} / {activeQuestions.length}
                 </div>
-                <div className='w-full h-3 bg-pw-surface rounded-full overflow-hidden border border-white/5 mb-4'>
+                <div className='w-full h-3 bg-pw-surface rounded-full overflow-hidden border border-white/5'>
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
-                      width: `${(score / quiz.questions.length) * 100}%`,
+                      width: `${(score / activeQuestions.length) * 100}%`,
                     }}
                     className='h-full gradient-brand rounded-full'
                   />
@@ -575,53 +579,175 @@ export default function PublicQuizPage() {
   }
 
   return (
-    <div className='relative min-h-screen flex overflow-hidden bg-pw-bg'>
-      {/* Planetary Background */}
-      <div className='globe-div fixed inset-0'>
-        <div className='globe opacity-10' />
-      </div>
-
-      {/* Background orbs */}
-      <div className='orb orb-accent w-[500px] h-[500px] -top-40 -left-40 opacity-40 blur-xl float' />
-      <div className='orb orb-primary w-[400px] h-[400px] -bottom-20 -right-20 opacity-30 blur-all float' />
-
-      {quiz.description && !started && (
-        <div
-          className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-10 max-w-5xl flex flex-col gap-3 align-center justify-center min-h-[40vh]'
-          style={{ justifySelf: 'center', alignSelf: 'center' }}>
-          <div
-            className='flex gap-2 text-center w-full'
-            style={{ justifyContent: 'center', alignItems: 'center' }}>
-            {quiz.type === 'quiz' ?
-              <Brain size={45} />
-            : <MessageCircle size={45} />}
-
-            <h1 className='font-bold text-[1.5rem]'>
-              {quiz.title.toUpperCase()}
-            </h1>
+    <div
+      onContextMenu={(e) => quiz.enforceSecurity && e.preventDefault()}
+      className={cn(
+        'relative min-h-screen flex flex-col transition-colors duration-500 pb-20',
+        quizTheme === 'dark' ?
+          'bg-pw-bg text-white'
+        : 'bg-slate-50 text-slate-900',
+        quiz.enforceSecurity && 'select-none',
+      )}>
+      {/* Dynamic Background */}
+      {quizTheme === 'dark' && (
+        <>
+          <div className='globe-div fixed inset-0'>
+            <div
+              className={cn(
+                'globe transition-opacity duration-1000',
+                quizTheme === 'dark' ? 'opacity-10' : 'opacity-[0.03]',
+              )}
+            />
           </div>
 
-          <p className='text-center w-full h-full overflow-auto max-h-[300px] text-[14px] opacity-80'>
+          {/* Background orbs */}
+          <div
+            className={cn(
+              'orb orb-accent w-[500px] h-[500px] -top-40 -left-40 blur-xl float transition-opacity',
+              quizTheme === 'dark' ? 'opacity-40' : 'opacity-10',
+            )}
+          />
+          <div
+            className={cn(
+              'orb orb-primary w-[400px] h-[400px] -bottom-20 -right-20 blur-all float transition-opacity',
+              quizTheme === 'dark' ? 'opacity-30' : 'opacity-10',
+            )}
+          />
+        </>
+      )}
+
+      {/* Floating Theme Assistant */}
+      <div className='fixed top-6 right-6 z-50'>
+        <Button
+          variant='ghost'
+          size='icon'
+          onClick={() => setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')}
+          className={cn(
+            'rounded-full h-12 w-12 border bkblur shadow-2xl transition-all active:scale-90',
+            quizTheme === 'dark' ?
+              'bg-white/5 border-white/10 text-pw-cyan hover:bg-white/10'
+            : 'bg-white border-slate-200 text-pw-primary shadow-lg hover:bg-slate-50',
+          )}>
+          {quizTheme === 'dark' ?
+            <Sun size={20} />
+          : <Moon size={20} />}
+        </Button>
+      </div>
+
+      {/* 1. Intro Gate */}
+      {!started && !showSecurityProtocol && !detailsCollected && (
+        <div className='container relative z-10 mx-auto px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
+          <div className='flex justify-center mb-6 text-pw-primary'>
+            {quiz.type === 'quiz' ?
+              <Brain size={60} />
+            : <MessageCircle size={60} />}
+          </div>
+          <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
+            {quiz.title.toUpperCase()}
+          </h1>
+          <p className='text-pw-muted text-lg leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'>
             {quiz.description}
           </p>
 
-          <div className='divider my-2 opacity-60'></div>
+          <div className='max-w-xs mx-auto w-full'>
+            {authRequired ?
+              <div className='bg-pw-danger/5 p-8 rounded-3xl border border-pw-danger/20 space-y-6'>
+                <Lock className='h-12 w-12 text-pw-danger mx-auto' />
+                <h3 className='text-xl font-bold'>Auth Required</h3>
+                <div className='grid grid-cols-1 gap-3'>
+                  <Link
+                    href='/login'
+                    className='btn-primary h-12 flex items-center justify-center font-bold'>
+                    Sign In
+                  </Link>
+                </div>
+              </div>
+            : <Button
+                className='w-full btn-primary h-14 text-xl font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
+                onClick={() => {
+                  if (quiz.enforceSecurity) setShowSecurityProtocol(true);
+                  else if (quiz.askDetails && quiz.askDetails.length > 0)
+                    setShowSecurityProtocol(true); // Jump to details
+                  else setStart(true);
+                }}>
+                CONTINUE
+              </Button>
+            }
+          </div>
+        </div>
+      )}
 
-          {quiz.askDetails && quiz.askDetails.length > 0 && !detailsCollected ?
-            <div className='w-full max-w-md bkblur mx-auto mt-8 bg-white/5 p-6 rounded-3xl border border-white/10'>
-              <h3 className='text-sm font-bold mb-4 uppercase tracking-widest text-pw-cyan'>
-                Enter your details
+      {/* 2. Security Gate */}
+      {quiz.enforceSecurity &&
+        !started &&
+        showSecurityProtocol &&
+        !detailsCollected && (
+          <div className='container relative z-10 mx-auto px-4 py-20 max-w-xl text-center flex-1 flex flex-col justify-center'>
+            <div className='bg-pw-primary/5 p-10 rounded-[2.5rem] border border-pw-primary/20 space-y-8 backdrop-blur-xl'>
+              <div className='flex flex-col items-center gap-4 border-b border-white/10 pb-6'>
+                <ShieldCheck className='h-16 w-16 text-pw-primary animate-pulse' />
+                <div className='text-center'>
+                  <h3 className='text-2xl font-bold'>Security Protocol</h3>
+                  <p className='text-xs text-pw-muted uppercase font-bold tracking-[0.2em] mt-1'>
+                    Active Monitoring Enabled
+                  </p>
+                </div>
+              </div>
+              <div className='space-y-6 text-left text-sm leading-relaxed'>
+                <div className='flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5'>
+                  <EyeOff className='h-6 w-6 text-pw-primary shrink-0' />
+                  <p>
+                    <span className='font-bold text-pw-text'>
+                      Tab-Lock System:
+                    </span>{' '}
+                    Leaving this window or switching tabs will trigger a
+                    violation. 3 violations result in immediate submission.
+                  </p>
+                </div>
+                <div className='flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5'>
+                  <Lock className='h-6 w-6 text-pw-primary shrink-0' />
+                  <p>
+                    <span className='font-bold text-pw-text'>
+                      Privacy Lockdown:
+                    </span>{' '}
+                    Context menus, text selection, and clipboard actions are
+                    restricted for integrity.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => {
+                    setStart(true);
+                  
+                }}
+                className='w-full btn-primary h-14 text-lg font-bold shadow-2xl relative overflow-hidden group'>
+                I UNDERSTAND & AGREE
+              </Button>
+            </div>
+          </div>
+        )}
+
+      
+      {/* 3. Details Gate */}
+      {!started &&
+        !detailsCollected &&
+        (quiz.askDetails || []).length > 0 &&
+        (!quiz.enforceSecurity || showSecurityProtocol) && (
+          <div className='container relative z-10 mx-auto px-2 py-10 max-w-lg flex-1 flex flex-col justify-center'>
+            <div className='bkblur bg-white/5 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl'>
+              <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
+                ENTER YOU DETAILS
               </h3>
-              <div className='space-y-4'>
-                {quiz.askDetails.map((detail, idx) => (
+              <div className='space-y-5'>
+                {quiz.askDetails?.map((detail, idx) => (
                   <div
                     key={idx}
-                    className='space-y-1'>
-                    <label className='text-[10px] font-bold text-pw-muted uppercase ml-1'>
+                    className='space-y-2'>
+                    <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
                       {detail.title}
                     </label>
                     {detail.type === 'sex' ?
-                      <div className='flex gap-2'>
+                      <div className='flex gap-3'>
                         {['Male', 'Female'].map((s) => (
                           <Button
                             key={s}
@@ -630,10 +756,10 @@ export default function PublicQuizPage() {
                               setUserData({ ...userData, [detail.title]: s })
                             }
                             className={cn(
-                              'flex-1 h-10 text-xs',
+                              'flex-1 h-12 rounded-2xl transition-all',
                               userData[detail.title] === s ?
-                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                              : 'bg-black/20',
+                                'bg-pw-primary text-white border-pw-primary shadow-lg shadow-pw-primary/30'
+                              : 'bg-black/20 hover:bg-black/40',
                             )}>
                             {s}
                           </Button>
@@ -653,38 +779,32 @@ export default function PublicQuizPage() {
                             className={'w-[40%] min-w-[100px] overflow-hidden'}>
                             <Button
                               variant='outline'
-                              className='h-10 text-xs w-full flex justify-between'>
+                              className='h-8 text-xs w-full flex justify-between'>
                               {userData[detail.title] || 'Select'}
-                              <ChevronDown className='h-2 w-2' />
+                              <ChevronDown size={16} />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent className='w-full rounded-xl'>
-                            {detail.options?.map((option) => (
+                          <DropdownMenuContent className='w-56 bg-pw-surface border-white/10 rounded-2xl'>
+                            {detail.options?.map((opt) => (
                               <DropdownMenuItem
-                                key={option}
+                                key={opt}
                                 onClick={() =>
                                   setUserData({
                                     ...userData,
-                                    [detail.title]: option,
+                                    [detail.title]: opt,
                                   })
-                                }>
-                                {option}
+                                }
+                                className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
+                                {opt}
                               </DropdownMenuItem>
                             ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     : <input
-                        type={
-                          detail.type === 'number' ? 'number'
-                          : detail.type === 'tel' ?
-                            'tel'
-                          : detail.type === 'email' ?
-                            'email'
-                          : 'text'
-                        }
-                        className='w-full h-10 bg-black/20 border border-white/10 rounded-xl px-4 text-sm focus:border-pw-primary outline-none'
-                        placeholder={`Enter ${detail.title.toLowerCase()}`}
+                        type={detail.type}
+                        className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
+                        placeholder={`Enter ${detail.title}...`}
                         value={userData[detail.title] || ''}
                         onChange={(e) =>
                           setUserData({
@@ -697,13 +817,13 @@ export default function PublicQuizPage() {
                   </div>
                 ))}
                 <Button
-                  className={'btn-primary h-11 w-full mt-4'}
+                  className='btn-primary h-14 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
                   onClick={() => {
                     const complete = quiz.askDetails?.every(
                       (d) => userData[d.title],
                     );
                     if (!complete)
-                      return toast.error('Please fill in all details');
+                      return toast.error('Required fields missing');
                     setDetailsCollected(true);
                     setStart(true);
                   }}>
@@ -711,39 +831,33 @@ export default function PublicQuizPage() {
                 </Button>
               </div>
             </div>
-          : <div className='w-full justify-center mt-4 flex'>
-              <Button
-                className={'btn-primary h-11 w-50'}
-                onClick={() => setStart(true)}>
-                START {quiz.type.toUpperCase()}
-              </Button>
-            </div>
-          }
-        </div>
-      )}
+          </div>
+        )}
+
+      {/* 4. Active Assessment View */}
       {started && (
-        <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 md:py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12'>
+        <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8'>
           <div className='lg:col-span-8'>
             <div className='mb-12'>
               <div className='flex justify-between items-end mb-6'>
                 <div>
-                  <div className='badge mb-4'>
-                    Question {currentQuestion + 1} / {activeQuestions.length}
+                  <div className='badge bg-pw-primary/10 text-pw-primary border-pw-primary/20 mb-4'>
+                    Question {currentQuestion + 1} of {activeQuestions.length}
                   </div>
-                  <h1 className='text-3xl font-bold font-display'>
+                  <h1 className='text-3xl font-bold font-display tracking-tight'>
                     {quiz.title}
                   </h1>
                 </div>
-                <div className='flex flex-col items-end gap-2'>
+                <div className='flex flex-col items-end gap-3'>
                   {quiz.hasTimer && timeLeft !== null && (
                     <div
                       className={cn(
-                        'flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-sm border',
+                        'flex items-center gap-2 px-4 py-2 rounded-2xl font-mono text-lg border-2 transition-all',
                         timeLeft < 60 ?
-                          'bg-pw-danger/10 border-pw-danger text-pw-danger animate-pulse'
-                        : 'bg-white/5 border-white/10',
+                          'bg-pw-danger/10 border-pw-danger text-pw-danger animate-pulse shadow-lg shadow-pw-danger/20'
+                        : 'bg-white/5 border-white/10 shadow-xl',
                       )}>
-                      <Clock className='h-4 w-4' />
+                      <Clock size={20} />
                       {formatTime(timeLeft)}
                     </div>
                   )}
@@ -754,9 +868,9 @@ export default function PublicQuizPage() {
                   )}
                 </div>
               </div>
-              <div className='w-full h-1.5 bg-white/5 rounded-full overflow-hidden'>
+              <div className='w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5'>
                 <motion.div
-                  className='h-full gradient-brand rounded-full'
+                  className='h-full gradient-brand rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)]'
                   animate={{
                     width: `${(currentQuestion / activeQuestions.length) * 100}%`,
                   }}
@@ -764,10 +878,11 @@ export default function PublicQuizPage() {
               </div>
             </div>
 
-            <Card className='glass bkblur rounded-3xl card p-4 mb-8 bg-pw-surface border-white/10'>
-              <div className='flex flex-col gap-2'>
-                <div className='flex justify-between items-start'>
-                  <h2 className='text-lg md:text-2xl pt-1 font-bold leading-relaxed flex-1'>
+            <Card className='glass bkblur rounded-[2rem] p-8 md:p-10 mb-8 bg-pw-surface border-white/10 shadow-2xl relative overflow-hidden'>
+              {/* Question Header */}
+              <div className='flex flex-col gap-4 mb-8'>
+                <div className='flex justify-between items-start gap-4'>
+                  <h2 className='text-lg md:text-2xl font-bold leading-snug flex-1'>
                     {q?.text}
                   </h2>
                   {quiz.correctOption && showFeedback && (
@@ -775,7 +890,7 @@ export default function PublicQuizPage() {
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className={cn(
-                        'ml-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border shrink-0',
+                        'px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm',
                         isCorrect ?
                           'bg-pw-success/10 border-pw-success text-pw-success'
                         : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
@@ -788,47 +903,48 @@ export default function PublicQuizPage() {
                   showFeedback &&
                   q?.correctExplanation && (
                     <motion.div
-                      initial={{ opacity: 0, y: -5 }}
+                      initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className='p-3 rounded-xl bg-pw-primary/5 border border-pw-primary/10 text-xs text-pw-text leading-relaxed'>
-                      <div className='font-bold text-pw-primary uppercase text-[10px] mb-1 tracking-widest'>
-                        Explanation
+                      className='p-5 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
+                      <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
+                        <Brain size={14} /> Explanation
                       </div>
                       {q.correctExplanation}
                     </motion.div>
                   )}
               </div>
 
+              {/* Options Section */}
               <AnimatePresence mode='sync'>
                 <motion.div
                   key={currentQuestion}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}>
+                  exit={{ opacity: 0, x: -20 }}
+                  className='space-y-4'>
                   {q?.type === 'dropdown' ?
-                    <div className='flex justify-center py-8'>
+                    <div className='flex justify-center py-6'>
                       <DropdownMenu>
                         <DropdownMenuTrigger>
                           <div
-                            className='h-12 px-8 gap-4 min-w-[200px] bg-white/5 text-lg flex rounded-xl'
-                            style={{
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              textAlign: 'center',
-                            }}>
-                            {selectedOption !== null ?
+                            variant='outline'
+                            className='h-14 flex items-center justify-between px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
+                            {selectedOption ?
                               (
-                                q.options.find(
+                                (shuffledOptions[q.id] || q.options).find(
                                   (o) =>
                                     (typeof o === 'string' ? o : o.id) ===
                                     selectedOption,
                                 ) as any
                               )?.text || selectedOption
-                            : 'Select an answer...'}
-                            <ChevronDown className='h-5 w-5 text-pw-muted' />
+                            : 'Choose your answer...'}
+                            <ChevronDown
+                              size={20}
+                              className='text-pw-primary'
+                            />
                           </div>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-72 p-2'>
+                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-3 rounded-[1.5rem] shadow-2xl'>
                           {(shuffledOptions[q.id] || q.options)?.map(
                             (opt, idx) => {
                               const optId =
@@ -841,11 +957,14 @@ export default function PublicQuizPage() {
                                 <DropdownMenuItem
                                   key={optId}
                                   onClick={() => setSelectedOption(optId)}
-                                  className='h-12 text-base gap-3 focus:bg-pw-primary/10 rounded-lg cursor-pointer'>
-                                  {selectedOption === optId && (
-                                    <Check className='h-4 w-4 text-pw-primary' />
-                                  )}
+                                  className='h-12 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4'>
                                   {optText}
+                                  {selectedOption === optId && (
+                                    <Check
+                                      size={18}
+                                      className='text-pw-primary mr-2'
+                                    />
+                                  )}
                                 </DropdownMenuItem>
                               );
                             },
@@ -858,61 +977,56 @@ export default function PublicQuizPage() {
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       placeholder='Type your answer here...'
-                      className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-2 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all'
+                      className='w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-5 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted focus:ring-1 focus:ring-pw-primary'
                     />
                   : <div
                       className={cn(
-                        'grid gap-3',
+                        'grid gap-4',
                         q?.type === 'multiple_choice' ?
                           'grid-cols-1'
                         : 'grid-cols-2',
                       )}>
-                      {(shuffledOptions[q.id] || q?.options)?.map(
-                        (opt, idx) => {
-                          const optId =
-                            typeof opt === 'string' ? idx.toString() : opt?.id;
-                          const optText =
-                            typeof opt === 'string' ? opt : opt?.text;
-                          const isSelected =
-                            q?.type === 'checkbox' ?
-                              selectedOptions.includes(optId)
-                            : selectedOption === optId;
-
-                          return (
-                            <button
-                              key={optId}
-                              onClick={() => {
-                                if (q?.type === 'checkbox') {
-                                  setSelectedOptions((prev) =>
-                                    prev.includes(optId) ?
-                                      prev.filter((id) => id !== optId)
-                                    : [...prev, optId],
-                                  );
-                                } else {
-                                  setSelectedOption(optId);
-                                }
-                              }}
+                      {(shuffledOptions[q.id] || q?.options).map((opt, idx) => {
+                        const optId =
+                          typeof opt === 'string' ? idx.toString() : opt?.id;
+                        const optText =
+                          typeof opt === 'string' ? opt : opt?.text;
+                        const isSelected =
+                          q?.type === 'checkbox' ?
+                            selectedOptions.includes(optId)
+                          : selectedOption === optId;
+                        return (
+                          <button
+                            key={optId}
+                            onClick={() =>
+                              q?.type === 'checkbox' ?
+                                setSelectedOptions((p) =>
+                                  p.includes(optId) ?
+                                    p.filter((i) => i !== optId)
+                                  : [...p, optId],
+                                )
+                              : setSelectedOption(optId)
+                            }
+                            className={cn(
+                              'w-full p-4 md:p-6 text-left rounded-2xl border-2 transition-all group flex items-center justify-between',
+                              isSelected ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg'
+                              : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                            )}>
+                            <span className='font-medium text-sm md:text-base'>
+                              {optText}
+                            </span>
+                            <CheckCircle
                               className={cn(
-                                'w-full p-2 px-4 md:p-3 text-left rounded-xl border transition-all duration-200 flex items-center justify-between group',
+                                'h-6 w-6 transition-all',
                                 isSelected ?
-                                  'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg shadow-pw-primary/10'
-                                : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                              )}>
-                              <span className='font-medium text-sm md:text-base'>
-                                {optText}
-                              </span>
-                              <CheckCircle
-                                className={cn(
-                                  'h-4 w-4 transition-all opacity-0',
-                                  isSelected ?
-                                    'opacity-100 translate-x-0'
-                                  : 'group-hover:opacity-50 -translate-x-2',
-                                )}
-                              />
-                            </button>
-                          );
-                        },
-                      )}
+                                  'opacity-100 scale-110 text-pw-primary'
+                                : 'opacity-0 scale-50',
+                              )}
+                            />
+                          </button>
+                        );
+                      })}
                     </div>
                   }
                 </motion.div>
@@ -932,25 +1046,31 @@ export default function PublicQuizPage() {
 
                 <Button
                   onClick={handleNext}
-                  className='btn-primary h-10 w-[25vmin] text-lg gap-2 ml-auto'>
-                  {currentQuestion + 1 === quiz.questions.length ?
+                  className='btn-primary h-14 px-12 rounded-2xl text-xl font-bold gap-3 shadow-2xl shadow-pw-primary/20 ml-auto transition-transform active:scale-95'>
+                  {currentQuestion + 1 === activeQuestions.length ?
                     'Finish'
                   : 'Next'}
-                  <ChevronRight className='h-5 w-5' />
+                  <ChevronRight size={22} />
                 </Button>
               </AnimatePresence>
             </div>
           </div>
 
-          {/* Sidebar for accessories */}
+          {/* Assistant Sidebar */}
           <div className='lg:col-span-4 space-y-6'>
             {q?.accessory === 'calculator' && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}>
-                <h4 className='text-[10px] font-bold text-pw-muted uppercase tracking-widest mb-3 px-1'>
-                  Tool Assistant
-                </h4>
+                <div className='flex items-center gap-2 mb-4 px-2'>
+                  <AlertTriangle
+                    size={14}
+                    className='text-pw-primary'
+                  />
+                  <h4 className='text-[10px] font-bold text-pw-muted uppercase tracking-[0.3em]'>
+                    System Assistant
+                  </h4>
+                </div>
                 <Calculator />
               </motion.div>
             )}

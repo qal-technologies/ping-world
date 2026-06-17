@@ -104,6 +104,7 @@ export interface Quiz {
   randomizeOptions?: boolean;
   randomizeQuestions?: boolean;
   allowRetry?: boolean;
+  enforceSecurity?: boolean;
   endScreen: {
     title: string;
     message: string;
@@ -461,7 +462,32 @@ const QuizBuilder = ({
                               : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
                             )}>
                             <ShieldCheck className='h-4 w-4' />
-                            {editedQuiz.allowRetry ? 'ALLOWED' : 'DISABLED'}
+                            {editedQuiz.allowRetry ? 'ALLOWED' : 'RESTRICTED'}
+                          </Button>
+                        </div>
+                        <div className='col-span-2 space-y-2'>
+                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                            Security (Anti-Cheat)
+                          </label>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                enforceSecurity: !editedQuiz.enforceSecurity,
+                              })
+                            }
+                            className={cn(
+                              'w-full h-10 gap-2 font-bold transition-all',
+                              editedQuiz.enforceSecurity ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            <ShieldCheck className='h-4 w-4' />
+                            {editedQuiz.enforceSecurity ?
+                              'STRICT MODE'
+                            : 'STANDARD MODE'}
                           </Button>
                         </div>
                       </div>
@@ -973,90 +999,105 @@ const QuizBuilder = ({
                         <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4'>
                           <Type className='h-8 w-8 text-pw-primary opacity-50' />
                           <div>
-                            <p className='text-sm text-pw-primary font-bold'>
-                              Text Input Mode
-                            </p>
-                            <p className='text-[10px] text-pw-muted max-w-[250px] mt-1'>
-                              Takers will type their answer. Perfect for
-                              open-ended feedback or exact keyword matching.
+                            <p className='text-sm font-bold'>Input Question</p>
+                            <p className='text-[10px] text-pw-muted max-w-[200px]'>
+                              Takers will type their answer. Leave the "Keyword"
+                              field empty to accept any text as correct.
                             </p>
                           </div>
+                          <Input
+                            value={
+                              editedQuiz.questions[currentStep].correctIndex ||
+                              ''
+                            }
+                            onChange={(e) =>
+                              updateQuestion(currentStep, {
+                                ...editedQuiz.questions[currentStep],
+                                correctIndex: e.target.value,
+                              })
+                            }
+                            placeholder='Keyword (Optional)'
+                            className='bg-white/5 border-white/10 h-10 text-center focus:border-pw-primary'
+                          />
                         </div>
 
                         {editedQuiz.type === 'quiz' && (
-                          <div className='space-y-2'>
+                          <div className='space-y-2 mt-4'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
-                              Correct Answer (Model)
+                              Explanation (Optional)
                             </label>
-                            <Input
+                            <textarea
                               value={
                                 editedQuiz.questions[currentStep]
-                                  .correctIndex || ''
+                                  .correctExplanation || ''
                               }
                               onChange={(e) =>
                                 updateQuestion(currentStep, {
                                   ...editedQuiz.questions[currentStep],
-                                  correctIndex: e.target.value,
+                                  correctExplanation: e.target.value,
                                 })
                               }
-                              placeholder='The answer to match...'
-                              className='bg-white/5 border-white/10 h-12 focus:border-pw-primary'
+                              placeholder='Explain why this is correct...'
+                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
                             />
-                            {editedQuiz.type === 'quiz' && (
-                              <div className='space-y-2 mt-4'>
-                                <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
-                                  Explanation (Optional)
-                                </label>
-                                <textarea
-                                  value={
-                                    editedQuiz.questions[currentStep]
-                                      .correctExplanation || ''
-                                  }
-                                  onChange={(e) =>
-                                    updateQuestion(currentStep, {
-                                      ...editedQuiz.questions[currentStep],
-                                      correctExplanation: e.target.value,
-                                    })
-                                  }
-                                  placeholder='Explain why this is correct...'
-                                  className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
-                                />
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
                     : editedQuiz.questions[currentStep].type === 'true_false' ?
-                      <div className='grid grid-cols-2 gap-4'>
-                        {['True', 'False'].map((val) => (
-                          <Button
-                            key={val}
-                            variant={
-                              (
+                      <div className='space-y-4'>
+                        <div className='grid grid-cols-2 gap-4'>
+                          {['True', 'False'].map((val) => (
+                            <Button
+                              key={val}
+                              variant={
+                                (
+                                  String(
+                                    editedQuiz.questions[currentStep]
+                                      .correctIndex,
+                                  ).toLowerCase() === val.toLowerCase()
+                                ) ?
+                                  'default'
+                                : 'outline'
+                              }
+                              onClick={() =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  correctIndex: val.toLowerCase(),
+                                })
+                              }
+                              className={cn(
+                                'h-16 text-lg font-bold border-white/5',
                                 String(
                                   editedQuiz.questions[currentStep]
                                     .correctIndex,
-                                ).toLowerCase() === val.toLowerCase()
-                              ) ?
-                                'default'
-                              : 'outline'
-                            }
-                            onClick={() =>
-                              updateQuestion(currentStep, {
-                                ...editedQuiz.questions[currentStep],
-                                correctIndex: val.toLowerCase(),
-                              })
-                            }
-                            className={cn(
-                              'h-16 text-lg font-bold border-white/5',
-                              String(
-                                editedQuiz.questions[currentStep].correctIndex,
-                              ).toLowerCase() === val.toLowerCase() &&
-                                'bg-pw-primary shadow-xl shadow-pw-primary/20',
-                            )}>
-                            {val}
-                          </Button>
-                        ))}
+                                ).toLowerCase() === val.toLowerCase() &&
+                                  'bg-pw-primary shadow-xl shadow-pw-primary/20',
+                              )}>
+                              {val}
+                            </Button>
+                          ))}
+                        </div>
+                        {editedQuiz.type === 'quiz' && (
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
+                              Explanation (Optional)
+                            </label>
+                            <textarea
+                              value={
+                                editedQuiz.questions[currentStep]
+                                  .correctExplanation || ''
+                              }
+                              onChange={(e) =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  correctExplanation: e.target.value,
+                                })
+                              }
+                              placeholder='Explain why this answer is correct...'
+                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
+                            />
+                          </div>
+                        )}
                       </div>
                     : <div className='space-y-3'>
                         {editedQuiz.questions[currentStep].options.map(
@@ -1169,6 +1210,28 @@ const QuizBuilder = ({
                           className='w-full border-dashed border-white/10 hover:bg-white/5 h-10 text-xs gap-2'>
                           <Plus className='h-3 w-3' /> Add Option
                         </Button>
+
+                        {editedQuiz.type === 'quiz' && (
+                          <div className='space-y-2 mt-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
+                              Explanation (Optional)
+                            </label>
+                            <textarea
+                              value={
+                                editedQuiz.questions[currentStep]
+                                  .correctExplanation || ''
+                              }
+                              onChange={(e) =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  correctExplanation: e.target.value,
+                                })
+                              }
+                              placeholder='Explain why the correct answer is right...'
+                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
+                            />
+                          </div>
+                        )}
                       </div>
                     }
                   </div>
@@ -1248,25 +1311,17 @@ export default function QuizPage() {
     }
   };
 
-  // Load from hybrid storage
+  // Load from hybrid storage (offline-first)
   useEffect(() => {
     const loadQuizzes = async () => {
-      // Background Sync trigger
-      try {
-        await HybridStorage.syncLocalToRemote('quiz');
-      } catch (e) {
-        console.warn('Sync failed:', e);
-      }
-
-      const data = await HybridStorage.getAll('quiz');
-      setQuizzes(data);
+      // 1. Serve local cache immediately
+      const localData = await HybridStorage.getAll('quiz', (freshItems) => {
+        // 2. Called in background when remote data arrives — silently refresh
+        setQuizzes(freshItems);
+      });
+      setQuizzes(localData);
     };
     loadQuizzes();
-
-    // Listen for online events to re-sync
-    const handleOnline = () => loadQuizzes();
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   // Managed by HybridStorage exclusively
@@ -1300,8 +1355,30 @@ export default function QuizPage() {
     if (invalid)
       return toast.error('Please fill in all questions and options.');
 
+    // Obfuscate answer key for security
+    const securedQuestions = quiz.questions.map((q) => {
+      let securedIndex = q.correctIndex;
+      try {
+        if (typeof q.correctIndex === 'string') {
+          securedIndex = btoa(q.correctIndex);
+        } else if (Array.isArray(q.correctIndex)) {
+          // Encode array values too if needed, but for now simple string btoa
+          securedIndex = btoa(JSON.stringify(q.correctIndex));
+        }
+      } catch (e) {
+        securedIndex = q.correctIndex;
+      }
+      return { ...q, correctIndex: securedIndex };
+    });
+
+    const quizToSave = { ...quiz, questions: securedQuestions };
+
     try {
-      const savedItem = await HybridStorage.save(quiz.id, quiz, 'quiz');
+      const savedItem = await HybridStorage.save(
+        quizToSave.id,
+        quizToSave,
+        'quiz',
+      );
 
       const existingIndex = quizzes.findIndex((q) => q.id === quiz.id);
       let newQuizzes;

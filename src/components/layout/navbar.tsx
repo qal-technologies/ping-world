@@ -18,7 +18,7 @@ import {
   ChevronDown,
   Home,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {supabase} from '@/lib/supabase';
 
 const toolLinks = [
   {
@@ -70,6 +71,17 @@ const navLinks = [
 export const Navbar = () => {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [session, setSession] = useState < any | null>();
+
+  useEffect(() => {
+    const checkUser = async ()=> {
+    const {data: {session}} = await supabase.auth.getSession();
+    if(session){
+      setSession(session);
+    }
+  }
+  checkUser();
+  }, []);
 
   return (
     <header className='fixed top-0 left-0 right-0 z-50 border-b border-white/5 h-[10vh] glass'>
@@ -162,11 +174,21 @@ export const Navbar = () => {
             className='hidden md:flex h-9 w-9 items-center justify-center rounded-lg text-pw-muted hover:text-pw-text hover:bg-pw-primary/10 transition-colors duration-200'>
             <Search className='h-4 w-4' />
           </Link>
-          <Link
-            href='/login'
-            className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
-            Sign In
-          </Link>
+          {
+            session && pathname !== '/dashboard' ? (
+              <Link
+                href='/dashboard'
+                className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
+                Dashboard
+              </Link>
+            ) : !session && (
+              <Link
+                href='/login'
+                className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
+                Sign In
+              </Link>
+            )
+          }
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label='Toggle menu'

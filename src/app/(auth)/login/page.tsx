@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Eye, EyeOff, Key, Mail, ArrowRight, LogIn } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -17,6 +17,20 @@ export default function LoginPage() {
     password: '',
   });
   const router = useRouter();
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        router.push('/dashboard');
+      }
+      setPageLoading(false);
+    };
+    checkUser();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,13 +48,23 @@ export default function LoginPage() {
       if (error) throw error;
 
       toast.success('Welcome back!');
-      router.push('/admin'); // Assuming admin is the dashboard
+      router.push('/dashboard'); // Assuming admin is the dashboard
     } catch (err: any) {
       toast.error(err.message || 'Failed to login');
     } finally {
       setLoading(false);
     }
   };
+
+  if (pageLoading) {
+    return (
+      <div className='min-h-screen w-full p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
+        <p className='font-bold text-lg'>Loading...</p>
+        <div className='divider'></div>
+        <p className='text-xs mt-1 opacity-50'>Checking your login status...</p>
+      </div>
+    );
+  }
 
   return (
     <div className='min-h-screen w-full p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
