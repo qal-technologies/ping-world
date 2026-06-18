@@ -176,6 +176,7 @@ export default function PublicQuizPage() {
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
 
   const [started, setStart] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
@@ -199,7 +200,7 @@ export default function PublicQuizPage() {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        if (target.enforceIdentity && !session) {
+        if (!target.askDetails && !session) {
           setAuthRequired(true);
         }
 
@@ -616,26 +617,9 @@ export default function PublicQuizPage() {
         </>
       )}
 
-      {/* Floating Theme Assistant */}
-      <div className='fixed top-6 right-6 z-50'>
-        <Button
-          variant='ghost'
-          size='icon'
-          onClick={() => setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')}
-          className={cn(
-            'rounded-full h-12 w-12 border bkblur shadow-2xl transition-all active:scale-90',
-            quizTheme === 'dark' ?
-              'bg-white/5 border-white/10 text-pw-cyan hover:bg-white/10'
-            : 'bg-white border-slate-200 text-pw-primary shadow-lg hover:bg-slate-50',
-          )}>
-          {quizTheme === 'dark' ?
-            <Sun size={20} />
-          : <Moon size={20} />}
-        </Button>
-      </div>
 
       {/* 1. Intro Gate */}
-      {!started && !showSecurityProtocol && !detailsCollected && (
+      {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
         <div className='container relative z-10 mx-auto px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
           <div className='flex justify-center mb-6 text-pw-primary'>
             {quiz.type === 'quiz' ?
@@ -663,12 +647,18 @@ export default function PublicQuizPage() {
                 </div>
               </div>
             : <Button
-                className='w-full btn-primary h-14 text-xl font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
+                className='w-full btn-primary h-12 text-xl font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
                 onClick={() => {
-                  if (quiz.enforceSecurity) setShowSecurityProtocol(true);
-                  else if (quiz.askDetails && quiz.askDetails.length > 0)
-                    setShowSecurityProtocol(true); // Jump to details
-                  else setStart(true);
+                  if (quiz.enforceSecurity) {
+                    setShowSecurityProtocol(true);
+                  } else if (quiz.askDetails && quiz.askDetails.length > 0) {
+                    setDetailsCollected(false); 
+                    setShowSecurityProtocol(false);
+                    // the third gate condition triggers automatically now
+                  } else {
+                    setStart(true);
+                  }
+                  setShowIntro(false);
                 }}>
                 CONTINUE
               </Button>
@@ -729,7 +719,7 @@ export default function PublicQuizPage() {
 
       
       {/* 3. Details Gate */}
-      {!started &&
+      {!showIntro && !started &&
         !detailsCollected &&
         (quiz.askDetails || []).length > 0 &&
         (!quiz.enforceSecurity || showSecurityProtocol) && (
@@ -848,6 +838,22 @@ export default function PublicQuizPage() {
                     {quiz.title}
                   </h1>
                 </div>
+                <div className='flex gap-3 items-center hidden'>
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={() => setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')}
+                    className={cn(
+                      'rounded-full h-10 w-10 border bkblur shadow-sm transition-all active:scale-90',
+                      quizTheme === 'dark' ?
+                        'bg-white/5 border-white/10 text-pw-cyan hover:bg-white/10'
+                      : 'bg-white border-slate-200 text-pw-primary shadow-sm hover:bg-slate-50',
+                    )}>
+                    {quizTheme === 'dark' ?
+                      <Sun size={18} />
+                    : <Moon size={18} />}
+                  </Button>
+                </div>
                 <div className='flex flex-col items-end gap-3'>
                   {quiz.hasTimer && timeLeft !== null && (
                     <div
@@ -878,10 +884,10 @@ export default function PublicQuizPage() {
               </div>
             </div>
 
-            <Card className='glass bkblur rounded-[2rem] p-8 md:p-10 mb-8 bg-pw-surface border-white/10 shadow-2xl relative overflow-hidden'>
+            <Card className='glass bkblur rounded-[1.5rem] p-4 md:p-6 mb-6 bg-pw-surface border-white/10 shadow-xl relative overflow-hidden'>
               {/* Question Header */}
-              <div className='flex flex-col gap-4 mb-8'>
-                <div className='flex justify-between items-start gap-4'>
+              <div className='flex flex-col gap-4 pt-1 mb-4'>
+                <div className='flex justify-between items-start gap-2'>
                   <h2 className='text-lg md:text-2xl font-bold leading-snug flex-1'>
                     {q?.text}
                   </h2>
@@ -890,7 +896,7 @@ export default function PublicQuizPage() {
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className={cn(
-                        'px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm',
+                        'px-2 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm',
                         isCorrect ?
                           'bg-pw-success/10 border-pw-success text-pw-success'
                         : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
@@ -905,7 +911,7 @@ export default function PublicQuizPage() {
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className='p-5 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
+                      className='p-2 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
                       <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
                         <Brain size={14} /> Explanation
                       </div>
@@ -921,12 +927,12 @@ export default function PublicQuizPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className='space-y-4'>
+                  className='space-y-2'>
                   {q?.type === 'dropdown' ?
-                    <div className='flex justify-center py-6'>
+                    <div className='flex justify-center py-1'>
                       <DropdownMenu>
                         <DropdownMenuTrigger>
-                          <div
+                          <Button
                             variant='outline'
                             className='h-14 flex items-center justify-between px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
                             {selectedOption ?
@@ -942,7 +948,7 @@ export default function PublicQuizPage() {
                               size={20}
                               className='text-pw-primary'
                             />
-                          </div>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-3 rounded-[1.5rem] shadow-2xl'>
                           {(shuffledOptions[q.id] || q.options)?.map(
@@ -961,7 +967,7 @@ export default function PublicQuizPage() {
                                   {optText}
                                   {selectedOption === optId && (
                                     <Check
-                                      size={18}
+                                      size={15}
                                       className='text-pw-primary mr-2'
                                     />
                                   )}
@@ -977,7 +983,7 @@ export default function PublicQuizPage() {
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       placeholder='Type your answer here...'
-                      className='w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-5 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted focus:ring-1 focus:ring-pw-primary'
+                      className='w-full h-20 bg-white/5 border border-white/10 rounded-2xl p-2 text-base focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted focus:ring-1 focus:ring-pw-primary'
                     />
                   : <div
                       className={cn(
@@ -1008,7 +1014,7 @@ export default function PublicQuizPage() {
                               : setSelectedOption(optId)
                             }
                             className={cn(
-                              'w-full p-4 md:p-6 text-left rounded-2xl border-2 transition-all group flex items-center justify-between',
+                              'w-full p-2 pl-3 md:p-4 text-left rounded-2xl border-2 transition-all group flex items-center justify-between',
                               isSelected ?
                                 'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg'
                               : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
@@ -1018,7 +1024,7 @@ export default function PublicQuizPage() {
                             </span>
                             <CheckCircle
                               className={cn(
-                                'h-6 w-6 transition-all',
+                                'h-5 w-5 transition-all',
                                 isSelected ?
                                   'opacity-100 scale-110 text-pw-primary'
                                 : 'opacity-0 scale-50',
@@ -1046,7 +1052,7 @@ export default function PublicQuizPage() {
 
                 <Button
                   onClick={handleNext}
-                  className='btn-primary h-14 px-12 rounded-2xl text-xl font-bold gap-3 shadow-2xl shadow-pw-primary/20 ml-auto transition-transform active:scale-95'>
+                  className='btn-primary h-10 px-8 rounded-2xl text-lg font-bold gap-2 shadow-xl shadow-pw-primary/20 ml-auto transition-transform active:scale-95'>
                   {currentQuestion + 1 === activeQuestions.length ?
                     'Finish'
                   : 'Next'}

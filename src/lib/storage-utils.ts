@@ -63,6 +63,64 @@ function flattenItems(items: StorageItem[]): any[] {
 }
 
 // ---------------------------------------------------------------------------
+
+// Safely construct payloads mapping local state directly to DB schema columns
+function buildSupabasePayload(
+  type: StorageItem['type'],
+  content: any,
+  userId: string,
+  timestamp: string,
+) {
+  const baseId = content.id;
+  
+  if (type === 'quiz') {
+    return {
+      id: baseId,
+      user_id: userId,
+      title: content.title,
+      description: content.description,
+      type: content.type,
+      questions: content.questions,
+      responses: content.responses,
+      canGoBack: content.canGoBack,
+      showScore: content.showScore,
+      hasTimer: content.hasTimer,
+      correctOption: content.correctOption,
+      correctOptionDes: content.correctOptionDes,
+      randomizeOptions: content.randomizeOptions,
+      randomizeQuestions: content.randomizeQuestions,
+      allowRetry: content.allowRetry,
+      enforceSecurity: content.enforceSecurity,
+      enforceIdentity: content.enforceIdentity,
+      askDetails: content.askDetails,
+      endScreen: content.endScreen,
+      updated_at: timestamp
+    };
+  } else if (type === 'link') {
+    return {
+      id: baseId,
+      creator_id: userId, // Schema uses creator_id
+      original_url: content.originalUrl || content.original_url,
+      clicks: content.clicks || 0
+      // updated_at does not exist on short_links
+    };
+  } else if (type === 'message') {
+    return {
+      id: baseId,
+      recipient_id: content.recipientId || content.recipient_id || userId,
+      content: content.content,
+      is_seen: content.isSeen || content.is_seen || false
+      // updated_at does not exist on messages
+    };
+  }
+
+  // Fallback for unexpected types (like 'post' if ever created)
+  const result = { ...content, id: baseId, user_id: userId, updated_at: timestamp };
+  delete result.createdAt;
+  delete result.updatedAt;
+  return result;
+}
+
 // Background remote fetch → merge → optional callback
 // ---------------------------------------------------------------------------
 
@@ -118,12 +176,26 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
 
     for (const item of unsynced) {
       try {
-        const { error } = await supabase.from(tableName(type)).upsert({
-          id: item.id,
-          user_id: session.user.id,
-          ...item.content,
-          updated_at: new Date().toISOString(),
-        });
+        const payload = buildSupabasePayload(
+          type,
+          item.content,
+          session.user.id,
+          new Date().toISOString(),
+        );
+
+        let { error } = await supabase.from(tableName(type)).upsert(payload);
+
+        // Auto-heal missing profile if trigger failed
+        if (error?.code === '23503' && error.message.includes('profiles')) {
+          await supabase.from('profiles').upsert({
+            id: session.user.id,
+            username: 'user_' + session.user.id.substring(0, 8),
+            display_name: session.user.email?.split('@')[0] || 'User',
+          });
+          // Retry original upsert
+          const retry = await supabase.from(tableName(type)).upsert(payload);
+          error = retry.error;
+        }
 
         if (!error) {
           item.is_synced = true;
@@ -191,12 +263,26 @@ export const HybridStorage = {
           } = await supabase.auth.getSession();
           if (!session) return;
 
-          const { error } = await supabase.from(tableName(type)).upsert({
-            id: item.id,
-            user_id: session.user.id,
-            ...content,
-            updated_at: timestamp,
-          });
+          const payload = buildSupabasePayload(
+            type,
+            content,
+            session.user.id,
+            timestamp,
+          );
+
+          let { error } = await supabase.from(tableName(type)).upsert(payload);
+
+          // Auto-heal missing profile if trigger failed
+          if (error?.code === '23503' && error.message.includes('profiles')) {
+            await supabase.from('profiles').upsert({
+              id: session.user.id,
+              username: 'user_' + session.user.id.substring(0, 8),
+              display_name: session.user.email?.split('@')[0] || 'User',
+            });
+            // Retry original upsert
+            const retry = await supabase.from(tableName(type)).upsert(payload);
+            error = retry.error;
+          }
 
           if (!error) {
             // Mark as synced locally
@@ -242,21 +328,36 @@ export const HybridStorage = {
     return localFlat;
   },
 
-  /**
-   * Save a quiz response.
-   */
   async saveResponse(quizId: string, response: any) {
     const quizzes = await this.getAll('quiz');
     const index = quizzes.findIndex(
       (q: any) => String(q.id) === String(quizId),
     );
+
     if (index === -1) return null;
 
     const quiz = quizzes[index];
     if (!quiz.responses) quiz.responses = [];
     quiz.responses.push({ ...response, timestamp: new Date().toISOString() });
 
-    return await this.save(quizId, quiz, 'quiz');
+    // 1. Save locally instantly
+    await this.save(quizId, quiz, 'quiz');
+
+    // 2. Fire RPC if online (bypasses RLS so anyone can submit)
+    if (isOnline()) {
+      (async () => {
+        try {
+          await supabase.rpc('submit_quiz_response', {
+            p_quiz_id: quizId,
+            p_response: { ...response, timestamp: new Date().toISOString() },
+          });
+        } catch (e) {
+          console.warn('[HybridStorage] Remote response push failed:', e);
+        }
+      })();
+    }
+
+    return true;
   },
 
   /**
