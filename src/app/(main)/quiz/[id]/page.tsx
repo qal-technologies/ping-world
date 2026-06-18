@@ -21,6 +21,7 @@ import {
   EyeOff,
   AlertTriangle,
   Lock,
+  X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -188,6 +189,7 @@ export default function PublicQuizPage() {
   const [cheatAttempts, setCheatAttempts] = useState(0);
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
+  const pendingUnloadCb = React.useRef<(() => void) | null>(null);
 
   // 1. Initial Load
   useEffect(() => {
@@ -328,6 +330,57 @@ export default function PublicQuizPage() {
     return () =>
       document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [started, quiz, cheatAttempts, userAnswers, isFinished]);
+
+  // 4. Reload / Navigate-away Guard
+  useEffect(() => {
+    if (!started || isFinished) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [started, isFinished]);
+
+  // Custom themed confirm for in-app navigation (back-button, link clicks)
+  const confirmLeaveQuiz = (onConfirm: () => void) => {
+    pendingUnloadCb.current = onConfirm;
+    toast(
+      <div className='flex flex-col gap-3 py-1'>
+        <p className='font-bold text-sm'>Leave Assessment?</p>
+        <p className='text-xs text-pw-muted leading-relaxed'>
+          Your progress will be lost and you will need to start over.
+        </p>
+        <div className='flex gap-2 pt-1'>
+          <button
+            className='flex-1 h-9 rounded-xl bg-pw-danger/20 border border-pw-danger/40 text-pw-danger text-xs font-bold hover:bg-pw-danger/30 transition-colors'
+            onClick={() => {
+              toast.dismiss('quiz-leave-confirm');
+              pendingUnloadCb.current?.();
+              pendingUnloadCb.current = null;
+            }}>
+            Leave
+          </button>
+          <button
+            className='flex-1 h-9 rounded-xl bg-pw-primary/20 border border-pw-primary/40 text-pw-primary text-xs font-bold hover:bg-pw-primary/30 transition-colors'
+            onClick={() => {
+              toast.dismiss('quiz-leave-confirm');
+              pendingUnloadCb.current = null;
+            }}>
+            Keep Going
+          </button>
+        </div>
+      </div>,
+      {
+        id: 'quiz-leave-confirm',
+        duration: Infinity,
+        className: 'border border-white/10 bg-pw-surface rounded-2xl',
+      },
+    );
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -585,7 +638,7 @@ export default function PublicQuizPage() {
     <div
       onContextMenu={(e) => quiz.enforceSecurity && e.preventDefault()}
       className={cn(
-        'relative min-h-screen flex flex-col transition-colors duration-500 pb-20',
+        'relative min-h-screen flex flex-col transition-colors duration-500 pb-20 overflow-x-hidden',
         quizTheme === 'dark' ? 'bg-pw-bg text-white' : 'bg-slate-50 text-black',
         quiz.enforceSecurity && 'select-none',
       )}>
@@ -682,10 +735,10 @@ export default function PublicQuizPage() {
                     Active Monitoring Enabled
                   </p>
                 </div>
-            </div>
+              </div>
 
-            <div className='divider' />
-            
+              <div className='divider' />
+
               <div className='space-y-6 text-left text-sm leading-relaxed'>
                 <div className='flex gap-4 p-2 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
                   <EyeOff className='h-6 w-6 text-pw-primary shrink-0' />
@@ -712,9 +765,11 @@ export default function PublicQuizPage() {
                 onClick={() => {
                   setShowSecurityProtocol(false);
 
-                if(quiz.askDetails && quiz.askDetails.length > 0) {
-                  setShowDetails(true);
-                }
+                  if (quiz.askDetails && quiz.askDetails.length > 0) {
+                    setShowDetails(true);
+                  } else {
+                    setStart(true);
+                  }
                 }}
                 className='w-full btn-primary h-12 text-lg font-bold shadow-2xl relative overflow-hidden group'>
                 I UNDERSTAND & AGREE
@@ -811,7 +866,7 @@ export default function PublicQuizPage() {
                   </div>
                 ))}
                 <Button
-                  className='btn-primary h-14 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
+                  className='btn-primary h-12 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
                   onClick={() => {
                     const complete = quiz.askDetails?.every(
                       (d) => userData[d.title],
@@ -830,7 +885,11 @@ export default function PublicQuizPage() {
 
       {/* 4. Active Assessment View */}
       {started && (
-        <div className='container relative z-10 mx-auto px-4 md:px-6 py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8'>
+        <div
+          className={cn(
+            'container relative z-10 mx-auto px-4 md:px-6 py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8',
+            quizTheme === 'dark' ? 'text-white' : 'text-black',
+          )}>
           <div className='lg:col-span-8'>
             <div className='mb-12'>
               <div className='flex justify-between items-end mb-6'>
@@ -842,7 +901,9 @@ export default function PublicQuizPage() {
                     {quiz.title}
                   </h1>
                 </div>
-                <div className='flex gap-3 items-center hidden'>
+                <div
+                  className='flex gap-3 items-center hidden
+                '>
                   <Button
                     variant='ghost'
                     size='icon'
@@ -1055,6 +1116,13 @@ export default function PublicQuizPage() {
                     Previous
                   </Button>
                 )}
+
+                <Button
+                  variant='ghost'
+                  className='h-10 px-4 text-xs text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 gap-1.5 rounded-xl border border-white/5 transition-all'
+                  onClick={() => confirmLeaveQuiz(() => window.history.back())}>
+                  <X size={14} /> Quit
+                </Button>
 
                 <Button
                   onClick={handleNext}

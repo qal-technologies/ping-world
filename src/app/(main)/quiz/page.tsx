@@ -1252,6 +1252,50 @@ export default function QuizPage() {
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
   const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
 
+  // Unified answer resolution logic
+  const resolveAnswerToText = (quiz: Quiz, questionId: string, val: any) => {
+    const question = quiz.questions?.find((q) => q.id === questionId);
+    if (!question) return String(val);
+    if (question.type === 'input') return String(val);
+
+    const options = question.options || [];
+    const findText = (idOrIdx: any) => {
+      const found = options.find(
+        (o) => typeof o !== 'string' && o.id === String(idOrIdx),
+      );
+      if (found && typeof found !== 'string') return found.text;
+
+      // Fallback for legacy numeric indices
+      if (typeof idOrIdx === 'number' && typeof options[idOrIdx] === 'string') {
+        return options[idOrIdx];
+      }
+      if (typeof idOrIdx === 'number' && typeof options[idOrIdx] === 'object') {
+        return (options[idOrIdx] as any).text;
+      }
+      return String(idOrIdx);
+    };
+
+    if (Array.isArray(val)) {
+      return val.map((v) => findText(v)).join(', ');
+    }
+    return findText(val);
+  };
+
+  const resolveCorrectText = (quiz: Quiz, questionId: string) => {
+    const question = quiz.questions?.find((q) => q.id === questionId);
+    if (!question) return '';
+    try {
+      let decodedStr = atob(String(question.correctIndex));
+      let decodedVal = decodedStr;
+      try {
+        decodedVal = JSON.parse(decodedStr);
+      } catch (_) {}
+      return resolveAnswerToText(quiz, questionId, decodedVal);
+    } catch (_) {
+      return resolveAnswerToText(quiz, questionId, question.correctIndex);
+    }
+  };
+
   const exportResponsesAsCSV = (quiz: Quiz) => {
     if (!quiz.responses || quiz.responses.length === 0) return;
 
@@ -1270,14 +1314,16 @@ export default function QuizPage() {
       resp.score,
       resp.totalQuestions,
       ...Object.values(resp.userData),
-      ...resp.answers.map((a) =>
-        typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer,
+      ...resp.answers.map(
+        (a) =>
+          `"${resolveAnswerToText(quiz, a.questionId, a.answer).replace(/"/g, '""')}"`,
       ),
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((v) => `"${v}"`).join(','))
-      .join('\n');
+    const csvContent = [
+      headers.map((h) => `"${h}"`).join(','),
+      ...rows.map((row) => row.join(',')),
+    ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -1661,7 +1707,7 @@ export default function QuizPage() {
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className='relative h-full w-full max-w-xl bg-pw-surface border-l border-white/10 p-8 shadow-2xl overflow-y-auto'>
+              className='relative h-full w-full max-w-2xl bg-pw-surface border-l border-white/10 p-8 shadow-2xl overflow-y-auto'>
               <div className='flex justify-between items-center mb-8 flex-wrap'>
                 <div>
                   <h2 className='text-2xl font-bold'>
@@ -1802,42 +1848,6 @@ export default function QuizPage() {
                                       (q) => q.id === ans.questionId,
                                     );
 
-                                  // Resolve ID to text logic
-                                  const resolveAnswer = (val: any) => {
-                                    if (!question) return String(val);
-                                    if (question.type === 'input')
-                                      return String(val);
-
-                                    const options = question.options;
-                                    const findText = (idOrIdx: any) => {
-                                      const found = options.find((o) =>
-                                        typeof o === 'string' ? false : (
-                                          o.id === String(idOrIdx)
-                                        ),
-                                      );
-                                      if (found && typeof found !== 'string')
-                                        return found.text;
-                                      // Fallback for legacy numeric indices
-                                      if (
-                                        typeof idOrIdx === 'number' &&
-                                        options[idOrIdx]
-                                      ) {
-                                        const opt = options[idOrIdx];
-                                        return typeof opt === 'string' ? opt : (
-                                            opt.text
-                                          );
-                                      }
-                                      return String(idOrIdx);
-                                    };
-
-                                    if (Array.isArray(val)) {
-                                      return val
-                                        .map((v) => findText(v))
-                                        .join(', ');
-                                    }
-                                    return findText(val);
-                                  };
-
                                   return (
                                     <div
                                       key={i}
@@ -1860,9 +1870,29 @@ export default function QuizPage() {
                                             : ans.correct ? 'text-pw-success'
                                             : 'text-pw-danger',
                                           )}>
-                                          {resolveAnswer(ans.answer)}
+                                          {resolveAnswerToText(
+                                            viewingResponses,
+                                            ans.questionId,
+                                            ans.answer,
+                                          )}
                                         </p>
                                       </div>
+                                      {!ans.correct && (
+                                        <div className='flex items-start gap-2 pt-1'>
+                                          <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
+                                            CORRECT:
+                                          </p>
+                                          <p
+                                            className={cn(
+                                              'text-[11px] font-mono text-white/80',
+                                            )}>
+                                            {resolveCorrectText(
+                                              viewingResponses,
+                                              ans.questionId,
+                                            )}
+                                          </p>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
