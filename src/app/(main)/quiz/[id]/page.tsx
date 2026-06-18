@@ -177,6 +177,8 @@ export default function PublicQuizPage() {
 
   const [started, setStart] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
+
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
@@ -584,9 +586,7 @@ export default function PublicQuizPage() {
       onContextMenu={(e) => quiz.enforceSecurity && e.preventDefault()}
       className={cn(
         'relative min-h-screen flex flex-col transition-colors duration-500 pb-20',
-        quizTheme === 'dark' ?
-          'bg-pw-bg text-white'
-        : 'bg-slate-50 text-slate-900',
+        quizTheme === 'dark' ? 'bg-pw-bg text-white' : 'bg-slate-50 text-black',
         quiz.enforceSecurity && 'select-none',
       )}>
       {/* Dynamic Background */}
@@ -617,7 +617,6 @@ export default function PublicQuizPage() {
         </>
       )}
 
-
       {/* 1. Intro Gate */}
       {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
         <div className='container relative z-10 mx-auto px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
@@ -647,14 +646,14 @@ export default function PublicQuizPage() {
                 </div>
               </div>
             : <Button
-                className='w-full btn-primary h-12 text-xl font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
+                className='w-full btn-primary h-10 text-lg font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
                 onClick={() => {
-                  if (quiz.enforceSecurity) {
+                  if (quiz.enforceSecurity!) {
                     setShowSecurityProtocol(true);
                   } else if (quiz.askDetails && quiz.askDetails.length > 0) {
-                    setDetailsCollected(false); 
+                    setDetailsCollected(false);
+                    setShowDetails(true);
                     setShowSecurityProtocol(false);
-                    // the third gate condition triggers automatically now
                   } else {
                     setStart(true);
                   }
@@ -668,13 +667,14 @@ export default function PublicQuizPage() {
       )}
 
       {/* 2. Security Gate */}
-      {quiz.enforceSecurity &&
-        !started &&
+      {!showIntro &&
+        quiz.enforceSecurity &&
         showSecurityProtocol &&
+        !started &&
         !detailsCollected && (
-          <div className='container relative z-10 mx-auto px-4 py-20 max-w-xl text-center flex-1 flex flex-col justify-center'>
-            <div className='bg-pw-primary/5 p-10 rounded-[2.5rem] border border-pw-primary/20 space-y-8 backdrop-blur-xl'>
-              <div className='flex flex-col items-center gap-4 border-b border-white/10 pb-6'>
+          <div className='container relative z-10 mx-auto px-2 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
+            <div className='bg-pw-primary/5 p-6 rounded-[2.5rem] border border-pw-primary/20 space-y-8 backdrop-blur-xl'>
+              <div className='flex flex-col items-center gap-4 mt-2'>
                 <ShieldCheck className='h-16 w-16 text-pw-primary animate-pulse' />
                 <div className='text-center'>
                   <h3 className='text-2xl font-bold'>Security Protocol</h3>
@@ -682,9 +682,12 @@ export default function PublicQuizPage() {
                     Active Monitoring Enabled
                   </p>
                 </div>
-              </div>
+            </div>
+
+            <div className='divider' />
+            
               <div className='space-y-6 text-left text-sm leading-relaxed'>
-                <div className='flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5'>
+                <div className='flex gap-4 p-2 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
                   <EyeOff className='h-6 w-6 text-pw-primary shrink-0' />
                   <p>
                     <span className='font-bold text-pw-text'>
@@ -694,7 +697,7 @@ export default function PublicQuizPage() {
                     violation. 3 violations result in immediate submission.
                   </p>
                 </div>
-                <div className='flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5'>
+                <div className='flex gap-4 p-2 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
                   <Lock className='h-6 w-6 text-pw-primary shrink-0' />
                   <p>
                     <span className='font-bold text-pw-text'>
@@ -707,22 +710,23 @@ export default function PublicQuizPage() {
               </div>
               <Button
                 onClick={() => {
-                    setStart(true);
-                  
+                  setShowSecurityProtocol(false);
+
+                if(quiz.askDetails && quiz.askDetails.length > 0) {
+                  setShowDetails(true);
+                }
                 }}
-                className='w-full btn-primary h-14 text-lg font-bold shadow-2xl relative overflow-hidden group'>
+                className='w-full btn-primary h-12 text-lg font-bold shadow-2xl relative overflow-hidden group'>
                 I UNDERSTAND & AGREE
               </Button>
             </div>
           </div>
         )}
 
-      
       {/* 3. Details Gate */}
-      {!showIntro && !started &&
+      {showDetails &&
         !detailsCollected &&
-        (quiz.askDetails || []).length > 0 &&
-        (!quiz.enforceSecurity || showSecurityProtocol) && (
+        (quiz.askDetails || []).length > 0 && (
           <div className='container relative z-10 mx-auto px-2 py-10 max-w-lg flex-1 flex flex-col justify-center'>
             <div className='bkblur bg-white/5 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl'>
               <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
@@ -842,7 +846,9 @@ export default function PublicQuizPage() {
                   <Button
                     variant='ghost'
                     size='icon'
-                    onClick={() => setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')}
+                    onClick={() =>
+                      setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')
+                    }
                     className={cn(
                       'rounded-full h-10 w-10 border bkblur shadow-sm transition-all active:scale-90',
                       quizTheme === 'dark' ?
@@ -934,7 +940,7 @@ export default function PublicQuizPage() {
                         <DropdownMenuTrigger>
                           <Button
                             variant='outline'
-                            className='h-14 flex items-center justify-between px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
+                            className='h-12 flex items-center justify-between px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
                             {selectedOption ?
                               (
                                 (shuffledOptions[q.id] || q.options).find(
@@ -950,7 +956,7 @@ export default function PublicQuizPage() {
                             />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-3 rounded-[1.5rem] shadow-2xl'>
+                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
                           {(shuffledOptions[q.id] || q.options)?.map(
                             (opt, idx) => {
                               const optId =
@@ -963,7 +969,7 @@ export default function PublicQuizPage() {
                                 <DropdownMenuItem
                                   key={optId}
                                   onClick={() => setSelectedOption(optId)}
-                                  className='h-12 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4'>
+                                  className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4'>
                                   {optText}
                                   {selectedOption === optId && (
                                     <Check
