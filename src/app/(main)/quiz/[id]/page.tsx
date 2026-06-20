@@ -35,7 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HybridStorage } from '@/lib/storage-utils';
-import { cn } from '@/lib/utils';
+import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
 import type { Quiz } from '../page';
 import { useParams } from 'next/navigation';
@@ -90,11 +90,11 @@ const Calculator = () => {
           'C',
           '=',
           'del',
-        ].map((btn) => {
+        ].map((btn, index) => {
           if (btn === '=') {
             return (
               <Button
-                key={btn}
+                key={btn + index + 'rfsc3gyuug'}
                 variant='secondary'
                 size='sm'
                 className='mt-2 col-span-3 text-white text-[18px] h-8 p-0 border-white/10'
@@ -112,7 +112,7 @@ const Calculator = () => {
           if (btn === 'del') {
             return (
               <Button
-                key={btn}
+                key={btn + index +'ytdvserrfurats'}
                 variant='destructive'
                 size='sm'
                 className='mt-2 h-8 p-0'
@@ -130,7 +130,7 @@ const Calculator = () => {
           if (btn === 'C') {
             return (
               <Button
-                key={btn}
+                key={btn + index + 'uigdtrdsrsdtdvytrd'}
                 size='sm'
                 className='h-8 text-[10px]'
                 onClick={() => setVal('')}>
@@ -140,7 +140,7 @@ const Calculator = () => {
           }
           return (
             <Button
-              key={btn}
+              key={btn + index + 'usdfghcasdtfg7gy'}
               variant='outline'
               size='sm'
               className='h-8 p-0 border-white/10'
@@ -545,16 +545,16 @@ export default function PublicQuizPage() {
   if (hasAlreadyCompleted && quiz) {
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
-        <div className='container relative z-10 mx-auto px-6 py-20 max-w-2xl text-center'>
+        <div className='container relative z-10 mx-auto px-6 py-10 max-w-2xl text-center'>
           <ShieldCheck className='h-20 w-20 text-pw-danger mx-auto mb-8 opacity-50' />
-          <h1 className='text-3xl font-bold mb-4'>Access Restricted</h1>
+          <h1 className='text-3xl font-bold mb-4 font-display'>Access Restricted</h1>
           <p className='text-pw-muted text-lg mb-8'>
-            You have already completed this {quiz.type}. Multiple attempts are
+            You have already attempted this {quiz.type}. Multiple attempts are
             not allowed.
           </p>
           <Link
             href='/quiz'
-            className='btn-primary h-12 inline-flex items-center px-8'>
+            className='btn-primary inline-flex items-center px-10'>
             Back to Dashboard
           </Link>
         </div>
@@ -566,10 +566,11 @@ export default function PublicQuizPage() {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
-        <h2 className='text-2xl font-bold'>Assessment Not Found</h2>
+        <h2 className='text-2xl md:text-3xl font-bold mb-1'>Assessment Not Found</h2>
+        <p className='text-sm text-white/80 max-w-md font-light'>This assessment may have been removed, ended or you used the wrong link</p>
         <Link
           href='/quiz'
-          className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2'>
+          className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2 hover:underline'>
           <ArrowLeft className='h-4 w-4' /> Back
         </Link>
       </div>
@@ -685,18 +686,20 @@ export default function PublicQuizPage() {
             {quiz.description}
           </p>
 
-          <div className='max-w-xs mx-auto w-full'>
+          <div className='max-w-sm mx-auto w-full'>
             {authRequired ?
-              <div className='bg-pw-danger/5 p-8 rounded-3xl border border-pw-danger/20 space-y-6'>
-                <Lock className='h-12 w-12 text-pw-danger mx-auto' />
-                <h3 className='text-xl font-bold'>Auth Required</h3>
-                <div className='grid grid-cols-1 gap-3'>
-                  <Link
-                    href='/login'
-                    className='btn-primary h-12 flex items-center justify-center font-bold'>
-                    Sign In
-                  </Link>
-                </div>
+              <div className='bg-pw-danger/5 p-4 rounded-2xl border border-pw-danger/20 space-y-6'>
+                <Lock className='h-12 w-12 text-pw-danger mx-auto mt-10' />
+                <h3 className='text-xl font-bold'>Authentication Required</h3>
+                <p className='text-sm text-white/70 '>
+                  You'll have to login or sign up for us to be able to track the
+                  information and answers from the {quiz.type}.
+                </p>
+                <Link
+                  href='/login'
+                  className='btn-primary h-10 flex items-center justify-center font-bold mt-2'>
+                  Sign In
+                </Link>
               </div>
             : <Button
                 className='w-full btn-primary h-10 text-lg font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
@@ -790,7 +793,7 @@ export default function PublicQuizPage() {
               <div className='space-y-5'>
                 {quiz.askDetails?.map((detail, idx) => (
                   <div
-                    key={idx}
+                    key={detail?.title as string + idx + '6r5e4wx4wyn6rs43'}
                     className='space-y-2'>
                     <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
                       {detail.title}
@@ -799,7 +802,7 @@ export default function PublicQuizPage() {
                       <div className='flex gap-3'>
                         {['Male', 'Female'].map((s) => (
                           <Button
-                            key={s}
+                            key={s + '990087g87g7f7'}
                             variant='outline'
                             onClick={() =>
                               setUserData({ ...userData, [detail.title]: s })
@@ -834,9 +837,9 @@ export default function PublicQuizPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className='w-56 bg-pw-surface border-white/10 rounded-2xl'>
-                            {detail.options?.map((opt) => (
+                            {detail.options?.map((opt, index) => (
                               <DropdownMenuItem
-                                key={opt}
+                                key={opt + index + '98gdewaa576yfy'}
                                 onClick={() =>
                                   setUserData({
                                     ...userData,
@@ -891,8 +894,8 @@ export default function PublicQuizPage() {
             quizTheme === 'dark' ? 'text-white' : 'text-black',
           )}>
           <div className='lg:col-span-8'>
-            <div className='mb-12'>
-              <div className='flex justify-between items-end mb-6'>
+            <div className='grid grid-cols-4 mb-10 w-full'>
+              <div className='flex justify-between items-end mb-4 col-span-4'>
                 <div>
                   <div className='badge bg-pw-primary/10 text-pw-primary border-pw-primary/20 mb-4'>
                     Question {currentQuestion + 1} of {activeQuestions.length}
@@ -901,12 +904,11 @@ export default function PublicQuizPage() {
                     {quiz.title}
                   </h1>
                 </div>
-                <div
-                  className='flex gap-3 items-center hidden
-                '>
+                <div className='flex gap-3 items-center hidden'>
                   <Button
                     variant='ghost'
                     size='icon'
+                    title={`Toggle ${capFirst(quiz.type)} Theme`}
                     onClick={() =>
                       setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')
                     }
@@ -921,11 +923,13 @@ export default function PublicQuizPage() {
                     : <Moon size={18} />}
                   </Button>
                 </div>
+
                 <div className='flex flex-col items-end gap-3'>
                   {quiz.hasTimer && timeLeft !== null && (
                     <div
+                      title={`${capFirst(quiz.type)} Timer`}
                       className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-2xl font-mono text-lg border-2 transition-all',
+                        'flex items-center gap-2 px-2 py-1 pr-3 rounded-2xl font-mono text-lg border-1 transition-all',
                         timeLeft < 60 ?
                           'bg-pw-danger/10 border-pw-danger text-pw-danger animate-pulse shadow-lg shadow-pw-danger/20'
                         : 'bg-white/5 border-white/10 shadow-xl',
@@ -935,13 +939,16 @@ export default function PublicQuizPage() {
                     </div>
                   )}
                   {quiz.type === 'quiz' && quiz.showScore && (
-                    <div className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
+                    <div
+                      className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'
+                      title={`Quiz Score Count`}>
                       Score: {score}
                     </div>
                   )}
                 </div>
               </div>
-              <div className='w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5'>
+
+              <div className='w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 col-span-4'>
                 <motion.div
                   className='h-full gradient-brand rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)]'
                   animate={{
@@ -949,13 +956,23 @@ export default function PublicQuizPage() {
                   }}
                 />
               </div>
+
+              <Button
+                title={`Quit ${quiz.type}`}
+                variant='ghost'
+                className='h-10 col-span-4 px-4 mt-4 align-end text-xs text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 gap-1.5 rounded-xl border border-white/5 transition-all'
+                onClick={() => confirmLeaveQuiz(() => window.location.href='/quiz')} style={{justifySelf:'flex-end'}}>
+                <X size={14} /> Quit
+              </Button>
             </div>
 
             <Card className='glass bkblur rounded-[1.5rem] p-4 md:p-6 mb-6 bg-pw-surface border-white/10 shadow-xl relative overflow-hidden'>
               {/* Question Header */}
               <div className='flex flex-col gap-4 pt-1 mb-4'>
                 <div className='flex justify-between items-start gap-2'>
-                  <h2 className='text-lg md:text-2xl font-bold leading-snug flex-1'>
+                  <h2
+                    className='text-lg md:text-2xl font-bold leading-snug flex-1'
+                    title={`${capFirst(quiz.type)} Question`}>
                     {q?.text}
                   </h2>
                   {quiz.correctOption && showFeedback && (
@@ -978,6 +995,7 @@ export default function PublicQuizPage() {
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
+                      title='Answer Explanation'
                       className='p-2 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
                       <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
                         <Brain size={14} /> Explanation
@@ -990,7 +1008,7 @@ export default function PublicQuizPage() {
               {/* Options Section */}
               <AnimatePresence mode='sync'>
                 <motion.div
-                  key={currentQuestion}
+                  key={currentQuestion + 'tv765ecwxartdufybgiun'}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
@@ -1028,7 +1046,7 @@ export default function PublicQuizPage() {
                                 typeof opt === 'string' ? opt : opt.text;
                               return (
                                 <DropdownMenuItem
-                                  key={optId}
+                                  key={optId + idx + 'y7f65awxsyribyt'}
                                   onClick={() => setSelectedOption(optId)}
                                   className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4'>
                                   {optText}
@@ -1070,7 +1088,7 @@ export default function PublicQuizPage() {
                           : selectedOption === optId;
                         return (
                           <button
-                            key={optId}
+                            key={optId + idx + '5ef3aTASDVFBIGU'} 
                             onClick={() =>
                               q?.type === 'checkbox' ?
                                 setSelectedOptions((p) =>
@@ -1116,13 +1134,6 @@ export default function PublicQuizPage() {
                     Previous
                   </Button>
                 )}
-
-                <Button
-                  variant='ghost'
-                  className='h-10 px-4 text-xs text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 gap-1.5 rounded-xl border border-white/5 transition-all'
-                  onClick={() => confirmLeaveQuiz(() => window.history.back())}>
-                  <X size={14} /> Quit
-                </Button>
 
                 <Button
                   onClick={handleNext}

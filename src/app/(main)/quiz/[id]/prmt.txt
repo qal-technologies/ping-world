@@ -1,29 +1,4 @@
-1. You cannot have two parallel pages that resolve to the same path. Please check /(main)/u/[username] and /u.
-
-2. Argument of type '{ format: "png"; quality: number; }' is not assignable to parameter of type 'TDataUrlOptions'.
-  Property 'multiplier' is missing in type '{ format: "png"; quality: number; }' but required in type '{ multiplier: number; format?: ImageFormat | undefined; quality?: number | undefined; enableRetinaScaling?: boolean | undefined; }'.ts(2345)
-typedefs.d.ts(85, 5): 'multiplier' is declared here.
-(property) format?: fabric.ImageFormat | undefined
-
-3. Type '{ id: string; value: string; size: number; includeMargin: false; fgColor: string; imgOptions: { excavate: boolean; }; }' is not assignable to type 'IntrinsicAttributes & QRProps & SVGAttributes<SVGSVGElement> & RefAttributes<SVGSVGElement>'.
-  Property 'imgOptions' does not exist on type 'IntrinsicAttributes & QRProps & SVGAttributes<SVGSVGElement> & RefAttributes<SVGSVGElement>'.ts(2322)
-(property) imgOptions: {
-    excavate: boolean;
-
-4. Element implicitly has an 'any' type because expression of type '0' can't be used to index type 'number | readonly number[]'.
-  Property '0' does not exist on type 'number | readonly number[]'.ts(7053)
-(parameter) vals: number | readonly number[]
-
-
-5. Find a way to save things like quiz and other user direct inpuits while they type, so when they come back or the page is mistakenly refreshed, they dont stay afresh afgain, especially the quiz part.
- 
-6. Add thse locally saved quiz to the cards so the edit can continue, add add atag to show if the quiz had been uploaded or just a draft.
 
 7. look at the tool path and work on the features functions. Make them actuallly work.
 
 8. Look into the comments I made on pages to further understand what to do. 
-
-9. On the landing page, make the planet rotate on load, (Trying to make a blackhole effect).
-10. Look into other tweaks and add subtle background objects that  beautifies the page.
-
-check these errors and do these requests too.

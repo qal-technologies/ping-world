@@ -59,15 +59,17 @@ export default function LoginPage() {
   if (pageLoading) {
     return (
       <div className='min-h-screen w-full p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
-        <p className='font-bold text-lg'>Loading...</p>
-        <div className='divider'></div>
-        <p className='text-xs mt-1 opacity-50'>Checking your login status...</p>
+        <p className='text-2xl md:text-4xl font-bold font-display gradient-text animate-fade-in-up'>
+          Ping World
+        </p>
+        <div className='divider' />
+        <p className='text-xs mt-[-10px] opacity-60'>Checking your login status...</p>
       </div>
     );
-  }
+  };
 
   return (
-    <div className='min-h-screen w-full p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
+    <div className='min-h-screen w-full p-2 md:p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
       <div className='beauty-obj w-64 h-64 top-[5%] left-[20%] opacity-10 float gradient-brand' />
       <div
         className='beauty-obj w-48 h-48 bottom-[10%] right-[10%] opacity-5 float'
@@ -75,7 +77,7 @@ export default function LoginPage() {
       />
 
       <div className='auth-container w-full max-w-[850px] grid md:grid-cols-3 animate-fade-in-up'>
-        <div className='banner p-8 gradient-dark w-full md:max-w-[280px] flex flex-col justify-between'>
+        <div className='banner p-8 gradient-dark w-full md:max-w-[280px] flex flex-col justify-between animate-gradient'>
           <div>
             <h1 className='text-xl opacity-80 mb-2 font-display'>Ping World</h1>
             <h1 className='text-3xl font-bold tracking-tight'>WELCOME</h1>
@@ -94,7 +96,7 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleLogin}
-          className='form p-8 md:p-12 gap-5 w-full md:col-span-2 grid bg-black/40 backdrop-blur-xl'>
+          className='form p-8 md:p-12 gap-2 md:gap-5 w-full md:col-span-2 grid bg-black/40 backdrop-blur-xl'>
           <div className='space-y-4'>
             <div className='form-group'>
               <label className='form-label mb-1.5'>
@@ -151,16 +153,24 @@ export default function LoginPage() {
             </Button>
 
             <div className='flex justify-center items-center gap-2 text-sm text-pw-muted'>
-              Don't have an account?{' '}
+              No account yet?{' '}
               <Link
                 href='/register'
+                replace
                 className='text-pw-cyan font-bold hover:underline decoration-pw-cyan/30 underline-offset-4'>
-                Create one now
+                Yes
               </Link>
             </div>
           </div>
         </form>
       </div>
+
+      <Link
+        href='/'
+        replace
+        className='text-xl gradient-text font-extrabold mt-3 hover:underline'>
+        Ping World
+      </Link>
     </div>
   );
 }

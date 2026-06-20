@@ -75,14 +75,14 @@ export const Footer = () => {
           ))}
         </div>
 
-        <div className='divider mt-10 mb-6' />
+        <div className='divider mt-10 mb-10' />
 
-        <div className='flex flex-col items-center justify-between gap-5 md:flex-row'>
+        <div className='flex flex-col items-center justify-between gap-5 md:flex-row mt-4'>
           <p className='text-xs text-pw-muted'>
             &copy; {new Date().getFullYear()} Ping World. All rights reserved.
           </p>
           <p className='text-xs text-pw-muted'>
-            Made by{' '}
+            Developed by{' '}
             <Link
               href='https://wa.me/2349016561308'
               target='_blank'

@@ -360,7 +360,7 @@ export const CTASection = () => {
                 <Link
                   href='/tools'
                   className='btn-ghost text-base px-8 py-3'>
-                  Browse Tools
+                  Explore Tools
                 </Link>
               </div>
             </div>

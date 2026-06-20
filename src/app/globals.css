@@ -11,7 +11,7 @@
   /* === Ping World Brand === */
   --pw-primary: #985cff;
   --pw-secondary: #2255fd;
-  --pw-bg: #02030b;
+  --pw-bg: #02040f;
   --pw-surface: #02040c;
   --pw-muted: #8b92b8;
   --pw-success: #22c985;
@@ -261,7 +261,6 @@ pre {
   background: linear-gradient(135deg, #920c8f 0%, #00bbe6 100%);
 }
 
-
 .gradient-surface {
   background: linear-gradient(145deg, #12152e 0%, #1a1f40 100%);
 }
@@ -362,8 +361,8 @@ pre {
 
 /* ─── Glow Ring (focus-visible) ─────────────────────────────── */
 :focus-visible {
-  outline: 2px solid #5c6fff;
-  outline-offset: 2px;
+  outline: 1px solid #5c6fff;
+  outline-offset: 1px;
 }
 
 /* ─── Animations ────────────────────────────────────────────── */
@@ -453,7 +452,11 @@ pre {
   animation: spin-slow 12s linear infinite;
 }
 .animate-shimmer {
- animation: shimmer 10s linear infinite;
+  animation: shimmer 10s linear infinite;
+}
+
+.animate-gradient {
+  animation: gradient-shift 5s linear infinite;
 }
 
 .stagger-1 {
@@ -712,19 +715,23 @@ button,
   text-transform: uppercase;
   letter-spacing: 1px;
   padding-left: 2px;
-  display:flex;
-  gap:5px;
+  display: flex;
+  gap: 5px;
 }
 
-.form-label svg{
-width:20px;
-height:20px;
+.form-label svg {
+  width: 20px;
+  height: 20px;
 }
 
 .form-input {
-  background:linear-gradient(150deg, rgba(180, 180, 180, 0.1), rgb(12, 12, 12, 0.1));
--webkit-backdrop-filter: blur(20px);
-backdrop-filter: blur(20px);
+  background: linear-gradient(
+    150deg,
+    rgba(180, 180, 180, 0.1),
+    rgb(12, 12, 12, 0.1)
+  );
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   width: 100%;
   padding: 5px;
   padding-inline: 10px;
@@ -733,13 +740,13 @@ backdrop-filter: blur(20px);
 }
 
 .auth-container {
-overflow:hidden;
--webkit-backdrop-filter: blur(12px);
-backdrop-filter: blur(12px);
-  background: rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px);
+  background: rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(180, 9, 157, 0.1);
-  box-shadow: 0px 0px 14px 12px rgba(10, 10, 10, 0.1);
-  border-radius:0;
+  box-shadow: 3px 6px 16px 12px rgba(10, 10, 10, 0.1);
+  border-radius: 0;
   border-top-left-radius: 60px;
   border-bottom-right-radius: 60px;
 }

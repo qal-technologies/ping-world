@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Brain,
   BadgeQuestionMark,
+  Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -191,7 +192,7 @@ const QuizBuilder = ({
   };
 
   return (
-    <div className='flex flex-col gap-8'>
+    <div className='flex flex-col w-full gap-8'>
       {/* Quiz Header Info */}
       <div className='flex flex-col md:flex-row justify-between gap-6'>
         <div>
@@ -217,9 +218,9 @@ const QuizBuilder = ({
         </div>
       </div>
 
-      <div className='grid grid-cols-1 lg:grid-cols-4 gap-8'>
+      <div className='grid grid-cols-1 lg:grid-cols-5 gap-8'>
         {/* Navigation Sidebar */}
-        <div className='lg:col-span-1 flex flex-col gap-4'>
+        <div className='lg:col-span-2 flex flex-col gap-4'>
           <button
             onClick={() => setCurrentStep(-1)}
             className={cn(
@@ -266,26 +267,26 @@ const QuizBuilder = ({
 
         {/* Editor Area */}
         <div className='lg:col-span-3'>
-          <Card className='card-glow p-4 lg:p-8 min-h-[450px]'>
+          <Card className='card-glow p-4 pt-6 lg:pt-9 lg:p-8 min-h-[450px]'>
             {currentStep === -1 ?
-              <div className='space-y-6 max-w-xl'>
-                <h3 className='text-xl font-bold flex items-center gap-2'>
+              <div className='space-y-6'>
+                <h3 className='text-xl font-bold flex items-center gap-2 mt-1'>
                   <Settings2 className='h-5 w-5 text-pw-primary' /> Quiz
                   Settings
                 </h3>
-                <div className='space-y-4'>
+                <div className='space-y-4 w-full'>
                   <div className='space-y-2'>
                     <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
                       Quiz Type
                     </label>
-                    <div className='flex gap-2 p-0.5 bg-white/5 border border-white/5 rounded-xl'>
+                    <div className='flex gap-2 p-0.5 bg-white/5 border border-white/5 rounded-2xl'>
                       <Button
                         variant='ghost'
                         onClick={() =>
                           setEditedQuiz({ ...editedQuiz, type: 'quiz' })
                         }
                         className={cn(
-                          'flex-1 h-8 text-xs rounded-xl',
+                          'flex-1 h-8 text-xs rounded-2xl',
                           editedQuiz.type === 'quiz' &&
                             'bg-pw-primary text-white shadow-lg',
                         )}>
@@ -297,7 +298,7 @@ const QuizBuilder = ({
                           setEditedQuiz({ ...editedQuiz, type: 'survey' })
                         }
                         className={cn(
-                          'flex-1 h-8 text-xs rounded-xl',
+                          'flex-1 h-8 text-xs rounded-2xl',
                           editedQuiz.type === 'survey' &&
                             'bg-pw-primary text-white shadow-lg',
                         )}>
@@ -404,6 +405,7 @@ const QuizBuilder = ({
                           <div className='flex items-center gap-3'>
                             <Input
                               type='number'
+                              min={0}
                               value={
                                 typeof editedQuiz.hasTimer === 'number' ?
                                   editedQuiz.hasTimer
@@ -418,7 +420,7 @@ const QuizBuilder = ({
                                     : false,
                                 })
                               }
-                              placeholder='10 (opt) '
+                              placeholder='10 (opt)'
                               className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
                             />
                             <Button
@@ -431,7 +433,7 @@ const QuizBuilder = ({
                                 })
                               }
                               className={cn(
-                                'h-10 px-4',
+                                'h-10 px-4 uppercase',
                                 editedQuiz.hasTimer ? 'text-pw-primary' : (
                                   'text-pw-muted'
                                 ),
@@ -495,7 +497,7 @@ const QuizBuilder = ({
                       <div className='grid grid-cols-2 gap-4 pb-2'>
                         <div className='space-y-2'>
                           <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Shuffle Options
+                            Random Options
                           </label>
                           <Button
                             variant='outline'
@@ -525,7 +527,7 @@ const QuizBuilder = ({
 
                         <div className='space-y-2'>
                           <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Shuffle Questions
+                            Random Questions
                           </label>
                           <Button
                             variant='outline'
@@ -879,7 +881,7 @@ const QuizBuilder = ({
                               // Reset options/correct Index for new type
                               if (type === 'true_false') {
                                 q.options = [
-                                  { id: 'true', text: 'True' },
+                                  { id: 'true', text: 'true' },
                                   { id: 'false', text: 'False' },
                                 ];
                                 q.correctIndex = 'true';
@@ -1066,7 +1068,7 @@ const QuizBuilder = ({
                                 })
                               }
                               className={cn(
-                                'h-16 text-lg font-bold border-white/5',
+                                'h-12 text-lg font-bold border-white/5',
                                 String(
                                   editedQuiz.questions[currentStep]
                                     .correctIndex,
@@ -1495,7 +1497,7 @@ export default function QuizPage() {
   };
 
   return (
-    <div className='container mx-auto px-6 py-12 max-w-7xl min-h-[calc(100vh-64px)] pb-20'>
+    <div className='container mx-auto px-6 py-12 max-w-8xl min-h-[calc(100vh-64px)] pb-20'>
       <AnimatePresence mode='wait'>
         {!isCreating ?
           <motion.div
@@ -1540,7 +1542,7 @@ export default function QuizPage() {
             </div>
 
             {quizzes.length > 0 ?
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
                 {quizzes.map((quiz, i) => (
                   <motion.div
                     key={quiz.id}
@@ -1553,27 +1555,30 @@ export default function QuizPage() {
                           className={cn(
                             'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest',
                           )}>
-                          <FileJson className='h-3 w-3 text-pw-primary' />
-                          {quiz?.questions?.length} Qts
-                          {quiz?.responses?.length &&
-                            quiz?.responses?.length > 0 && (
-                              <span className='text-pw-primary'>
-                                {(quiz as any).responses?.length || 0} Ans
-                              </span>
-                            )}
                           {(quiz as any).is_synced ?
-                            <span className='text-pw-success flex items-center gap-1.5'>
+                            <span
+                              className='text-pw-success flex items-center gap-1.5'
+                              title='Synced'>
                               <ShieldCheck className='h-3 w-3' />
                             </span>
-                          : <span className='text-pw-warning flex items-center gap-1.5'>
+                          : <span
+                              className='text-pw-warning flex items-center gap-1.5'
+                              title='Not synced'>
                               <Clock className='h-3 w-3' />
                             </span>
                           }
+                          {quiz?.questions?.length} Qts
+                          {quiz?.responses && quiz?.responses?.length > 0 && (
+                            <span className='text-pw-primary'>
+                              {(quiz as any).responses?.length || 0} Ans
+                            </span>
+                          )}
                         </div>
 
                         <div className='flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity'>
                           <Button
                             variant='ghost'
+                            title='View Feedback'
                             size='icon'
                             onClick={() => {
                               // Migration: Ensure options have IDs if legacy
@@ -1606,6 +1611,7 @@ export default function QuizPage() {
                           </Button>
                           <Button
                             variant='ghost'
+                            title='Download as JSON'
                             size='icon'
                             onClick={() => exportQuiz(quiz)}
                             className='h-8 w-8 text-pw-muted hover:text-pw-primary'>
@@ -1614,6 +1620,7 @@ export default function QuizPage() {
                           <Button
                             variant='ghost'
                             size='icon'
+                            title='Edit'
                             onClick={() => {
                               setActiveQuiz(quiz);
                               setIsCreating(true);
@@ -1623,6 +1630,7 @@ export default function QuizPage() {
                           </Button>
                           <Button
                             variant='ghost'
+                            title='Delete'
                             size='icon'
                             onClick={() => deleteQuiz(quiz.id)}
                             className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
@@ -1638,12 +1646,14 @@ export default function QuizPage() {
                       </p>
                       <div className='flex gap-3 flex-wrap sm:flex-nowrap'>
                         <Button
+                          title='Start Assessment'
                           onClick={() => playQuiz(quiz.id)}
                           className='btn-primary flex-1 h-10 gap-2 min-w-[120px]'>
-                          <Eye className='h-4 w-4' /> Play
+                          <Play className='h-4 w-4' /> Start
                         </Button>
                         <Button
                           variant='outline'
+                          title='Share link'
                           onClick={() => {
                             const url = `${window.location.origin}/q/${quiz.id}`;
                             navigator.clipboard.writeText(url);
@@ -1680,7 +1690,8 @@ export default function QuizPage() {
             key='editor'
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}>
+            exit={{ opacity: 0, scale: 0.98 }}
+            className='w-full'>
             <QuizBuilder
               quiz={activeQuiz!}
               onSave={handleSaveQuiz}

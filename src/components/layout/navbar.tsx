@@ -17,6 +17,7 @@ import {
   Puzzle,
   ChevronDown,
   Home,
+  Pencil,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,12 @@ const toolLinks = [
     icon: Zap,
     description: 'Clean links with QR codes',
   },
+  {
+    href: '/composer',
+    label: 'Composer',
+    description: 'Compose posts and captions',
+    icon: Pencil,
+  }
 ];
 
 const navLinks = [
@@ -183,7 +190,8 @@ export const Navbar = () => {
               </Link>
             ) : !session && (
               <Link
-                href='/login'
+                  href='/login'
+                  target='_blank'
                 className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
                 Sign In
               </Link>
