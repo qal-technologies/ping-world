@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Zap } from 'lucide-react';
+import { Instagram, Linkedin, Mail, Twitter, Youtube, Zap } from 'lucide-react';
+import {capFirst} from '@/lib/utils';
 
 const footerSections = [
   {
@@ -30,6 +31,34 @@ const footerSections = [
     ],
   },
 ];
+
+const socials = [
+  {
+    name: 'Youtube',
+    link: 'www.youtube.com/ping-world',
+    icon: Youtube,
+  },
+  {
+    name: 'Email',
+    link: 'mailto:ping.world@gmail.com',
+    icon:Mail,
+  },
+  {
+    name: 'X',
+    link: 'www.x.com/ping-world',
+    icon:Twitter,
+  },
+  {
+    name: 'Instagram',
+    link: 'www.instagram.com/ping-world',
+    icon:Instagram,
+  },
+  {
+    name: 'Linkedin',
+    link: 'www.linkedin.com/ping-world',
+    icon:Linkedin,
+  },
+]
 
 export const Footer = () => {
   return (
@@ -75,7 +104,23 @@ export const Footer = () => {
           ))}
         </div>
 
-        <div className='divider mt-10 mb-10' />
+        <div className='divider mt-15 mb-5' />
+
+        <div className='flex w-full items-center gap-2 p-2 justify-evenly flex-wrap'>
+          {socials.map((s, i) => {
+            return (
+              <Link
+                title={`Check out our ${capFirst(s.name)}`}
+                href={s.link}
+                key={s.link + s.name + '9hf8erh89her98hf'}
+                className={'opacity-50 hover:opacity-100'}
+                >
+                <s.icon className='w-5 h-5'/>
+              </Link>
+            );
+          })}
+        </div>
+        <div className='divider mt-5 mb-15' />
 
         <div className='flex flex-col items-center justify-between gap-5 md:flex-row mt-4'>
           <p className='text-xs text-pw-muted'>

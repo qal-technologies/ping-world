@@ -161,18 +161,29 @@ body {
 
 /* ─── Custom Scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
+  transition: width ease-in 0.5s, height ease 0.6s;
 }
+
+::-webkit-scrollbar:hover {
+  width: 8px;
+  height: 8px;
+}
+
 ::-webkit-scrollbar-track {
   background: var(--pw-bg);
 }
+
 ::-webkit-scrollbar-thumb {
   background: #5c6fff55;
-  border-radius: 99px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
+  width: 16px;
+  height: 16px;
   background: #5c6fffaa;
+  border-radius: 99px;
 }
 
 /* ─── Typography ────────────────────────────────────────────── */

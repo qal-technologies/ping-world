@@ -16,6 +16,11 @@ import {
   MessageCircle,
   Clock,
   ShieldCheck,
+  Table,
+  BookOpen,
+  StickyNote,
+  GraduationCap,
+  Info,
   Sun,
   Moon,
   EyeOff,
@@ -58,9 +63,124 @@ interface Question {
   text: string;
   options: (string | QuizOption)[];
   correctIndex: any;
-  accessory?: 'none' | 'calculator';
+  accessory?:
+    | 'none'
+    | 'calculator'
+    | 'note'
+    | 'periodic_table'
+    | 'formula_sheet'
+    | 'glossary';
+  accessoryNote?: string;
   correctExplanation?: string;
 }
+
+const NoteSheet = ({ note }: { note: string }) => (
+  <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
+    <div className='flex items-center gap-2 mb-4 text-pw-primary'>
+      <StickyNote size={20} />
+      <h3 className='font-bold uppercase tracking-widest text-xs'>
+        Special Note
+      </h3>
+    </div>
+    <div className='text-sm leading-relaxed text-pw-text whitespace-pre-wrap whitespace-pre-line'>
+      {note}
+    </div>
+  </Card>
+);
+
+const PeriodicTable = () => (
+  <Card className='p-4 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-xl overflow-x-auto'>
+    <div className='flex items-center gap-2 mb-4 text-pw-cyan'>
+      <Table size={20} />
+      <h3 className='font-bold uppercase tracking-widest text-xs'>
+        Periodic Table (Snippet)
+      </h3>
+    </div>
+    <div className='grid grid-cols-18 gap-1 min-w-[600px]'>
+      {/* Simplified visualization */}
+      {[
+        'H',
+        'He',
+        'Li',
+        'Be',
+        'B',
+        'C',
+        'N',
+        'O',
+        'F',
+        'Ne',
+        'Na',
+        'Mg',
+        'Al',
+        'Si',
+        'P',
+        'S',
+        'Cl',
+        'Ar',
+      ].map((el) => (
+        <div
+          key={el}
+          className='h-10 w-10 flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-lg'>
+          <span className='text-[10px] font-bold'>{el}</span>
+        </div>
+      ))}
+    </div>
+    <p className='text-[10px] text-pw-muted mt-4 italic'>
+      * Full table available in official formula book.
+    </p>
+  </Card>
+);
+
+const FormulaSheet = () => (
+  <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
+    <div className='flex items-center gap-2 mb-4 text-pw-warning'>
+      <GraduationCap size={20} />
+      <h3 className='font-bold uppercase tracking-widest text-xs'>
+        Formula Sheet
+      </h3>
+    </div>
+    <div className='space-y-3 text-xs'>
+      <div className='flex justify-between border-b border-white/5 pb-1'>
+        <span>Area of Circle</span>
+        <span className='font-mono'>πr²</span>
+      </div>
+      <div className='flex justify-between border-b border-white/5 pb-1'>
+        <span>Pythagoras</span>
+        <span className='font-mono'>a² + b² = c²</span>
+      </div>
+      <div className='flex justify-between border-b border-white/5 pb-1'>
+        <span>Quadratic</span>
+        <span className='font-mono'>-b ± √(b²-4ac) / 2a</span>
+      </div>
+    </div>
+  </Card>
+);
+
+const Glossary = () => (
+  <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
+    <div className='flex items-center gap-2 mb-4 text-pw-success'>
+      <BookOpen size={20} />
+      <h3 className='font-bold uppercase tracking-widest text-xs'>
+        Terminology
+      </h3>
+    </div>
+    <div className='space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar'>
+      <div>
+        <p className='font-bold text-pw-success mb-1'>Hypothesis</p>
+        <p className='text-[10px] leading-relaxed text-pw-muted'>
+          A proposed explanation made on the basis of limited evidence as a
+          starting point for further investigation.
+        </p>
+      </div>
+      <div>
+        <p className='font-bold text-pw-success mb-1'>Velocity</p>
+        <p className='text-[10px] leading-relaxed text-pw-muted'>
+          The speed of something in a given direction.
+        </p>
+      </div>
+    </div>
+  </Card>
+);
 
 // --- Accessory Components ---
 const Calculator = () => {
@@ -112,7 +232,7 @@ const Calculator = () => {
           if (btn === 'del') {
             return (
               <Button
-                key={btn + index +'ytdvserrfurats'}
+                key={btn + index + 'ytdvserrfurats'}
                 variant='destructive'
                 size='sm'
                 className='mt-2 h-8 p-0'
@@ -547,7 +667,9 @@ export default function PublicQuizPage() {
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
         <div className='container relative z-10 mx-auto px-6 py-10 max-w-2xl text-center'>
           <ShieldCheck className='h-20 w-20 text-pw-danger mx-auto mb-8 opacity-50' />
-          <h1 className='text-3xl font-bold mb-4 font-display'>Access Restricted</h1>
+          <h1 className='text-3xl font-bold mb-4 font-display'>
+            Access Restricted
+          </h1>
           <p className='text-pw-muted text-lg mb-8'>
             You have already attempted this {quiz.type}. Multiple attempts are
             not allowed.
@@ -566,8 +688,13 @@ export default function PublicQuizPage() {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
-        <h2 className='text-2xl md:text-3xl font-bold mb-1'>Assessment Not Found</h2>
-        <p className='text-sm text-white/80 max-w-md font-light'>This assessment may have been removed, ended or you used the wrong link</p>
+        <h2 className='text-2xl md:text-3xl font-bold mb-1'>
+          Assessment Not Found
+        </h2>
+        <p className='text-sm text-white/80 max-w-md font-light'>
+          This assessment may have been removed, ended or you used the wrong
+          link
+        </p>
         <Link
           href='/quiz'
           className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2 hover:underline'>
@@ -793,7 +920,7 @@ export default function PublicQuizPage() {
               <div className='space-y-5'>
                 {quiz.askDetails?.map((detail, idx) => (
                   <div
-                    key={detail?.title as string + idx + '6r5e4wx4wyn6rs43'}
+                    key={(detail?.title as string) + idx + '6r5e4wx4wyn6rs43'}
                     className='space-y-2'>
                     <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
                       {detail.title}
@@ -961,7 +1088,10 @@ export default function PublicQuizPage() {
                 title={`Quit ${quiz.type}`}
                 variant='ghost'
                 className='h-10 col-span-4 px-4 mt-4 align-end text-xs text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 gap-1.5 rounded-xl border border-white/5 transition-all'
-                onClick={() => confirmLeaveQuiz(() => window.location.href='/quiz')} style={{justifySelf:'flex-end'}}>
+                onClick={() =>
+                  confirmLeaveQuiz(() => (window.location.href = '/quiz'))
+                }
+                style={{ justifySelf: 'flex-end' }}>
                 <X size={14} /> Quit
               </Button>
             </div>
@@ -1088,7 +1218,7 @@ export default function PublicQuizPage() {
                           : selectedOption === optId;
                         return (
                           <button
-                            key={optId + idx + '5ef3aTASDVFBIGU'} 
+                            key={optId + idx + '5ef3aTASDVFBIGU'}
                             onClick={() =>
                               q?.type === 'checkbox' ?
                                 setSelectedOptions((p) =>
@@ -1149,7 +1279,7 @@ export default function PublicQuizPage() {
 
           {/* Assistant Sidebar */}
           <div className='lg:col-span-4 space-y-6'>
-            {q?.accessory === 'calculator' && (
+            {q?.accessory && q.accessory !== 'none' && (
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}>
@@ -1162,7 +1292,13 @@ export default function PublicQuizPage() {
                     System Assistant
                   </h4>
                 </div>
-                <Calculator />
+                {q.accessory === 'calculator' && <Calculator />}
+                {q.accessory === 'note' && (
+                  <NoteSheet note={q.accessoryNote || ''} />
+                )}
+                {q.accessory === 'periodic_table' && <PeriodicTable />}
+                {q.accessory === 'formula_sheet' && <FormulaSheet />}
+                {q.accessory === 'glossary' && <Glossary />}
               </motion.div>
             )}
           </div>

@@ -44,6 +44,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HybridStorage } from '@/lib/storage-utils';
+import Wrapper from '@/components/ui/wrapper';
+import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 
 // --- Types ---
 export type QuestionType =
@@ -65,7 +67,14 @@ export interface Question {
   options: (string | QuizOption)[];
   correctExplanation?: string;
   correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
-  accessory?: 'none' | 'calculator';
+  accessory?:
+    | 'none'
+    | 'calculator'
+    | 'note'
+    | 'periodic_table'
+    | 'formula_sheet'
+    | 'glossary';
+  accessoryNote?: string; // content for the 'note' accessory
 }
 
 interface Details {
@@ -128,7 +137,25 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
-  const [editedQuiz, setEditedQuiz] = useState<Quiz>(quiz);
+  // Pre-process quiz to decode secured indices for editing
+  const decodedQuestions = (quiz.questions || []).map((q) => {
+    let plainIndex = q.correctIndex;
+    try {
+      if (typeof q.correctIndex === 'string') {
+        const decoded = atob(q.correctIndex);
+        try {
+          plainIndex = JSON.parse(decoded);
+        } catch {
+          plainIndex = decoded;
+        }
+      }
+    } catch (e) {
+      // Not base64 or other error, keep as is
+    }
+    return { ...q, correctIndex: plainIndex };
+  });
+
+  const [editedQuiz, setEditedQuiz] = useState<Quiz>({ ...quiz, questions: decodedQuestions });
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1 for settings
 
   useEffect(() => {
@@ -267,145 +294,285 @@ const QuizBuilder = ({
 
         {/* Editor Area */}
         <div className='lg:col-span-3'>
-          <Card className='card-glow p-4 pt-6 lg:pt-9 lg:p-8 min-h-[450px]'>
+          <Card className='card-glow p-4 pb-2 pt-6 lg:pt-9 lg:p-8 h-full'>
             {currentStep === -1 ?
-              <div className='space-y-6'>
-                <h3 className='text-xl font-bold flex items-center gap-2 mt-1'>
-                  <Settings2 className='h-5 w-5 text-pw-primary' /> Quiz
-                  Settings
-                </h3>
-                <div className='space-y-4 w-full'>
-                  <div className='space-y-2'>
-                    <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                      Quiz Type
-                    </label>
-                    <div className='flex gap-2 p-0.5 bg-white/5 border border-white/5 rounded-2xl'>
-                      <Button
-                        variant='ghost'
-                        onClick={() =>
-                          setEditedQuiz({ ...editedQuiz, type: 'quiz' })
+              <div className='space-y-4 mt-1'>
+                <div className='flex items-center justify-between'>
+                  <div>
+                    <h3 className='text-xl font-bold flex items-center gap-2'>
+                      <Settings2 className='h-5 w-5 text-pw-primary' />{' '}
+                      Assessment Config
+                    </h3>
+                    <p className='text-[10px] text-pw-muted mt-0.5'>
+                      Customize your assessment behavior and security.
+                    </p>
+                  </div>
+                </div>
+
+                <div className='divider opacity-50' />
+
+                {/* Identity & Basic Info */}
+                <Wrapper
+                  title='General Info'
+                  description='Control the title, description and type of your assessment'
+                  icon={<Brain className='h-4 w-4' />}
+                  color='cyan'
+                  defaultOpen>
+                  <div className='flex flex-col gap-4 mt-2'>
+                    <div className='space-y-2'>
+                      <label className='text-xs font-bold text-pw-muted uppercase tracking-widest'>
+                        Assessment Type
+                      </label>
+                      <div className='flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/5'>
+                        <Button
+                          variant='ghost'
+                          onClick={() =>
+                            setEditedQuiz({ ...editedQuiz, type: 'quiz' })
+                          }
+                          className={cn(
+                            'flex-1 h-9 rounded-xl transition-all',
+                            editedQuiz.type === 'quiz' ?
+                              'bg-pw-primary text-white shadow-lg'
+                            : 'text-pw-muted',
+                          )}>
+                          Quiz (Graded)
+                        </Button>
+                        <Button
+                          variant='ghost'
+                          onClick={() =>
+                            setEditedQuiz({ ...editedQuiz, type: 'survey' })
+                          }
+                          className={cn(
+                            'flex-1 h-9 rounded-xl transition-all',
+                            editedQuiz.type === 'survey' ?
+                              'bg-pw-primary text-white shadow-lg'
+                            : 'text-pw-muted',
+                          )}>
+                          Survey (Poll)
+                        </Button>
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <label className='text-xs font-bold text-pw-muted uppercase'>
+                        Title
+                      </label>
+                      <Input
+                        value={editedQuiz.title}
+                        onChange={(e) =>
+                          setEditedQuiz({
+                            ...editedQuiz,
+                            title: e.target.value,
+                          })
                         }
-                        className={cn(
-                          'flex-1 h-8 text-xs rounded-2xl',
-                          editedQuiz.type === 'quiz' &&
-                            'bg-pw-primary text-white shadow-lg',
-                        )}>
-                        Quiz
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        onClick={() =>
-                          setEditedQuiz({ ...editedQuiz, type: 'survey' })
+                        placeholder='e.g., General Relativity Crash Course'
+                        className='bg-white/5 border-white/10 h-11 focus:border-pw-primary'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <label className='text-xs font-bold text-pw-muted uppercase'>
+                        Intro Message
+                      </label>
+                      <textarea
+                        value={editedQuiz.description}
+                        onChange={(e) =>
+                          setEditedQuiz({
+                            ...editedQuiz,
+                            description: e.target.value,
+                          })
                         }
-                        className={cn(
-                          'flex-1 h-8 text-xs rounded-2xl',
-                          editedQuiz.type === 'survey' &&
-                            'bg-pw-primary text-white shadow-lg',
-                        )}>
-                        Survey
-                      </Button>
+                        placeholder='Welcome your takers and explain the rules...'
+                        className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
+                      />
                     </div>
                   </div>
-                  <div className='space-y-2'>
-                    <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                      Quiz Title
-                    </label>
-                    <Input
-                      value={editedQuiz.title}
-                      onChange={(e) =>
-                        setEditedQuiz({ ...editedQuiz, title: e.target.value })
-                      }
-                      placeholder='e.g., General Knowledge Blast'
-                      className='bg-white/5 border-white/10 h-11 focus:border-pw-primary'
-                    />
-                  </div>
-                  <div className='space-y-2'>
-                    <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                      Description
-                    </label>
-                    <textarea
-                      value={editedQuiz.description}
-                      onChange={(e) =>
+                </Wrapper>
+
+                {/* Participant Details */}
+                <Wrapper
+                  title='Data Collection'
+                  description='Required identify/details fields for participants'
+                  icon={<Type className='h-4 w-4' />}
+                  color='primary'>
+                  <div className='flex flex-col gap-3 py-2'>
+                    {(editedQuiz.askDetails || []).map((detail, idx) => (
+                      <div
+                        key={idx}
+                        className='flex flex-col gap-2 bg-white/5 lg:p-2 p-1 rounded-xl border border-white/5'>
+                        <div className='flex gap-2 items-center'>
+                          <Input
+                            value={detail.title}
+                            onChange={(e) => {
+                              const newDetails = [
+                                ...(editedQuiz.askDetails || []),
+                              ];
+                              newDetails[idx].title = e.target.value;
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                askDetails: newDetails,
+                              });
+                            }}
+                            className='bg-transparent border-none h-8 text-xs focus-visible:ring-0'
+                            placeholder='Field Label'
+                          />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger>
+                              <Button
+                                variant='ghost'
+                                size='sm'
+                                className='h-8 text-[10px] font-bold uppercase tracking-tighter bg-white/5'>
+                                {detail.type}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className='bg-pw-surface border-white/10'>
+                              {[
+                                'name',
+                                'email',
+                                'tel',
+                                'dropdown',
+                                'input',
+                              ].map((t) => (
+                                <DropdownMenuItem
+                                  key={t}
+                                  onClick={() => {
+                                    const newDetails = [
+                                      ...(editedQuiz.askDetails || []),
+                                    ];
+                                    newDetails[idx].type = t as any;
+                                    setEditedQuiz({
+                                      ...editedQuiz,
+                                      askDetails: newDetails,
+                                    });
+                                  }}>
+                                  {t.toUpperCase()}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => {
+                              const newDetails = (
+                                editedQuiz.askDetails || []
+                              ).filter((_, i) => i !== idx);
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                askDetails: newDetails,
+                              });
+                            }}
+                            className='h-8 w-8 text-pw-danger'>
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                        {detail.type === 'dropdown' && (
+                          <div className='space-y-1 mt-1'>
+                            <Input
+                              placeholder='Option 1, Option 2, Option 3...'
+                              value={detail.options?.join(', ') || ''}
+                              onChange={(e) => {
+                                const newDetails = [
+                                  ...(editedQuiz.askDetails || []),
+                                ];
+                                newDetails[idx].options = e.target.value
+                                  .split(',')
+                                  .map((s) => s.trim());
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  askDetails: newDetails,
+                                });
+                              }}
+                              className='h-8 text-[10px] bg-black/20'
+                            />
+                            <p className='text-[9px] text-pw-muted italic ml-1'>
+                              Separate options with commas
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() =>
                         setEditedQuiz({
                           ...editedQuiz,
-                          description: e.target.value,
+                          askDetails: [
+                            ...(editedQuiz.askDetails || []),
+                            { title: '', type: 'input' },
+                          ],
                         })
                       }
-                      placeholder='What is this quiz about?'
-                      className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-2 text-sm focus:border-pw-primary focus:outline-none focus:ring-0 resize-none'
-                    />
+                      className='h-10 w-full border-dashed border-white/20 gap-2 text-xs opacity-70 hover:opacity-100'>
+                      <Plus size={14} /> Add details field
+                    </Button>
                   </div>
+                </Wrapper>
 
-                  <div className='divider opacity-80' />
-                  {editedQuiz.type === 'quiz' && (
-                    <>
-                      <div className='grid grid-cols-2 gap-4'>
-                        <div className='space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Show Score
-                          </label>
-                          <div className='flex items-center gap-2'>
-                            <Button
-                              variant='outline'
-                              size='sm'
-                              onClick={() =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  showScore: !editedQuiz.showScore,
-                                })
-                              }
-                              className={cn(
-                                'w-full h-10 gap-2',
-                                editedQuiz.showScore ?
-                                  'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                                : 'bg-white/5 border-white/10',
-                              )}>
-                              {editedQuiz.showScore ?
-                                <Check className='h-4 w-4' />
-                              : <X className='h-4 w-4' />}
-                              {editedQuiz.showScore ? 'Visible' : 'Hidden'}
-                            </Button>
-                          </div>
-                        </div>
+                {/* Quiz Specific Logic */}
+                {editedQuiz.type === 'quiz' && (
+                  <>
+                    <Wrapper
+                      title='Logic & Flow'
+                      description='Control how takers progress and interact with scores'
+                      icon={<Play className='h-4 w-4' />}
+                      color='primary'>
+                      <div className='flex flex-col gap-2 pt-2'>
+                        <QuizSettingItem
+                          label='Show Real-time Score'
+                          description='Displays the current score as takers answer questions.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                showScore: !editedQuiz.showScore,
+                              })
+                            }
+                            className={cn(
+                              'h-8 min-w-[80px] gap-2',
+                              editedQuiz.showScore ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {editedQuiz.showScore ?
+                              <Check className='h-3 w-3' />
+                            : <X className='h-3 w-3' />}
+                            {editedQuiz.showScore ? 'ON' : 'OFF'}
+                          </Button>
+                        </QuizSettingItem>
 
-                        <div className='space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Can Go Back
-                          </label>
-                          <div className='flex items-center gap-2'>
-                            <Button
-                              variant='outline'
-                              size='sm'
-                              onClick={() =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  canGoBack: !editedQuiz.canGoBack,
-                                })
-                              }
-                              className={cn(
-                                'w-full h-10 gap-2',
-                                editedQuiz.canGoBack ?
-                                  'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                                : 'bg-white/5 border-white/10',
-                              )}>
-                              {editedQuiz.canGoBack ?
-                                <Check className='h-4 w-4' />
-                              : <X className='h-4 w-4' />}
-                              {editedQuiz.canGoBack ? 'Enabled' : 'Disabled'}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                        <QuizSettingItem
+                          label='Next Only'
+                          description='Disable back navigation. Takers cannot go back to previous questions.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                canGoBack: !editedQuiz.canGoBack,
+                              })
+                            }
+                            className={cn(
+                              'h-8 min-w-[80px] gap-2 font-bold',
+                              !editedQuiz.canGoBack ?
+                                'bg-pw-warning/10 border-pw-warning text-pw-warning'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {!editedQuiz.canGoBack ?
+                              <ShieldCheck className='h-3 w-3' />
+                            : <X className='h-3 w-3' />}
+                            {!editedQuiz.canGoBack ? 'ENFORCED' : 'OFF'}
+                          </Button>
+                        </QuizSettingItem>
 
-                      <div className='grid grid-cols-2 gap-4'>
-                        <div className='space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Timer (Minutes)
-                          </label>
-                          <div className='flex items-center gap-3'>
+                        <QuizSettingItem
+                          label='Time Limit'
+                          description='Auto-submits when time expires. Set to minutes.'>
+                          <div className='flex gap-2 items-center'>
                             <Input
                               type='number'
-                              min={0}
                               value={
                                 typeof editedQuiz.hasTimer === 'number' ?
                                   editedQuiz.hasTimer
@@ -420,34 +587,37 @@ const QuizBuilder = ({
                                     : false,
                                 })
                               }
-                              placeholder='10 (opt)'
-                              className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
+                              placeholder='Min'
+                              className='h-8 w-16 bg-white/5 border-white/10 text-center text-xs'
                             />
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              onClick={() =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  hasTimer: !editedQuiz.hasTimer,
-                                })
-                              }
-                              className={cn(
-                                'h-10 px-4 uppercase',
-                                editedQuiz.hasTimer ? 'text-pw-primary' : (
-                                  'text-pw-muted'
-                                ),
-                              )}>
-                              <Clock className='h-4 w-4 mr-2' />{' '}
-                              {editedQuiz.hasTimer ? 'On' : 'Off'}
-                            </Button>
+                            {editedQuiz.hasTimer && (
+                              <Button
+                                variant='ghost'
+                                size='icon'
+                                onClick={() =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    hasTimer: false,
+                                  })
+                                }
+                                className='h-8 w-8 text-pw-muted opacity-50 hover:opacity-100'>
+                                <X size={14} />
+                              </Button>
+                            )}
                           </div>
-                        </div>
+                        </QuizSettingItem>
+                      </div>
+                    </Wrapper>
 
-                        <div className='space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Allow Retry
-                          </label>
+                    <Wrapper
+                      title='Security'
+                      description='Advanced protection for high-stakes assessments'
+                      icon={<ShieldCheck className='h-4 w-4' />}
+                      color='danger'>
+                      <div className='flex flex-col gap-2 pt-2'>
+                        <QuizSettingItem
+                          label='Multiple Attempts'
+                          description={`This restricts or allows takers to retake the ${editedQuiz.type}.`}>
                           <Button
                             variant='outline'
                             size='sm'
@@ -458,19 +628,18 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'w-full h-10 gap-2 font-bold transition-all',
+                              'h-8 min-w-[100px] gap-2 font-black tracking-tighter',
                               editedQuiz.allowRetry ?
-                                'bg-pw-success/10 border-pw-success text-pw-success'
-                              : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                                'bg-pw-cyan/10 border-pw-cyan text-pw-cyan'
+                              : 'bg-white/5 border-white/10',
                             )}>
-                            <ShieldCheck className='h-4 w-4' />
-                            {editedQuiz.allowRetry ? 'ALLOWED' : 'RESTRICTED'}
+                            {editedQuiz.allowRetry ? 'ALLOW' : 'RESTRICT'}
                           </Button>
-                        </div>
-                        <div className='col-span-2 space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Security (Anti-Cheat)
-                          </label>
+                        </QuizSettingItem>
+
+                        <QuizSettingItem
+                          label='Enforce Anticheat'
+                          description='Detects tab switching, copy-pasting, and print-screen. Auto-submits on repeated violations.'>
                           <Button
                             variant='outline'
                             size='sm'
@@ -481,349 +650,93 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'w-full h-10 gap-2 font-bold transition-all',
+                              'h-8 min-w-[100px] gap-2 font-black tracking-tighter',
                               editedQuiz.enforceSecurity ?
-                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                                'bg-pw-danger/10 border-pw-danger text-pw-danger'
                               : 'bg-white/5 border-white/10',
                             )}>
-                            <ShieldCheck className='h-4 w-4' />
-                            {editedQuiz.enforceSecurity ?
-                              'STRICT MODE'
-                            : 'STANDARD MODE'}
+                            {editedQuiz.enforceSecurity ? 'STRICT' : 'STANDARD'}
                           </Button>
-                        </div>
+                        </QuizSettingItem>
                       </div>
+                    </Wrapper>
 
-                      <div className='grid grid-cols-2 gap-4 pb-2'>
-                        <div className='space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Random Options
-                          </label>
+                    <Wrapper
+                      title='Results & Review'
+                      description='What happens after submission?'
+                      icon={<CheckCircle2 className='h-4 w-4' />}
+                      color='success'>
+                      <div className='flex flex-col gap-2 pt-2'>
+                        <QuizSettingItem
+                          label='Show Performance Stats'
+                          description='Reveal final score and breakdown to the taker.'>
                           <Button
                             variant='outline'
                             size='sm'
                             onClick={() =>
                               setEditedQuiz({
                                 ...editedQuiz,
-                                randomizeOptions: !editedQuiz.randomizeOptions,
+                                endScreen: {
+                                  ...editedQuiz.endScreen,
+                                  showPerformance:
+                                    !editedQuiz.endScreen.showPerformance,
+                                },
                               })
                             }
                             className={cn(
-                              'w-full h-10 gap-2 font-bold transition-all',
-                              editedQuiz.randomizeOptions ?
-                                'bg-pw-cyan/10 border-pw-cyan text-pw-cyan'
+                              'h-8 min-w-[80px]',
+                              editedQuiz.endScreen.showPerformance ?
+                                'bg-pw-success/10 border-pw-success text-pw-success'
                               : 'bg-white/5 border-white/10',
                             )}>
-                            <RefreshCw
-                              className={cn(
-                                'h-4 w-4',
-                                editedQuiz.randomizeOptions &&
-                                  'animate-spin-slow',
-                              )}
-                            />
-                            {editedQuiz.randomizeOptions ? 'ON' : 'OFF'}
+                            {editedQuiz.endScreen.showPerformance ?
+                              'SHOW'
+                            : 'HIDE'}
                           </Button>
-                        </div>
+                        </QuizSettingItem>
 
-                        <div className='space-y-2'>
-                          <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                            Random Questions
-                          </label>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() =>
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                randomizeQuestions:
-                                  !editedQuiz.randomizeQuestions,
-                              })
-                            }
-                            className={cn(
-                              'w-full h-10 gap-2 font-bold transition-all',
-                              editedQuiz.randomizeQuestions ?
-                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                              : 'bg-white/5 border-white/10',
-                            )}>
-                            <BadgeQuestionMark
-                              className={cn(
-                                'h-4 w-4',
-                                editedQuiz.randomizeQuestions &&
-                                  'animate-pulse',
-                              )}
-                            />
-                            {editedQuiz.randomizeQuestions ? 'ON' : 'OFF'}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className='divider opacity-80' />
-                    </>
-                  )}
-
-                  <div className='space-y-4'>
-                    <div className='flex justify-between items-center'>
-                      <h3 className='text-lg font-bold flex items-center gap-2'>
-                        <Type className='h-4 w-4 text-pw-cyan' /> Ask Details
-                      </h3>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={() => {
-                          const newDetails: Details[] = [
-                            ...(editedQuiz.askDetails || []),
-                            { title: 'New Field', type: 'input' },
-                          ];
-                          setEditedQuiz({
-                            ...editedQuiz,
-                            askDetails: newDetails,
-                          });
-                        }}
-                        className='h-8 text-[10px] gap-2 border-white/10'>
-                        <Plus className='h-3 w-3' /> Add Detail
-                      </Button>
-                    </div>
-
-                    <div className='space-y-2'>
-                      {(editedQuiz.askDetails || []).map((detail, idx) => (
-                        <>
-                          <div
-                            key={idx}
-                            className='flex gap-2 items-center bg-white/5 p-1 rounded-xl border border-white/5'>
+                        <div className='space-y-4 mt-4'>
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Custom Finish Title
+                            </label>
                             <Input
-                              value={detail.title}
-                              minLength={1}
-                              //for number input
-                              min={0}
-                              onChange={(e) => {
-                                const newDetails = [
-                                  ...(editedQuiz.askDetails || []),
-                                ];
-                                newDetails[idx].title = e.target.value;
+                              value={editedQuiz.endScreen.title}
+                              onChange={(e) =>
                                 setEditedQuiz({
                                   ...editedQuiz,
-                                  askDetails: newDetails,
-                                });
-                              }}
-                              className='bg-transparent border-none h-8 text-xs focus-visible:ring-0'
-                              placeholder='Field Label'
+                                  endScreen: {
+                                    ...editedQuiz.endScreen,
+                                    title: e.target.value,
+                                  },
+                                })
+                              }
+                              className='bg-white/5 border-white/10 h-10'
                             />
-                            <DropdownMenu>
-                              <DropdownMenuTrigger>
-                                <Button
-                                  variant='ghost'
-                                  size='sm'
-                                  className='h-6 text-[10px] uppercase font-bold tracking-tighter bg-white/5'>
-                                  {detail.type}
-                                  <ChevronDown size={18} />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className='bg-pw-surface border-white/10 min-w-[100px]'>
-                                {[
-                                  'name',
-                                  'sex',
-                                  'input',
-                                  'number',
-                                  'tel',
-                                  'email',
-                                  'dropdown',
-                                  'others',
-                                ].map((t) => (
-                                  <DropdownMenuItem
-                                    key={t}
-                                    onClick={() => {
-                                      const newDetails = [
-                                        ...(editedQuiz.askDetails || []),
-                                      ];
-                                      newDetails[idx].type = t as any;
-                                      setEditedQuiz({
-                                        ...editedQuiz,
-                                        askDetails: newDetails,
-                                      });
-                                    }}>
-                                    {t.toUpperCase()}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              className='h-8 w-8 text-pw-danger/50 hover:text-pw-danger'
-                              onClick={() => {
-                                const newDetails = (
-                                  editedQuiz.askDetails || []
-                                ).filter((_, i) => i !== idx);
+                          </div>
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Custom Finish Message
+                            </label>
+                            <textarea
+                              value={editedQuiz.endScreen.message}
+                              onChange={(e) =>
                                 setEditedQuiz({
                                   ...editedQuiz,
-                                  askDetails: newDetails,
-                                });
-                              }}>
-                              <Trash2 className='h-3.5 w-3.5' />
-                            </Button>
+                                  endScreen: {
+                                    ...editedQuiz.endScreen,
+                                    message: e.target.value,
+                                  },
+                                })
+                              }
+                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-3 text-xs'
+                            />
                           </div>
-                          {editedQuiz?.askDetails &&
-                            editedQuiz?.askDetails[idx].type === 'dropdown' && (
-                              <>
-                                <Input
-                                  placeholder='Add dropdown options here'
-                                  className='h-9 text-xs focus-visible:ring-0'
-                                  value={editedQuiz?.askDetails[
-                                    idx
-                                  ].options?.join(',')}
-                                  onChange={(e) => {
-                                    const newDetails = [
-                                      ...(editedQuiz.askDetails || []),
-                                    ];
-                                    newDetails[idx].options =
-                                      e.target.value.split(',');
-                                    setEditedQuiz({
-                                      ...editedQuiz,
-                                      askDetails: newDetails,
-                                    });
-                                  }}
-                                />
-                                <p className='text-xs opacity-60 mb-6 px-2'>
-                                  Seperate each option with a comma
-                                </p>
-                              </>
-                            )}
-                        </>
-                      ))}
-                      {(editedQuiz.askDetails?.length || 0) === 0 && (
-                        <p className='text-[10px] text-pw-muted italic'>
-                          No user details requested. Quiz will start
-                          immediately.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className='divider opacity-80 mt-2' />
-                  {editedQuiz.type === 'quiz' && (
-                    <div className='grid grid-cols-2 gap-4'>
-                      <div className='space-y-2'>
-                        <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                          Instant Feedback
-                        </label>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          onClick={() =>
-                            setEditedQuiz({
-                              ...editedQuiz,
-                              correctOption: !editedQuiz.correctOption,
-                            })
-                          }
-                          className={cn(
-                            'w-full h-10 gap-2',
-                            editedQuiz.correctOption ?
-                              'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                            : 'bg-white/5 border-white/10',
-                          )}>
-                          {editedQuiz.correctOption ? 'Enabled' : 'Disabled'}
-                        </Button>
+                        </div>
                       </div>
-                      <div className='space-y-2'>
-                        <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                          Show Explanations
-                        </label>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          onClick={() =>
-                            setEditedQuiz({
-                              ...editedQuiz,
-                              correctOptionDes: !editedQuiz.correctOptionDes,
-                            })
-                          }
-                          className={cn(
-                            'w-full h-10 gap-2',
-                            editedQuiz.correctOptionDes ?
-                              'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                            : 'bg-white/5 border-white/10',
-                          )}>
-                          {editedQuiz.correctOptionDes ? 'Enabled' : 'Disabled'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  <h3 className='text-lg font-bold flex items-center gap-2 mt-8'>
-                    <CheckCircle2 className='h-4 w-4 text-pw-success' /> End
-                    Screen Settings
-                  </h3>
-
-                  <div className='space-y-4'>
-                    {editedQuiz.type === 'quiz' && (
-                      <div className='flex items-center justify-between p-2 pl-2 rounded-2xl bg-white/5 border border-white/5'>
-                        <span className='text-xs font-bold text-pw-muted uppercase'>
-                          Show Performance Stats
-                        </span>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          onClick={() =>
-                            setEditedQuiz({
-                              ...editedQuiz,
-                              endScreen: {
-                                ...editedQuiz.endScreen,
-                                showPerformance:
-                                  !editedQuiz.endScreen.showPerformance,
-                              },
-                            })
-                          }
-                          className={cn(
-                            'h-8 px-4',
-                            editedQuiz.endScreen.showPerformance ?
-                              'text-pw-success'
-                            : 'text-pw-muted',
-                          )}>
-                          {editedQuiz.endScreen.showPerformance ? 'ON' : 'OFF'}
-                        </Button>
-                      </div>
-                    )}
-
-                    <div className='space-y-2'>
-                      <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                        Finish Title
-                      </label>
-                      <Input
-                        value={editedQuiz.endScreen.title}
-                        onChange={(e) =>
-                          setEditedQuiz({
-                            ...editedQuiz,
-                            endScreen: {
-                              ...editedQuiz.endScreen,
-                              title: e.target.value,
-                            },
-                          })
-                        }
-                        placeholder='e.g., Congratulations!'
-                        className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
-                      />
-                    </div>
-                    <div className='space-y-2'>
-                      <label className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                        Finish Message
-                      </label>
-                      <textarea
-                        value={editedQuiz.endScreen.message}
-                        onChange={(e) =>
-                          setEditedQuiz({
-                            ...editedQuiz,
-                            endScreen: {
-                              ...editedQuiz.endScreen,
-                              message: e.target.value,
-                            },
-                          })
-                        }
-                        placeholder='e.g., You nailed it! Feel free to share your score.'
-                        className='w-full h-20 bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:border-pw-primary focus:outline-none focus:ring-0 resize-none'
-                      />
-                    </div>
-                  </div>
-                </div>
+                    </Wrapper>
+                  </>
+                )}
               </div>
             : <div className='space-y-8'>
                 <div className='flex items-center justify-between flex-wrap'>
@@ -912,32 +825,59 @@ const QuizBuilder = ({
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button
-                      variant={
-                        (
-                          editedQuiz.questions[currentStep].accessory ===
-                          'calculator'
-                        ) ?
-                          'default'
-                        : 'outline'
-                      }
-                      size='sm'
-                      onClick={() => {
-                        const q = {
-                          ...editedQuiz.questions[currentStep],
-                          accessory:
-                            (
-                              editedQuiz.questions[currentStep].accessory ===
-                              'calculator'
-                            ) ?
-                              'none'
-                            : 'calculator',
-                        } as Question;
-                        updateQuestion(currentStep, q);
-                      }}
-                      className='h-9 px-3 gap-2 text-[10px] uppercase font-bold tracking-widest border-white/10'>
-                      Calc
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <Button
+                          variant='outline'
+                          className='h-9 gap-2 text-[10px] bg-white/5 border-white/10 uppercase font-bold tracking-widest'>
+                          {editedQuiz.questions[currentStep].accessory ||
+                            'No Accessory'}{' '}
+                          <ChevronDown className='h-3 w-3' />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-48'>
+                        {(
+                          [
+                            'none',
+                            'calculator',
+                            'note',
+                            'periodic_table',
+                            'formula_sheet',
+                            'glossary',
+                          ] as const
+                        ).map((acc) => (
+                          <DropdownMenuItem
+                            key={acc}
+                            onClick={() => {
+                              const q = {
+                                ...editedQuiz.questions[currentStep],
+                                accessory: acc,
+                              };
+                              updateQuestion(currentStep, q);
+                            }}
+                            className='text-xs uppercase font-bold'>
+                            {acc.replace('_', ' ')}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {editedQuiz.questions[currentStep].accessory === 'note' && (
+                      <Input
+                        placeholder='Add your note/formula here...'
+                        value={
+                          editedQuiz.questions[currentStep].accessoryNote || ''
+                        }
+                        onChange={(e) => {
+                          const q = {
+                            ...editedQuiz.questions[currentStep],
+                            accessoryNote: e.target.value,
+                          };
+                          updateQuestion(currentStep, q);
+                        }}
+                        className='h-9 text-xs bg-white/5 border-white/10 min-w-[200px]'
+                      />
+                    )}
 
                     <div className='w-[1px] h-9 bg-white/5 mx-2' />
 
