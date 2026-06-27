@@ -167,8 +167,8 @@ body {
 }
 
 ::-webkit-scrollbar:hover {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -374,6 +374,10 @@ pre {
 :focus-visible {
   outline: 1px solid #5c6fff;
   outline-offset: 1px;
+}
+.no-outline:focus-visible{
+  outline: none;
+  outline-offset: 0;
 }
 
 /* ─── Animations ────────────────────────────────────────────── */

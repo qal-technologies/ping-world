@@ -31,6 +31,7 @@ import {
   Brain,
   BadgeQuestionMark,
   Play,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -53,11 +54,15 @@ export type QuestionType =
   | 'true_false'
   | 'dropdown'
   | 'checkbox'
-  | 'input';
+  | 'input'
+  | 'range'
+  | 'rating';
 
 export interface QuizOption {
   id: string; // questionId-index or uuid
   text: string;
+  skipTo?: string; // ID of the next question to jump to
+  skipToCat?: string; // Category name to jump to (jumps to first question in category)
 }
 
 export interface Question {
@@ -67,6 +72,10 @@ export interface Question {
   options: (string | QuizOption)[];
   correctExplanation?: string;
   correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
+  caseSensitive?: boolean; // for input type
+  min?: number; // for range
+  max?: number; // for range
+  step?: number; // for range
   accessory?:
     | 'none'
     | 'calculator'
@@ -74,7 +83,11 @@ export interface Question {
     | 'periodic_table'
     | 'formula_sheet'
     | 'glossary';
-  accessoryNote?: string; // content for the 'note' accessory
+  accessoryNote?: string; // content for the 'note' or custom formulas
+  accessoryConfig?: any; // specific IDs or categories for formulas/glossary
+  skipTo?: string; // Question-level branching: jump to specific question after this one
+  skipToCat?: string; // Question-level branching: jump to first question of this category
+  category?: string; // Optional category tag for grouping questions
 }
 
 interface Details {
@@ -124,6 +137,7 @@ export interface Quiz {
   correctOptionDes?: boolean;
   createdAt: number;
   responses?: QuizTakerResponse[];
+  allowEarlySubmit?: boolean;
 }
 
 // --- Components ---
@@ -155,7 +169,10 @@ const QuizBuilder = ({
     return { ...q, correctIndex: plainIndex };
   });
 
-  const [editedQuiz, setEditedQuiz] = useState<Quiz>({ ...quiz, questions: decodedQuestions });
+  const [editedQuiz, setEditedQuiz] = useState<Quiz>({
+    ...quiz,
+    questions: decodedQuestions,
+  });
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1 for settings
 
   useEffect(() => {
@@ -568,6 +585,31 @@ const QuizBuilder = ({
                         </QuizSettingItem>
 
                         <QuizSettingItem
+                          label='Early Submission'
+                          description='Allow participants to submit the assessment even if questions remain.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                allowEarlySubmit: !editedQuiz.allowEarlySubmit,
+                              })
+                            }
+                            className={cn(
+                              'h-8 min-w-[80px] gap-2 font-bold',
+                              editedQuiz.allowEarlySubmit ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {editedQuiz.allowEarlySubmit ?
+                              <Check className='h-3 w-3' />
+                            : <X className='h-3 w-3' />}
+                            {editedQuiz.allowEarlySubmit ? 'ENABLED' : 'OFF'}
+                          </Button>
+                        </QuizSettingItem>
+
+                        <QuizSettingItem
                           label='Time Limit'
                           description='Auto-submits when time expires. Set to minutes.'>
                           <div className='flex gap-2 items-center'>
@@ -630,8 +672,8 @@ const QuizBuilder = ({
                             className={cn(
                               'h-8 min-w-[100px] gap-2 font-black tracking-tighter',
                               editedQuiz.allowRetry ?
-                                'bg-pw-cyan/10 border-pw-cyan text-pw-cyan'
-                              : 'bg-white/5 border-white/10',
+                                'bg-pw-cyan/10 border-pw-cyan/80 text-pw-cyan'
+                              : 'bg-pw-danger/5 border-pw-danger/80 text-pw-danger',
                             )}>
                             {editedQuiz.allowRetry ? 'ALLOW' : 'RESTRICT'}
                           </Button>
@@ -746,6 +788,7 @@ const QuizBuilder = ({
                   <div className='flex gap-2 flex-wrap'>
                     <Button
                       variant='ghost'
+                      title='Move question up'
                       size='icon'
                       onClick={() => moveQuestion(currentStep, 'up')}
                       disabled={currentStep === 0}
@@ -755,6 +798,7 @@ const QuizBuilder = ({
                     <Button
                       variant='ghost'
                       size='icon'
+                      title='Move question down'
                       onClick={() => moveQuestion(currentStep, 'down')}
                       disabled={currentStep === editedQuiz.questions.length - 1}
                       className='h-9 w-9 text-pw-muted hover:text-pw-primary'>
@@ -767,6 +811,7 @@ const QuizBuilder = ({
                       <DropdownMenuTrigger>
                         <Button
                           variant='outline'
+                          title='Change question type'
                           className='h-9 gap-2 text-xs bg-white/5 border-white/10'>
                           {editedQuiz.questions[currentStep].type
                             .replace('_', ' ')
@@ -782,46 +827,60 @@ const QuizBuilder = ({
                             'dropdown',
                             'checkbox',
                             'input',
+                            editedQuiz.type === 'survey' && 'rating',
+                            editedQuiz.type === 'survey' && 'range',
                           ] as QuestionType[]
-                        ).map((type) => (
-                          <DropdownMenuItem
-                            key={type}
-                            onClick={() => {
-                              const q = {
-                                ...editedQuiz.questions[currentStep],
-                                type,
-                              };
-                              // Reset options/correct Index for new type
-                              if (type === 'true_false') {
-                                q.options = [
-                                  { id: 'true', text: 'true' },
-                                  { id: 'false', text: 'False' },
-                                ];
-                                q.correctIndex = 'true';
-                              } else if (type === 'input') {
-                                q.options = [];
-                                q.correctIndex = '';
-                              } else if (type === 'checkbox') {
-                                q.correctIndex = [];
-                              } else {
-                                // For MC/Dropdown, ensure options are objects
-                                if (
-                                  q.options.length > 0 &&
-                                  typeof q.options[0] === 'string'
-                                ) {
-                                  q.options = q.options.map((opt, idx) => ({
-                                    id: `${q.id}-opt-${idx}`,
-                                    text: opt as string,
-                                  }));
+                        ).map((type) => {
+                          if (!type) return null;
+                          return (
+                            <DropdownMenuItem
+                              key={type}
+                              onClick={() => {
+                                const q = {
+                                  ...editedQuiz.questions[currentStep],
+                                  type,
+                                };
+                                // Reset options/correct Index for new type
+                                if (type === 'true_false') {
+                                  q.options = [
+                                    { id: 'true', text: 'True' },
+                                    { id: 'false', text: 'False' },
+                                  ];
+                                  q.correctIndex = 'true';
+                                } else if (type === 'input') {
+                                  q.options = [];
+                                  q.correctIndex = '';
+                                } else if (type === 'checkbox') {
+                                  q.correctIndex = [];
+                                } else if (type === 'range') {
+                                  q.options = [];
+                                  q.min = 0;
+                                  q.max = 10;
+                                  q.step = 1;
+                                  q.correctIndex = 5;
+                                } else if (type === 'rating') {
+                                  q.options = [];
+                                  q.correctIndex = 5;
+                                } else {
+                                  // For MC/Dropdown, ensure options are objects
+                                  if (
+                                    q.options.length > 0 &&
+                                    typeof q.options[0] === 'string'
+                                  ) {
+                                    q.options = q.options.map((opt, idx) => ({
+                                      id: `${q.id}-opt-${idx}`,
+                                      text: opt as string,
+                                    }));
+                                  }
+                                  q.correctIndex =
+                                    (q.options[0] as QuizOption)?.id || '';
                                 }
-                                q.correctIndex =
-                                  (q.options[0] as QuizOption)?.id || '';
-                              }
-                              updateQuestion(currentStep, q);
-                            }}>
-                            {type.replace('_', ' ').toUpperCase()}
-                          </DropdownMenuItem>
-                        ))}
+                                updateQuestion(currentStep, q);
+                              }}>
+                              {type.replace('_', ' ').toUpperCase()}
+                            </DropdownMenuItem>
+                          );
+                        })}
                       </DropdownMenuContent>
                     </DropdownMenu>
 
@@ -829,6 +888,7 @@ const QuizBuilder = ({
                       <DropdownMenuTrigger>
                         <Button
                           variant='outline'
+                          title='Add accessory'
                           className='h-9 gap-2 text-[10px] bg-white/5 border-white/10 uppercase font-bold tracking-widest'>
                           {editedQuiz.questions[currentStep].accessory ||
                             'No Accessory'}{' '}
@@ -885,6 +945,7 @@ const QuizBuilder = ({
                       <Button
                         variant='ghost'
                         size='icon'
+                        title='Previous question'
                         onClick={() =>
                           setCurrentStep(Math.max(0, currentStep - 1))
                         }
@@ -895,6 +956,7 @@ const QuizBuilder = ({
                       <Button
                         variant='ghost'
                         size='icon'
+                        title='Next question'
                         onClick={() =>
                           setCurrentStep(
                             Math.min(
@@ -918,17 +980,224 @@ const QuizBuilder = ({
                     <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
                       Question Text
                     </label>
-                    <textarea
-                      value={editedQuiz.questions[currentStep].text}
-                      onChange={(e) =>
-                        updateQuestion(currentStep, {
-                          ...editedQuiz.questions[currentStep],
-                          text: e.target.value,
-                        })
-                      }
-                      placeholder='Enter your question'
-                      className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:border-pw-primary focus:outline-none resize-none transition-all'
-                    />
+
+                    <div className='w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm'>
+                      <textarea
+                        value={editedQuiz.questions[currentStep].text}
+                        onChange={(e) =>
+                          updateQuestion(currentStep, {
+                            ...editedQuiz.questions[currentStep],
+                            text: e.target.value,
+                          })
+                        }
+                        placeholder='Enter your question'
+                        className='w-full h-20 bg-transparent p-0 text-sm no-outline resize-none transition-all'
+                      />
+
+                      {/* Group + Question Routing row */}
+                      <div className='flex flex-wrap items-center justify-between gap-2 mt-2 border-t border-white/5 pt-2'>
+                        {/* Group Tag Input (Combo-box Style) */}
+                        <div className='flex flex-col gap-1'>
+                          <div className='flex items-center gap-1.5'>
+                            <span className='text-[11px] text-pw-muted uppercase tracking-wider font-bold shrink-0'>
+                              Group
+                            </span>
+                            <div className='relative'>
+                              <input
+                                type='text'
+                                list='existing-groups'
+                                placeholder='e.g. Male, Section A'
+                                value={
+                                  editedQuiz.questions[currentStep].category ||
+                                  ''
+                                }
+                                onChange={(e) =>
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    category: e.target.value || undefined,
+                                  })
+                                }
+                                className='h-6 w-32 bg-white/5 border border-white/10 px-2 text-[10px] rounded-md text-pw-text placeholder:text-pw-muted/40 outline-none focus:border-pw-primary/60 transition-colors'
+                              />
+                              <datalist id='existing-groups'>
+                                {Array.from(
+                                  new Set(
+                                    editedQuiz.questions
+                                      .map((q) => q.category)
+                                      .filter(Boolean),
+                                  ),
+                                ).map((group) => (
+                                  <option
+                                    key={group}
+                                    value={group}
+                                  />
+                                ))}
+                              </datalist>
+                            </div>
+                            {editedQuiz.questions[currentStep].category && (
+                              <span className='px-1.5 py-0.5 bg-pw-primary/15 text-pw-primary rounded text-[8px] font-bold uppercase'>
+                                {editedQuiz.questions[currentStep].category}
+                              </span>
+                            )}
+                          </div>
+                          <p className='text-[10px] text-pw-muted/60 pl-1'>
+                            Group questions to create automated sequential
+                            branches.
+                          </p>
+                        </div>
+
+                        {/* Question-level routing dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className={cn(
+                                'h-6 text-[10px] gap-1 px-2',
+                                (
+                                  editedQuiz.questions[currentStep].skipTo ||
+                                    editedQuiz.questions[currentStep].skipToCat
+                                ) ?
+                                  'text-pw-warning hover:text-pw-warning/80'
+                                : 'text-pw-muted hover:text-pw-primary',
+                              )}>
+                              {editedQuiz.questions[currentStep].skipToCat ?
+                                `↪ Group: ${editedQuiz.questions[currentStep].skipToCat}`
+                              : (
+                                editedQuiz.questions[currentStep].skipTo ===
+                                'end'
+                              ) ?
+                                '⛔ Ends Here'
+                              : editedQuiz.questions[currentStep].skipTo ?
+                                `↪ Q${editedQuiz.questions.findIndex((q) => q.id === editedQuiz.questions[currentStep].skipTo) + 1}`
+                              : 'Next →'}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 max-h-[280px] overflow-y-auto'>
+                            <div className='px-2 pt-1.5 pb-0.5'>
+                              <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                After this question…
+                              </p>
+                            </div>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const cur = {
+                                  ...editedQuiz.questions[currentStep],
+                                };
+                                delete cur.skipTo;
+                                delete (cur as any).skipToCat;
+                                updateQuestion(currentStep, cur);
+                              }}>
+                              <span className='text-xs text-pw-muted'>
+                                ↩ Default (Next in order)
+                              </span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const cur = {
+                                  ...editedQuiz.questions[currentStep],
+                                };
+                                delete (cur as any).skipToCat;
+                                updateQuestion(currentStep, {
+                                  ...cur,
+                                  skipTo: 'end',
+                                });
+                              }}>
+                              <span className='text-xs text-pw-danger'>
+                                ⛔ Finish Assessment
+                              </span>
+                            </DropdownMenuItem>
+
+                            {editedQuiz.questions.filter(
+                              (q) =>
+                                q.id !== editedQuiz.questions[currentStep].id,
+                            ).length > 0 && (
+                              <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                                <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                  Jump to Specific Question
+                                </p>
+                              </div>
+                            )}
+                            {editedQuiz.questions
+                              .filter(
+                                (q) =>
+                                  q.id !== editedQuiz.questions[currentStep].id,
+                              )
+                              .map((q) => (
+                                <DropdownMenuItem
+                                  key={q.id}
+                                  className={'cursor-pointer'}
+                                  onClick={() => {
+                                    const cur = {
+                                      ...editedQuiz.questions[currentStep],
+                                    };
+                                    delete (cur as any).skipToCat;
+                                    updateQuestion(currentStep, {
+                                      ...cur,
+                                      skipTo: q.id,
+                                    });
+                                  }}>
+                                  <span className='text-xs'>
+                                    Q{editedQuiz.questions.indexOf(q) + 1}{' '}
+                                    {q.text.slice(0, 18)}
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+
+                            {Array.from(
+                              new Set(
+                                editedQuiz.questions
+                                  .filter(
+                                    (q) =>
+                                      (q as any).category &&
+                                      q.id !==
+                                        editedQuiz.questions[currentStep].id,
+                                  )
+                                  .map((q) => (q as any).category as string),
+                              ),
+                            ).length > 0 && (
+                              <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                                <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                  Jump to Group (sequential flow)
+                                </p>
+                              </div>
+                            )}
+                            {Array.from(
+                              new Set(
+                                editedQuiz.questions
+                                  .filter(
+                                    (q) =>
+                                      (q as any).category &&
+                                      q.id !==
+                                        editedQuiz.questions[currentStep].id,
+                                  )
+                                  .map((q) => (q as any).category as string),
+                              ),
+                            ).map((cat) => (
+                              <DropdownMenuItem
+                                key={`cat-${cat}`}
+                                onClick={() => {
+                                  const cur = {
+                                    ...editedQuiz.questions[currentStep],
+                                  };
+                                  delete cur.skipTo;
+                                  updateQuestion(currentStep, {
+                                    ...cur,
+                                    skipToCat: cat,
+                                  } as any);
+                                }}>
+                                <span className='text-xs flex items-center gap-1.5'>
+                                  <span className='px-1.5 py-0.5 bg-pw-primary/15 text-pw-primary rounded text-[8px] font-bold uppercase'>
+                                    {cat}
+                                  </span>
+                                  Start this group
+                                </span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
                   </div>
 
                   <div className='space-y-3'>
@@ -938,35 +1207,78 @@ const QuizBuilder = ({
 
                     {editedQuiz.questions[currentStep].type === 'input' ?
                       <div className='space-y-4'>
-                        <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4'>
-                          <Type className='h-8 w-8 text-pw-primary opacity-50' />
-                          <div>
-                            <p className='text-sm font-bold'>Input Question</p>
-                            <p className='text-[10px] text-pw-muted max-w-[200px]'>
-                              Takers will type their answer. Leave the "Keyword"
-                              field empty to accept any text as correct.
-                            </p>
-                          </div>
-                          <Input
-                            value={
-                              editedQuiz.questions[currentStep].correctIndex ||
-                              ''
-                            }
-                            onChange={(e) =>
-                              updateQuestion(currentStep, {
-                                ...editedQuiz.questions[currentStep],
-                                correctIndex: e.target.value,
-                              })
-                            }
-                            placeholder='Keyword (Optional)'
-                            className='bg-white/5 border-white/10 h-10 text-center focus:border-pw-primary'
-                          />
-                        </div>
+                        <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4 pt-12 md:pt-8 md:flex-row md:align-start justify-evenly'>
+                          <div className='gap-2 flex flex-col items-center'>
+                            <Type className='h-8 w-8 text-pw-primary opacity-50' />
+                            <div>
+                              <p className='text-sm font-bold'>
+                                Input Question
+                              </p>
+                              <p className='text-[10px] text-pw-muted max-w-[350px]'>
+                                Takers will type their answer.
+                                <br />
+                                Leave the "Keyword" field empty to accept any
+                                text as correct.
+                              </p>
+                            </div>
+                            <Input
+                              placeholder='Keyword (Optional)'
+                              value={
+                                editedQuiz.questions[currentStep]
+                                  .correctIndex || ''
+                              }
+                              onChange={(e) =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  correctIndex: e.target.value,
+                                })
+                              }
+                              className='h-8 w-full max-w-[300px] bg-white/5 border-white/10 text-center transition-all focus:border-pw-primary placeholder:text-pw-muted/50 mt-2'
+                            />
 
-                        {editedQuiz.type === 'quiz' && (
+                            <div className={cn('items-center gap-2 w-full mt-1 justify-between px-1', !editedQuiz.questions[currentStep].correctIndex ? 'hidden' : 'flex')}>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Case Sensitive
+                              </label>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() =>
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    caseSensitive:
+                                      !editedQuiz.questions[currentStep]
+                                        .caseSensitive,
+                                  })
+                                }
+                                className={cn(
+                                  'h-8 px-3 text-[10px] gap-1',
+                                  (
+                                    editedQuiz.questions[currentStep]
+                                      .caseSensitive
+                                  ) ?
+                                    'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                                  : 'bg-white/5 border-white/10',
+                                )}>
+                                {(
+                                  editedQuiz.questions[currentStep]
+                                    .caseSensitive
+                                ) ?
+                                  <Check className='h-3 w-3' />
+                                : <X className='h-3 w-3' />}
+                                {(
+                                  editedQuiz.questions[currentStep]
+                                    .caseSensitive
+                                ) ?
+                                  'ON'
+                                : 'OFF'}
+                              </Button>
+                            </div>
+                          </div>
+
                           <div className='space-y-2 mt-4'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
-                              Explanation (Optional)
+                              Correct Explanation (Optional)
                             </label>
                             <textarea
                               value={
@@ -980,200 +1292,397 @@ const QuizBuilder = ({
                                 })
                               }
                               placeholder='Explain why this is correct...'
-                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
+                              className='w-full h-full max-h-[200px] bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
                             />
                           </div>
-                        )}
+                        </div>
                       </div>
-                    : editedQuiz.questions[currentStep].type === 'true_false' ?
-                      <div className='space-y-4'>
-                        <div className='grid grid-cols-2 gap-4'>
-                          {['True', 'False'].map((val) => (
-                            <Button
-                              key={val}
-                              variant={
-                                (
-                                  String(
-                                    editedQuiz.questions[currentStep]
-                                      .correctIndex,
-                                  ).toLowerCase() === val.toLowerCase()
-                                ) ?
-                                  'default'
-                                : 'outline'
-                              }
-                              onClick={() =>
-                                updateQuestion(currentStep, {
-                                  ...editedQuiz.questions[currentStep],
-                                  correctIndex: val.toLowerCase(),
-                                })
-                              }
-                              className={cn(
-                                'h-12 text-lg font-bold border-white/5',
-                                String(
-                                  editedQuiz.questions[currentStep]
-                                    .correctIndex,
-                                ).toLowerCase() === val.toLowerCase() &&
-                                  'bg-pw-primary shadow-xl shadow-pw-primary/20',
-                              )}>
-                              {val}
-                            </Button>
+                    : editedQuiz.questions[currentStep].type === 'range' ?
+                      <div className='space-y-6 flex flex-col items-center py-4'>
+                        <div className='w-full max-w-sm space-y-4'>
+                          <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase'>
+                            <span>
+                              Min: {editedQuiz.questions[currentStep].min || 0}
+                            </span>
+                            <span>
+                              Max: {editedQuiz.questions[currentStep].max || 10}
+                            </span>
+                          </div>
+                          <input
+                            type='range'
+                            min={editedQuiz.questions[currentStep].min || 0}
+                            max={editedQuiz.questions[currentStep].max || 10}
+                            step={editedQuiz.questions[currentStep].step || 1}
+                            className='w-full accent-pw-primary cursor-pointer'
+                            disabled
+                          />
+                          <div className='grid grid-cols-3 gap-2'>
+                            <div className='space-y-1'>
+                              <label className='text-[8px] text-pw-muted uppercase'>
+                                Min
+                              </label>
+                              <Input
+                                type='number'
+                                value={
+                                  editedQuiz.questions[currentStep].min ?? 0
+                                }
+                                onChange={(e) =>
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    min: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                                className='h-8 text-[10px] bg-white/5'
+                              />
+                            </div>
+                            <div className='space-y-1'>
+                              <label className='text-[8px] text-pw-muted uppercase'>
+                                Max
+                              </label>
+                              <Input
+                                type='number'
+                                value={
+                                  editedQuiz.questions[currentStep].max ?? 10
+                                }
+                                onChange={(e) =>
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    max: parseInt(e.target.value) || 10,
+                                  })
+                                }
+                                className='h-8 text-[10px] bg-white/5'
+                              />
+                            </div>
+                            <div className='space-y-1'>
+                              <label className='text-[8px] text-pw-muted uppercase'>
+                                Step
+                              </label>
+                              <Input
+                                type='number'
+                                value={
+                                  editedQuiz.questions[currentStep].step ?? 1
+                                }
+                                onChange={(e) =>
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    step: parseInt(e.target.value) || 1,
+                                  })
+                                }
+                                className='h-8 text-[10px] bg-white/5'
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    : editedQuiz.questions[currentStep].type === 'rating' ?
+                      <div className='flex flex-col items-center gap-4 py-8'>
+                        <div className='flex gap-2 text-pw-warning'>
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <Star
+                              key={i}
+                              className='h-8 w-8 fill-current opacity-20'
+                            />
                           ))}
                         </div>
-                        {editedQuiz.type === 'quiz' && (
-                          <div className='space-y-2'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
-                              Explanation (Optional)
-                            </label>
-                            <textarea
-                              value={
-                                editedQuiz.questions[currentStep]
-                                  .correctExplanation || ''
-                              }
-                              onChange={(e) =>
-                                updateQuestion(currentStep, {
-                                  ...editedQuiz.questions[currentStep],
-                                  correctExplanation: e.target.value,
-                                })
-                              }
-                              placeholder='Explain why this answer is correct...'
-                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
-                            />
-                          </div>
-                        )}
+                        <p className='text-xs text-pw-muted'>
+                          Survey only — no correct answer required.
+                        </p>
                       </div>
                     : <div className='space-y-3'>
-                        {editedQuiz.questions[currentStep].options.map(
-                          (opt, idx) => {
-                            const q = editedQuiz.questions[currentStep];
-                            const optObj =
-                              typeof opt === 'string' ?
-                                { id: `${q.id}-opt-${idx}`, text: opt }
-                              : opt;
-                            const isCorrect =
-                              q.type === 'checkbox' ?
-                                Array.isArray(q.correctIndex) &&
-                                q.correctIndex.includes(optObj.id)
-                              : q.correctIndex === optObj.id;
-
-                            return (
-                              <div
-                                key={optObj.id || idx}
-                                className='flex gap-3'>
-                                <button
-                                  onClick={() => {
-                                    if (q.type === 'checkbox') {
-                                      const current =
-                                        Array.isArray(q.correctIndex) ?
-                                          q.correctIndex
-                                        : [];
-                                      const next =
-                                        current.includes(optObj.id) ?
-                                          current.filter(
-                                            (id) => id !== optObj.id,
-                                          )
-                                        : [...current, optObj.id];
-                                      updateQuestion(currentStep, {
-                                        ...q,
-                                        correctIndex: next,
-                                      });
-                                    } else {
-                                      updateQuestion(currentStep, {
-                                        ...q,
-                                        correctIndex: optObj.id,
-                                      });
-                                    }
-                                  }}
-                                  className={cn(
-                                    'w-10 h-10 rounded-lg border flex items-center justify-center transition-all shrink-0',
-                                    isCorrect ?
-                                      'bg-pw-primary border-pw-primary text-white shadow-lg'
-                                    : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/20',
-                                  )}>
-                                  {isCorrect ?
-                                    <Check className='h-4 w-4' />
-                                  : idx + 1}
-                                </button>
+                        {(
+                          editedQuiz.questions[currentStep]
+                            .options as QuizOption[]
+                        ).map((opt, idx) => {
+                          const isCheckbox =
+                            editedQuiz.questions[currentStep].type ===
+                            'checkbox';
+                          const isCorrect =
+                            isCheckbox ?
+                              Array.isArray(
+                                editedQuiz.questions[currentStep].correctIndex,
+                              ) &&
+                              (
+                                editedQuiz.questions[currentStep]
+                                  .correctIndex as string[]
+                              ).includes(opt.id)
+                            : editedQuiz.questions[currentStep].correctIndex ===
+                              opt.id;
+                          return (
+                            <div
+                              key={opt.id}
+                              className={cn(
+                                'group flex flex-col gap-1 p-3 rounded-xl border transition-all',
+                                isCorrect ?
+                                  'bg-pw-success/10 border-pw-success/50 shadow-md shadow-pw-success/5'
+                                : 'bg-white/5 border-white/5 hover:border-pw-primary/30',
+                              )}>
+                              <div className='flex items-center gap-3'>
+                                {editedQuiz.type === 'quiz' && (
+                                  <button
+                                    onClick={() => {
+                                      if (isCheckbox) {
+                                        const currentCorrect =
+                                          (
+                                            Array.isArray(
+                                              editedQuiz.questions[currentStep]
+                                                .correctIndex,
+                                            )
+                                          ) ?
+                                            editedQuiz.questions[currentStep]
+                                              .correctIndex
+                                          : [];
+                                        const newCorrect =
+                                          currentCorrect.includes(opt.id) ?
+                                            currentCorrect.filter(
+                                              (id: string) => id !== opt.id,
+                                            )
+                                          : [...currentCorrect, opt.id];
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          correctIndex: newCorrect,
+                                        });
+                                      } else {
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          correctIndex: opt.id,
+                                        });
+                                      }
+                                    }}
+                                    className={cn(
+                                      'h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-transform active:scale-95',
+                                      isCorrect ?
+                                        'bg-pw-success border-pw-success text-white scale-110'
+                                      : 'bg-black/20 border-white/20 text-transparent hover:border-pw-primary hover:text-pw-primary/50',
+                                    )}>
+                                    <Check className='h-3 w-3' />
+                                  </button>
+                                )}
                                 <Input
-                                  value={optObj.text}
+                                  value={opt.text}
                                   onChange={(e) => {
-                                    const newOptions = [
-                                      ...editedQuiz.questions[currentStep]
-                                        .options,
+                                    const newOpts = [
+                                      ...(editedQuiz.questions[currentStep]
+                                        .options as QuizOption[]),
                                     ];
-                                    newOptions[idx] = {
-                                      ...optObj,
-                                      text: e.target.value,
-                                    };
+                                    newOpts[idx].text = e.target.value;
                                     updateQuestion(currentStep, {
                                       ...editedQuiz.questions[currentStep],
-                                      options: newOptions,
+                                      options: newOpts,
                                     });
                                   }}
                                   placeholder={`Option ${idx + 1}`}
-                                  className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
+                                  className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1'
                                 />
-                                <Button
-                                  variant='ghost'
-                                  size='icon'
-                                  onClick={() => {
-                                    const newOptions = editedQuiz.questions[
-                                      currentStep
-                                    ].options.filter((_, i) => i !== idx);
-                                    updateQuestion(currentStep, {
-                                      ...editedQuiz.questions[currentStep],
-                                      options: newOptions,
-                                    });
-                                  }}
-                                  className='h-10 w-10 text-pw-muted hover:text-pw-danger'>
-                                  <Trash2 className='h-4 w-4' />
-                                </Button>
+
+                                <div className='flex items-center gap-1 shrink-0'>
+                                  {/* Branching Logic for Option */}
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger>
+                                      <Button
+                                        variant='ghost'
+                                        size='sm'
+                                        className={cn(
+                                          'h-7 px-2 text-[10px] gap-1 transition-all',
+                                          opt.skipTo || opt.skipToCat ?
+                                            'bg-pw-warning/10 text-pw-warning border-pw-warning/20'
+                                          : 'md:opacity-0 opacity-100 group-hover:opacity-100 md:group-hover:opacity-100 group-active:opacity-100 text-pw-muted hover:text-pw-primary',
+                                        )}>
+                                        {opt.skipTo || opt.skipToCat ?
+                                          <>
+                                            <Share2 size={10} />
+                                            {opt.skipToCat ?
+                                              `To Grp: ${opt.skipToCat}`
+                                            : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
+                                            }
+                                          </>
+                                        : <>
+                                            <Share2 size={10} /> Branch
+                                          </>
+                                        }
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className='bg-pw-surface border-white/10 w-56'>
+                                      <div className='px-2 py-1.5 border-b border-white/5'>
+                                        <p className='text-[10px] font-black uppercase text-pw-muted tracking-widest'>
+                                          Route this answer to:
+                                        </p>
+                                      </div>
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          const newOpts = [
+                                            ...(editedQuiz.questions[
+                                              currentStep
+                                            ].options as QuizOption[]),
+                                          ];
+                                          const o = { ...newOpts[idx] };
+                                          delete o.skipTo;
+                                          delete o.skipToCat;
+                                          newOpts[idx] = o;
+                                          updateQuestion(currentStep, {
+                                            ...editedQuiz.questions[
+                                              currentStep
+                                            ],
+                                            options: newOpts,
+                                          });
+                                        }}>
+                                        <span className='text-xs text-pw-muted italic'>
+                                          Default (Next Question)
+                                        </span>
+                                      </DropdownMenuItem>
+
+                                      <div className='px-2 pt-2 pb-1'>
+                                        <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
+                                          Specific Questions
+                                        </p>
+                                      </div>
+
+                                      {editedQuiz.questions
+                                        .filter(
+                                          (q) =>
+                                            q.id !==
+                                            editedQuiz.questions[currentStep]
+                                              .id,
+                                        )
+                                        .map((q) => (
+                                          <DropdownMenuItem
+                                            key={q.id}
+                                            onClick={() => {
+                                              const newOpts = [
+                                                ...(editedQuiz.questions[
+                                                  currentStep
+                                                ].options as QuizOption[]),
+                                              ];
+                                              newOpts[idx] = {
+                                                ...newOpts[idx],
+                                                skipTo: q.id,
+                                                skipToCat: undefined,
+                                              };
+                                              updateQuestion(currentStep, {
+                                                ...editedQuiz.questions[
+                                                  currentStep
+                                                ],
+                                                options: newOpts,
+                                              });
+                                            }}>
+                                            <span className='text-xs'>
+                                              Q
+                                              {editedQuiz.questions.indexOf(q) +
+                                                1}{' '}
+                                              {q.text.slice(0, 18)}
+                                            </span>
+                                          </DropdownMenuItem>
+                                        ))}
+
+                                      {Array.from(
+                                        new Set(
+                                          editedQuiz.questions
+                                            .filter(
+                                              (q) =>
+                                                (q as any).category &&
+                                                q.id !==
+                                                  editedQuiz.questions[
+                                                    currentStep
+                                                  ].id,
+                                            )
+                                            .map(
+                                              (q) =>
+                                                (q as any).category as string,
+                                            ),
+                                        ),
+                                      ).length > 0 && (
+                                        <>
+                                          <div className='px-2 pt-2 pb-1 border-t border-white/5'>
+                                            <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
+                                              Jump to Group
+                                            </p>
+                                          </div>
+                                          {Array.from(
+                                            new Set(
+                                              editedQuiz.questions
+                                                .filter(
+                                                  (q) =>
+                                                    (q as any).category &&
+                                                    q.id !==
+                                                      editedQuiz.questions[
+                                                        currentStep
+                                                      ].id,
+                                                )
+                                                .map(
+                                                  (q) =>
+                                                    (q as any)
+                                                      .category as string,
+                                                ),
+                                            ),
+                                          ).map((cat) => (
+                                            <DropdownMenuItem
+                                              key={`cat-opt-${cat}`}
+                                              onClick={() => {
+                                                const newOpts = [
+                                                  ...(editedQuiz.questions[
+                                                    currentStep
+                                                  ].options as QuizOption[]),
+                                                ];
+                                                newOpts[idx] = {
+                                                  ...newOpts[idx],
+                                                  skipToCat: cat,
+                                                  skipTo: undefined,
+                                                };
+                                                updateQuestion(currentStep, {
+                                                  ...editedQuiz.questions[
+                                                    currentStep
+                                                  ],
+                                                  options: newOpts,
+                                                });
+                                              }}>
+                                              <span className='text-[10px] font-bold uppercase'>
+                                                {cat}
+                                              </span>
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    onClick={() => {
+                                      const newOpts = (
+                                        editedQuiz.questions[currentStep]
+                                          .options as QuizOption[]
+                                      ).filter((_, i) => i !== idx);
+                                      updateQuestion(currentStep, {
+                                        ...editedQuiz.questions[currentStep],
+                                        options: newOpts,
+                                      });
+                                    }}
+                                    className='h-7 w-7 hidden group-hover:inline-flex text-pw-danger transition-all duration-200'>
+                                    <Trash2 size={12} />
+                                  </Button>
+                                </div>
                               </div>
-                            );
-                          },
-                        )}
+                            </div>
+                          );
+                        })}
                         <Button
                           variant='outline'
+                          size='sm'
                           onClick={() => {
-                            const q = editedQuiz.questions[currentStep];
-                            if (q.options.length >= 5) {
-                              toast.info('Maximum of 5 options per question');
-                              return;
-                            } else {
-                              const newOptId = `${q.id}-opt-${q.options.length}-${Math.random().toString(36).substr(2, 4)}`;
-                              updateQuestion(currentStep, {
-                                ...q,
-                                options: [
-                                  ...q.options,
-                                  { id: newOptId, text: '' },
-                                ],
-                              });
-                            }
+                            const newId = `${editedQuiz.questions[currentStep].id}-opt-${editedQuiz.questions[currentStep].options.length}`;
+                            const newOpts = [
+                              ...(editedQuiz.questions[currentStep]
+                                .options as QuizOption[]),
+                              { id: newId, text: '' },
+                            ];
+                            updateQuestion(currentStep, {
+                              ...editedQuiz.questions[currentStep],
+                              options: newOpts,
+                            });
                           }}
-                          className='w-full border-dashed border-white/10 hover:bg-white/5 h-10 text-xs gap-2'>
+                          className='w-full border-dashed border-white/20 h-10 gap-2 text-xs'>
                           <Plus className='h-3 w-3' /> Add Option
                         </Button>
-
-                        {editedQuiz.type === 'quiz' && (
-                          <div className='space-y-2 mt-2'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
-                              Explanation (Optional)
-                            </label>
-                            <textarea
-                              value={
-                                editedQuiz.questions[currentStep]
-                                  .correctExplanation || ''
-                              }
-                              onChange={(e) =>
-                                updateQuestion(currentStep, {
-                                  ...editedQuiz.questions[currentStep],
-                                  correctExplanation: e.target.value,
-                                })
-                              }
-                              placeholder='Explain why the correct answer is right...'
-                              className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none'
-                            />
-                          </div>
-                        )}
                       </div>
                     }
                   </div>
@@ -1299,16 +1808,17 @@ export default function QuizPage() {
     }
   };
 
+  const loadQuizzes = async () => {
+    // 1. Serve local cache immediately
+    const localData = await HybridStorage.getAll('quiz', (freshItems) => {
+      // 2. Called in background when remote data arrives — silently refresh
+      setQuizzes(freshItems);
+    });
+    setQuizzes(localData);
+  };
+
   // Load from hybrid storage (offline-first)
   useEffect(() => {
-    const loadQuizzes = async () => {
-      // 1. Serve local cache immediately
-      const localData = await HybridStorage.getAll('quiz', (freshItems) => {
-        // 2. Called in background when remote data arrives — silently refresh
-        setQuizzes(freshItems);
-      });
-      setQuizzes(localData);
-    };
     loadQuizzes();
   }, []);
 
@@ -1460,9 +1970,17 @@ export default function QuizPage() {
                 </p>
               </div>
               <div className='flex gap-3 flex-wrap'>
+                <Button
+                  variant='outline'
+                  title='Refresh Quiz'
+                  onClick={loadQuizzes}
+                  className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
+                  <RefreshCw className='h-4 w-4' />
+                </Button>
                 <div className='relative'>
                   <Button
                     variant='outline'
+                    title='Import Quiz'
                     className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
                     <Upload className='h-4 w-4' /> Import JSON
                     <input
@@ -1474,6 +1992,7 @@ export default function QuizPage() {
                   </Button>
                 </div>
                 <Button
+                  title='Create New Quiz'
                   onClick={handleStartNew}
                   className='btn-primary gap-2 h-11 px-8'>
                   <Plus className='h-5 w-5' /> Create New Quiz

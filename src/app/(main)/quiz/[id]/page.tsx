@@ -1,32 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
   CheckCircle2,
   ChevronRight,
-  ArrowLeft,
   ArrowRight,
   ChevronDown,
   Check,
   CheckCircle,
   ChevronLeft,
   Brain,
-  MessageCircle,
   Clock,
-  ShieldCheck,
-  Table,
-  BookOpen,
-  StickyNote,
-  GraduationCap,
-  Info,
   Sun,
   Moon,
-  EyeOff,
   AlertTriangle,
-  Lock,
   X,
+  Layers,
+  FileText,
+  BookOpen,
+  ArrowLeft,
+  Star,
+  StickyNote,
+  ShieldCheck,
+  MessageCircle,
+  EyeOff,
+  Lock,
+  LogOut,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -42,7 +43,7 @@ import {
 import { HybridStorage } from '@/lib/storage-utils';
 import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
-import type { Quiz } from '../page';
+import type { Question, Quiz, QuizOption } from '../page';
 import { useParams } from 'next/navigation';
 
 export type QuestionType =
@@ -50,37 +51,43 @@ export type QuestionType =
   | 'true_false'
   | 'dropdown'
   | 'checkbox'
-  | 'input';
+  | 'input'
+  | 'range'
+  | 'rating';
 
-export interface QuizOption {
-  id: string;
-  text: string;
-}
+// export interface QuizOption {
+//   id: string;
+//   text: string;
+//   skipTo?: string;
+// }
 
-interface Question {
-  id: string;
-  type: QuestionType;
-  text: string;
-  options: (string | QuizOption)[];
-  correctIndex: any;
-  accessory?:
-    | 'none'
-    | 'calculator'
-    | 'note'
-    | 'periodic_table'
-    | 'formula_sheet'
-    | 'glossary';
-  accessoryNote?: string;
-  correctExplanation?: string;
-}
+// interface Question {
+//   id: string;
+//   type: QuestionType;
+//   text: string;
+//   options: (string | QuizOption)[];
+//   correctIndex: any;
+//   caseSensitive?: boolean;
+//   min?: number;
+//   max?: number;
+//   step?: number;
+//   accessory?:
+//     | 'none'
+//     | 'calculator'
+//     | 'note'
+//     | 'periodic_table'
+//     | 'formula_sheet'
+//     | 'glossary';
+//   accessoryNote?: string;
+//   accessoryConfig?: any;
+//   correctExplanation?: string;
+// }
 
 const NoteSheet = ({ note }: { note: string }) => (
   <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
     <div className='flex items-center gap-2 mb-4 text-pw-primary'>
       <StickyNote size={20} />
-      <h3 className='font-bold uppercase tracking-widest text-xs'>
-        Special Note
-      </h3>
+      <h3 className='font-bold uppercase tracking-widest text-xs'>Note</h3>
     </div>
     <div className='text-sm leading-relaxed text-pw-text whitespace-pre-wrap whitespace-pre-line'>
       {note}
@@ -88,73 +95,170 @@ const NoteSheet = ({ note }: { note: string }) => (
   </Card>
 );
 
-const PeriodicTable = () => (
-  <Card className='p-4 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-xl overflow-x-auto'>
-    <div className='flex items-center gap-2 mb-4 text-pw-cyan'>
-      <Table size={20} />
-      <h3 className='font-bold uppercase tracking-widest text-xs'>
-        Periodic Table (Snippet)
-      </h3>
-    </div>
-    <div className='grid grid-cols-18 gap-1 min-w-[600px]'>
-      {/* Simplified visualization */}
-      {[
-        'H',
-        'He',
-        'Li',
-        'Be',
-        'B',
-        'C',
-        'N',
-        'O',
-        'F',
-        'Ne',
-        'Na',
-        'Mg',
-        'Al',
-        'Si',
-        'P',
-        'S',
-        'Cl',
-        'Ar',
-      ].map((el) => (
-        <div
-          key={el}
-          className='h-10 w-10 flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-lg'>
-          <span className='text-[10px] font-bold'>{el}</span>
-        </div>
-      ))}
-    </div>
-    <p className='text-[10px] text-pw-muted mt-4 italic'>
-      * Full table available in official formula book.
-    </p>
-  </Card>
-);
+const PeriodicTable = () => {
+  const elements = [
+    { s: 'H', n: 'Hydrogen', cat: 'nonmetal', c: '#4ADE80' },
+    { s: 'He', n: 'Helium', cat: 'noble', c: '#60A5FA' },
+    { s: 'Li', n: 'Lithium', cat: 'alkali', c: '#F87171' },
+    { s: 'Be', n: 'Beryllium', cat: 'alkaline', c: '#FB923C' },
+    { s: 'B', n: 'Boron', cat: 'metalloid', c: '#FACC15' },
+    { s: 'C', n: 'Carbon', cat: 'nonmetal', c: '#4ADE80' },
+    { s: 'N', n: 'Nitrogen', cat: 'nonmetal', c: '#4ADE80' },
+    { s: 'O', n: 'Oxygen', cat: 'nonmetal', c: '#4ADE80' },
+    { s: 'F', n: 'Fluorine', cat: 'halogen', c: '#A78BFA' },
+    { s: 'Ne', n: 'Neon', cat: 'noble', c: '#60A5FA' },
+    { s: 'Na', n: 'Sodium', cat: 'alkali', c: '#F87171' },
+    { s: 'Mg', n: 'Magnesium', cat: 'alkaline', c: '#FB923C' },
+    { s: 'Al', n: 'Aluminium', cat: 'metal', c: '#94A3B8' },
+    { s: 'Si', n: 'Silicon', cat: 'metalloid', c: '#FACC15' },
+    { s: 'P', n: 'Phosphorus', cat: 'nonmetal', c: '#4ADE80' },
+    { s: 'S', n: 'Sulfur', cat: 'nonmetal', c: '#4ADE80' },
+    { s: 'Cl', n: 'Chlorine', cat: 'halogen', c: '#A78BFA' },
+    { s: 'Ar', n: 'Argon', cat: 'noble', c: '#60A5FA' },
+  ];
 
-const FormulaSheet = () => (
-  <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
-    <div className='flex items-center gap-2 mb-4 text-pw-warning'>
-      <GraduationCap size={20} />
-      <h3 className='font-bold uppercase tracking-widest text-xs'>
-        Formula Sheet
-      </h3>
-    </div>
-    <div className='space-y-3 text-xs'>
-      <div className='flex justify-between border-b border-white/5 pb-1'>
-        <span>Area of Circle</span>
-        <span className='font-mono'>πr²</span>
+  return (
+    <Card className='p-4 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
+      <div className='flex items-center gap-2 mb-4 text-pw-cyan'>
+        <Layers size={18} />
+        <h3 className='font-bold uppercase tracking-widest text-xs'>
+          Periodic Table
+        </h3>
       </div>
-      <div className='flex justify-between border-b border-white/5 pb-1'>
-        <span>Pythagoras</span>
-        <span className='font-mono'>a² + b² = c²</span>
+      <div className='grid grid-cols-6 gap-1'>
+        {elements.map((el) => (
+          <div
+            key={el.s}
+            title={`${el.n} (${el.cat})`}
+            className='aspect-square flex flex-col items-center justify-center rounded border border-white/5 bg-white/5 hover:bg-white/10 transition-colors cursor-help p-1'>
+            <span
+              className='font-bold text-[10px]'
+              style={{ color: el.c }}>
+              {el.s}
+            </span>
+            <span className='text-[6px] opacity-50 truncate w-full text-center'>
+              {el.n}
+            </span>
+          </div>
+        ))}
       </div>
-      <div className='flex justify-between border-b border-white/5 pb-1'>
-        <span>Quadratic</span>
-        <span className='font-mono'>-b ± √(b²-4ac) / 2a</span>
+      <div className='mt-4 flex flex-wrap gap-2'>
+        <div className='flex items-center gap-1'>
+          <div className='w-2 h-2 rounded bg-[#4ADE80]'></div>
+          <span className='text-[8px] text-pw-muted uppercase'>Nonmetal</span>
+        </div>
+        <div className='flex items-center gap-1'>
+          <div className='w-2 h-2 rounded bg-[#60A5FA]'></div>
+          <span className='text-[8px] text-pw-muted uppercase'>Noble</span>
+        </div>
+        <div className='flex items-center gap-1'>
+          <div className='w-2 h-2 rounded bg-[#F87171]'></div>
+          <span className='text-[8px] text-pw-muted uppercase'>Alkali</span>
+        </div>
       </div>
-    </div>
-  </Card>
-);
+    </Card>
+  );
+};
+
+const FormulaSheet = ({
+  config,
+  customFormulas,
+}: {
+  config?: any;
+  customFormulas?: string;
+}) => {
+  const allFormulas = [
+    {
+      cat: 'Math',
+      items: [
+        { n: 'Area of Circle', f: 'πr²' },
+        { n: 'Pythagoras', f: 'a² + b² = c²' },
+        { n: 'Quadratic', f: '(-b ± √(b²-4ac)) / 2a' },
+      ],
+    },
+    {
+      cat: 'Physics',
+      items: [
+        { n: 'Force', f: 'F = ma' },
+        { n: 'Energy', f: 'E = mc²' },
+        { n: "Ohm's Law", f: 'V = IR' },
+      ],
+    },
+    {
+      cat: 'Chemistry',
+      items: [
+        { n: 'Ideal Gas Law', f: 'PV = nRT' },
+        { n: 'Molarity', f: 'M = n/V' },
+        { n: 'Density', f: 'ρ = m/v' },
+      ],
+    },
+  ];
+
+  const allowedCategories = config?.categories || [
+    'Math',
+    'Physics',
+    'Chemistry',
+  ];
+  const formulas = allFormulas.filter((group) =>
+    allowedCategories.includes(group.cat),
+  );
+
+  const parsedCustomFormulas = (customFormulas || '')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split('=');
+      if (parts.length >= 2) {
+        return { n: parts[0].trim(), f: parts.slice(1).join('=').trim() };
+      }
+      return { n: 'Custom', f: line.trim() };
+    });
+
+  if (parsedCustomFormulas.length > 0) {
+    formulas.push({ cat: 'Custom', items: parsedCustomFormulas });
+  }
+
+  return (
+    <Card className='p-4 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm max-h-[400px] overflow-y-auto custom-scrollbar'>
+      <div className='flex items-center gap-2 mb-4 text-pw-primary'>
+        <FileText size={18} />
+        <h3 className='font-bold uppercase tracking-widest text-xs'>
+          Formula Sheet
+        </h3>
+      </div>
+      <div className='space-y-6'>
+        {formulas.map((group) => (
+          <div
+            key={group.cat}
+            className='space-y-2'>
+            <h4 className='text-[8px] font-black text-pw-muted uppercase tracking-[0.3em] border-b border-white/5 pb-1'>
+              {group.cat}
+            </h4>
+            <div className='space-y-2'>
+              {group.items.map((item) => (
+                <div
+                  key={item.n + item.f}
+                  className='flex justify-between items-center group'>
+                  <span className='text-[10px] text-pw-text opacity-70 group-hover:opacity-100 transition-opacity'>
+                    {item.n}
+                  </span>
+                  <span className='font-mono text-[10px] text-pw-primary bg-pw-primary/5 px-2 py-0.5 rounded'>
+                    {item.f}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {formulas.length === 0 && (
+          <p className='text-xs text-pw-muted italic text-center'>
+            No formulas available.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+};
 
 const Glossary = () => (
   <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
@@ -185,88 +289,89 @@ const Glossary = () => (
 // --- Accessory Components ---
 const Calculator = () => {
   const [val, setVal] = useState('');
+  const [result, setResult] = useState<string | null>(null);
+
+  const calculate = (expression: string) => {
+    try {
+      // Basic safe parser for math
+      const clean = expression.replace(/[^-+*/.0-9]/g, '');
+      const fn = new Function(`return ${clean}`);
+      const res = fn();
+      setResult(res.toString());
+    } catch {
+      setResult('Error');
+    }
+  };
+
   return (
-    <Card className='p-4 bg-pw bkblur border-white/10 shadow-2xl w-70 m-2'>
-      <div className='bg-black/20 p-2 py-4 rounded-lg mb-2 text-right font-mono text-lg min-h-[40px] break-all border-white/10'>
-        {val || '0'}
+    <Card className='p-4 bg-pw bkblur border-white/10 shadow-2xl w-72 m-2 ring-1 ring-white/10'>
+      <div className='bg-black/40 p-4 rounded-xl mb-4 text-right font-mono border border-white/5'>
+        <div className='text-xs text-pw-muted h-4 overflow-hidden truncate'>
+          {val || '0'}
+        </div>
+        <div className='text-2xl font-bold text-pw-primary drop-shadow-[0_0_8px_rgba(var(--pw-primary-rgb),0.3)]'>
+          {result || val || '0'}
+        </div>
       </div>
-      <div className='grid grid-cols-4 gap-1'>
+      <div className='grid grid-cols-4 gap-1.5'>
         {[
+          'C',
+          'del',
+          '/',
+          '*',
           '7',
           '8',
           '9',
-          '/',
+          '-',
           '4',
           '5',
           '6',
-          '*',
+          '+',
           '1',
           '2',
           '3',
-          '-',
-          '0',
           '.',
-          '+',
-          'C',
+          '0',
           '=',
-          'del',
-        ].map((btn, index) => {
-          if (btn === '=') {
-            return (
-              <Button
-                key={btn + index + 'rfsc3gyuug'}
-                variant='secondary'
-                size='sm'
-                className='mt-2 col-span-3 text-white text-[18px] h-8 p-0 border-white/10'
-                onClick={() => {
-                  try {
-                    setVal(eval(val).toString());
-                  } catch {
-                    setVal('Error');
-                  }
-                }}>
-                {btn}
-              </Button>
-            );
-          }
-          if (btn === 'del') {
-            return (
-              <Button
-                key={btn + index + 'ytdvserrfurats'}
-                variant='destructive'
-                size='sm'
-                className='mt-2 h-8 p-0'
-                onClick={() => {
-                  try {
-                    setVal((e) => e.slice(0, e.length - 1));
-                  } catch {
-                    setVal('Error');
-                  }
-                }}>
-                {btn}
-              </Button>
-            );
-          }
-          if (btn === 'C') {
-            return (
-              <Button
-                key={btn + index + 'uigdtrdsrsdtdvytrd'}
-                size='sm'
-                className='h-8 text-[10px]'
-                onClick={() => setVal('')}>
-                {btn}
-              </Button>
-            );
-          }
+          '(',
+          ')',
+        ].map((btn) => {
+          const isOp = ['/', '*', '-', '+', '='].includes(btn);
+          const isClr = ['C', 'del'].includes(btn);
+
           return (
             <Button
-              key={btn + index + 'usdfghcasdtfg7gy'}
-              variant='outline'
+              key={btn}
+              variant={
+                isOp ? 'secondary'
+                : isClr ?
+                  'destructive'
+                : 'outline'
+              }
               size='sm'
-              className='h-8 p-0 border-white/10'
+              className={cn(
+                'h-10 text-xs font-bold transition-all active:scale-90 rounded-lg',
+                btn === '=' &&
+                  'col-span-1 bg-pw-primary text-white hover:bg-pw-primary/80',
+                isOp &&
+                  !isClr &&
+                  btn !== '=' &&
+                  'bg-pw-primary/10 text-pw-primary border-pw-primary/20',
+              )}
               onClick={() => {
-                if (val === 'Error') setVal('');
-                setVal((v) => v + btn);
+                if (btn === 'C') {
+                  setVal('');
+                  setResult(null);
+                } else if (btn === 'del') {
+                  setVal((v) => v.slice(0, -1));
+                  setResult(null);
+                } else if (btn === '=') calculate(val);
+                else {
+                  if (result) {
+                    setVal(result + btn);
+                    setResult(null);
+                  } else setVal((v) => v + btn);
+                }
               }}>
               {btn}
             </Button>
@@ -305,6 +410,7 @@ export default function PublicQuizPage() {
   const [userData, setUserData] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [quizTheme, setQuizTheme] = useState<'dark' | 'light'>('dark');
   const [cheatAttempts, setCheatAttempts] = useState(0);
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
@@ -465,6 +571,16 @@ export default function PublicQuizPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [started, isFinished]);
 
+  // --- Performance: Memoized Current Question Data ---
+  const q = useMemo(() => {
+    if (!activeQuestions || activeQuestions.length === 0) return null;
+    return activeQuestions[currentQuestion] || null;
+  }, [activeQuestions, currentQuestion]);
+
+  const answeredCount = useMemo(() => {
+    return new Set(userAnswers.map((a) => a.questionId)).size;
+  }, [userAnswers]);
+
   // Custom themed confirm for in-app navigation (back-button, link clicks)
   const confirmLeaveQuiz = (onConfirm: () => void) => {
     pendingUnloadCb.current = onConfirm;
@@ -497,7 +613,40 @@ export default function PublicQuizPage() {
       {
         id: 'quiz-leave-confirm',
         duration: Infinity,
+        icon: <AlertTriangle className='text-pw-danger' />,
         className: 'border border-white/10 bg-pw-surface rounded-2xl',
+      },
+    );
+  };
+
+  // Custom themed confirm for Submitting Quiz
+  const confirmSubmitQuiz = () => {
+    toast(
+      <div className='flex flex-col gap-3 py-1'>
+        <p className='font-bold text-sm'>Submit Assessment?</p>
+        <p className='text-xs text-pw-muted leading-relaxed'>
+          Are you sure you want to finalize your answers and submit?
+        </p>
+        <div className='flex gap-2 pt-1'>
+          <button
+            className='flex-1 h-9 rounded-xl bg-pw-success/20 border border-pw-success/40 text-pw-success text-xs font-bold hover:bg-pw-success/30 transition-colors'
+            onClick={() => {
+              toast.dismiss('quiz-submit-confirm');
+              finalizeQuiz(userAnswers);
+            }}>
+            Submit
+          </button>
+          <button
+            className='flex-1 h-9 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-bold hover:bg-pw-primary/20 transition-colors'
+            onClick={() => toast.dismiss('quiz-submit-confirm')}>
+            Cancel
+          </button>
+        </div>
+      </div>,
+      {
+        id: 'quiz-submit-confirm',
+        duration: Infinity,
+        position: 'top-center',
       },
     );
   };
@@ -507,16 +656,20 @@ export default function PublicQuizPage() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  const q = activeQuestions[currentQuestion] as Question;
+  // --- Removed redundant q declaration as it is now memoized ---
 
   const handleNext = () => {
     if (q?.type === 'checkbox' && selectedOptions.length === 0) {
       toast.error('Please select at least one answer');
       return;
     }
+    let currentSelectedOption = selectedOption;
+    if (q?.type === 'range' && currentSelectedOption === null) {
+      currentSelectedOption = (q.min || 0).toString();
+    }
+
     if (
-      selectedOption === null &&
+      currentSelectedOption === null &&
       q?.type !== 'input' &&
       q?.type !== 'checkbox'
     ) {
@@ -528,8 +681,14 @@ export default function PublicQuizPage() {
     if (quiz?.type === 'quiz' && q) {
       let decodedCorrect: any = q.correctIndex;
       try {
-        if (typeof q.correctIndex === 'string' && q.correctIndex.length > 0) {
-          decodedCorrect = atob(q.correctIndex);
+        if (typeof q.correctIndex === 'string' && q.correctIndex.length > 5) {
+          // Assuming secured keys are at least some length, avoid decoding normal IDs
+          const decoded = atob(q.correctIndex);
+          try {
+            decodedCorrect = JSON.parse(decoded);
+          } catch {
+            decodedCorrect = decoded;
+          }
         }
       } catch (e) {
         decodedCorrect = q.correctIndex;
@@ -542,19 +701,25 @@ export default function PublicQuizPage() {
           selectedOptions.length === correctIds.length &&
           selectedOptions.every((val) => correctIds.includes(val));
       } else if (q.type === 'input') {
-        if (!decodedCorrect || decodedCorrect.trim() === '') {
+        if (!decodedCorrect || String(decodedCorrect).trim() === '') {
           correct = true;
         } else {
+          const userAns = content.trim();
+          const targetAns = String(decodedCorrect).trim();
           correct =
-            content.toLowerCase().trim() ===
-            String(decodedCorrect).toLowerCase().trim();
+            q.caseSensitive ?
+              userAns === targetAns
+            : userAns.toLowerCase() === targetAns.toLowerCase();
         }
       } else if (q.type === 'true_false') {
         correct =
-          String(selectedOption).toLowerCase() ===
+          String(currentSelectedOption).toLowerCase() ===
           String(decodedCorrect).toLowerCase();
+      } else if (q.type === 'range' || q.type === 'rating') {
+        // Typically range/rating in a 'quiz' mode would check for a specific value
+        correct = Number(currentSelectedOption) >= Number(decodedCorrect);
       } else {
-        correct = String(selectedOption) === String(decodedCorrect);
+        correct = String(currentSelectedOption) === String(decodedCorrect);
       }
 
       if (correct) setScore((s) => s + 1);
@@ -563,7 +728,9 @@ export default function PublicQuizPage() {
       const answer =
         q.type === 'checkbox' ? selectedOptions
         : q.type === 'input' ? content
-        : selectedOption;
+        : q.type === 'range' || q.type === 'rating' ? currentSelectedOption
+        : currentSelectedOption;
+
       const qId = q.id;
       const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
 
@@ -591,10 +758,13 @@ export default function PublicQuizPage() {
         proceedToNext(updatedAnswers);
       }
     } else if (q) {
+      // Survey Mode
       const answer =
         q.type === 'checkbox' ? selectedOptions
         : q.type === 'input' ? content
-        : selectedOption;
+        : q.type === 'range' || q.type === 'rating' ? currentSelectedOption
+        : currentSelectedOption;
+
       const qId = q.id;
       const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
       let updatedAnswers;
@@ -613,8 +783,106 @@ export default function PublicQuizPage() {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
-    if (quiz && currentQuestion + 1 < activeQuestions.length) {
-      setCurrentQuestion((c) => c + 1);
+    let targetSkipTo: string | undefined;
+    let targetSkipToCat: string | undefined;
+
+    // 1. Check for Option-level Skip Logic overrides for single-choice answers
+    if (
+      q?.type === 'multiple_choice' ||
+      q?.type === 'dropdown' ||
+      q?.type === 'true_false'
+    ) {
+      const selectedOptObj = q.options.find(
+        (opt) => typeof opt !== 'string' && opt.id === selectedOption,
+      ) as QuizOption | undefined;
+
+      if (selectedOptObj?.skipToCat) {
+        targetSkipToCat = selectedOptObj.skipToCat;
+      } else if (selectedOptObj?.skipTo) {
+        targetSkipTo = selectedOptObj.skipTo;
+      }
+    }
+
+    // 2. Cascade down to Question-level skip logic if no option-specific override
+    if (!targetSkipTo && !targetSkipToCat) {
+      if ((q as any).skipToCat) {
+        targetSkipToCat = (q as any).skipToCat;
+      } else if ((q as any).skipTo) {
+        targetSkipTo = (q as any).skipTo;
+      }
+    }
+
+    // 3. Process routing
+    let nextIdx = currentQuestion + 1;
+
+    if (targetSkipToCat) {
+      // Find the FIRST UNANSWERED question in the target group/category
+      const jumpIdx = activeQuestions.findIndex(
+        (quest) =>
+          (quest as any).category === targetSkipToCat &&
+          !answersToSave.some((a) => a.questionId === quest.id),
+      );
+
+      if (jumpIdx !== -1) {
+        nextIdx = jumpIdx;
+      } else {
+        // If all in that group are answered, find the first question in that group anyway
+        // relative to the current position to avoid getting stuck, or fall back to linear
+        const firstInGroup = activeQuestions.findIndex(
+          (quest) => (quest as any).category === targetSkipToCat,
+        );
+        if (firstInGroup !== -1) nextIdx = firstInGroup;
+      }
+    } else if (targetSkipTo) {
+      if (targetSkipTo === 'end') {
+        finalizeQuiz(answersToSave);
+        return;
+      }
+      const jumpIdx = activeQuestions.findIndex(
+        (quest) => quest.id === targetSkipTo,
+      );
+      if (jumpIdx !== -1) {
+        nextIdx = jumpIdx;
+      }
+    }
+
+    // --- Dynamic Loop Detection & Auto-Submission ---
+    const nextQ = activeQuestions[nextIdx];
+
+    // Auto-submit only if we truly reach the end or have a definitive jump to "end"
+    if (!nextQ) {
+      finalizeQuiz(answersToSave);
+      return;
+    }
+
+    // Conservative Loop Protection:
+    // Only auto-submit if jumping back to an ALREADY answered question
+    // AND that question is not the immediate previous or next linear neighbor (allowing for some flex)
+    // AND we are in a branching jump (nextIdx !== currentQuestion + 1)
+    const isAlreadyAnswered =
+      latestAnswers ?
+        latestAnswers.some((a) => a.questionId === nextQ?.id)
+      : userAnswers.some((a) => a.questionId === nextQ?.id);
+
+    if (
+      isAlreadyAnswered &&
+      nextIdx !== currentQuestion + 1 &&
+      nextIdx !== currentQuestion - 1
+    ) {
+      // Final sanity check: are there ANY unanswered questions left in the entire quiz?
+      // If the setter says "Early Submission OFF", we should be VERY careful.
+      const hasUnanswered = activeQuestions.some(
+        (quest) => !answersToSave.some((a) => a.questionId === quest.id),
+      );
+
+      if (!hasUnanswered || !quiz?.allowEarlySubmit) {
+        finalizeQuiz(answersToSave);
+        return;
+      }
+    }
+
+    if (quiz && nextIdx < activeQuestions.length) {
+      setCurrentQuestion(nextIdx);
       setSelectedOption(null);
       setSelectedOptions([]);
       setContent('');
@@ -628,11 +896,13 @@ export default function PublicQuizPage() {
     if (quiz) {
       localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
       try {
+        const finalScore = finalAnswers.filter((a) => a.correct).length;
         await HybridStorage.saveResponse(quiz.id, {
           userData,
           answers: finalAnswers,
-          score,
+          score: finalScore,
           totalQuestions: activeQuestions.length,
+          answeredQuestions: finalAnswers.length,
         });
       } catch (e) {
         console.error('Failed to save response:', e);
@@ -1015,294 +1285,425 @@ export default function PublicQuizPage() {
 
       {/* 4. Active Assessment View */}
       {started && (
-        <div
-          className={cn(
-            'container relative z-10 mx-auto px-4 md:px-6 py-10 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8',
-            quizTheme === 'dark' ? 'text-white' : 'text-black',
-          )}>
-          <div className='lg:col-span-8'>
-            <div className='grid grid-cols-4 mb-10 w-full'>
-              <div className='flex justify-between items-end mb-4 col-span-4'>
+        <>
+          {/* Top Progress Bar */}
+          <div className='fixed top-0 left-0 w-full h-1.5 bg-black/10 z-[100] backdrop-blur-sm'>
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{
+                width: `${(answeredCount / activeQuestions.length) * 100}%`,
+              }}
+              className='h-full bg-pw-primary shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
+            />
+          </div>
+
+          <div
+            className={cn(
+              'container relative z-10 mx-auto px-4 md:px-6 pt-12 pb-10 max-w-7xl',
+              quizTheme === 'dark' ? 'text-white' : 'text-black',
+            )}>
+            {/* Header Row */}
+            <div className='flex flex-wrap items-center justify-between gap-4 mb-8 bg-white/5 p-4 rounded-[2rem] border border-white/5 backdrop-blur-md'>
+              <div className='flex items-center gap-4'>
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  onClick={() =>
+                    confirmLeaveQuiz(() => (window.location.href = '/quiz'))
+                  }
+                  className='h-10 px-4 gap-2 rounded-xl text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 transition-all active:scale-95 border border-white/5'>
+                  <LogOut size={16} />
+                  <span className='hidden sm:inline font-bold'>Quit</span>
+                </Button>
+
+                <div className='h-8 w-px bg-white/10 hidden sm:block' />
+
                 <div>
-                  <div className='badge bg-pw-primary/10 text-pw-primary border-pw-primary/20 mb-4'>
-                    Question {currentQuestion + 1} of {activeQuestions.length}
-                  </div>
-                  <h1 className='text-3xl font-bold font-display tracking-tight'>
+                  <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
                     {quiz.title}
                   </h1>
                 </div>
-                <div className='flex gap-3 items-center hidden'>
-                  <Button
-                    variant='ghost'
-                    size='icon'
-                    title={`Toggle ${capFirst(quiz.type)} Theme`}
-                    onClick={() =>
-                      setQuizTheme(quizTheme === 'dark' ? 'light' : 'dark')
-                    }
+              </div>
+
+              <div className='flex items-center gap-3'>
+                {quiz.hasTimer && timeLeft !== null && (
+                  <div
+                    title={`${capFirst(quiz.type)} Timer`}
                     className={cn(
-                      'rounded-full h-10 w-10 border bkblur shadow-sm transition-all active:scale-90',
-                      quizTheme === 'dark' ?
-                        'bg-white/5 border-white/10 text-pw-cyan hover:bg-white/10'
-                      : 'bg-white border-slate-200 text-pw-primary shadow-sm hover:bg-slate-50',
+                      'flex items-center gap-2 px-4 py-2 rounded-xl font-mono text-lg border transition-all',
+                      timeLeft < 60 ?
+                        'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
+                      : 'bg-white/5 border-white/10 text-pw-primary',
                     )}>
-                    {quizTheme === 'dark' ?
-                      <Sun size={18} />
-                    : <Moon size={18} />}
-                  </Button>
-                </div>
-
-                <div className='flex flex-col items-end gap-3'>
-                  {quiz.hasTimer && timeLeft !== null && (
-                    <div
-                      title={`${capFirst(quiz.type)} Timer`}
-                      className={cn(
-                        'flex items-center gap-2 px-2 py-1 pr-3 rounded-2xl font-mono text-lg border-1 transition-all',
-                        timeLeft < 60 ?
-                          'bg-pw-danger/10 border-pw-danger text-pw-danger animate-pulse shadow-lg shadow-pw-danger/20'
-                        : 'bg-white/5 border-white/10 shadow-xl',
-                      )}>
-                      <Clock size={20} />
-                      {formatTime(timeLeft)}
-                    </div>
-                  )}
-                  {quiz.type === 'quiz' && quiz.showScore && (
-                    <div
-                      className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'
-                      title={`Quiz Score Count`}>
-                      Score: {score}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className='w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 col-span-4'>
-                <motion.div
-                  className='h-full gradient-brand rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)]'
-                  animate={{
-                    width: `${(currentQuestion / activeQuestions.length) * 100}%`,
-                  }}
-                />
-              </div>
-
-              <Button
-                title={`Quit ${quiz.type}`}
-                variant='ghost'
-                className='h-10 col-span-4 px-4 mt-4 align-end text-xs text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 gap-1.5 rounded-xl border border-white/5 transition-all'
-                onClick={() =>
-                  confirmLeaveQuiz(() => (window.location.href = '/quiz'))
-                }
-                style={{ justifySelf: 'flex-end' }}>
-                <X size={14} /> Quit
-              </Button>
-            </div>
-
-            <Card className='glass bkblur rounded-[1.5rem] p-4 md:p-6 mb-6 bg-pw-surface border-white/10 shadow-xl relative overflow-hidden'>
-              {/* Question Header */}
-              <div className='flex flex-col gap-4 pt-1 mb-4'>
-                <div className='flex justify-between items-start gap-2'>
-                  <h2
-                    className='text-lg md:text-2xl font-bold leading-snug flex-1'
-                    title={`${capFirst(quiz.type)} Question`}>
-                    {q?.text}
-                  </h2>
-                  {quiz.correctOption && showFeedback && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.5 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className={cn(
-                        'px-2 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm',
-                        isCorrect ?
-                          'bg-pw-success/10 border-pw-success text-pw-success'
-                        : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                      )}>
-                      {isCorrect ? 'Correct' : 'Incorrect'}
-                    </motion.div>
-                  )}
-                </div>
-                {quiz.correctOptionDes &&
-                  showFeedback &&
-                  q?.correctExplanation && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      title='Answer Explanation'
-                      className='p-2 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
-                      <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
-                        <Brain size={14} /> Explanation
-                      </div>
-                      {q.correctExplanation}
-                    </motion.div>
-                  )}
-              </div>
-
-              {/* Options Section */}
-              <AnimatePresence mode='sync'>
-                <motion.div
-                  key={currentQuestion + 'tv765ecwxartdufybgiun'}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className='space-y-2'>
-                  {q?.type === 'dropdown' ?
-                    <div className='flex justify-center py-1'>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger>
-                          <Button
-                            variant='outline'
-                            className='h-12 flex items-center justify-between px-8 gap-4 min-w-[280px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
-                            {selectedOption ?
-                              (
-                                (shuffledOptions[q.id] || q.options).find(
-                                  (o) =>
-                                    (typeof o === 'string' ? o : o.id) ===
-                                    selectedOption,
-                                ) as any
-                              )?.text || selectedOption
-                            : 'Choose your answer...'}
-                            <ChevronDown
-                              size={20}
-                              className='text-pw-primary'
-                            />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
-                          {(shuffledOptions[q.id] || q.options)?.map(
-                            (opt, idx) => {
-                              const optId =
-                                typeof opt === 'string' ?
-                                  idx.toString()
-                                : opt.id;
-                              const optText =
-                                typeof opt === 'string' ? opt : opt.text;
-                              return (
-                                <DropdownMenuItem
-                                  key={optId + idx + 'y7f65awxsyribyt'}
-                                  onClick={() => setSelectedOption(optId)}
-                                  className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4'>
-                                  {optText}
-                                  {selectedOption === optId && (
-                                    <Check
-                                      size={15}
-                                      className='text-pw-primary mr-2'
-                                    />
-                                  )}
-                                </DropdownMenuItem>
-                              );
-                            },
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  : q?.type === 'input' ?
-                    <textarea
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder='Type your answer here...'
-                      className='w-full h-20 bg-white/5 border border-white/10 rounded-2xl p-2 text-base focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted focus:ring-1 focus:ring-pw-primary'
+                    <Clock
+                      size={18}
+                      className={
+                        timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
+                      }
                     />
-                  : <div
-                      className={cn(
-                        'grid gap-4',
-                        q?.type === 'multiple_choice' ?
-                          'grid-cols-1'
-                        : 'grid-cols-2',
-                      )}>
-                      {(shuffledOptions[q.id] || q?.options).map((opt, idx) => {
-                        const optId =
-                          typeof opt === 'string' ? idx.toString() : opt?.id;
-                        const optText =
-                          typeof opt === 'string' ? opt : opt?.text;
-                        const isSelected =
-                          q?.type === 'checkbox' ?
-                            selectedOptions.includes(optId)
-                          : selectedOption === optId;
-                        return (
-                          <button
-                            key={optId + idx + '5ef3aTASDVFBIGU'}
-                            onClick={() =>
-                              q?.type === 'checkbox' ?
-                                setSelectedOptions((p) =>
-                                  p.includes(optId) ?
-                                    p.filter((i) => i !== optId)
-                                  : [...p, optId],
-                                )
-                              : setSelectedOption(optId)
-                            }
-                            className={cn(
-                              'w-full p-2 pl-3 md:p-4 text-left rounded-2xl border-2 transition-all group flex items-center justify-between',
-                              isSelected ?
-                                'bg-pw-primary/10 border-pw-primary text-pw-text shadow-lg'
-                              : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                            )}>
-                            <span className='font-medium text-sm md:text-base'>
-                              {optText}
-                            </span>
-                            <CheckCircle
-                              className={cn(
-                                'h-5 w-5 transition-all',
-                                isSelected ?
-                                  'opacity-100 scale-110 text-pw-primary'
-                                : 'opacity-0 scale-50',
-                              )}
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  }
-                </motion.div>
-              </AnimatePresence>
-            </Card>
+                    {Math.floor(timeLeft / 60)}:
+                    {String(timeLeft % 60).padStart(2, '0')}
+                  </div>
+                )}
 
-            <div className='flex justify-between gap-2 flex-wrap'>
-              <AnimatePresence mode='sync'>
-                {quiz.canGoBack && currentQuestion > 0 && (
+                {quiz?.allowEarlySubmit && (
                   <Button
-                    onClick={GoBack}
-                    className='btn-ghost h-10 px-6 text-lg gap-2'>
-                    <ChevronLeft className='h-5 w-5' />
-                    Previous
+                    onClick={confirmSubmitQuiz}
+                    className='h-10 px-5 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10'>
+                    <CheckCircle2 size={18} />
+                    <span className='hidden sm:inline font-bold'>SUBMIT</span>
                   </Button>
                 )}
+              </div>
+            </div>
 
-                <Button
-                  onClick={handleNext}
-                  className='btn-primary h-10 px-8 rounded-2xl text-lg font-bold gap-2 shadow-xl shadow-pw-primary/20 ml-auto transition-transform active:scale-95'>
-                  {currentQuestion + 1 === activeQuestions.length ?
-                    'Finish'
-                  : 'Next'}
-                  <ChevronRight size={22} />
-                </Button>
-              </AnimatePresence>
+            <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-start'>
+              <div className='lg:col-span-8'>
+                {!q ?
+                  <div className='flex flex-col items-center justify-center min-h-[40vh] text-center p-6 bg-white/5 rounded-[3rem] border border-white/5'>
+                    <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 opacity-50' />
+                    <h2 className='text-xl font-bold mb-2'>
+                      Question Not Found
+                    </h2>
+                    <p className='text-sm text-pw-muted max-w-xs'>
+                      There was an issue loading this question. This can happen
+                      if the quiz routing is invalid.
+                    </p>
+                    <Button
+                      onClick={() => setCurrentQuestion(0)}
+                      className='mt-6 btn-ghost'>
+                      Return to Start
+                    </Button>
+                  </div>
+                : <>
+                    <div className='flex flex-col mb-4 w-full'>
+                      <div className='badge bg-pw-primary/10 text-pw-primary border-pw-primary/20 px-4 py-1.5 rounded-full text-xs font-bold'>
+                        {`Question ${currentQuestion + 1} of ${activeQuestions.length}`}
+                      </div>
+
+                      <div className='w-full grid grid-cols-1 gap-1 mt-2'>
+                        <AnimatePresence mode='wait'>
+                          <motion.div
+                            key={q.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                            className='space-y-8'>
+                            <Card className='glass bkblur rounded-[3rem] p-6 md:p-10 bg-pw-surface/40 border-white/5 shadow-2xl relative overflow-hidden group min-h-[450px] flex flex-col'>
+                              <div className='absolute -top-24 -right-24 w-64 h-64 bg-pw-primary/5 rounded-full blur-3xl group-hover:bg-pw-primary/10 transition-colors duration-700' />
+
+                              <div className='flex-1 w-full flex flex-col'>
+                                <div className='flex flex-col gap-6 mb-8'>
+                                  <div className='flex justify-between items-start gap-4'>
+                                    <div className='flex items-start gap-4 flex-1'>
+                                      <div className='h-12 w-12 rounded-[1.25rem] bg-pw-primary/10 flex items-center justify-center shrink-0 border border-pw-primary/20 shadow-inner'>
+                                        <Brain
+                                          className='text-pw-primary'
+                                          size={24}
+                                        />
+                                      </div>
+                                      <h2 className='text-lg md:text-2xl font-medium leading-tight text-balance'>
+                                        {q.text}
+                                      </h2>
+                                    </div>
+
+                                    {quiz.correctOption && showFeedback && (
+                                      <motion.div
+                                        initial={{ opacity: 0, scale: 0.5 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className={cn(
+                                          'px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
+                                          isCorrect ?
+                                            'bg-pw-success/10 border-pw-success text-pw-success'
+                                          : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                                        )}>
+                                        {isCorrect ? 'Correct' : 'Incorrect'}
+                                      </motion.div>
+                                    )}
+                                  </div>
+
+                                  {quiz.correctOptionDes &&
+                                    showFeedback &&
+                                    q?.correctExplanation && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
+                                        <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
+                                          <Brain size={14} /> Explanation
+                                        </div>
+                                        {q.correctExplanation}
+                                      </motion.div>
+                                    )}
+                                </div>
+
+                                <div className='space-y-4'>
+                                  {q.type === 'dropdown' ?
+                                    <div className='flex justify-center py-4'>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger>
+                                          <Button
+                                            variant='outline'
+                                            className='h-14 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
+                                            {selectedOption ?
+                                              (
+                                                (
+                                                  shuffledOptions[q.id] ||
+                                                  q.options
+                                                ).find(
+                                                  (o) =>
+                                                    (typeof o === 'string' ? o
+                                                    : o.id) === selectedOption,
+                                                ) as any
+                                              )?.text || selectedOption
+                                            : 'Choose your answer...'}
+                                            <ChevronDown
+                                              size={20}
+                                              className='text-pw-primary'
+                                            />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
+                                          {(
+                                            shuffledOptions[q.id] || q.options
+                                          )?.map((opt, idx) => {
+                                            const optId =
+                                              typeof opt === 'string' ?
+                                                idx.toString()
+                                              : opt.id;
+                                            const optText =
+                                              typeof opt === 'string' ? opt : (
+                                                opt.text
+                                              );
+                                            return (
+                                              <DropdownMenuItem
+                                                key={
+                                                  optId +
+                                                  idx +
+                                                  'dropdown-option'
+                                                }
+                                                onClick={() =>
+                                                  setSelectedOption(optId)
+                                                }
+                                                className='h-12 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
+                                                {optText}
+                                                {selectedOption === optId && (
+                                                  <Check
+                                                    size={18}
+                                                    className='text-pw-primary'
+                                                  />
+                                                )}
+                                              </DropdownMenuItem>
+                                            );
+                                          })}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  : q.type === 'input' ?
+                                    <div className='py-2'>
+                                      <textarea
+                                        value={content}
+                                        onChange={(e) =>
+                                          setContent(e.target.value)
+                                        }
+                                        placeholder='Type your answer here...'
+                                        className='w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-6 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
+                                      />
+                                    </div>
+                                  : q.type === 'range' ?
+                                    <div className='flex flex-col items-center gap-10 py-8'>
+                                      <div className='w-full max-w-md space-y-6'>
+                                        <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
+                                          <span>{q.min || 0}</span>
+                                          <span>
+                                            {selectedOption || q.min || 0}
+                                          </span>
+                                          <span>{q.max || 10}</span>
+                                        </div>
+                                        <input
+                                          type='range'
+                                          min={q.min || 0}
+                                          max={q.max || 10}
+                                          step={q.step || 1}
+                                          value={selectedOption || q.min || 0}
+                                          onChange={(e) =>
+                                            setSelectedOption(e.target.value)
+                                          }
+                                          className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
+                                        />
+                                        <div className='flex justify-center'>
+                                          <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
+                                            {selectedOption || q.min || 0}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  : q.type === 'rating' ?
+                                    <div className='flex flex-col items-center gap-10 py-8'>
+                                      <div className='flex gap-4'>
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                          <button
+                                            key={i}
+                                            onClick={() =>
+                                              setSelectedOption(i.toString())
+                                            }
+                                            className={cn(
+                                              'transition-all transform hover:scale-125 active:scale-95',
+                                              Number(selectedOption) >= i ?
+                                                'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
+                                              : 'text-white/10 hover:text-white/20',
+                                            )}>
+                                            <Star
+                                              size={56}
+                                              fill={
+                                                Number(selectedOption) >= i ?
+                                                  'currentColor'
+                                                : 'none'
+                                              }
+                                              strokeWidth={1.5}
+                                            />
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
+                                        {selectedOption ?
+                                          `Rating: ${selectedOption} / 5`
+                                        : 'Select a Rating'}
+                                      </p>
+                                    </div>
+                                  : <div
+                                      className={cn(
+                                        'grid gap-4',
+                                        q.type === 'multiple_choice' ?
+                                          'grid-cols-1'
+                                        : 'grid-cols-1 md:grid-cols-2',
+                                      )}>
+                                      {(shuffledOptions[q.id] || q.options).map(
+                                        (opt, idx) => {
+                                          const optId =
+                                            typeof opt === 'string' ?
+                                              idx.toString()
+                                            : opt.id;
+                                          const optText =
+                                            typeof opt === 'string' ? opt : (
+                                              opt.text
+                                            );
+                                          const isSelected =
+                                            q.type === 'checkbox' ?
+                                              selectedOptions.includes(optId)
+                                            : selectedOption === optId;
+                                          return (
+                                            <button
+                                              key={
+                                                optId +
+                                                idx +
+                                                'assessment-option'
+                                              }
+                                              onClick={() =>
+                                                q.type === 'checkbox' ?
+                                                  setSelectedOptions((p) =>
+                                                    p.includes(optId) ?
+                                                      p.filter(
+                                                        (i) => i !== optId,
+                                                      )
+                                                    : [...p, optId],
+                                                  )
+                                                : setSelectedOption(optId)
+                                              }
+                                              className={cn(
+                                                'w-full p-5 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between',
+                                                isSelected ?
+                                                  'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
+                                                : 'bg-white/5 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                                              )}>
+                                              <span className='font-bold text-base md:text-lg'>
+                                                {optText}
+                                              </span>
+                                              <CheckCircle
+                                                className={cn(
+                                                  'h-6 w-6 transition-all text-pw-primary',
+                                                  isSelected ?
+                                                    'opacity-100 scale-110'
+                                                  : 'opacity-0 scale-50',
+                                                )}
+                                              />
+                                            </button>
+                                          );
+                                        },
+                                      )}
+                                    </div>
+                                  }
+                                </div>
+                              </div>
+                            </Card>
+                          </motion.div>
+                        </AnimatePresence>
+
+                        <div className='flex justify-between items-center gap-4 flex-wrap mt-8'>
+                          <AnimatePresence mode='sync'>
+                            {quiz.canGoBack && currentQuestion > 0 && (
+                              <Button
+                                onClick={GoBack}
+                                className='btn-ghost h-12 px-8 text-lg rounded-2xl gap-2 font-bold'>
+                                <ChevronLeft className='h-5 w-5' />
+                                Previous
+                              </Button>
+                            )}
+
+                            <div className='flex items-center gap-3 ml-auto'>
+
+                              <Button
+                                onClick={handleNext}
+                                className='btn-primary h-14 px-12 rounded-2xl text-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
+                                {currentQuestion + 1 === activeQuestions.length ?
+                                  'FINISH'
+                                : 'NEXT'}
+                                <ChevronRight size={32} />
+                              </Button>
+                            </div>
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                }
+              </div>
+
+              {/* Assistant Sidebar */}
+              <div className='lg:col-span-4 space-y-6'>
+                {q?.accessory && q.accessory !== 'none' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className='sticky top-10'>
+                    <div className='flex items-center gap-2 mb-4 px-4'>
+                      <AlertTriangle
+                        size={14}
+                        className='text-pw-primary'
+                      />
+                      <h4 className='text-[10px] font-black text-pw-muted uppercase tracking-[0.3em]'>
+                        TOOLS
+                      </h4>
+                    </div>
+                    {q.accessory === 'calculator' && <Calculator />}
+                    {q.accessory === 'note' && (
+                      <NoteSheet note={q.accessoryNote || ''} />
+                    )}
+                    {q.accessory === 'periodic_table' && <PeriodicTable />}
+                    {q.accessory === 'formula_sheet' && (
+                      <FormulaSheet
+                        config={q.accessoryConfig}
+                        customFormulas={q.accessoryNote}
+                      />
+                    )}
+                    {q.accessory === 'glossary' && <Glossary />}
+                  </motion.div>
+                )}
+              </div>
             </div>
           </div>
-
-          {/* Assistant Sidebar */}
-          <div className='lg:col-span-4 space-y-6'>
-            {q?.accessory && q.accessory !== 'none' && (
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}>
-                <div className='flex items-center gap-2 mb-4 px-2'>
-                  <AlertTriangle
-                    size={14}
-                    className='text-pw-primary'
-                  />
-                  <h4 className='text-[10px] font-bold text-pw-muted uppercase tracking-[0.3em]'>
-                    System Assistant
-                  </h4>
-                </div>
-                {q.accessory === 'calculator' && <Calculator />}
-                {q.accessory === 'note' && (
-                  <NoteSheet note={q.accessoryNote || ''} />
-                )}
-                {q.accessory === 'periodic_table' && <PeriodicTable />}
-                {q.accessory === 'formula_sheet' && <FormulaSheet />}
-                {q.accessory === 'glossary' && <Glossary />}
-              </motion.div>
-            )}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

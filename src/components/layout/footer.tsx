@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Instagram, Linkedin, Mail, Twitter, Youtube, Zap } from 'lucide-react';
-import {capFirst} from '@/lib/utils';
+import { capFirst } from '@/lib/utils';
 
 const footerSections = [
   {
@@ -41,24 +41,24 @@ const socials = [
   {
     name: 'Email',
     link: 'mailto:ping.world@gmail.com',
-    icon:Mail,
+    icon: Mail,
   },
   {
     name: 'X',
     link: 'www.x.com/ping-world',
-    icon:Twitter,
+    icon: Twitter,
   },
   {
     name: 'Instagram',
     link: 'www.instagram.com/ping-world',
-    icon:Instagram,
+    icon: Instagram,
   },
   {
     name: 'Linkedin',
     link: 'www.linkedin.com/ping-world',
-    icon:Linkedin,
+    icon: Linkedin,
   },
-]
+];
 
 export const Footer = () => {
   return (
@@ -80,6 +80,17 @@ export const Footer = () => {
             <p className='text-sm text-pw-muted leading-relaxed max-w-xs'>
               Your world of tools. Free utilities and creator tools for
               everyone.
+            </p>
+
+            <p className='text-xs text-pw-muted mt-1'>
+              A {'  '}
+              <Link
+                href='https://qhal-tech.com'
+                target='_blank'
+                className='font-bold text-pw-primary'>
+                QAL TECH
+              </Link>{' '}
+              Company
             </p>
           </div>
 
@@ -113,16 +124,15 @@ export const Footer = () => {
                 title={`Check out our ${capFirst(s.name)}`}
                 href={s.link}
                 key={s.link + s.name + '9hf8erh89her98hf'}
-                className={'opacity-50 hover:opacity-100'}
-                >
-                <s.icon className='w-5 h-5'/>
+                className={'text-pw-muted hover:text-pw-cyan hover:scale-[1.1]'}>
+                <s.icon className='w-5 h-5' />
               </Link>
             );
           })}
         </div>
         <div className='divider mt-5 mb-15' />
 
-        <div className='flex flex-col items-center justify-between gap-5 md:flex-row mt-4'>
+        <div className='flex flex-col items-center justify-between gap-2 md:gap-5 md:flex-row mt-4'>
           <p className='text-xs text-pw-muted'>
             &copy; {new Date().getFullYear()} Ping World. All rights reserved.
           </p>
