@@ -542,6 +542,119 @@ pre {
   color: var(--pw-warning);
 }
 
+/* ─── Premium Badge ──────────────────────────────────────────── */
+.badge-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 179, 71, 0.5);
+  background: linear-gradient(135deg, rgba(255, 179, 71, 0.15), rgba(152, 92, 255, 0.15));
+  color: var(--pw-warning);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ─── Premium Border ─────────────────────────────────────────── */
+.premium-border {
+  border: 1px solid;
+  border-image: linear-gradient(135deg, #ffb347, #985cff) 1;
+  border-radius: 1rem;
+  
+  box-shadow:
+    0 0 20px rgba(255, 179, 71, 0.12),
+    inset 0 0 20px rgba(152, 92, 255, 0.05);
+}
+
+/* ─── Premium Button ─────────────────────────────────────────── */
+.btn-premium {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffb347 0%, #985cff 100%);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  border: none;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  transition:
+    opacity 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.2s ease;
+  box-shadow: 0 0 16px rgba(255, 179, 71, 0.3);
+  text-decoration: none;
+}
+
+.btn-premium:hover {
+  opacity: 0.92;
+  box-shadow: 0 0 28px rgba(255, 179, 71, 0.5);
+  transform: translateY(-1px);
+}
+
+/* ─── Feature Locked Overlay ─────────────────────────────────── */
+.feature-locked {
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-locked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 4, 15, 0.5);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ─── Online / Offline dots ──────────────────────────────────── */
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pw-success);
+  box-shadow: 0 0 6px var(--pw-success);
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+.offline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pw-danger);
+  box-shadow: 0 0 6px var(--pw-danger);
+}
+
+/* ─── Custom scrollbar for small containers ──────────────────── */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(92, 111, 255, 0.3) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(92, 111, 255, 0.3);
+  border-radius: 99px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(92, 111, 255, 0.6);
+}
+
 /* ─── Skeleton ───────────────────────────────────────────────── */
 .skeleton {
   background: linear-gradient(

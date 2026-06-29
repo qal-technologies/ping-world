@@ -1,14 +1,12 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import {
   Type,
   Palette,
   Plus,
   Trash2,
   Download,
-  RefreshCw,
   Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

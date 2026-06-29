@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useComposer } from '@/lib/composer/useComposerStore';
 
 // ─── Emoji Data ──────────────────────────────────────────────
 // Organized by category. Extended set of Unicode emojis.
@@ -141,11 +140,11 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
   return (
     <motion.div
       ref={pickerRef}
-      initial={{ opacity: 0, scale: 0.95, y: 8 }}
+      initial={{ opacity: 0, scale: 0.95, y: -5 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: 8 }}
+      exit={{ opacity: 0, scale: 0.95, y: -5 }}
       transition={{ duration: 0.15 }}
-      className='absolute bottom-full mb-2 left-0 z-50 w-72 bg-pw-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden'
+      className='absolute bottom-13.5 m-1 left-0 z-1000 w-full max-w-75 bg-pw-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden'
     >
       {/* Search */}
       <div className='p-3 border-b border-white/5'>
@@ -154,7 +153,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder='Search emoji...'
-          className='w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-pw-text placeholder:text-pw-muted/50 focus:outline-none focus:border-pw-primary/50 no-outline'
+          className='w-full bg-white/5 bkblur rounded-lg px-3 py-1.5 text-sm text-pw-text placeholder:text-pw-muted/50 focus:outline-none focus:border-pw-primary/50 no-outline'
         />
       </div>
 

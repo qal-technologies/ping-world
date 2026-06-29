@@ -5,12 +5,12 @@ import {
   BarChart2,
   Eye,
   AlertTriangle,
-  CheckCircle2,
   Clock,
   Smile,
   Meh,
   Frown,
   Crown,
+  CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -137,8 +137,8 @@ export function TextAnalysisPanel() {
 
       {/* Flagged words */}
       {analysis.flaggedWords.length > 0 && (
-        <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 space-y-1.5'>
-          <div className='flex items-center gap-2'>
+        <div className='p-2 rounded-xl bg-pw-danger/6 border border-pw-danger/15 space-y-1'>
+          <div className='flex items-center gap-2 mb-2'>
             <AlertTriangle className='h-3.5 w-3.5 text-pw-danger shrink-0' />
             <span className='text-xs font-bold text-pw-danger'>
               {analysis.flaggedWords.length} flagged phrase{analysis.flaggedWords.length > 1 ? 's' : ''}
@@ -148,26 +148,27 @@ export function TextAnalysisPanel() {
             {analysis.flaggedWords.map((w) => (
               <span
                 key={w}
-                className='text-[10px] px-2 py-0.5 rounded-full bg-pw-danger/20 text-pw-danger border border-pw-danger/20'
+                className='text-[10px] px-2 py-0.5 rounded-full bg-pw-danger/8 text-pw-danger border border-pw-danger/15'
               >
                 {w}
               </span>
             ))}
           </div>
-          <p className='text-[10px] text-pw-danger/70'>
+          <p className='text-[10px] text-pw-danger/80'>
             These phrases may trigger spam filters on some platforms.
           </p>
         </div>
       )}
 
       {/* Grammar Check — Premium */}
-      <div className='space-y-2'>
+      <div className='space-y-2 w-full flex flex-col h-full'>
         <div className='flex items-center gap-2'>
           <Crown className='h-3 w-3 text-pw-warning' />
-          <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
-            Grammar Check
+          <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted flex gap-1'>
+            Grammar Check <CheckCircle2 className='h-3 w-3 text-pw-success' />
           </span>
         </div>
+        
         <PremiumGate
           feature={grammarFeature}
           isPremium={state.isPremium}

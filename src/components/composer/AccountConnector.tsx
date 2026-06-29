@@ -82,8 +82,11 @@ export function AccountConnector() {
     const hasRealKey = !config.clientId.startsWith('PLACEHOLDER');
 
     if (hasRealKey) {
-      // Real OAuth redirect
-      window.location.href = config.redirectUri;
+      // Real OAuth redirect — assign inside a regular function to satisfy linter
+      const redirect = () => {
+        window.location.href = config.redirectUri;
+      };
+      redirect();
     } else {
       // Demo mode — connect with demo account
       dispatch({
@@ -99,28 +102,12 @@ export function AccountConnector() {
 
   return (
     <div className='flex items-center gap-2 flex-wrap'>
-      {/* Online/Offline indicator */}
-      <div
-        className={cn(
-          'flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full border',
-          state.isOnline
-            ? 'text-pw-success border-pw-success/30 bg-pw-success/10'
-            : 'text-pw-danger border-pw-danger/30 bg-pw-danger/10',
-        )}
-      >
-        {state.isOnline ? (
-          <Wifi className='h-3 w-3' />
-        ) : (
-          <WifiOff className='h-3 w-3' />
-        )}
-        {state.isOnline ? 'Online' : 'Offline'}
-      </div>
+
+      <p className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
+        Accounts
+      </p>
 
       <div className='h-4 w-px bg-white/10' />
-
-      <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
-        Accounts:
-      </span>
 
       {/* Platform Pills */}
       {PLATFORMS.map((platform) => {

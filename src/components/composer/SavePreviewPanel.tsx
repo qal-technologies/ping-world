@@ -87,8 +87,8 @@ export function SavePreviewPanel() {
   return (
     <div className='space-y-4'>
       {/* Hidden capture target */}
-      <div className='hidden'>
-        <div ref={previewRef} className='p-6 bg-[#02040f] w-[500px]'>
+      <div className=''>
+        <div ref={previewRef} className='p-6 bg-[#02040f] w-[400px] items-center'>
           <div className='mb-4 flex items-center gap-2'>
             <div className='w-2 h-2 rounded-full bg-pw-primary' />
             <span
@@ -98,7 +98,7 @@ export function SavePreviewPanel() {
               PingWorld Composer
             </span>
           </div>
-          <LivePreview />
+          <LivePreview forExport />
         </div>
       </div>
 
@@ -123,7 +123,7 @@ export function SavePreviewPanel() {
         showPartial={false}
         className='h-12'
       >
-        <div className='px-3 py-2 flex items-center gap-2'>
+        <div className='px-3 py-2 flex items-center h-12 gap-2'>
           <Crown className='h-3.5 w-3.5 text-pw-warning' />
           <span className='text-xs text-pw-muted'>Export without watermark</span>
         </div>

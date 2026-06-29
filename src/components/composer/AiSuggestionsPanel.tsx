@@ -2,14 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Sparkles,
-  Loader2,
-  ArrowRight,
-  RefreshCw,
-  Check,
-  Wand2,
-} from 'lucide-react';
+import { Sparkles, Loader2, ArrowRight, Check, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { suggestFromTitle, rephraseText } from '@/lib/composer/ai-utils';

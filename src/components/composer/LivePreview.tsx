@@ -20,7 +20,6 @@ import {
   ToggleLeft,
   ToggleRight,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { getPlatform } from '@/lib/composer/constants';
 import type { Platform } from '@/lib/composer/types';
@@ -33,7 +32,7 @@ function randomEngagement(base: number, variance = 0.3) {
 function formatCount(n: number) {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return `${n}`;
+  return `${n}` as string;
 }
 
 // ─── X / Twitter Preview ──────────────────────────────────────
@@ -283,7 +282,7 @@ const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
   linkedin: Linkedin,
 };
 
-export function LivePreview() {
+export function LivePreview({forExport}: {forExport?:boolean}) {
   const { state, dispatch, getContentForPlatform } = useComposer();
   const activePlatform =
     state.selectedPlatforms[0] ?? ('x' as Platform);
@@ -293,10 +292,10 @@ export function LivePreview() {
   const meta = getPlatform(activePlatform);
 
   return (
-    <div className='space-y-4'>
+    <div className='space-y-4 '>
       {/* Preview platform selector */}
       {state.selectedPlatforms.length > 1 && (
-        <div className='flex gap-2 flex-wrap'>
+        <div className='flex gap-2 flex-wrap '>
           {state.selectedPlatforms.map((platform) => {
             const Icon = PLATFORM_ICONS[platform];
             const pmeta = getPlatform(platform);
@@ -322,18 +321,20 @@ export function LivePreview() {
       )}
 
       {/* Reactions toggle */}
-      <button
-        onClick={() => dispatch({ type: 'TOGGLE_REACTIONS' })}
-        className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'
-      >
-        {state.showReactions ? (
-          <ToggleRight className='h-4 w-4 text-pw-primary' />
-        ) : (
-          <ToggleLeft className='h-4 w-4' />
-        )}
-        {state.showReactions ? 'Reactions visible' : 'Reactions hidden'}
-      </button>
-
+      {
+        !forExport &&
+        <button
+          onClick={() => dispatch({type: 'TOGGLE_REACTIONS'})}
+          className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'
+        >
+          {state.showReactions ? (
+            <ToggleRight className='h-4 w-4 text-pw-primary' />
+          ) : (
+            <ToggleLeft className='h-4 w-4' />
+          )}
+          {state.showReactions ? 'Reactions visible' : 'Reactions hidden'}
+        </button>
+      }
       {/* The Preview */}
       <motion.div
         key={activePlatform}

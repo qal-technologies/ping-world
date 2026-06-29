@@ -2,14 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  Brain,
-  Crown,
-  Save,
-  RefreshCw,
-  Check,
-  Zap,
-} from 'lucide-react';
+import { Crown, Save, Check, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import {
@@ -38,7 +31,7 @@ export function AiContextPanel() {
 
   const handleSave = () => {
     // Persist to localStorage
-    if (typeof window !== 'undefined') {
+    if ( window && typeof window !== 'undefined') {
       localStorage.setItem(
         'composer_ai_context',
         JSON.stringify(state.aiContext),

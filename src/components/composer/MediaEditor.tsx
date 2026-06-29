@@ -9,9 +9,7 @@ import {
   Contrast,
   RotateCcw,
   RotateCw,
-  ImageIcon,
   VideoIcon,
-  Lock,
   AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,6 +18,7 @@ import { FREE_LIMITS, PREMIUM_FEATURES, getPlatform } from '@/lib/composer/const
 import { PremiumGate } from './PremiumGate';
 import type { MediaAsset } from '@/lib/composer/types';
 import { toast } from 'sonner';
+import Image from 'next/image';
 
 const multiImageFeature = PREMIUM_FEATURES.find((f) => f.id === 'multi_image')!;
 
@@ -170,10 +169,12 @@ export function MediaEditor() {
                 }
               >
                 {asset.type === 'image' ? (
-                  <img
+                  <Image
                     src={asset.previewUrl}
                     alt={asset.altText || 'upload'}
                     className='w-full h-full object-cover'
+                    width={500}
+                    height={500}
                     style={{
                       filter: asset.filterStyle,
                       transform: `rotate(${asset.rotation}deg)`,

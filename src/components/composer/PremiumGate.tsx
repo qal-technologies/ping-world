@@ -30,10 +30,9 @@ export function PremiumGate({
     return (
       <div
         className={cn(
-          'relative rounded-xl premium-border overflow-hidden',
+          'relative h-full flex flex-col premium-border overflow-hidden',
           className,
-        )}
-      >
+        )}>
         <div className='absolute top-2 right-2 z-10'>
           <span className='badge-premium flex items-center gap-1 text-[10px]'>
             <Crown className='h-2.5 w-2.5' />
@@ -46,11 +45,11 @@ export function PremiumGate({
   }
 
   return (
-    <div className={cn('relative rounded-xl overflow-hidden group', className)}>
+    <div className={cn('relative w-full flex flex-col overflow-hidden overflow-y-auto no-scrollbar group', className)} style={{height:'fit-content', minHeight:200, alignItems:'center', justifyContent:'center', placeSelf:'center'}}>
       {/* Partially visible content (blurred) */}
       <div
         className={cn(
-          'transition-all duration-300',
+          'transition-all h-full duration-300',
           showPartial ? 'blur-[2px] opacity-60 pointer-events-none select-none' : 'hidden',
         )}
       >
@@ -58,11 +57,11 @@ export function PremiumGate({
       </div>
 
       {/* Lock Overlay */}
-      <div className='absolute inset-0 flex flex-col items-center justify-center bg-pw-bg/70 backdrop-blur-sm rounded-xl border border-pw-primary/20 z-10'>
+      <div className='absolute inset-0 flex h-50 flex-col items-center py-4 justify-center bg-pw-bg/70 backdrop-blur-sm rounded-xl border border-pw-primary/20 z-10'>
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className='flex flex-col items-center gap-2 text-center px-4'
+          className='flex flex-col items-center gap-2 text-center px-4 py-5'
         >
           <div className='h-10 w-10 rounded-full bg-pw-warning/10 border border-pw-warning/30 flex items-center justify-center'>
             <Lock className='h-4 w-4 text-pw-warning' />
@@ -75,7 +74,7 @@ export function PremiumGate({
       </div>
 
       {/* Hover expand — shows full description */}
-      <div className='absolute inset-0 flex flex-col items-center justify-center bg-pw-bg/90 backdrop-blur-md rounded-xl border border-pw-warning/40 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 p-4'>
+      <div className='absolute inset-0 flex flex-col items-center justify-center bg-pw-bg/90 backdrop-blur-md rounded-xl border border-pw-warning/40 z-20 opacity-0 h-[150%] group-hover:opacity-100 transition-all duration-300 p-4 py-5'>
         <Sparkles className='h-5 w-5 text-pw-warning mb-2' />
         <p className='text-sm font-bold text-pw-warning mb-1'>{feature.name}</p>
         <p className='text-xs text-pw-muted text-center leading-relaxed mb-3'>
@@ -83,7 +82,7 @@ export function PremiumGate({
         </p>
         <a
           href='/pricing'
-          className='btn-premium flex items-center gap-1 text-xs px-3 py-1.5 rounded-full'
+          className='btn-premium h-10 flex items-center gap-1 text-xs px-4 py-2 rounded-full'
         >
           Upgrade to Premium
           <ArrowRight className='h-3 w-3' />

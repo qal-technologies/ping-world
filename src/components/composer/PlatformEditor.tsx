@@ -10,10 +10,7 @@ import {
   Smile,
   Hash,
   ImageIcon,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
-  CheckCircle2,
   Lock,
   ToggleLeft,
   ToggleRight,
@@ -23,7 +20,7 @@ import { useComposer } from '@/lib/composer/useComposerStore';
 import { getPlatform, PLATFORMS, FREE_LIMITS } from '@/lib/composer/constants';
 import type { Platform } from '@/lib/composer/types';
 import { EmojiPicker } from './EmojiPicker';
-import { AnimatePresence as AP } from 'framer-motion';
+import { toast } from 'sonner';
 
 const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
   x: Twitter,
@@ -37,7 +34,10 @@ interface PlatformEditorProps {
   onOpenMedia: () => void;
 }
 
-export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) {
+export function PlatformEditor({
+  onOpenTag,
+  onOpenMedia,
+}: PlatformEditorProps) {
   const { state, dispatch, getContentForPlatform } = useComposer();
   const [activePlatformTab, setActivePlatformTab] = useState<Platform>(
     state.selectedPlatforms[0] ?? 'x',
@@ -59,7 +59,10 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
   };
 
   const handleVariantChange = (platform: Platform, val: string) => {
-    dispatch({ type: 'SET_PLATFORM_VARIANT', payload: { platform, content: val } });
+    dispatch({
+      type: 'SET_PLATFORM_VARIANT',
+      payload: { platform, content: val },
+    });
   };
 
   const toggleOverride = (platform: Platform) => {
@@ -71,15 +74,18 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
       const ta = textareaRef.current;
       if (!ta) {
         // append to base
-        dispatch({ type: 'SET_BASE_CONTENT', payload: state.baseContent + emoji });
+        dispatch({
+          type: 'SET_BASE_CONTENT',
+          payload: state.baseContent + emoji,
+        });
         return;
       }
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
       const current =
-        activePlatformTab && isOverridden(activePlatformTab)
-          ? getContentForPlatform(activePlatformTab)
-          : state.baseContent;
+        activePlatformTab && isOverridden(activePlatformTab) ?
+          getContentForPlatform(activePlatformTab)
+        : state.baseContent;
       const newVal = current.slice(0, start) + emoji + current.slice(end);
       if (activePlatformTab && isOverridden(activePlatformTab)) {
         dispatch({
@@ -95,7 +101,13 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
         ta.setSelectionRange(start + emoji.length, start + emoji.length);
       }, 0);
     },
-    [activePlatformTab, state.baseContent, getContentForPlatform, dispatch, isOverridden],
+    [
+      activePlatformTab,
+      state.baseContent,
+      getContentForPlatform,
+      dispatch,
+      isOverridden,
+    ],
   );
 
   // Platform selection pills
@@ -106,22 +118,7 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
   };
 
   return (
-    <div
-      className={cn(
-        'rounded-2xl overflow-hidden border transition-all duration-500',
-        isSinglePlatform
-          ? 'border-0 shadow-lg'
-          : 'border-white/10 bg-white/[0.02]',
-      )}
-      style={
-        isSinglePlatform
-          ? {
-              border: `1px solid ${activeMeta.iconHex}30`,
-              boxShadow: `0 0 30px ${activeMeta.iconHex}18`,
-            }
-          : {}
-      }
-    >
+    <div className={cn('transition-all duration-500')}>
       {/* Platform Selector Row */}
       <div
         className={cn(
@@ -129,22 +126,32 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
           isSinglePlatform ? '' : 'border-white/5',
         )}
         style={
-          isSinglePlatform
-            ? { borderColor: `${activeMeta.iconHex}20` }
-            : {}
-        }
-      >
-        {PLATFORMS.map((platform, idx) => {
+          isSinglePlatform ? { borderColor: `${activeMeta.iconHex}20` } : {}
+        }>
+        {PLATFORMS.map((platform) => {
           const isSelected = state.selectedPlatforms.includes(platform.id);
           const isActive = activePlatformTab === platform.id && isSelected;
           const locked = isPlatformLocked(platform.id);
           const Icon = PLATFORM_ICONS[platform.id];
 
           return (
-            <div key={platform.id} className='relative flex-1'>
+            <div
+              key={platform.id}
+              className='relative flex-1 h-16'>
               <button
+                title={
+                  locked ? 'Premium Feature - Upgrade to Premium'
+                  : isActive ?
+                    `${platform.name}`
+                  : `Select ${platform.name}`
+                }
                 onClick={() => {
-                  if (locked) return;
+                  if (locked) {
+                    toast.error(
+                      'Premium Feature - Upgrade to Premium to access this platform',
+                    );
+                    return;
+                  }
                   if (isSelected) {
                     setActivePlatformTab(platform.id);
                   } else {
@@ -153,31 +160,29 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                   }
                 }}
                 className={cn(
-                  'w-full py-3 flex flex-col items-center gap-1.5 transition-all relative overflow-hidden',
+                  'w-full h-full py-3 pt-4 flex flex-col items-center gap-1.5 transition-all relative overflow-hidden',
                   locked && 'opacity-40 cursor-not-allowed',
-                  isActive
-                    ? 'text-white'
-                    : isSelected
-                      ? 'text-pw-muted/70'
-                      : 'text-pw-muted/40 hover:text-pw-muted',
+                  isActive ? 'text-white bg-white/5'
+                  : isSelected ? 'text-pw-muted/80'
+                  : 'text-pw-muted/40 hover:text-pw-muted',
                 )}
-              >
+                style={{ justifyContent: 'center' }}>
                 {/* Checkbox-style indicator */}
                 <div
                   className={cn(
-                    'absolute top-1.5 right-1.5 h-3 w-3 rounded-full border flex items-center justify-center',
-                    isSelected
-                      ? 'border-transparent'
-                      : 'border-white/20 bg-transparent',
+                    'absolute top-3.5 right-3.5 h-3 w-3 rounded-full border flex items-center justify-center',
+                    isSelected ? 'border-transparent' : (
+                      'border-white/20 bg-transparent'
+                    ),
                   )}
                   style={
-                    isSelected
-                      ? { backgroundColor: platform.iconHex }
-                      : {}
-                  }
-                >
+                    isSelected ? { backgroundColor: platform.iconHex } : {}
+                  }>
                   {isSelected && (
-                    <svg className='h-2 w-2 text-white' viewBox='0 0 8 8' fill='none'>
+                    <svg
+                      className='h-2 w-2 text-white'
+                      viewBox='0 0 8 8'
+                      fill='none'>
                       <path
                         d='M1.5 4L3 5.5L6.5 2'
                         stroke='currentColor'
@@ -189,11 +194,11 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                 </div>
 
                 {locked && (
-                  <Lock className='absolute top-1.5 left-1.5 h-2.5 w-2.5 text-pw-warning' />
+                  <Lock className='absolute top-8 right-3.5 h-2.5 w-2.5 text-pw-warning' />
                 )}
 
                 <Icon
-                  className='h-4 w-4'
+                  className='h-5 w-5'
                   style={{
                     color: isActive ? platform.iconHex : 'currentColor',
                   }}
@@ -222,8 +227,9 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
           if (platform !== activePlatformTab) return null;
           const meta = getPlatform(platform);
           const overridden = isOverridden(platform);
-          const content = overridden
-            ? (getVariant(platform)?.content ?? '')
+          const content =
+            overridden ?
+              (getVariant(platform)?.content ?? '')
             : state.baseContent;
           const limit = meta.charLimit;
           const progress = (content.length / limit) * 100;
@@ -236,16 +242,12 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}
-              className={cn(
-                'p-6 space-y-4',
-                isSinglePlatform ? '' : '',
-              )}
+              className={cn('p-4 space-y-2')}
               style={
-                isSinglePlatform
-                  ? { backgroundColor: `${meta.brandColor}06` }
-                  : {}
-              }
-            >
+                isSinglePlatform ?
+                  { backgroundColor: `${meta.brandColor}06` }
+                : {}
+              }>
               {/* Override toggle */}
               <div className='flex items-center justify-between'>
                 <div className='flex items-center gap-2'>
@@ -259,8 +261,7 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                         color: meta.iconHex,
                         borderColor: `${meta.iconHex}40`,
                         backgroundColor: `${meta.iconHex}10`,
-                      }}
-                    >
+                      }}>
                       {content.length}/{limit}
                     </span>
                   )}
@@ -268,13 +269,10 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                 {state.selectedPlatforms.length > 1 && (
                   <button
                     onClick={() => toggleOverride(platform)}
-                    className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-primary transition-colors'
-                  >
-                    {overridden ? (
+                    className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-primary transition-colors'>
+                    {overridden ?
                       <ToggleRight className='h-4 w-4 text-pw-primary' />
-                    ) : (
-                      <ToggleLeft className='h-4 w-4' />
-                    )}
+                    : <ToggleLeft className='h-4 w-4' />}
                     {overridden ? 'Custom text' : 'Synced to base'}
                   </button>
                 )}
@@ -286,9 +284,9 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                   ref={platform === activePlatformTab ? textareaRef : undefined}
                   value={content}
                   onChange={(e) =>
-                    overridden
-                      ? handleVariantChange(platform, e.target.value)
-                      : handleBaseChange(e.target.value)
+                    overridden ?
+                      handleVariantChange(platform, e.target.value)
+                    : handleBaseChange(e.target.value)
                   }
                   placeholder={`Write your ${meta.name} post here...`}
                   rows={8}
@@ -297,32 +295,30 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                     isOver ? 'text-pw-danger' : 'text-pw-text',
                   )}
                 />
-
-                {/* Emoji Picker Popover */}
-                <AP>
-                  {showEmoji && (
-                    <EmojiPicker
-                      onSelect={insertEmojiAtCursor}
-                      onClose={() => setShowEmoji(false)}
-                    />
-                  )}
-                </AP>
               </div>
+
+              {/* Emoji Picker Popover */}
+              <AnimatePresence>
+                {showEmoji && (
+                  <EmojiPicker
+                    onSelect={insertEmojiAtCursor}
+                    onClose={() => setShowEmoji(false)}
+                  />
+                )}
+              </AnimatePresence>
 
               {/* Bottom toolbar */}
               <div className='flex items-center justify-between flex-wrap gap-3 pt-4 border-t border-white/5'>
                 <div className='flex items-center gap-4'>
                   <button
                     onClick={onOpenMedia}
-                    className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-1.5 text-xs font-semibold'
-                  >
+                    className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-1.5 text-xs font-semibold'>
                     <ImageIcon className='h-4 w-4' />
                     <span className='hidden sm:inline'>Media</span>
                   </button>
                   <button
                     onClick={onOpenTag}
-                    className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-1.5 text-xs font-semibold'
-                  >
+                    className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-1.5 text-xs font-semibold'>
                     <Hash className='h-4 w-4' />
                     <span className='hidden sm:inline'>Tags</span>
                     {state.tags.length > 0 && (
@@ -333,8 +329,7 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                   </button>
                   <button
                     onClick={() => setShowEmoji((v) => !v)}
-                    className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-1.5 text-xs font-semibold'
-                  >
+                    className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-1.5 text-xs font-semibold'>
                     <Smile className='h-4 w-4' />
                     <span className='hidden sm:inline'>Emoji</span>
                   </button>
@@ -344,9 +339,10 @@ export function PlatformEditor({ onOpenTag, onOpenMedia }: PlatformEditorProps) 
                 <div className='flex items-center gap-3'>
                   <div
                     className='relative h-6 w-6'
-                    title={`${content.length}/${limit} characters`}
-                  >
-                    <svg className='h-6 w-6 -rotate-90' viewBox='0 0 24 24'>
+                    title={`${content.length}/${limit} characters`}>
+                    <svg
+                      className='h-6 w-6 -rotate-90'
+                      viewBox='0 0 24 24'>
                       <circle
                         cx='12'
                         cy='12'
