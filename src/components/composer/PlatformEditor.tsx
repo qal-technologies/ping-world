@@ -39,9 +39,7 @@ export function PlatformEditor({
   onOpenMedia,
 }: PlatformEditorProps) {
   const { state, dispatch, getContentForPlatform } = useComposer();
-  const [activePlatformTab, setActivePlatformTab] = useState<Platform>(
-    state.selectedPlatforms[0] ?? 'x',
-  );
+  const activePlatformTab = state.activeEditorPlatform;
   const [showEmoji, setShowEmoji] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -120,105 +118,128 @@ export function PlatformEditor({
   return (
     <div className={cn('transition-all duration-500')}>
       {/* Platform Selector Row */}
-      <div
-        className={cn(
-          'flex border-b',
-          isSinglePlatform ? '' : 'border-white/5',
-        )}
-        style={
-          isSinglePlatform ? { borderColor: `${activeMeta.iconHex}20` } : {}
-        }>
-        {PLATFORMS.map((platform) => {
-          const isSelected = state.selectedPlatforms.includes(platform.id);
-          const isActive = activePlatformTab === platform.id && isSelected;
-          const locked = isPlatformLocked(platform.id);
-          const Icon = PLATFORM_ICONS[platform.id];
+      <div className='w-full overflow-x-auto hide-scrollbar border-b border-white/5'>
+        <div
+          className='flex w-max min-w-full'
+          style={
+            isSinglePlatform ? { borderColor: `${activeMeta.iconHex}20` } : {}
+          }>
+          {PLATFORMS.map((platform) => {
+            const isSelected = state.selectedPlatforms.includes(platform.id);
+            const isActive = activePlatformTab === platform.id && isSelected;
+            const locked = isPlatformLocked(platform.id);
+            const Icon = PLATFORM_ICONS[platform.id];
 
-          return (
-            <div
-              key={platform.id}
-              className='relative flex-1 h-16'>
-              <button
-                title={
-                  locked ? 'Premium Feature - Upgrade to Premium'
-                  : isActive ?
-                    `${platform.name}`
-                  : `Select ${platform.name}`
-                }
-                onClick={() => {
-                  if (locked) {
-                    toast.error(
-                      'Premium Feature - Upgrade to Premium to access this platform',
-                    );
-                    return;
+            return (
+              <div
+                key={platform.id}
+                className='relative flex-1 h-16'>
+                <button
+                  title={
+                    locked ? 'Premium Feature - Upgrade to Premium'
+                    : isActive ?
+                      `${platform.name}`
+                    : `Select ${platform.name}`
                   }
-                  if (isSelected) {
-                    setActivePlatformTab(platform.id);
-                  } else {
-                    dispatch({ type: 'TOGGLE_PLATFORM', payload: platform.id });
-                    setActivePlatformTab(platform.id);
-                  }
-                }}
-                className={cn(
-                  'w-full h-full py-3 pt-4 flex flex-col items-center gap-1.5 transition-all relative overflow-hidden',
-                  locked && 'opacity-40 cursor-not-allowed',
-                  isActive ? 'text-white bg-white/5'
-                  : isSelected ? 'text-pw-muted/80'
-                  : 'text-pw-muted/40 hover:text-pw-muted',
-                )}
-                style={{ justifyContent: 'center' }}>
-                {/* Checkbox-style indicator */}
-                <div
-                  className={cn(
-                    'absolute top-3.5 right-3.5 h-3 w-3 rounded-full border flex items-center justify-center',
-                    isSelected ? 'border-transparent' : (
-                      'border-white/20 bg-transparent'
-                    ),
-                  )}
-                  style={
-                    isSelected ? { backgroundColor: platform.iconHex } : {}
-                  }>
-                  {isSelected && (
-                    <svg
-                      className='h-2 w-2 text-white'
-                      viewBox='0 0 8 8'
-                      fill='none'>
-                      <path
-                        d='M1.5 4L3 5.5L6.5 2'
-                        stroke='currentColor'
-                        strokeWidth='1.5'
-                        strokeLinecap='round'
-                      />
-                    </svg>
-                  )}
-                </div>
-
-                {locked && (
-                  <Lock className='absolute top-8 right-3.5 h-2.5 w-2.5 text-pw-warning' />
-                )}
-
-                <Icon
-                  className='h-5 w-5'
-                  style={{
-                    color: isActive ? platform.iconHex : 'currentColor',
+                  onClick={() => {
+                    if (locked) {
+                      toast.error(
+                        'Premium Feature - Upgrade to Premium to access this platform',
+                      );
+                      return;
+                    }
+                    if (!isSelected) {
+                      // Turn it on and make it active
+                      dispatch({
+                        type: 'TOGGLE_PLATFORM',
+                        payload: platform.id,
+                      });
+                      dispatch({
+                        type: 'SET_ACTIVE_EDITOR_PLATFORM',
+                        payload: platform.id,
+                      });
+                    } else if (!isActive) {
+                      // It's on but not active, so just make it active
+                      dispatch({
+                        type: 'SET_ACTIVE_EDITOR_PLATFORM',
+                        payload: platform.id,
+                      });
+                    } else {
+                      // It is active AND selected, so we turn it off!
+                      // Guard against turning off the very last platform
+                      if (state.selectedPlatforms.length > 1) {
+                        dispatch({
+                          type: 'TOGGLE_PLATFORM',
+                          payload: platform.id,
+                        });
+                      } else {
+                        toast.error(
+                          'You must keep at least one platform selected',
+                        );
+                      }
+                    }
                   }}
-                />
-                <span className='text-[9px] font-bold uppercase tracking-widest hidden sm:block'>
-                  {platform.name.split(' ')[0]}
-                </span>
+                  className={cn(
+                    'w-full h-full py-3 pt-4 flex flex-col items-center gap-1.5 transition-all relative overflow-hidden',
+                    locked && 'opacity-40 cursor-not-allowed',
+                    isActive ? 'text-white bg-white/5'
+                    : isSelected ? 'text-pw-muted/80'
+                    : 'text-pw-muted/40 hover:text-pw-muted',
+                  )}
+                  style={{ justifyContent: 'center' }}>
+                  {/* Checkbox-style indicator */}
+                  <div
+                    className={cn(
+                      'absolute top-3.5 right-3.5 h-3 w-3 rounded-full border flex items-center justify-center',
+                      isSelected ? 'border-transparent' : (
+                        'border-white/20 bg-transparent'
+                      ),
+                    )}
+                    style={
+                      isSelected ? { backgroundColor: platform.iconHex } : {}
+                    }>
+                    {isSelected && (
+                      <svg
+                        className='h-2 w-2 text-white'
+                        viewBox='0 0 8 8'
+                        fill='none'>
+                        <path
+                          d='M1.5 4L3 5.5L6.5 2'
+                          stroke='currentColor'
+                          strokeWidth='1.5'
+                          strokeLinecap='round'
+                        />
+                      </svg>
+                    )}
+                  </div>
 
-                {/* Active underline */}
-                {isActive && (
-                  <motion.div
-                    layoutId='editorActivePlatform'
-                    className='absolute bottom-0 left-0 right-0 h-0.5'
-                    style={{ backgroundColor: platform.iconHex }}
+                  {locked && (
+                    <Lock className='absolute top-8 right-3.5 h-2.5 w-2.5 text-pw-warning' />
+                  )}
+
+                  <Icon
+                    className='h-5 w-5'
+                    style={{
+                      color: isActive ? platform.iconHex : 'currentColor',
+                    }}
                   />
-                )}
-              </button>
-            </div>
-          );
-        })}
+                  <span className='text-[9px] font-bold uppercase tracking-widest hidden sm:block'>
+                    {platform.name.split(' ')[0]}
+                  </span>
+
+                  {/* Active underline */}
+                  {isActive && (
+                    <motion.div
+                      layoutId='editorActivePlatform'
+                      className='absolute bottom-0 left-0 right-0 h-0.5'
+                      style={{ backgroundColor: platform.iconHex }}
+                    />
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Editor area */}

@@ -10,21 +10,38 @@ import {
   Loader2,
   Image as ImageIcon,
   Crown,
+  Twitter,
+  Instagram,
+  Facebook,
+  Linkedin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
-import { PREMIUM_FEATURES } from '@/lib/composer/constants';
+import { PREMIUM_FEATURES, getPlatform } from '@/lib/composer/constants';
+import type { Platform } from '@/lib/composer/types';
 import { PremiumGate } from './PremiumGate';
 import { LivePreview } from './LivePreview';
 import { toast } from 'sonner';
 
-const cleanExportFeature = PREMIUM_FEATURES.find((f) => f.id === 'clean_preview')!;
+const cleanExportFeature = PREMIUM_FEATURES.find(
+  (f) => f.id === 'clean_preview',
+)!;
+
+const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
+  x: Twitter,
+  instagram: Instagram,
+  facebook: Facebook,
+  linkedin: Linkedin,
+};
 
 export function SavePreviewPanel() {
   const { state } = useComposer();
   const previewRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<string | null>(null);
+  const [exportPlatform, setExportPlatform] = useState<Platform>(
+    state.selectedPlatforms[0] ?? 'x',
+  );
 
   const capturePreview = async () => {
     if (!previewRef.current) return;
@@ -43,7 +60,7 @@ export function SavePreviewPanel() {
         ctx.font = 'bold 16px Syne, sans-serif';
         ctx.fillStyle = 'rgba(152, 92, 255, 0.8)';
         ctx.fillText('Made with PingWorld', 12, canvas.height - 12);
-        
+
         // PingWorld logo badge
         ctx.fillStyle = 'rgba(92, 111, 255, 0.5)';
         ctx.fillRect(canvas.width - 130, canvas.height - 28, 128, 24);
@@ -86,19 +103,58 @@ export function SavePreviewPanel() {
 
   return (
     <div className='space-y-4'>
+      {/* Export Platform Selector */}
+      {state.selectedPlatforms.length > 1 && (
+        <div className='flex gap-2 flex-wrap mb-2'>
+          {state.selectedPlatforms.map((platform) => {
+            const Icon = PLATFORM_ICONS[platform];
+            const pmeta = getPlatform(platform);
+            const isSelected = exportPlatform === platform;
+            return (
+              <button
+                key={platform}
+                onClick={() => setExportPlatform(platform)}
+                className='flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all hover:scale-105'
+                style={
+                  isSelected ?
+                    {
+                      borderColor: pmeta.iconHex,
+                      color: '#fff',
+                      backgroundColor: pmeta.iconHex,
+                    }
+                  : {
+                      borderColor: `${pmeta.iconHex}40`,
+                      color: pmeta.iconHex,
+                      backgroundColor: `${pmeta.iconHex}10`,
+                    }
+                }>
+                <Icon className='h-3 w-3' />
+                {pmeta.name.split(' ')[0]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Hidden capture target */}
-      <div className=''>
-        <div ref={previewRef} className='p-6 bg-[#02040f] w-[400px] items-center'>
-          <div className='mb-4 flex items-center gap-2'>
-            <div className='w-2 h-2 rounded-full bg-pw-primary' />
-            <span
-              className='text-xs font-bold'
-              style={{ color: '#985cff', fontFamily: 'Syne, sans-serif' }}
-            >
-              PingWorld Composer
-            </span>
+      <div className='overflow-x-auto hide-scrollbar'>
+        <div
+          ref={previewRef}
+          className='p-6 bg-[#02040f] w-[400px] items-center'>
+          <LivePreview
+            forExport
+            platformOverride={exportPlatform}
+          />
+          <div className='mt-4 flex flex-col items-center gap-1 opacity-50'>
+            <div className='flex items-center gap-1.5'>
+              <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' />
+              <span
+                className='text-[10px] font-bold tracking-wider'
+                style={{ color: '#985cff', fontFamily: 'Syne, sans-serif' }}>
+                PingWorld Composer
+              </span>
+            </div>
           </div>
-          <LivePreview forExport />
         </div>
       </div>
 
@@ -106,13 +162,10 @@ export function SavePreviewPanel() {
       <button
         onClick={capturePreview}
         disabled={isCapturing}
-        className='w-full flex items-center justify-center gap-2 py-3 rounded-xl btn-primary text-sm font-semibold'
-      >
-        {isCapturing ? (
+        className='w-full flex items-center justify-center gap-2 py-3 rounded-xl btn-primary text-sm font-semibold'>
+        {isCapturing ?
           <Loader2 className='h-4 w-4 animate-spin' />
-        ) : (
-          <Eye className='h-4 w-4' />
-        )}
+        : <Eye className='h-4 w-4' />}
         {isCapturing ? 'Capturing...' : 'Capture Preview'}
       </button>
 
@@ -121,11 +174,12 @@ export function SavePreviewPanel() {
         feature={cleanExportFeature}
         isPremium={state.isPremium}
         showPartial={false}
-        className='h-12'
-      >
+        className='h-12'>
         <div className='px-3 py-2 flex items-center h-12 gap-2'>
           <Crown className='h-3.5 w-3.5 text-pw-warning' />
-          <span className='text-xs text-pw-muted'>Export without watermark</span>
+          <span className='text-xs text-pw-muted'>
+            Export without watermark
+          </span>
         </div>
       </PremiumGate>
 
@@ -136,8 +190,7 @@ export function SavePreviewPanel() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className='fixed inset-0 z-50 flex items-center justify-center p-4'
-          >
+            className='fixed inset-0 z-50 flex items-center justify-center p-4'>
             <div
               className='absolute inset-0 bg-black/80 backdrop-blur-md'
               onClick={() => setPreviewBlob(null)}
@@ -145,8 +198,7 @@ export function SavePreviewPanel() {
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className='relative z-10 max-w-lg w-full bg-pw-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden'
-            >
+              className='relative z-10 max-w-lg w-full bg-pw-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden'>
               {/* Header */}
               <div className='flex items-center justify-between p-4 border-b border-white/5'>
                 <div className='flex items-center gap-2'>
@@ -155,8 +207,7 @@ export function SavePreviewPanel() {
                 </div>
                 <button
                   onClick={() => setPreviewBlob(null)}
-                  className='text-pw-muted hover:text-pw-text transition-colors'
-                >
+                  className='text-pw-muted hover:text-pw-text transition-colors'>
                   <X className='h-4 w-4' />
                 </button>
               </div>
@@ -174,15 +225,13 @@ export function SavePreviewPanel() {
               <div className='flex gap-3 p-4 border-t border-white/5'>
                 <button
                   onClick={downloadPreview}
-                  className='flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold'
-                >
+                  className='flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold'>
                   <Download className='h-4 w-4' />
                   Download PNG
                 </button>
                 <button
                   onClick={copyToClipboard}
-                  className='flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold transition-all'
-                >
+                  className='flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold transition-all'>
                   <Check className='h-4 w-4' />
                   Copy Image
                 </button>
@@ -192,7 +241,9 @@ export function SavePreviewPanel() {
                 <div className='px-4 pb-4'>
                   <p className='text-[10px] text-pw-muted text-center'>
                     Free exports include PingWorld watermark.{' '}
-                    <a href='/pricing' className='text-pw-primary hover:underline'>
+                    <a
+                      href='/pricing'
+                      className='text-pw-primary hover:underline'>
                       Upgrade
                     </a>{' '}
                     for clean exports.

@@ -98,6 +98,7 @@ export interface ComposerState {
   postTitle: string;
   platformVariants: PostVariant[];
   selectedPlatforms: Platform[];
+  activeEditorPlatform: Platform;
 
   // Tags
   tags: HashTag[];
@@ -147,18 +148,28 @@ export type ComposerAction =
   | { type: 'SET_BASE_CONTENT'; payload: string }
   | { type: 'SET_POST_TITLE'; payload: string }
   | { type: 'TOGGLE_PLATFORM'; payload: Platform }
-  | { type: 'SET_PLATFORM_VARIANT'; payload: { platform: Platform; content: string } }
+  | { type: 'SET_ACTIVE_EDITOR_PLATFORM'; payload: Platform }
+  | {
+      type: 'SET_PLATFORM_VARIANT';
+      payload: { platform: Platform; content: string };
+    }
   | { type: 'TOGGLE_PLATFORM_OVERRIDE'; payload: Platform }
   | { type: 'ADD_TAG'; payload: HashTag }
   | { type: 'REMOVE_TAG'; payload: string }
   | { type: 'SET_TAGS'; payload: HashTag[] }
   | { type: 'ADD_MEDIA'; payload: MediaAsset }
   | { type: 'REMOVE_MEDIA'; payload: string }
-  | { type: 'UPDATE_MEDIA_FILTER'; payload: { id: string; filterStyle: string } }
+  | {
+      type: 'UPDATE_MEDIA_FILTER';
+      payload: { id: string; filterStyle: string };
+    }
   | { type: 'UPDATE_MEDIA_ROTATION'; payload: { id: string; rotation: number } }
   | { type: 'SET_CANVAS_BG'; payload: string }
   | { type: 'ADD_CANVAS_TEXT'; payload: CanvasTextOverlay }
-  | { type: 'UPDATE_CANVAS_TEXT'; payload: { index: number; overlay: CanvasTextOverlay } }
+  | {
+      type: 'UPDATE_CANVAS_TEXT';
+      payload: { index: number; overlay: CanvasTextOverlay };
+    }
   | { type: 'REMOVE_CANVAS_TEXT'; payload: number }
   | { type: 'SET_AI_CONTEXT'; payload: Partial<AiContext> }
   | { type: 'SET_AI_SUGGESTIONS'; payload: AiSuggestion[] }

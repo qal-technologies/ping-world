@@ -17,10 +17,9 @@ const initialState: ComposerState = {
   postTitle: '',
   platformVariants: [],
   selectedPlatforms: ['x'],
+  activeEditorPlatform: 'x',
 
-  tags: [
-    { tag: PINGWORLD_HASHTAG, isPingWorld: true, source: 'manual' },
-  ],
+  tags: [{ tag: PINGWORLD_HASHTAG, isPingWorld: true, source: 'manual' }],
 
   mediaAssets: [],
   canvasBackground: 'linear-gradient(135deg, #12152e 0%, #1a1f40 100%)',
@@ -30,7 +29,9 @@ const initialState: ComposerState = {
     preset: 'brand_voice',
     customPrompt: '',
     alwaysIncludePingWorld: true,
-    pingWorldPlatformHandle: PINGWORLD_ACCOUNTS as Partial<Record<Platform, string>>,
+    pingWorldPlatformHandle: PINGWORLD_ACCOUNTS as Partial<
+      Record<Platform, string>
+    >,
   },
   aiSuggestions: [],
   isAiProcessing: false,
@@ -69,21 +70,32 @@ function composerReducer(
     case 'TOGGLE_PLATFORM': {
       const platform = action.payload;
       const isSelected = state.selectedPlatforms.includes(platform);
-      const selectedPlatforms = isSelected
-        ? state.selectedPlatforms.filter((p) => p !== platform)
+      const selectedPlatforms =
+        isSelected ?
+          state.selectedPlatforms.filter((p) => p !== platform)
         : [...state.selectedPlatforms, platform];
-      return { ...state, selectedPlatforms };
+
+      const newActive =
+        selectedPlatforms.includes(state.activeEditorPlatform) ?
+          state.activeEditorPlatform
+        : (selectedPlatforms[0] ?? 'x');
+
+      return { ...state, selectedPlatforms, activeEditorPlatform: newActive };
     }
+
+    case 'SET_ACTIVE_EDITOR_PLATFORM':
+      return { ...state, activeEditorPlatform: action.payload };
 
     case 'SET_PLATFORM_VARIANT': {
       const existing = state.platformVariants.find(
         (v) => v.platform === action.payload.platform,
       );
-      const platformVariants = existing
-        ? state.platformVariants.map((v) =>
-            v.platform === action.payload.platform
-              ? { ...v, content: action.payload.content }
-              : v,
+      const platformVariants =
+        existing ?
+          state.platformVariants.map((v) =>
+            v.platform === action.payload.platform ?
+              { ...v, content: action.payload.content }
+            : v,
           )
         : [
             ...state.platformVariants,
@@ -116,9 +128,9 @@ function composerReducer(
       return {
         ...state,
         platformVariants: state.platformVariants.map((v) =>
-          v.platform === action.payload
-            ? { ...v, isOverridden: !v.isOverridden }
-            : v,
+          v.platform === action.payload ?
+            { ...v, isOverridden: !v.isOverridden }
+          : v,
         ),
       };
     }
@@ -156,9 +168,9 @@ function composerReducer(
       return {
         ...state,
         mediaAssets: state.mediaAssets.map((m) =>
-          m.id === action.payload.id
-            ? { ...m, filterStyle: action.payload.filterStyle }
-            : m,
+          m.id === action.payload.id ?
+            { ...m, filterStyle: action.payload.filterStyle }
+          : m,
         ),
       };
 
@@ -166,9 +178,9 @@ function composerReducer(
       return {
         ...state,
         mediaAssets: state.mediaAssets.map((m) =>
-          m.id === action.payload.id
-            ? { ...m, rotation: action.payload.rotation }
-            : m,
+          m.id === action.payload.id ?
+            { ...m, rotation: action.payload.rotation }
+          : m,
         ),
       };
 

@@ -36,7 +36,7 @@ import { MediaEditor } from './MediaEditor';
 import { CanvasBuilder } from './CanvasBuilder';
 import { LivePreview } from './LivePreview';
 import { SavePreviewPanel } from './SavePreviewPanel';
-import {toast} from 'sonner';
+import { toast } from 'sonner';
 
 type ToolTab =
   | 'tags'
@@ -183,20 +183,42 @@ export function ComposerLayout() {
          xl:grid-cols-12 gap-6 mt-10 lg:mt-12'>
           {/* ─── Left: Editor + Tools ─── */}
           <div className='md:col-span-3 xl:col-span-8 space-y-4'>
-            {/* Platform Editor */}
-            <Card
-              className={cn(
-                'overflow-hiddfen p-0 bg-white/[0.02] bkblur rounded-[25px]',
-                isPremiumUI ?
-                  'border-pw-warning/20 shadow-[0_0_30px_rgba(255,179,71,0.08)]'
-                : 'border-white/10',
-              )}>
-              <PlatformEditor
-                onOpenTag={() => setActiveTab('tags')}
-                onOpenMedia={() => setActiveTab('media')}
-              />
-            </Card>
 
+            {/* Platform Editor */}
+            <div className='flex items-center flex-col w-full gap-2'>
+
+              {/* Add Network / Add Social button */}
+              <div className='h-12 bg-transparent w-full items-center justify-end flex'>
+                <button
+                  title='Add New Social Platform'
+                  onClick={() =>
+                    toast.error(
+                      'Additional premium social networks coming soon!',
+                    )
+                  }
+                  className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10'>
+                  <div className='h-5 w-5 rounded-full border border-current flex items-center justify-center'>
+                    <span className='font-bold text-lg'>+</span>
+                  </div>
+                  <span className='text-[8px] font-bold uppercase tracking-widest hidden sm:block'>
+                    Add
+                  </span>
+                </button>
+              </div>
+
+              <Card
+                className={cn(
+                  'overflow-hidden w-full p-0 bg-white/[0.02] bkblur rounded-[25px]',
+                  isPremiumUI ?
+                    'border-pw-warning/20 shadow-[0_0_30px_rgba(255,179,71,0.08)]'
+                  : 'border-white/10',
+                )}>
+                <PlatformEditor
+                  onOpenTag={() => setActiveTab('tags')}
+                  onOpenMedia={() => setActiveTab('media')}
+                />
+              </Card>
+            </div>
             {/* Tool Tabs */}
             <Card
               className={cn(

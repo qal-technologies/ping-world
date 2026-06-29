@@ -11,6 +11,7 @@ import {
   RotateCw,
   VideoIcon,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -203,7 +204,7 @@ export function MediaEditor() {
 
       {/* Editor panel for selected asset */}
       <AnimatePresence>
-        {selectedAsset && selectedAsset.type === 'image' && (
+        {selectedAsset && selectedAsset.type === 'image' ? (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -311,6 +312,24 @@ export function MediaEditor() {
               />
             </div>
           </motion.div>
+        ) : selectedAsset && selectedAsset.type === 'video' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className='p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col items-center justify-center text-center space-y-2'
+            >
+              <div className='p-3 rounded-full bg-pw-primary/10 mb-1 mt-2'>
+                <VideoIcon className='h-5 w-5 text-pw-primary' />
+              </div>
+              <p className='text-sm font-bold text-pw-text'>Video Editing <span className='text-pw-primary'>Coming Soon</span></p>
+              <p className='text-[10px] text-pw-muted max-w-[200px] mb-2'>
+                Trimming, filters, and cover frame selection for video assets will be available for Premium users soon.
+              </p>
+              <div className='flex items-center gap-1 text-[10px] text-pw-warning font-semibold uppercase tracking-widest'>
+                <Lock className='h-3 w-3' /> Premium Feature
+              </div>
+            </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -298,21 +298,19 @@ export const CANVAS_FONTS = [
   'Verdana',
 ];
 
-// ─── Spam/Flagged Word List (Local Dictionary) ───────────────
+// ─── Spam/Flagged Word List (Platform Alignment) ───────────────
 export const FLAGGED_WORDS: string[] = [
-  'buy now',
-  'click here',
-  'free money',
-  'guaranteed',
-  'limited time offer',
-  'act now',
-  'risk-free',
-  'earn money',
-  'make money fast',
-  'winner',
-  'you have been selected',
-  'congratulations',
-  'no cost',
-  'this is not spam',
-  'unsubscribe',
+  'buy followers',
+  'get followers fast',
+  'get rich quick',
+  'follower hack',
+  'click link in bio to earn',
+  'cash app hack',
+  'venmo hack',
+  'bitcoin double',
+  'crypto multiplier',
+  'investment guaranteed',
+  '100% free money',
+  'DM for promo',
+  'send money to claim',
 ];

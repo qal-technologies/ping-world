@@ -12,6 +12,13 @@
 import { AI_CONFIG, FLAGGED_WORDS, PINGWORLD_HASHTAG } from './constants';
 import type { TextAnalysis, AiStyle, HashTag } from './types';
 
+export interface GrammarIssue {
+  message: string;
+  context: string;
+  offset: number;
+  length: number;
+}
+
 // ─── Local Text Analysis (No API needed) ─────────────────────
 
 /**
@@ -33,9 +40,7 @@ export function analyzeText(text: string): TextAnalysis {
   }
 
   // Word count
-  const words = rawText
-    .split(/\s+/)
-    .filter((w) => w.length > 0);
+  const words = rawText.split(/\s+/).filter((w) => w.length > 0);
   const wordCount = words.length;
   const charCount = rawText.length;
 
@@ -91,30 +96,110 @@ export function analyzeText(text: string): TextAnalysis {
 function countSyllables(word: string): number {
   const cleaned = word.toLowerCase().replace(/[^a-z]/g, '');
   if (!cleaned) return 1;
-  const matches = cleaned.match(
-    /[aeiouy]{1,2}/g,
-  );
+  const matches = cleaned.match(/[aeiouy]{1,2}/g);
   const count = matches ? matches.length : 1;
   return Math.max(1, count);
 }
 
 function computeSentiment(text: string): 'positive' | 'neutral' | 'negative' {
   const positive = [
-    'amazing', 'awesome', 'great', 'excellent', 'love', 'happy', 'best',
-    'wonderful', 'fantastic', 'good', 'excited', 'thrilled', 'top', 'win',
-    'success', 'achieve', 'proud', 'celebrate', 'brilliant', 'superb',
-    'perfect', 'beautiful', 'incredible', 'outstanding', 'growth',
+    'amazing',
+    'awesome',
+    'great',
+    'excellent',
+    'love',
+    'happy',
+    'best',
+    'wonderful',
+    'fantastic',
+    'good',
+    'excited',
+    'thrilled',
+    'top',
+    'win',
+    'success',
+    'achieve',
+    'proud',
+    'celebrate',
+    'brilliant',
+    'superb',
+    'perfect',
+    'beautiful',
+    'incredible',
+    'outstanding',
+    'growth',
+    'masterpiece',
+    'joy',
+    'blessed',
+    'grateful',
   ];
   const negative = [
-    'bad', 'hate', 'terrible', 'awful', 'worst', 'horrible', 'sad',
-    'disappointing', 'disaster', 'fail', 'problem', 'issue', 'broken',
-    'wrong', 'angry', 'frustrated', 'annoyed', 'poor', 'weak', 'failed',
+    'bad',
+    'hate',
+    'terrible',
+    'awful',
+    'worst',
+    'horrible',
+    'sad',
+    'disappointing',
+    'disaster',
+    'fail',
+    'problem',
+    'issue',
+    'broken',
+    'wrong',
+    'angry',
+    'frustrated',
+    'annoyed',
+    'poor',
+    'weak',
+    'failed',
+    'pathetic',
+    'worthless',
+    'garbage',
+    'rubbish',
+    'trash',
+    'sucks',
   ];
+  const vulgarOrOffensive = [
+    'fuck',
+    'shit',
+    'bitch',
+    'asshole',
+    'crap',
+    'damn',
+    'slut',
+    'whore',
+    'bastard',
+    'cunt',
+    'dick',
+    'pussy',
+    'faggot',
+    'nigger',
+    'retard',
+  ];
+
   const lower = text.toLowerCase();
-  const pos = positive.filter((w) => lower.includes(w)).length;
-  const neg = negative.filter((w) => lower.includes(w)).length;
+
+  // Instant trigger for highly offensive words -> negative sentiment
+  // (Using word boundaries to prevent accidental substring matches)
+  if (
+    vulgarOrOffensive.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))
+  ) {
+    return 'negative';
+  }
+
+  const pos = positive.filter((w) =>
+    new RegExp(`\\b${w}\\b`, 'i').test(lower),
+  ).length;
+  const neg = negative.filter((w) =>
+    new RegExp(`\\b${w}\\b`, 'i').test(lower),
+  ).length;
+
+  // A single explicitly negative word is strong enough to skew it neutral,
+  // but if negativity significantly outweighs positivity, it's negative.
   if (pos > neg + 1) return 'positive';
-  if (neg > pos + 1) return 'negative';
+  if (neg > pos) return 'negative';
   return 'neutral';
 }
 
@@ -122,13 +207,39 @@ function computeSentiment(text: string): 'positive' | 'neutral' | 'negative' {
  * Extract potential hashtags from text (words starting with # or key nouns)
  */
 function extractKeyNouns(text: string): string[] {
-  const existingTags = (text.match(/#\w+/g) || []).map((t) =>
-    t.toLowerCase(),
-  );
+  const existingTags = (text.match(/#\w+/g) || []).map((t) => t.toLowerCase());
   // Extract capitalized words as potential tags
-  const capitalized = (text.match(/\b[A-Z][a-z]{2,}\b/g) || [])
-    .map((w) => `#${w.toLowerCase()}`);
+  const capitalized = (text.match(/\b[A-Z][a-z]{2,}\b/g) || []).map(
+    (w) => `#${w.toLowerCase()}`,
+  );
   return [...new Set([...existingTags, ...capitalized])].slice(0, 8);
+}
+
+/**
+ * Check grammar using free keyless LanguageTool API
+ */
+export async function checkGrammar(text: string): Promise<GrammarIssue[]> {
+  if (!text || text.trim().length === 0) return [];
+  try {
+    const res = await fetch('https://api.languagetool.org/v2/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        text,
+        language: 'auto',
+      }),
+    });
+    const data = await res.json();
+    return data.matches.map((m: any) => ({
+      message: m.message,
+      context: m.context.text,
+      offset: m.context.offset,
+      length: m.context.length,
+    }));
+  } catch (e) {
+    console.warn('Grammar check failed:', e);
+    return []; // Return empty on fail so we don't break the UI
+  }
 }
 
 // ─── AI Features (Mock + Real slot) ──────────────────────────
@@ -137,9 +248,7 @@ function extractKeyNouns(text: string): string[] {
  * Generate hashtags based on text content.
  * Works locally by extracting key terms; real AI upgrades quality.
  */
-export async function generateHashtags(
-  text: string,
-): Promise<HashTag[]> {
+export async function generateHashtags(text: string): Promise<HashTag[]> {
   if (AI_CONFIG.useRealAi) {
     return callRealAiForHashtags(text);
   }
@@ -230,13 +339,30 @@ export async function translateText(
   targetLanguageName: string,
 ): Promise<string> {
   if (AI_CONFIG.useRealAi) {
-    return callRealAiForTranslation(text, targetLanguageCode, targetLanguageName);
+    return callRealAiForTranslation(
+      text,
+      targetLanguageCode,
+      targetLanguageName,
+    );
+  }
+
+  // Attempt to use MyMemory free keyless API (5000 chars/day)
+  try {
+    const res = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLanguageCode}`,
+    );
+    const data = await res.json();
+    if (data.responseData?.translatedText) {
+      return data.responseData.translatedText;
+    }
+  } catch (e) {
+    console.warn('Keyless Translation failed, falling back to mock', e);
   }
 
   await simulateDelay(1000);
 
-  // Demo: prefix with language note since we can't actually translate without API
-  return `[${targetLanguageName} — Demo Translation]\n\nThis text would be translated to ${targetLanguageName} once your AI API key is configured. Original:\n\n${text}`;
+  // Demo fallback
+  return `[${targetLanguageName} — Demo Translation]\n\nWe couldn't connect to the free translation API. Original:\n\n${text}`;
 }
 
 // ─── Delay Simulation ────────────────────────────────────────

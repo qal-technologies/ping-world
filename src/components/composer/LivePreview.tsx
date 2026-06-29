@@ -282,10 +282,15 @@ const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
   linkedin: Linkedin,
 };
 
-export function LivePreview({forExport}: {forExport?:boolean}) {
+export function LivePreview({
+  forExport,
+  platformOverride,
+}: {
+  forExport?: boolean;
+  platformOverride?: Platform;
+}) {
   const { state, dispatch, getContentForPlatform } = useComposer();
-  const activePlatform =
-    state.selectedPlatforms[0] ?? ('x' as Platform);
+  const activePlatform = platformOverride ?? state.activeEditorPlatform;
 
   const PreviewComponent = PLATFORM_PREVIEWS[activePlatform];
   const content = getContentForPlatform(activePlatform);
@@ -293,60 +298,31 @@ export function LivePreview({forExport}: {forExport?:boolean}) {
 
   return (
     <div className='space-y-4 '>
-      {/* Preview platform selector */}
-      {state.selectedPlatforms.length > 1 && (
-        <div className='flex gap-2 flex-wrap '>
-          {state.selectedPlatforms.map((platform) => {
-            const Icon = PLATFORM_ICONS[platform];
-            const pmeta = getPlatform(platform);
-            return (
-              <button
-                key={platform}
-                onClick={() => {
-                  // Scroll to this platform preview — handled by parent layout
-                }}
-                className='flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all'
-                style={{
-                  borderColor: `${pmeta.iconHex}40`,
-                  color: pmeta.iconHex,
-                  backgroundColor: `${pmeta.iconHex}10`,
-                }}
-              >
-                <Icon className='h-3 w-3' />
-                {pmeta.name.split(' ')[0]}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* Reactions toggle */}
-      {
-        !forExport &&
+      {!forExport && (
         <button
-          onClick={() => dispatch({type: 'TOGGLE_REACTIONS'})}
-          className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'
-        >
-          {state.showReactions ? (
+          onClick={() => dispatch({ type: 'TOGGLE_REACTIONS' })}
+          className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'>
+          {state.showReactions ?
             <ToggleRight className='h-4 w-4 text-pw-primary' />
-          ) : (
-            <ToggleLeft className='h-4 w-4' />
-          )}
+          : <ToggleLeft className='h-4 w-4' />}
           {state.showReactions ? 'Reactions visible' : 'Reactions hidden'}
         </button>
-      }
+      )}
       {/* The Preview */}
       <motion.div
         key={activePlatform}
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.25 }}
-      >
-        <PreviewComponent content={content} showReactions={state.showReactions} />
+        transition={{ duration: 0.25 }}>
+        <PreviewComponent
+          content={content}
+          showReactions={state.showReactions}
+        />
       </motion.div>
 
       {/* All platforms preview (if multi-selected) */}
-      {state.selectedPlatforms.length > 1 && (
+      {!forExport && state.selectedPlatforms.length > 1 && (
         <div className='space-y-3 pt-2'>
           <p className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
             Other Platforms
@@ -356,11 +332,20 @@ export function LivePreview({forExport}: {forExport?:boolean}) {
             .map((platform) => {
               const PC = PLATFORM_PREVIEWS[platform];
               return (
-                <div key={platform} className='opacity-70 hover:opacity-100 transition-opacity'>
-                  <p className='text-[9px] text-pw-muted mb-1.5 uppercase tracking-widest font-bold'>
+                <div
+                  key={platform}
+                  className='opacity-70 hover:opacity-100 transition-opacity cursor-pointer'
+                  onClick={() =>
+                    dispatch({
+                      type: 'SET_ACTIVE_EDITOR_PLATFORM',
+                      payload: platform,
+                    })
+                  }>
+                  <p className='text-[9px] text-pw-muted mb-1.5 uppercase tracking-widest font-bold flex items-center gap-1'>
+                    <Eye className='h-3 w-3' /> CLICK TO VIEW{' '}
                     {getPlatform(platform).name}
                   </p>
-                  <div className='scale-95 origin-top-left'>
+                  <div className='scale-95 origin-top-left pointer-events-none'>
                     <PC
                       content={getContentForPlatform(platform)}
                       showReactions={state.showReactions}
