@@ -40,7 +40,7 @@ export default function RegisterPage() {
         password: formData.password,
         options: {
           data: {
-            full_name: formData.name,
+            username: formData.name,
           },
         },
       });

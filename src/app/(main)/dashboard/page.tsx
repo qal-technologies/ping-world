@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { HybridStorage } from '@/lib/storage-utils';
+import {supabase} from '@/lib/supabase';
 
 export default function GeneralDashboard() {
   const [stats, setStats] = useState({
@@ -28,6 +29,7 @@ export default function GeneralDashboard() {
     links: 0,
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [username, setUsername] = useState('');
 
   useEffect(() => {
     const loadStats = async () => {
@@ -57,7 +59,15 @@ export default function GeneralDashboard() {
     loadStats();
   }, []);
 
-  const username = 'creator'; // Fallback for demo
+
+  useEffect(() => {
+    const getUsername = async () => {
+      const {data: {user}} = await supabase.auth.getUser();
+      const username = user?.user_metadata.username || user?.user_metadata.full_name || 'creator';
+      setUsername(username);
+    }
+    getUsername();
+  }, []);
 
   return (
     <div className='container mx-auto px-6 py-12 max-w-7xl pb-32'>
