@@ -145,16 +145,18 @@ export function SavePreviewPanel() {
             forExport
             platformOverride={exportPlatform}
           />
-          <div className='mt-4 flex flex-col items-center gap-1 opacity-50'>
-            <div className='flex items-center gap-1.5'>
-              <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' />
-              <span
-                className='text-[10px] font-bold tracking-wider'
-                style={{ color: '#985cff', fontFamily: 'Syne, sans-serif' }}>
-                PingWorld Composer
-              </span>
+          {!state.isPremium &&
+            <div className='mt-4 flex flex-col items-center gap-1 opacity-50'>
+              <div className='flex items-center gap-1.5'>
+                <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' />
+                <span
+                  className='text-[10px] font-bold tracking-wider'
+                  style={{color: '#985cff', fontFamily: 'Syne, sans-serif'}}>
+                  PingWorld Composer
+                </span>
+              </div>
             </div>
-          </div>
+          }
         </div>
       </div>
 

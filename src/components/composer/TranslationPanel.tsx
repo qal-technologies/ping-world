@@ -24,6 +24,7 @@ export function TranslationPanel() {
   const selectedLanguage = LANGUAGES.find((l) => l.code === selectedLang);
 
   const handleTranslate = async () => {
+    //check for selection to translate only section instead.
     if (!state.baseContent.trim()) {
       toast.error('Write some content first to translate.');
       return;
@@ -100,7 +101,7 @@ export function TranslationPanel() {
           onClick={handleTranslate}
           disabled={isTranslating || !state.isOnline || atLimit}
           className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all',
+            'flex items-center gap-2 py-2 rounded-xl text-xs font-semibold transition-all',
             !state.isOnline || atLimit
               ? 'bg-white/5 border border-white/10 text-pw-muted/50 cursor-not-allowed'
               : 'btn-primary',

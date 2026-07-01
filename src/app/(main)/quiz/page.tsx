@@ -48,6 +48,12 @@ import { HybridStorage } from '@/lib/storage-utils';
 import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 
+const metadata = {
+  title: 'Quiz Generator',
+  description: 'Create engaging quizzes with ease using the Quizzable platform.',
+  keywords: ['Quiz Generator', 'Quiz', 'Generator', 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
+
 // --- Types ---
 export type QuestionType =
   | 'multiple_choice'

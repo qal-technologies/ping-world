@@ -196,7 +196,7 @@ export function ComposerLayout() {
                       'Additional premium social networks coming soon!',
                     )
                   }
-                  className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10'>
+                  className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10 sm:bg-transparent'>
                   <div className='h-5 w-5 rounded-full border border-current flex items-center justify-center'>
                     <span className='font-bold text-lg'>+</span>
                   </div>

@@ -23,6 +23,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { QRCodeSVG } from "qrcode.react";
 
+
+const metadata = {
+  title:"QR Code Generator",
+  description:"Generate high-quality, customizable QR codes for any type of data.",
+  keywords:["QR Code Generator", "QR Code", "Generator", "Ping World", "pingwrld", "pingworld", "pingwrld qr code", "pingwrld generator", "pingwrld qr code generator", "pingwrld pingworld", "pingwrld pingwrld", 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
 export default function QrCodeGeneratorPage() {
   const [data, setData] = useState("");
   const [qrType, setQrType] = useState("url");

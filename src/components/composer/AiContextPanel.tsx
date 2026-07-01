@@ -123,11 +123,13 @@ export function AiContextPanel() {
             </span>
           </div>
           <div
+            title={!state.isPremium ? 'Premium feature' : 'Toggle PingWorld mention'}
             className={cn(
               'h-5 w-9 rounded-full border-2 transition-all relative',
               state.aiContext.alwaysIncludePingWorld
                 ? 'border-pw-primary bg-pw-primary/30'
                 : 'border-white/20 bg-white/5',
+              !state.isPremium && 'opacity-50 cursor-not-allowed',
             )}
           >
             <div
@@ -141,7 +143,7 @@ export function AiContextPanel() {
           </div>
         </button>
 
-        {/* Per-platform handles */}
+        {/* Per-platform handles
         {state.aiContext.alwaysIncludePingWorld && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
@@ -180,7 +182,7 @@ export function AiContextPanel() {
               </div>
             ))}
           </motion.div>
-        )}
+        )} */}
       </div>
 
       {/* Save button */}

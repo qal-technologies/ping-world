@@ -90,7 +90,7 @@ export function TagsHashtagsPanel() {
           onClick={handleGenerate}
           disabled={isGenerating || !state.isOnline}
           className={cn(
-            'flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border transition-all',
+            'flex items-center gap-2 text-xs font-semibold py-2 rounded-xl border transition-all',
             state.isOnline
               ? 'btn-primary'
               : 'border-white/10 text-pw-muted/50 cursor-not-allowed bg-white/5',
@@ -130,9 +130,9 @@ export function TagsHashtagsPanel() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all',
+                'flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-semibold border transition-all',
                 tag.isPingWorld
-                  ? 'bg-pw-primary/20 border-pw-primary/40 text-pw-primary'
+                  ? 'bg-pw-primary/10 border-pw-primary/40 text-pw-primary'
                   : tag.source === 'ai'
                     ? 'bg-pw-cyan/10 border-pw-cyan/30 text-pw-cyan'
                     : tag.source === 'trending'
@@ -147,9 +147,9 @@ export function TagsHashtagsPanel() {
               {!tag.isPingWorld && (
                 <button
                   onClick={() => handleRemove(tag.tag)}
-                  className='opacity-60 hover:opacity-100 transition-opacity ml-0.5'
+                  className='opacity-60 hover:opacity-100 transition-opacity'
                 >
-                  <X className='h-2.5 w-2.5' />
+                  <X className='h-3 w-3' />
                 </button>
               )}
             </motion.div>
@@ -167,12 +167,12 @@ export function TagsHashtagsPanel() {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddManual()}
             placeholder='Add tag manually...'
-            className='w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-sm text-pw-text placeholder:text-pw-muted/50 focus:outline-none focus:border-pw-primary/40 no-outline transition-all'
+            className='w-full bg-white/2 bkblur border border-white/5 rounded-xl pl-4 pr-3 py-2 text-sm text-pw-text placeholder:text-pw-muted/50 focus:outline-none focus:border-pw-primary/40 no-outline transition-all'
           />
         </div>
         <button
           onClick={handleAddManual}
-          className='px-3 py-2 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary hover:bg-pw-primary/20 transition-all'
+          className='px-3 py-2 rounded-xl bg-pw-primary/10 border border-pw-primary/15 text-pw-primary hover:bg-pw-primary/20 transition-all'
         >
           <Plus className='h-4 w-4' />
         </button>
@@ -192,7 +192,7 @@ export function TagsHashtagsPanel() {
               <button
                 key={tag}
                 onClick={() => handleAddTrending(tag)}
-                className='text-[11px] px-2.5 py-1 rounded-full bg-pw-warning/10 border border-pw-warning/20 text-pw-warning hover:bg-pw-warning/20 transition-all'
+                className='text-[11px] px-2.5 py-1 rounded-full bg-pw-warning/5 border border-pw-warning/20 text-pw-warning hover:bg-pw-warning/20 transition-all'
               >
                 {tag}
               </button>

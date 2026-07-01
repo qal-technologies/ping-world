@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Loader2, ArrowRight, Check, Wand2 } from 'lucide-react';
+import { Sparkles, Loader2, ArrowRight, Check, Wand2, Briefcase, TrendingUp, GraduationCap, SmileIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { suggestFromTitle, rephraseText } from '@/lib/composer/ai-utils';
@@ -13,11 +13,11 @@ import type { AiStyle } from '@/lib/composer/types';
 
 const unlimitedFeature = PREMIUM_FEATURES.find((f) => f.id === 'unlimited_ai')!;
 
-const STYLE_OPTIONS: { id: AiStyle; label: string; emoji: string }[] = [
-  { id: 'professional', label: 'Professional', emoji: '👔' },
-  { id: 'casual', label: 'Casual', emoji: '😎' },
-  { id: 'viral', label: 'Viral', emoji: '🔥' },
-  { id: 'educational', label: 'Educational', emoji: '📚' },
+const STYLE_OPTIONS: { id: AiStyle; label: string; emoji: any }[] = [
+  { id: 'professional', label: 'Professional', emoji: Briefcase },
+  { id: 'casual', label: 'Casual', emoji: SmileIcon },
+  { id: 'viral', label: 'Viral', emoji: TrendingUp },
+  { id: 'educational', label: 'Educational', emoji:GraduationCap },
 ];
 
 export function AiSuggestionsPanel() {
@@ -119,7 +119,7 @@ export function AiSuggestionsPanel() {
     <div className='space-y-5'>
       {/* Post Title Input */}
       <div className='space-y-1.5'>
-        <label className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
+        <label className='text-[10px] font-bold uppercase pl-1 tracking-widest text-pw-muted mb-1'>
           Post Topic / Title
         </label>
         <input
@@ -129,7 +129,7 @@ export function AiSuggestionsPanel() {
             dispatch({ type: 'SET_POST_TITLE', payload: e.target.value })
           }
           placeholder='e.g. My new product launch, Tips for web design...'
-          className='w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-pw-text placeholder:text-pw-muted/40 focus:outline-none focus:border-pw-primary/40 no-outline transition-all'
+          className='w-full bg-white/2 border border-white/5 rounded-xl px-3 py-2.5 text-sm text-pw-text placeholder:text-pw-muted/40 focus:outline-none focus:border-pw-primary/40 no-outline transition-all'
         />
       </div>
 
@@ -146,11 +146,11 @@ export function AiSuggestionsPanel() {
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
                 selectedStyle === style.id
-                  ? 'bg-pw-primary/20 border-pw-primary/40 text-pw-primary'
-                  : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/20 hover:text-pw-text',
+                  ? 'bg-pw-primary/5 border-pw-primary/40 text-pw-primary'
+                  : 'bg-white/2 border-white/10 text-pw-muted hover:border-white/20 hover:text-pw-text',
               )}
             >
-              <span>{style.emoji}</span>
+              <span><style.emoji className='h-3.5 w-3.5' /></span>
               {style.label}
             </button>
           ))}
@@ -184,7 +184,7 @@ export function AiSuggestionsPanel() {
             'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all',
             !state.isOnline || atRephraseLimit
               ? 'border-white/5 text-pw-muted/50 cursor-not-allowed bg-white/5'
-              : 'border-pw-secondary/40 bg-pw-secondary/10 text-pw-secondary hover:bg-pw-secondary/20',
+              : 'border-pw-secondary/30 bg-pw-secondary/5 text-pw-secondary hover:bg-pw-secondary hover:text-white',
           )}
         >
           {isRephrasing ? (

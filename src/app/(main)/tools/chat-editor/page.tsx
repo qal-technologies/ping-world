@@ -24,6 +24,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import html2canvas from "html2canvas";
 
+const metadata = {
+  title: "Chat Editor",
+  description: "Create realistic chat conversations for stories and social content.",
+  keywords: ["Chat Editor", "Chat", "Editor", "Ping World", "pingwrld", "pingworld", "pingwrld chat", "pingwrld editor", "pingwrld chat editor", "pingwrld pingworld", "pingwrld pingwrld", 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
+
 // --- Types ---
 interface ChatMessage {
   id: string;

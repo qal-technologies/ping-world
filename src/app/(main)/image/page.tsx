@@ -21,7 +21,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import {cn} from '@/lib/utils';
+
+const metadata = {
+  title: 'Image Toolkit',
+  description: 'Edit and enhance your images with our powerful toolkit (from Krafty).',
+  keywords: ['Image Toolkit', 'Image', 'Toolkit', 'Krafty', 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
 
 // --- Types ---
 interface Filter {

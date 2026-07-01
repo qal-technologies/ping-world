@@ -21,6 +21,12 @@ import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+const metadata = {
+  title: "Tools",
+  description: "Manage your content, engage your audience, and streamline your workflow with our premium tool suite.",
+  keywords: ["Tools", "Tool", "Ping World", "pingwrld", "pingworld", "pingwrld tools", "pingwrld tool", "pingwrld pingworld", "pingwrld pingwrld", 'anon link', 'quiz', 'quizzable', 'editor', 'image', 'shortener', 'image toolkit','url shortener', 'qr code', 'word counter', 'word', 'counter', 'word counter pingwrld', 'word counter pingworld', 'word counter pingwrld pingworld', 'word counter pingwrld pingwrld', 'qal technology', 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
+
 const TOOLS = [
   { 
     id: "anonlink", 

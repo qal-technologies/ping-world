@@ -85,7 +85,7 @@ export const Footer = () => {
             <p className='text-xs text-pw-muted mt-1'>
               A {'  '}
               <Link
-                href='https://qhal-tech.com'
+                href='https://wa.me/2349016561308'
                 target='_blank'
                 className='font-bold text-pw-primary'>
                 QAL TECH

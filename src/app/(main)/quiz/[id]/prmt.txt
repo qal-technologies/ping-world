@@ -1,4 +1,0 @@
-
-7. look at the tool path and work on the features functions. Make them actuallly work.
-
-8. Look into the comments I made on pages to further understand what to do. 

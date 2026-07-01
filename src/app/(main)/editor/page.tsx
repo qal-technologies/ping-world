@@ -15,7 +15,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import {cn} from "@/lib/utils";
+
+const metadata = {
+  title: 'Editor',
+  description: 'Edit and enhance your texts and documents with our powerful toolkit (from Ping World).',
+  keywords: ['Editor', 'Text', 'Documents', 'Ping World', 'word doc', 'doc', 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
 
 // Dynamic imports for heavy editor components
 const TiptapEditor = dynamic(() => import("@/components/editor/tiptap-editor"), {

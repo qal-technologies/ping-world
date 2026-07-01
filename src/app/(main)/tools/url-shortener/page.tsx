@@ -22,6 +22,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { QRCodeSVG } from "qrcode.react";
 
+const metadata = {
+  title: "URL Shortener",
+  description: "Transform long, ugly URLs into clean, manageable links with built-in QR codes and click analytics.",
+  keywords: ["URL Shortener", "URL", "Shortener", "Ping World", "pingwrld", "pingworld", "pingwrld url", "pingwrld shortener", "pingwrld url shortener", "pingwrld pingworld", "pingwrld pingwrld", 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
+}
+
 interface ShortLink {
   original: string;
   short: string;
