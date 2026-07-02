@@ -60,7 +60,7 @@ export default function EditorPage() {
         <div>
           <div className="badge mb-4">
             <Sparkles className="h-3 w-3" />
-            Ping World Editor
+            Text Editor
           </div>
           <h1 className="text-4xl font-extrabold font-display">Craft your <span className="gradient-text">masterpiece.</span></h1>
           <p className="mt-2 text-pw-muted">Switch between rich document editing and visual post creation.</p>

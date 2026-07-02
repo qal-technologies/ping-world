@@ -19,63 +19,73 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {useEffect, useState} from 'react';
+import {supabase} from '@/lib/supabase';
 
 const tools = [
   {
-    icon: MessageCircle,
-    title: 'Anonymous Messaging',
-    description: 'Get anonymous messages from anyone with a shareable link.',
-    href: '/message',
-    color: '#5C6FFF',
-  },
-  {
-    icon: Type,
-    title: 'Text Editor',
-    description: 'Rich text editor with post card canvas and export options.',
-    href: '/editor',
-    color: '#22D4FD',
-  },
-  {
     icon: Brain,
-    title: 'Quiz Builder',
-    description: 'Create interactive quizzes with multiple question types.',
+    title: 'Quizzable',
+    desc: 'Create logic-based quizzes for your audience. Export to JSON or share as an interactive page.',
     href: '/quiz',
-    color: '#22C985',
-  },
-  {
-    icon: ImageIcon,
-    title: 'Image Toolkit',
-    description: 'Edit, convert, compress, and remove backgrounds from images.',
-    href: '/image',
-    color: '#FFB347',
-  },
-  {
-    icon: Link2,
-    title: 'URL Shortener',
-    description: 'Shorten URLs with click tracking and custom aliases.',
-    href: '/tools/url-shortener',
-    color: '#FF5C7A',
-  },
-  {
-    icon: QrCode,
-    title: 'QR Code Generator',
-    description: 'Generate customizable QR codes for any content.',
-    href: '/tools/qr-code',
-    color: '#5C6FFF',
-  },
-  {
-    icon: Palette,
-    title: 'Color Palette',
-    description: 'Generate, extract, and explore beautiful color palettes.',
-    href: '/tools/colors',
-    color: '#22D4FD',
+    color: '#18cb83ff',
+    tag: 'Powerful',
   },
   {
     icon: PenTool,
     title: 'Creator Hub',
-    description: 'Compose posts, AI editing, chat mimic, and templates.',
-    href: '/create',
-    color: '#22C985',
+    desc: 'The ultimate social creator hub to make posts, with translation, grammar check, AI assistance and more.',
+    href: '/composer',
+    color: '#0ebae1ff',
+    tag: 'Creative',
+  },
+  {
+    icon: MessageCircle,
+    title: 'Anonymous Link',
+    desc: 'Personalized anonymous inboxes. Share your link, gather secrets, and reply with privacy.',
+    href: '/message',
+    color: '#7b8afbff',
+    tag: 'Popular',
+  },
+  {
+    icon: Type,
+    title: 'Text Editor',
+    desc: 'Top notch all-in-one text editor with post card canvas and export options.',
+    href: '/editor',
+    color: '#f622fdff',
+    tag:'Utility'
+  },
+  {
+    icon: ImageIcon,
+    title: 'Image Toolkit',
+    desc: 'Premium image editing tools. Edit, convert, compress, and remove backgrounds from images.',
+    href: '/image',
+    color: '#FFB347',
+    tag: 'New',
+  },
+  {
+    icon: Link2,
+    title: 'URL Shortener',
+    desc: 'More than a shortener. Generate QR codes and track link health with advanced local analytics.',
+    href: '/tools/url-shortener',
+    color: '#fe7790ff',
+    tag: 'Utility',
+  },
+  {
+    icon: QrCode,
+    title: 'QR Code Generator',
+    desc: 'More than a shortener. Generate QR codes and track link health with advanced local analytics.',
+    href: '/tools/qr-code',
+    color: '#adff72ff',
+    tag: 'Utility',
+  },
+  {
+    icon: Palette,
+    title: 'Color Palette',
+    desc: 'More color manipulation tools with color generation, extraction, color picker, color randomizer and more.',
+    href: '/tools/colors',
+    color: '#ea6b89ff',
+    tag: 'Utility',
   },
 ];
 
@@ -227,56 +237,7 @@ export const ToolsGrid = () => {
         </motion.div>
 
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-          {[
-            {
-              title: 'AnonLink',
-              desc: 'Personalized anonymous inboxes. Share your link, gather secrets, and reply with privacy.',
-              icon: MessageCircle,
-              href: '/message',
-              color: '#5C6FFF',
-              tag: 'Popular',
-            },
-            {
-              title: 'Quizzable',
-              desc: 'Create logic-based quizzes for your audience. Export to JSON or share as an interactive page.',
-              icon: Brain,
-              href: '/quiz',
-              color: '#22C985',
-              tag: 'Powerful',
-            },
-            {
-              title: 'Image Toolkit',
-              desc: 'Zero-latency image filtering. Smooth out your shots with premium presets directly in-browser.',
-              icon: ImageIcon,
-              href: '/image',
-              color: '#FFB347',
-              tag: 'New',
-            },
-            {
-              title: 'Post Composer',
-              desc: 'The ultimate social canvas. Design beautiful post cards and export them for X, Instagram, and Facebook.',
-              icon: Type,
-              href: '/editor',
-              color: '#22D4FD',
-              tag: 'Creative',
-            },
-            {
-              title: 'URL Matrix',
-              desc: 'More than a shortener. Generate QR codes and track link health with advanced local analytics.',
-              icon: Zap,
-              href: '/tools/url-shortener',
-              color: '#F65164',
-              tag: 'Essential',
-            },
-            {
-              title: 'Chat Mimic',
-              desc: 'Create realistic chat story narratives. High-fidelity iOS/Android message previews with image export.',
-              icon: PenTool,
-              href: '/composer',
-              color: '#a855f7',
-              tag: 'Narrative',
-            },
-          ].map((tool, i) => (
+          {tools.map((tool, i) => (
             <motion.div
               key={tool.title}
               initial={{ opacity: 0, scale: 0.95 }}
@@ -299,7 +260,7 @@ export const ToolsGrid = () => {
                     />
                   </div>
 
-                  <div className='flex items-center gap-3'>
+                  <div className='flex items-center gap-3 flex-wrap'>
                     <h3 className='text-2xl font-bold font-display group-hover:text-pw-primary transition-colors'>
                       {tool.title}
                     </h3>
@@ -314,7 +275,7 @@ export const ToolsGrid = () => {
 
                   <div className='mt-6 pt-6 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/20 transition-all'>
                     <div className='flex items-center gap-2 text-sm font-bold text-pw-text group-hover:text-pw-cyan transition-colors'>
-                      Demo Tool{' '}
+                      Use Tool{' '}
                       <ArrowRight className='h-4 w-4 transition-transform group-hover:translate-x-2' />
                     </div>
                   </div>
@@ -329,6 +290,16 @@ export const ToolsGrid = () => {
 };
 
 export const CTASection = () => {
+  const [isUser, setIsUser] = useState(false);
+  useEffect(() => {
+    const getUser = async () => {
+      const {data: {user}} = await supabase.auth.getUser();
+      if (user) {
+        setIsUser(true);
+      }
+    }
+    getUser();
+  }, [])
   return (
     <section className='relative py-20 md:py-28'>
       <div className='mx-auto max-w-3xl px-6 text-center'>
@@ -348,14 +319,13 @@ export const CTASection = () => {
                 Ready to explore your world of tools?
               </h2>
               <p className='mt-4 text-pw-muted max-w-md mx-auto'>
-                Sign up for free and unlock your dashboard, saved quizzes,
-                message inbox, and more.
+               {isUser ? 'Navigate to your dashboard to access and use the tools and features available to you.' : 'Sign up for free and unlock your dashboard, saved quizzes, message inbox, and more.'}
               </p>
               <div className='mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center'>
                 <Link
-                  href='/register'
+                  href={isUser ? '/dashboard' : '/register'}
                   className='btn-primary text-base px-8 py-3'>
-                  Create Free Account
+                  {isUser ? 'Go to Dashboard' : 'Create Free Account'}
                 </Link>
                 <Link
                   href='/tools'

@@ -298,17 +298,7 @@ export function LivePreview({
 
   return (
     <div className='space-y-4 '>
-      {/* Reactions toggle */}
-      {!forExport && (
-        <button
-          onClick={() => dispatch({ type: 'TOGGLE_REACTIONS' })}
-          className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'>
-          {state.showReactions ?
-            <ToggleRight className='h-4 w-4 text-pw-primary' />
-          : <ToggleLeft className='h-4 w-4' />}
-          {state.showReactions ? 'Reactions visible' : 'Reactions hidden'}
-        </button>
-      )}
+     
       {/* The Preview */}
       <motion.div
         key={activePlatform}

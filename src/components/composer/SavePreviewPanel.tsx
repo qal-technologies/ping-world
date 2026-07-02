@@ -14,6 +14,8 @@ import {
   Instagram,
   Facebook,
   Linkedin,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -35,7 +37,7 @@ const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
 };
 
 export function SavePreviewPanel() {
-  const { state } = useComposer();
+  const { state, dispatch, getContentForPlatform } = useComposer();
   const previewRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<string | null>(null);
@@ -136,27 +138,45 @@ export function SavePreviewPanel() {
         </div>
       )}
 
-      {/* Hidden capture target */}
-      <div className='overflow-x-auto hide-scrollbar'>
+      {/* Reactions toggle */}
+      <button
+        onClick={() => dispatch({ type: 'TOGGLE_REACTIONS' })}
+        className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'>
+        {state.showReactions ?
+          <ToggleRight className='h-4 w-4 text-pw-primary' />
+        : <ToggleLeft className='h-4 w-4' />}
+        {state.showReactions ? 'Show Reactions' : 'Hide Reactions'}
+      </button>
+
+      <div className='overflow-x-auto hide-scrollbar w-full flex justify-center items-center'>
         <div
           ref={previewRef}
-          className='p-6 bg-[#02040f] w-[400px] items-center'>
+          className='p-4 bg-[#02040f] w-[400px] items-center'>
           <LivePreview
             forExport
             platformOverride={exportPlatform}
           />
-          {!state.isPremium &&
-            <div className='mt-4 flex flex-col items-center gap-1 opacity-50'>
-              <div className='flex items-center gap-1.5'>
-                <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' />
-                <span
-                  className='text-[10px] font-bold tracking-wider'
-                  style={{color: '#985cff', fontFamily: 'Syne, sans-serif'}}>
-                  PingWorld Composer
+          {!state.isPremium && (
+            <div className='mt-4 flex flex-col items-center gap-1 opacity-50 w-full'>
+              <div className='flex flex-col items-center'>
+                <div className='flex items-center gap-1 w-full'>
+                  {/* <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' /> */}
+                  <span
+                    className='text-[10px] font-bold tracking-wider'
+                    style={{
+                      color: '#985cff',
+                      fontFamily: 'Syne, sans-serif',
+                    }}>
+                    PingWorld Composer
+                  </span>
+                </div>
+
+                <span className='text-[8px] min-w-full text-center opacity-80 tracking-wider'>
+                  www.ping-world.com
                 </span>
               </div>
             </div>
-          }
+          )}
         </div>
       </div>
 
@@ -224,16 +244,16 @@ export function SavePreviewPanel() {
               </div>
 
               {/* Actions */}
-              <div className='flex gap-3 p-4 border-t border-white/5'>
+              <div className='flex flex-wrap items-center justify-center gap-3 p-4 border-t border-white/5'>
                 <button
                   onClick={downloadPreview}
-                  className='flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold'>
+                  className=' min-w-[150px] flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold'>
                   <Download className='h-4 w-4' />
                   Download PNG
                 </button>
                 <button
                   onClick={copyToClipboard}
-                  className='flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold transition-all'>
+                  className=' min-w-[150px] flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold transition-all'>
                   <Check className='h-4 w-4' />
                   Copy Image
                 </button>

@@ -285,7 +285,7 @@ export function ComposerLayout() {
           <div className='md:col-span-2 xl:col-span-4 space-y-4'>
             <Card
               className={cn(
-                'overflow-hidden bg-pw-surface/40 p-0',
+                'overflow-hidden bg-pw-surface/40 p-0 hidden',
                 isPremiumUI ? 'border-pw-warning/20' : 'border-white/10',
               )}>
               {/* Preview header */}
@@ -328,7 +328,7 @@ export function ComposerLayout() {
               )}>
               <div className='p-5 border-b border-white/5'>
                 <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
-                  Export Preview
+                  Live Preview
                 </span>
               </div>
               <div className='p-3 lg:p-5 pt-0'>
