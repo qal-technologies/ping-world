@@ -242,7 +242,7 @@ const QuizBuilder = ({
   };
 
   return (
-    <div className='flex flex-col w-full gap-8'>
+    <div className='flex flex-col gap-8'>
       {/* Quiz Header Info */}
       <div className='flex flex-col md:flex-row justify-between gap-6'>
         <div>
@@ -268,7 +268,7 @@ const QuizBuilder = ({
         </div>
       </div>
 
-      <div className='grid grid-cols-1 lg:grid-cols-5 gap-8'>
+      <div className='w-full grid grid-cols-1 lg:grid-cols-5 gap-8'>
         {/* Navigation Sidebar */}
         <div className='lg:col-span-2 flex flex-col gap-4'>
           <button
@@ -343,17 +343,17 @@ const QuizBuilder = ({
                   defaultOpen>
                   <div className='flex flex-col gap-4 mt-2'>
                     <div className='space-y-2'>
-                      <label className='text-xs font-bold text-pw-muted uppercase tracking-widest'>
+                      <label className='text-xs font-bold text-pw-muted uppercase tracking-widest mb-1'>
                         Assessment Type
                       </label>
-                      <div className='flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/5'>
+                      <div className='flex p-0.5 bg-white/5 rounded-full border border-white/5'>
                         <Button
                           variant='ghost'
                           onClick={() =>
                             setEditedQuiz({ ...editedQuiz, type: 'quiz' })
                           }
                           className={cn(
-                            'flex-1 h-9 rounded-xl transition-all',
+                            'flex-1 h-9 rounded-full transition-all',
                             editedQuiz.type === 'quiz' ?
                               'bg-pw-primary text-white shadow-lg'
                             : 'text-pw-muted',
@@ -366,7 +366,7 @@ const QuizBuilder = ({
                             setEditedQuiz({ ...editedQuiz, type: 'survey' })
                           }
                           className={cn(
-                            'flex-1 h-9 rounded-xl transition-all',
+                            'flex-1 h-9 rounded-full transition-all',
                             editedQuiz.type === 'survey' ?
                               'bg-pw-primary text-white shadow-lg'
                             : 'text-pw-muted',
@@ -388,7 +388,7 @@ const QuizBuilder = ({
                           })
                         }
                         placeholder='e.g., General Relativity Crash Course'
-                        className='bg-white/5 border-white/10 h-11 focus:border-pw-primary'
+                        className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
                       />
                     </div>
                     <div className='space-y-2'>
@@ -404,7 +404,7 @@ const QuizBuilder = ({
                           })
                         }
                         placeholder='Welcome your takers and explain the rules...'
-                        className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
+                        className='w-full h-20 lg:h-24 bg-white/5 border border-white/10 rounded-lg p-2 px-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
                       />
                     </div>
                   </div>
@@ -553,7 +553,7 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'h-8 min-w-[80px] gap-2',
+                              'h-6 min-w-[80px] gap-2',
                               editedQuiz.showScore ?
                                 'bg-pw-primary/10 border-pw-primary text-pw-primary'
                               : 'bg-white/5 border-white/10',
@@ -578,7 +578,7 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'h-8 min-w-[80px] gap-2 font-bold',
+                              'h-6 min-w-[80px] gap-2 font-bold',
                               !editedQuiz.canGoBack ?
                                 'bg-pw-warning/10 border-pw-warning text-pw-warning'
                               : 'bg-white/5 border-white/10',
@@ -603,7 +603,7 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'h-8 min-w-[80px] gap-2 font-bold',
+                              'h-6 min-w-[80px] gap-2 font-bold',
                               editedQuiz.allowEarlySubmit ?
                                 'bg-pw-primary/10 border-pw-primary text-pw-primary'
                               : 'bg-white/5 border-white/10',
@@ -676,7 +676,7 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'h-8 min-w-[100px] gap-2 font-black tracking-tighter',
+                              'h-6 min-w-[100px] gap-2 font-black tracking-tighter',
                               editedQuiz.allowRetry ?
                                 'bg-pw-cyan/10 border-pw-cyan/80 text-pw-cyan'
                               : 'bg-pw-danger/5 border-pw-danger/80 text-pw-danger',
@@ -698,7 +698,7 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'h-8 min-w-[100px] gap-2 font-black tracking-tighter',
+                              'h-6 min-w-[100px] gap-2 font-black tracking-tighter',
                               editedQuiz.enforceSecurity ?
                                 'bg-pw-danger/10 border-pw-danger text-pw-danger'
                               : 'bg-white/5 border-white/10',
@@ -732,7 +732,7 @@ const QuizBuilder = ({
                               })
                             }
                             className={cn(
-                              'h-8 min-w-[80px]',
+                              'h-6 min-w-[80px]',
                               editedQuiz.endScreen.showPerformance ?
                                 'bg-pw-success/10 border-pw-success text-pw-success'
                               : 'bg-white/5 border-white/10',
@@ -1953,7 +1953,7 @@ export default function QuizPage() {
   };
 
   return (
-    <div className='container mx-auto px-6 py-12 max-w-8xl min-h-[calc(100vh-64px)] pb-20'>
+    <div className='container mx-auto px-4 py-12 max-w-8xl min-h-[calc(100vh-64px)] pb-20'>
       <AnimatePresence mode='wait'>
         {!isCreating ?
           <motion.div
@@ -2156,7 +2156,7 @@ export default function QuizPage() {
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
-            className='w-full'>
+            className='min-w-full flex-1 flex flex-col p-0'>
             <QuizBuilder
               quiz={activeQuiz!}
               onSave={handleSaveQuiz}

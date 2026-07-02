@@ -77,7 +77,7 @@ export default function Wrapper({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}>
-            <div className='p-4 pt-2 border-t border-white/5'>
+            <div className='p-2 pt-0 border-t border-white/5'>
               {children}
             </div>
           </motion.div>

@@ -155,7 +155,7 @@ export const HeroSection = () => {
           <motion.p
             variants={fadeUp}
             className='mt-6 mx-4 text-md md:text-lg text-pw-muted max-w-2xl leading-relaxed'>
-            Anonymous messaging, quiz builder, image toolkit, URL shortener,
+            Quiz builder, Anonymous messaging, Image toolkit, URL shortener,
             creator hub - all free, all in one place.
           </motion.p>
 
