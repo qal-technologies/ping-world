@@ -4,14 +4,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Search, 
-  Wrench, 
   LayoutGrid, 
   ArrowRight,
-  MessageSquare,
-  Type,
-  Puzzle,
-  ImageIcon,
-  Zap,
   ChevronRight,
   Sparkles
 } from "lucide-react";

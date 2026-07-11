@@ -17,8 +17,6 @@ import {
   Instagram,
   Facebook,
   Linkedin,
-  ToggleLeft,
-  ToggleRight,
   LucideHeart,
 } from 'lucide-react';
 import { useComposer } from '@/lib/composer/useComposerStore';

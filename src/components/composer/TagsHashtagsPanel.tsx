@@ -14,9 +14,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { generateHashtags } from '@/lib/composer/ai-utils';
-import { FREE_LIMITS, PINGWORLD_HASHTAG, PREMIUM_FEATURES } from '@/lib/composer/constants';
+import { FREE_LIMITS, PREMIUM_FEATURES } from '@/lib/composer/constants';
 import { PremiumGate, UsageCounter } from './PremiumGate';
-import type { HashTag } from '@/lib/composer/types';
 import { toast } from 'sonner';
 
 const TRENDING_TAGS_MOCK = [

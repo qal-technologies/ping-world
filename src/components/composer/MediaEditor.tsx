@@ -12,7 +12,6 @@ import {
   VideoIcon,
   AlertTriangle,
   Lock,
-  PaintBucket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';

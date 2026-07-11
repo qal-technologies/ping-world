@@ -11,7 +11,6 @@ import {
   Brain,
   ImageIcon,
   Layers,
-  Download,
   Crown,
   WifiOff,
   ChevronDown,
