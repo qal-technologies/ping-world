@@ -163,7 +163,9 @@ body {
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
-  transition: width ease-in 0.5s, height ease 0.6s;
+  transition:
+    width ease-in 0.5s,
+    height ease 0.6s;
 }
 
 ::-webkit-scrollbar:hover {
@@ -184,6 +186,11 @@ body {
   height: 16px;
   background: #5c6fffaa;
   border-radius: 99px;
+}
+
+::selection {
+  background: var(--pw-cyan);
+  color: black;
 }
 
 /* ─── Typography ────────────────────────────────────────────── */
@@ -375,7 +382,7 @@ pre {
   outline: 1px solid #5c6fff;
   outline-offset: 1px;
 }
-.no-outline:focus-visible{
+.no-outline:focus-visible {
   outline: none;
   outline-offset: 0;
 }
@@ -553,7 +560,11 @@ pre {
   padding: 0.2rem 0.6rem;
   border-radius: 99px;
   border: 1px solid rgba(255, 179, 71, 0.5);
-  background: linear-gradient(135deg, rgba(255, 179, 71, 0.15), rgba(152, 92, 255, 0.15));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 179, 71, 0.15),
+    rgba(152, 92, 255, 0.15)
+  );
   color: var(--pw-warning);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -568,15 +579,19 @@ pre {
 }
 
 .premium-border::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   border-radius: 1rem;
   padding: 1px;
   background: linear-gradient(135deg, #ffb347, #985cff);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   mask-composite: exclude;
   pointer-events: none;
 }

@@ -90,7 +90,7 @@ export function TagsHashtagsPanel() {
           onClick={handleGenerate}
           disabled={isGenerating || !state.isOnline}
           className={cn(
-            'flex items-center gap-2 text-xs font-semibold py-2 rounded-xl border transition-all',
+            'flex items-center gap-2 text-xs font-semibold p-2 px-3 rounded-xl border transition-all',
             state.isOnline
               ? 'btn-primary'
               : 'border-white/10 text-pw-muted/50 cursor-not-allowed bg-white/5',
@@ -114,9 +114,9 @@ export function TagsHashtagsPanel() {
         )}
 
         {!state.isOnline && (
-          <span className='text-[10px] text-pw-warning'>
+          <p className='text-[10px] text-pw-warning min-w-full mt-[-5px] px-2'>
             AI requires internet connection
-          </span>
+          </p>
         )}
       </div>
 

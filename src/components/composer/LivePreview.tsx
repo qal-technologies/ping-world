@@ -19,10 +19,14 @@ import {
   Linkedin,
   ToggleLeft,
   ToggleRight,
+  LucideHeart,
 } from 'lucide-react';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { getPlatform } from '@/lib/composer/constants';
 import type { Platform } from '@/lib/composer/types';
+import Image from 'next/image';
+import { useState, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 
 function randomEngagement(base: number, variance = 0.3) {
   const v = base * variance;
@@ -36,7 +40,13 @@ function formatCount(n: number) {
 }
 
 // ─── X / Twitter Preview ──────────────────────────────────────
-function XPreview({ content, showReactions }: { content: string; showReactions: boolean }) {
+function XPreview({
+  content,
+  showReactions,
+}: {
+  content: string;
+  showReactions: boolean;
+}) {
   const likes = randomEngagement(4700, 0.4);
   const retweets = randomEngagement(1200, 0.4);
   const replies = randomEngagement(340, 0.5);
@@ -50,7 +60,10 @@ function XPreview({ content, showReactions }: { content: string; showReactions: 
         <div className='flex-1 min-w-0'>
           <div className='flex items-center gap-1 flex-wrap'>
             <span className='font-bold text-white text-sm'>Display Name</span>
-            <svg className='h-4 w-4 text-[#1d9bf0] shrink-0' viewBox='0 0 24 24' fill='currentColor'>
+            <svg
+              className='h-4 w-4 text-[#1d9bf0] shrink-0'
+              viewBox='0 0 24 24'
+              fill='currentColor'>
               <path d='M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91C2.88 9.33 2 10.57 2 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.26 3.91.8c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.33-2.19c1.4.46 2.91.2 3.92-.81s1.26-2.52.8-3.91C21.12 14.67 22.25 13.43 22.25 12z' />
             </svg>
             <span className='text-[#71767b] text-sm'>@username · 2m</span>
@@ -61,7 +74,11 @@ function XPreview({ content, showReactions }: { content: string; showReactions: 
 
       {/* Content */}
       <p className='text-[#e7e9ea] whitespace-pre-wrap text-[15px] leading-relaxed mb-3'>
-        {content || <span className='text-[#71767b] italic'>Preview your post here...</span>}
+        {content || (
+          <span className='text-[#71767b] italic'>
+            Preview your post here...
+          </span>
+        )}
       </p>
 
       {/* Engagement */}
@@ -73,7 +90,9 @@ function XPreview({ content, showReactions }: { content: string; showReactions: 
             { icon: <Heart className='h-4 w-4' />, count: likes },
             { icon: <Eye className='h-4 w-4' />, count: views },
           ].map((item, i) => (
-            <div key={i} className='flex items-center gap-1 hover:text-[#1d9bf0] transition-colors cursor-pointer'>
+            <div
+              key={i}
+              className='flex items-center gap-1 hover:text-[#1d9bf0] transition-colors cursor-pointer'>
               {item.icon}
               <span className='text-xs'>{formatCount(item.count)}</span>
             </div>
@@ -88,9 +107,25 @@ function XPreview({ content, showReactions }: { content: string; showReactions: 
 }
 
 // ─── Instagram Preview ────────────────────────────────────────
-function InstagramPreview({ content, showReactions }: { content: string; showReactions: boolean }) {
+function InstagramPreview({
+  content,
+  showReactions,
+}: {
+  content: string;
+  showReactions: boolean;
+}) {
   const likes = randomEngagement(18200, 0.3);
   const comments = randomEngagement(430, 0.4);
+
+  const [index, setIndex] = useState(0);
+  const [liked, setLiked] = useState(false);
+
+  const { state } = useComposer();
+  const images = state.mediaAssets;
+  const imageCount = useMemo(
+    () => state.mediaAssets.length,
+    [state.mediaAssets],
+  );
 
   return (
     <div className='bg-white rounded-2xl overflow-hidden text-[#1c1c1e] font-[system-ui] max-w-full'>
@@ -106,14 +141,51 @@ function InstagramPreview({ content, showReactions }: { content: string; showRea
       </div>
 
       {/* Media area */}
-      <div className='aspect-square bg-gradient-to-br from-[#f5f5f5] to-[#e8e8e8] flex items-center justify-center border-y border-gray-100'>
-        <Instagram className='h-12 w-12 text-gray-300' />
+      <div
+        className={cn(
+          'bg-gradient-to-br from-[#f5f5f5] to-[#e8e8e8] flex items-center justify-center border-y border-gray-100',
+          imageCount === 0 && 'aspect-square',
+        )}>
+        {imageCount > 0 ?
+          <Image
+            src={images[index]?.previewUrl}
+            alt={images[index]?.altText || 'upload'}
+            className='w-full h-full object-cover'
+            width={500}
+            height={500}
+            style={{
+              filter: images[index]?.filterStyle,
+              transform: `rotate(${images[index]?.rotation}deg)`,
+            }}
+          />
+        : <Instagram className='h-12 w-12 text-gray-300' />}
       </div>
+
+      {/* Image count */}
+      {imageCount > 1 && (
+        <div className='w-full p-1 items-center gap-2 flex justify-center'>
+          {images.map((_, i) => (
+            <div
+              className={cn(
+                'w-2 h-2 rounded-full cursor-pointer',
+                index == i ? 'bg-red-500 w-4' : 'bg-gray-300',
+              )}
+              onClick={() => setIndex(i)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Actions */}
       {showReactions && (
         <div className='flex items-center gap-3 px-3 pt-3'>
-          <Heart className='h-5 w-5 text-gray-700 hover:text-[#E4405F] transition-colors cursor-pointer' />
+          {liked ?
+            <LucideHeart className='h-5 w-5 text-gray-700 hover:text-[#E4405F] transition-colors cursor-pointer' />
+          : <Heart
+              className='h-5 w-5 text-gray-700 hover:text-[#E4405F] transition-colors cursor-pointer'
+              onClick={() => setLiked(true)}
+            />
+          }
           <MessageCircle className='h-5 w-5 text-gray-700 cursor-pointer' />
           <Send className='h-5 w-5 text-gray-700 cursor-pointer' />
           <Bookmark className='h-5 w-5 text-gray-700 cursor-pointer ml-auto' />
@@ -127,21 +199,31 @@ function InstagramPreview({ content, showReactions }: { content: string; showRea
         )}
         <p className='text-xs leading-relaxed'>
           <span className='font-semibold mr-1.5'>username</span>
-          {content || <span className='text-gray-400 italic'>Caption preview...</span>}
+          {content || (
+            <span className='text-gray-400 italic'>Caption preview...</span>
+          )}
         </p>
         {showReactions && (
           <p className='text-gray-400 text-xs cursor-pointer'>
             View all {formatCount(comments)} comments
           </p>
         )}
-        <p className='text-gray-300 text-[10px] uppercase tracking-wider'>2 minutes ago</p>
+        <p className='text-gray-300 text-[10px] uppercase tracking-wider'>
+          2 minutes ago
+        </p>
       </div>
     </div>
   );
 }
 
 // ─── Facebook Preview ─────────────────────────────────────────
-function FacebookPreview({ content, showReactions }: { content: string; showReactions: boolean }) {
+function FacebookPreview({
+  content,
+  showReactions,
+}: {
+  content: string;
+  showReactions: boolean;
+}) {
   const likes = randomEngagement(8900, 0.4);
   const comments = randomEngagement(215, 0.5);
   const shares = randomEngagement(88, 0.6);
@@ -156,7 +238,7 @@ function FacebookPreview({ content, showReactions }: { content: string; showReac
         <div className='flex-1'>
           <p className='font-semibold text-sm'>User Name</p>
           <div className='flex items-center gap-1 text-[#65676B] text-xs'>
-            <span>2 min ago</span>
+            <span>1 min ago</span>
             <span>·</span>
             <Globe className='h-3 w-3' />
           </div>
@@ -166,7 +248,9 @@ function FacebookPreview({ content, showReactions }: { content: string; showReac
 
       {/* Content */}
       <p className='px-3 pb-3 text-sm leading-relaxed whitespace-pre-wrap'>
-        {content || <span className='text-[#90929A] italic'>Post preview...</span>}
+        {content || (
+          <span className='text-[#90929A] italic'>Post preview...</span>
+        )}
       </p>
 
       {/* Reactions */}
@@ -190,8 +274,7 @@ function FacebookPreview({ content, showReactions }: { content: string; showReac
             ].map((btn, i) => (
               <button
                 key={i}
-                className='flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[#65676B] text-xs font-semibold hover:bg-gray-50 transition-colors'
-              >
+                className='flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[#65676B] text-xs font-semibold hover:bg-gray-50 transition-colors'>
                 {btn.icon}
                 {btn.label}
               </button>
@@ -204,7 +287,13 @@ function FacebookPreview({ content, showReactions }: { content: string; showReac
 }
 
 // ─── LinkedIn Preview ─────────────────────────────────────────
-function LinkedInPreview({ content, showReactions }: { content: string; showReactions: boolean }) {
+function LinkedInPreview({
+  content,
+  showReactions,
+}: {
+  content: string;
+  showReactions: boolean;
+}) {
   const likes = randomEngagement(2400, 0.4);
   const comments = randomEngagement(87, 0.5);
 
@@ -219,7 +308,7 @@ function LinkedInPreview({ content, showReactions }: { content: string; showReac
           <p className='font-semibold text-sm'>User Name</p>
           <p className='text-[#666666] text-xs'>Headline · 1st</p>
           <div className='flex items-center gap-1 text-[#666666] text-[11px] mt-0.5'>
-            <span>2m</span>
+            <span>1m</span>
             <span>·</span>
             <Globe className='h-3 w-3' />
           </div>
@@ -251,8 +340,7 @@ function LinkedInPreview({ content, showReactions }: { content: string; showReac
             ].map((btn, i) => (
               <button
                 key={i}
-                className='flex flex-col items-center gap-1 py-2.5 text-[#666666] text-[11px] font-semibold hover:bg-gray-50 transition-colors'
-              >
+                className='flex flex-col items-center gap-1 py-2.5 text-[#666666] text-[11px] font-semibold hover:bg-gray-50 transition-colors'>
                 {btn.icon}
                 {btn.label}
               </button>
@@ -298,7 +386,6 @@ export function LivePreview({
 
   return (
     <div className='space-y-4 '>
-     
       {/* The Preview */}
       <motion.div
         key={activePlatform}

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Lock, Crown, Sparkles, ArrowRight } from 'lucide-react';
+import { Lock, Crown, Sparkles, ArrowRight, LockIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PremiumFeatureDef } from '@/lib/composer/constants';
 
@@ -123,7 +123,7 @@ export function UsageCounter({ used, limit, label, isPremium }: UsageCounterProp
             : 'text-pw-muted border-white/10 bg-white/5',
       )}
     >
-      {isAtLimit ? '🔒 ' : ''}
+      {isAtLimit ? <LockIcon size='10px'/> : ''}
       {used}/{limit} {label}
     </span>
   );

@@ -3,92 +3,14 @@
 import Link from 'next/link';
 import { motion, Variants } from 'framer-motion';
 import {
-  MessageCircle,
-  Type,
-  Brain,
-  Image as ImageIcon,
-  Link2,
-  QrCode,
-  Palette,
-  PenTool,
   ArrowRight,
   Sparkles,
-  Zap,
   Globe,
-  MessageSquare,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {useEffect, useState} from 'react';
 import {supabase} from '@/lib/supabase';
-
-const tools = [
-  {
-    icon: Brain,
-    title: 'Quizzable',
-    desc: 'Create logic-based quizzes for your audience. Export to JSON or share as an interactive page.',
-    href: '/quiz',
-    color: '#18cb83ff',
-    tag: 'Powerful',
-  },
-  {
-    icon: PenTool,
-    title: 'Creator Hub',
-    desc: 'The ultimate social creator hub to make posts, with translation, grammar check, AI assistance and more.',
-    href: '/composer',
-    color: '#0ebae1ff',
-    tag: 'Creative',
-  },
-  {
-    icon: MessageCircle,
-    title: 'Anonymous Link',
-    desc: 'Personalized anonymous inboxes. Share your link, gather secrets, and reply with privacy.',
-    href: '/message',
-    color: '#7b8afbff',
-    tag: 'Popular',
-  },
-  {
-    icon: Type,
-    title: 'Text Editor',
-    desc: 'Top notch all-in-one text editor with post card canvas and export options.',
-    href: '/editor',
-    color: '#f622fdff',
-    tag:'Utility'
-  },
-  {
-    icon: ImageIcon,
-    title: 'Image Toolkit',
-    desc: 'Premium image editing tools. Edit, convert, compress, and remove backgrounds from images.',
-    href: '/image',
-    color: '#FFB347',
-    tag: 'New',
-  },
-  {
-    icon: Link2,
-    title: 'URL Shortener',
-    desc: 'More than a shortener. Generate QR codes and track link health with advanced local analytics.',
-    href: '/tools/url-shortener',
-    color: '#fe7790ff',
-    tag: 'Utility',
-  },
-  {
-    icon: QrCode,
-    title: 'QR Code Generator',
-    desc: 'More than a shortener. Generate QR codes and track link health with advanced local analytics.',
-    href: '/tools/qr-code',
-    color: '#adff72ff',
-    tag: 'Utility',
-  },
-  {
-    icon: Palette,
-    title: 'Color Palette',
-    desc: 'More color manipulation tools with color generation, extraction, color picker, color randomizer and more.',
-    href: '/tools/colors',
-    color: '#ea6b89ff',
-    tag: 'Utility',
-  },
-];
-
+import {tools} from '@/lib/general/data';
 const stagger: Variants = {
   hidden: {},
   visible: {
@@ -237,7 +159,7 @@ export const ToolsGrid = () => {
         </motion.div>
 
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-          {tools.map((tool, i) => (
+          {tools.slice(0, 6).map((tool, i) => (
             <motion.div
               key={tool.title}
               initial={{ opacity: 0, scale: 0.95 }}
@@ -270,7 +192,7 @@ export const ToolsGrid = () => {
                   </div>
 
                   <p className='text-pw-muted leading-relaxed flex-1 text-sm font-medium'>
-                    {tool.desc}
+                    {tool.description}
                   </p>
 
                   <div className='mt-6 pt-6 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/20 transition-all'>

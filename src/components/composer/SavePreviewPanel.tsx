@@ -157,9 +157,9 @@ export function SavePreviewPanel() {
             platformOverride={exportPlatform}
           />
           {!state.isPremium && (
-            <div className='mt-4 flex flex-col items-center gap-1 opacity-50 w-full'>
+            <div className='mt-4 flex flex-col items-center opacity-50 w-full'>
               <div className='flex flex-col items-center'>
-                <div className='flex items-center gap-1 w-full'>
+                <div className='flex items-center gap-1 w-full mb-[-3px]'>
                   {/* <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' /> */}
                   <span
                     className='text-[10px] font-bold tracking-wider'
@@ -171,7 +171,7 @@ export function SavePreviewPanel() {
                   </span>
                 </div>
 
-                <span className='text-[8px] min-w-full text-center opacity-80 tracking-wider'>
+                <span className='text-[8px] min-w-full text-center opacity-25 tracking-wider'>
                   www.ping-world.com
                 </span>
               </div>

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import {tools} from "@/lib/general/data";
 
 const metadata = {
   title: "Tools",
@@ -27,62 +28,16 @@ const metadata = {
   keywords: ["Tools", "Tool", "Ping World", "pingwrld", "pingworld", "pingwrld tools", "pingwrld tool", "pingwrld pingworld", "pingwrld pingwrld", 'anon link', 'quiz', 'quizzable', 'editor', 'image', 'shortener', 'image toolkit','url shortener', 'qr code', 'word counter', 'word', 'counter', 'word counter pingwrld', 'word counter pingworld', 'word counter pingwrld pingworld', 'word counter pingwrld pingwrld', 'qal technology', 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
 }
 
-const TOOLS = [
-  { 
-    id: "anonlink", 
-    name: "AnonLink", 
-    category: "Communication", 
-    icon: MessageSquare, 
-    href: "/message", 
-    description: "Send and receive anonymous messages with secure end-to-end encryption features.",
-    color: "#5C6FFF"
-  },
-  { 
-    id: "editor", 
-    name: "Text Editor", 
-    category: "Content", 
-    icon: Type, 
-    href: "/editor", 
-    description: "Professional rich text editor with post card generation and auto-save capabilities.",
-    color: "#22D4FD"
-  },
-  { 
-    id: "quizzable", 
-    name: "Quizzable", 
-    category: "Engagement", 
-    icon: Puzzle, 
-    href: "/quiz", 
-    description: "Build interactive quizzes, export to JSON, and share with your audience instantly.",
-    color: "#22C985"
-  },
-  { 
-    id: "image", 
-    name: "Image Toolkit", 
-    category: "Media", 
-    icon: ImageIcon, 
-    href: "/image", 
-    description: "Apply premium filters and enhance your images directly in the browser.",
-    color: "#FFB347"
-  },
-  { 
-    id: "shortener", 
-    name: "URL Shortener", 
-    category: "Utility", 
-    icon: Zap, 
-    href: "/tools/url-shortener", 
-    description: "Shorten long URLs and generate stylish QR codes for your marketing needs.",
-    color: "#F65164"
-  },
-];
-
 export default function ToolsHubPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
 
+  const TOOLS = tools;
+
   const categories = ["All", ...Array.from(new Set(TOOLS.map(t => t.category)))];
 
   const filteredTools = TOOLS.filter(t => {
-    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) || 
+    const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || 
                          t.description.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = activeCategory === "All" || t.category === activeCategory;
     return matchesSearch && matchesCategory;
@@ -149,7 +104,7 @@ export default function ToolsHubPage() {
               transition={{ duration: 0.2 }}
             >
               <Link href={tool.href}>
-                <Card className="card-glow h-full flex flex-col p-8 group hover:border-pw-primary/30 transition-all cursor-pointer">
+                <Card className="card-glow h-full flex flex-col p-8 pb-5 group hover:border-pw-primary/30 transition-all cursor-pointer">
                   <div className="flex justify-between items-start mb-6">
                     <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-110 group-hover:shadow-pw-primary/5 transition-all duration-500">
                       <tool.icon className="h-7 w-7" style={{ color: tool.color }} />
@@ -160,16 +115,16 @@ export default function ToolsHubPage() {
                   </div>
                   
                   <h3 className="text-2xl font-bold font-display mb-3 flex items-center gap-2 group-hover:text-pw-primary transition-colors">
-                    {tool.name}
+                    {tool.title}
                     <ArrowRight className="h-5 w-5 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                   </h3>
                   <p className="text-pw-muted text-sm leading-relaxed flex-1">
                     {tool.description}
                   </p>
                   
-                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors">
-                    <span className="text-[10px] font-bold text-pw-muted uppercase tracking-widest font-mono">
-                      v1.4 Status: Stable
+                  <div className="mt-8 pt-5 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors">
+                    <span className="text-[10px] font-bold text-pw-muted tracking-widest font-mono">
+                      v-{tool.version.v.toString()} ({tool.version.s})
                     </span>
                     <ChevronRight className="h-4 w-4 text-pw-muted group-hover:text-pw-primary" />
                   </div>

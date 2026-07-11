@@ -64,7 +64,6 @@ const TOOL_TABS: TabDef[] = [
   { id: 'ai_context', label: 'AI Context', icon: Brain },
   { id: 'media', label: 'Media', icon: ImageIcon },
   { id: 'canvas', label: 'Canvas', icon: Layers },
-  { id: 'save', label: 'Save Preview', icon: Download },
 ];
 
 function ToolPanel({ activeTab }: { activeTab: ToolTab }) {
@@ -83,8 +82,6 @@ function ToolPanel({ activeTab }: { activeTab: ToolTab }) {
       return <MediaEditor />;
     case 'canvas':
       return <CanvasBuilder />;
-    case 'save':
-      return <SavePreviewPanel />;
     default:
       return null;
   }
@@ -226,7 +223,7 @@ export function ComposerLayout() {
                 isPremiumUI ? 'border-pw-warning/20' : 'border-white/10',
               )}>
               {/* Tab bar */}
-              <div className='flex overflow-x-auto scrollable-row pt-3'>
+              <div className='flex overflow-x-auto scrollable-row pt-3 px-1'>
                 {TOOL_TABS.map((tab) => {
                   const Icon = tab.icon;
                   const isDisabled = tab.onlineOnly && !state.isOnline;
