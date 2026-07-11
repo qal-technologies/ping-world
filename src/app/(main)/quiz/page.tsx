@@ -50,9 +50,21 @@ import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 
 const metadata = {
   title: 'Quiz Generator',
-  description: 'Create engaging quizzes with ease using the Quizzable platform.',
-  keywords: ['Quiz Generator', 'Quiz', 'Generator', 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
-}
+  description:
+    'Create engaging quizzes with ease using the Quizzable platform.',
+  keywords: [
+    'Quiz Generator',
+    'Quiz',
+    'Generator',
+    'Ping World',
+    'pingworld',
+    'pingwrld',
+    'qal tech',
+    'qal technologies',
+    'trending',
+    'trend',
+  ],
+};
 
 // --- Types ---
 export type QuestionType =
@@ -282,7 +294,7 @@ const QuizBuilder = ({
             <Settings2 className='h-4 w-4' /> Quiz Settings
           </button>
 
-          <div className='flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar'>
+          <div className='flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar'>
             {editedQuiz.questions.map((q, i) => (
               <button
                 key={q.id}
@@ -358,7 +370,7 @@ const QuizBuilder = ({
                               'bg-pw-primary text-white shadow-lg'
                             : 'text-pw-muted',
                           )}>
-                          Quiz (Graded)
+                          Quiz
                         </Button>
                         <Button
                           variant='ghost'
@@ -371,7 +383,7 @@ const QuizBuilder = ({
                               'bg-pw-primary text-white shadow-lg'
                             : 'text-pw-muted',
                           )}>
-                          Survey (Poll)
+                          Survey
                         </Button>
                       </div>
                     </div>
@@ -586,7 +598,7 @@ const QuizBuilder = ({
                             {!editedQuiz.canGoBack ?
                               <ShieldCheck className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
-                            {!editedQuiz.canGoBack ? 'ENFORCED' : 'OFF'}
+                            {!editedQuiz.canGoBack ? 'ON' : 'OFF'}
                           </Button>
                         </QuizSettingItem>
 
@@ -665,7 +677,7 @@ const QuizBuilder = ({
                       <div className='flex flex-col gap-2 pt-2'>
                         <QuizSettingItem
                           label='Multiple Attempts'
-                          description={`This restricts or allows takers to retake the ${editedQuiz.type}.`}>
+                          description={`This restricts or allows takers to retake the ${editedQuiz.type} after completion.`}>
                           <Button
                             variant='outline'
                             size='sm'
@@ -704,6 +716,44 @@ const QuizBuilder = ({
                               : 'bg-white/5 border-white/10',
                             )}>
                             {editedQuiz.enforceSecurity ? 'STRICT' : 'STANDARD'}
+                          </Button>
+                        </QuizSettingItem>
+
+                        <QuizSettingItem
+                          label='Randomization'
+                          description='Randomize your questions and options to improve quiz integrity and security.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                randomizeOptions: !editedQuiz.randomizeOptions,
+                                randomizeQuestions:
+                                  !editedQuiz.randomizeQuestions,
+                              })
+                            }
+                            className={cn(
+                              'h-6 min-w-[80px] gap-2',
+                              (
+                                editedQuiz.randomizeOptions &&
+                                  editedQuiz.randomizeQuestions
+                              ) ?
+                                'bg-pw-primary/10 border-pw-primary text-white'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {(
+                              editedQuiz.randomizeOptions &&
+                              editedQuiz.randomizeQuestions
+                            ) ?
+                              <Check className='h-3 w-3' />
+                            : <X className='h-3 w-3' />}
+                            {(
+                              editedQuiz.randomizeOptions &&
+                              editedQuiz.randomizeQuestions
+                            ) ?
+                              'RANDOM'
+                            : 'OFF'}
                           </Button>
                         </QuizSettingItem>
                       </div>
@@ -1242,7 +1292,16 @@ const QuizBuilder = ({
                               className='h-8 w-full max-w-[300px] bg-white/5 border-white/10 text-center transition-all focus:border-pw-primary placeholder:text-pw-muted/50 mt-2'
                             />
 
-                            <div className={cn('items-center gap-2 w-full mt-1 justify-between px-1', !editedQuiz.questions[currentStep].correctIndex ? 'hidden' : 'flex')}>
+                            <div
+                              className={cn(
+                                'items-center gap-2 w-full mt-1 justify-between px-1',
+                                (
+                                  !editedQuiz.questions[currentStep]
+                                    .correctIndex
+                                ) ?
+                                  'hidden'
+                                : 'flex',
+                              )}>
                               <label className='text-[10px] font-bold text-pw-muted uppercase'>
                                 Case Sensitive
                               </label>
@@ -1391,237 +1450,180 @@ const QuizBuilder = ({
                           ))}
                         </div>
                         <p className='text-xs text-pw-muted'>
-                          Survey only — no correct answer required.
+                          Survey only: no correct answer required.
                         </p>
                       </div>
                     : <div className='space-y-3'>
-                        {(
-                          editedQuiz.questions[currentStep]
-                            .options as QuizOption[]
-                        ).map((opt, idx) => {
-                          const isCheckbox =
+                        <div
+                          className={cn(
+                            'w-full grid grid-cols-1 gap-2',
                             editedQuiz.questions[currentStep].type ===
-                            'checkbox';
-                          const isCorrect =
-                            isCheckbox ?
-                              Array.isArray(
-                                editedQuiz.questions[currentStep].correctIndex,
-                              ) &&
-                              (
-                                editedQuiz.questions[currentStep]
-                                  .correctIndex as string[]
-                              ).includes(opt.id)
-                            : editedQuiz.questions[currentStep].correctIndex ===
-                              opt.id;
-                          return (
-                            <div
-                              key={opt.id}
-                              className={cn(
-                                'group flex flex-col gap-1 p-3 rounded-xl border transition-all',
-                                isCorrect ?
-                                  'bg-pw-success/10 border-pw-success/50 shadow-md shadow-pw-success/5'
-                                : 'bg-white/5 border-white/5 hover:border-pw-primary/30',
-                              )}>
-                              <div className='flex items-center gap-3'>
-                                {editedQuiz.type === 'quiz' && (
-                                  <button
-                                    onClick={() => {
-                                      if (isCheckbox) {
-                                        const currentCorrect =
-                                          (
-                                            Array.isArray(
+                              'true_false' && 'grid-cols-1 lg:grid-cols-2',
+                          )}>
+                          {(
+                            editedQuiz.questions[currentStep]
+                              .options as QuizOption[]
+                          ).map((opt, idx) => {
+                            const isCheckbox =
+                              editedQuiz.questions[currentStep].type ===
+                              'checkbox';
+                            const isCorrect =
+                              isCheckbox ?
+                                Array.isArray(
+                                  editedQuiz.questions[currentStep]
+                                    .correctIndex,
+                                ) &&
+                                (
+                                  editedQuiz.questions[currentStep]
+                                    .correctIndex as string[]
+                                ).includes(opt.id)
+                              : editedQuiz.questions[currentStep]
+                                  .correctIndex === opt.id;
+                            return (
+                              <div
+                                key={opt.id}
+                                className={cn(
+                                  'group flex flex-col gap-1 p-3 rounded-xl border transition-all',
+                                  isCorrect ?
+                                    'bg-pw-success/10 border-pw-success/50 shadow-md shadow-pw-success/5'
+                                  : 'bg-white/5 border-white/5 hover:border-pw-primary/30',
+                                  
+                                )}>
+                                <div className='flex items-center gap-3'>
+                                  {editedQuiz.type === 'quiz' && (
+                                    <button
+                                      onClick={() => {
+                                        if (isCheckbox) {
+                                          const currentCorrect =
+                                            (
+                                              Array.isArray(
+                                                editedQuiz.questions[
+                                                  currentStep
+                                                ].correctIndex,
+                                              )
+                                            ) ?
                                               editedQuiz.questions[currentStep]
-                                                .correctIndex,
-                                            )
-                                          ) ?
-                                            editedQuiz.questions[currentStep]
-                                              .correctIndex
-                                          : [];
-                                        const newCorrect =
-                                          currentCorrect.includes(opt.id) ?
-                                            currentCorrect.filter(
-                                              (id: string) => id !== opt.id,
-                                            )
-                                          : [...currentCorrect, opt.id];
-                                        updateQuestion(currentStep, {
-                                          ...editedQuiz.questions[currentStep],
-                                          correctIndex: newCorrect,
-                                        });
-                                      } else {
-                                        updateQuestion(currentStep, {
-                                          ...editedQuiz.questions[currentStep],
-                                          correctIndex: opt.id,
-                                        });
-                                      }
-                                    }}
-                                    className={cn(
-                                      'h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-transform active:scale-95',
-                                      isCorrect ?
-                                        'bg-pw-success border-pw-success text-white scale-110'
-                                      : 'bg-black/20 border-white/20 text-transparent hover:border-pw-primary hover:text-pw-primary/50',
-                                    )}>
-                                    <Check className='h-3 w-3' />
-                                  </button>
-                                )}
-                                <Input
-                                  value={opt.text}
-                                  onChange={(e) => {
-                                    const newOpts = [
-                                      ...(editedQuiz.questions[currentStep]
-                                        .options as QuizOption[]),
-                                    ];
-                                    newOpts[idx].text = e.target.value;
-                                    updateQuestion(currentStep, {
-                                      ...editedQuiz.questions[currentStep],
-                                      options: newOpts,
-                                    });
-                                  }}
-                                  placeholder={`Option ${idx + 1}`}
-                                  className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1'
-                                />
-
-                                <div className='flex items-center gap-1 shrink-0'>
-                                  {/* Branching Logic for Option */}
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger>
-                                      <Button
-                                        variant='ghost'
-                                        size='sm'
-                                        className={cn(
-                                          'h-7 px-2 text-[10px] gap-1 transition-all',
-                                          opt.skipTo || opt.skipToCat ?
-                                            'bg-pw-warning/10 text-pw-warning border-pw-warning/20'
-                                          : 'md:opacity-0 opacity-100 group-hover:opacity-100 md:group-hover:opacity-100 group-active:opacity-100 text-pw-muted hover:text-pw-primary',
-                                        )}>
-                                        {opt.skipTo || opt.skipToCat ?
-                                          <>
-                                            <Share2 size={10} />
-                                            {opt.skipToCat ?
-                                              `To Grp: ${opt.skipToCat}`
-                                            : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
-                                            }
-                                          </>
-                                        : <>
-                                            <Share2 size={10} /> Branch
-                                          </>
-                                        }
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className='bg-pw-surface border-white/10 w-56'>
-                                      <div className='px-2 py-1.5 border-b border-white/5'>
-                                        <p className='text-[10px] font-black uppercase text-pw-muted tracking-widest'>
-                                          Route this answer to:
-                                        </p>
-                                      </div>
-                                      <DropdownMenuItem
-                                        onClick={() => {
-                                          const newOpts = [
-                                            ...(editedQuiz.questions[
-                                              currentStep
-                                            ].options as QuizOption[]),
-                                          ];
-                                          const o = { ...newOpts[idx] };
-                                          delete o.skipTo;
-                                          delete o.skipToCat;
-                                          newOpts[idx] = o;
+                                                .correctIndex
+                                            : [];
+                                          const newCorrect =
+                                            currentCorrect.includes(opt.id) ?
+                                              currentCorrect.filter(
+                                                (id: string) => id !== opt.id,
+                                              )
+                                            : [...currentCorrect, opt.id];
                                           updateQuestion(currentStep, {
                                             ...editedQuiz.questions[
                                               currentStep
                                             ],
-                                            options: newOpts,
+                                            correctIndex: newCorrect,
                                           });
-                                        }}>
-                                        <span className='text-xs text-pw-muted italic'>
-                                          Default (Next Question)
-                                        </span>
-                                      </DropdownMenuItem>
+                                        } else {
+                                          updateQuestion(currentStep, {
+                                            ...editedQuiz.questions[
+                                              currentStep
+                                            ],
+                                            correctIndex: opt.id,
+                                          });
+                                        }
+                                      }}
+                                      className={cn(
+                                        'h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-transform active:scale-95',
+                                        isCorrect ?
+                                          'bg-pw-success border-pw-success text-white scale-110'
+                                        : 'bg-black/20 border-white/20 text-transparent hover:border-pw-primary hover:text-pw-primary/50',
+                                      )}>
+                                      <Check className='h-3 w-3' />
+                                    </button>
+                                  )}
+                                  <Input
+                                    value={opt.text}
+                                    onChange={(e) => {
+                                      const newOpts = [
+                                        ...(editedQuiz.questions[currentStep]
+                                          .options as QuizOption[]),
+                                      ];
+                                      newOpts[idx].text = e.target.value;
+                                      updateQuestion(currentStep, {
+                                        ...editedQuiz.questions[currentStep],
+                                        options: newOpts,
+                                      });
+                                    }}
+                                    placeholder={`Option ${idx + 1}`}
+                                    className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1'
+                                  />
 
-                                      <div className='px-2 pt-2 pb-1'>
-                                        <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
-                                          Specific Questions
-                                        </p>
-                                      </div>
+                                  <div className='flex items-center gap-1 shrink-0'>
+                                    {/* Branching Logic for Option */}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger>
+                                        <Button
+                                          variant='ghost'
+                                          size='sm'
+                                          className={cn(
+                                            'h-7 px-2 text-[10px] gap-1 transition-all',
+                                            opt.skipTo || opt.skipToCat ?
+                                              'bg-pw-warning/10 text-pw-warning border-pw-warning/20'
+                                            : 'md:opacity-0 opacity-100 group-hover:opacity-100 md:group-hover:opacity-100 group-active:opacity-100 text-pw-muted hover:text-pw-primary',
+                                          )}>
+                                          {opt.skipTo || opt.skipToCat ?
+                                            <>
+                                              <Share2 size={10} />
+                                              {opt.skipToCat ?
+                                                `To Grp: ${opt.skipToCat}`
+                                              : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
+                                              }
+                                            </>
+                                          : <>
+                                              <Share2 size={10} /> Branch
+                                            </>
+                                          }
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-56'>
+                                        <div className='px-2 py-1.5 border-b border-white/5'>
+                                          <p className='text-[10px] font-black uppercase text-pw-muted tracking-widest'>
+                                            Route this answer to:
+                                          </p>
+                                        </div>
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            const o = { ...newOpts[idx] };
+                                            delete o.skipTo;
+                                            delete o.skipToCat;
+                                            newOpts[idx] = o;
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
+                                          }}>
+                                          <span className='text-xs text-pw-muted italic'>
+                                            Default (Next Question)
+                                          </span>
+                                        </DropdownMenuItem>
 
-                                      {editedQuiz.questions
-                                        .filter(
-                                          (q) =>
-                                            q.id !==
-                                            editedQuiz.questions[currentStep]
-                                              .id,
-                                        )
-                                        .map((q) => (
-                                          <DropdownMenuItem
-                                            key={q.id}
-                                            onClick={() => {
-                                              const newOpts = [
-                                                ...(editedQuiz.questions[
-                                                  currentStep
-                                                ].options as QuizOption[]),
-                                              ];
-                                              newOpts[idx] = {
-                                                ...newOpts[idx],
-                                                skipTo: q.id,
-                                                skipToCat: undefined,
-                                              };
-                                              updateQuestion(currentStep, {
-                                                ...editedQuiz.questions[
-                                                  currentStep
-                                                ],
-                                                options: newOpts,
-                                              });
-                                            }}>
-                                            <span className='text-xs'>
-                                              Q
-                                              {editedQuiz.questions.indexOf(q) +
-                                                1}{' '}
-                                              {q.text.slice(0, 18)}
-                                            </span>
-                                          </DropdownMenuItem>
-                                        ))}
+                                        <div className='px-2 pt-2 pb-1'>
+                                          <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
+                                            Specific Questions
+                                          </p>
+                                        </div>
 
-                                      {Array.from(
-                                        new Set(
-                                          editedQuiz.questions
-                                            .filter(
-                                              (q) =>
-                                                (q as any).category &&
-                                                q.id !==
-                                                  editedQuiz.questions[
-                                                    currentStep
-                                                  ].id,
-                                            )
-                                            .map(
-                                              (q) =>
-                                                (q as any).category as string,
-                                            ),
-                                        ),
-                                      ).length > 0 && (
-                                        <>
-                                          <div className='px-2 pt-2 pb-1 border-t border-white/5'>
-                                            <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
-                                              Jump to Group
-                                            </p>
-                                          </div>
-                                          {Array.from(
-                                            new Set(
-                                              editedQuiz.questions
-                                                .filter(
-                                                  (q) =>
-                                                    (q as any).category &&
-                                                    q.id !==
-                                                      editedQuiz.questions[
-                                                        currentStep
-                                                      ].id,
-                                                )
-                                                .map(
-                                                  (q) =>
-                                                    (q as any)
-                                                      .category as string,
-                                                ),
-                                            ),
-                                          ).map((cat) => (
+                                        {editedQuiz.questions
+                                          .filter(
+                                            (q) =>
+                                              q.id !==
+                                              editedQuiz.questions[currentStep]
+                                                .id,
+                                          )
+                                          .map((q) => (
                                             <DropdownMenuItem
-                                              key={`cat-opt-${cat}`}
+                                              key={q.id}
                                               onClick={() => {
                                                 const newOpts = [
                                                   ...(editedQuiz.questions[
@@ -1630,8 +1632,8 @@ const QuizBuilder = ({
                                                 ];
                                                 newOpts[idx] = {
                                                   ...newOpts[idx],
-                                                  skipToCat: cat,
-                                                  skipTo: undefined,
+                                                  skipTo: q.id,
+                                                  skipToCat: undefined,
                                                 };
                                                 updateQuestion(currentStep, {
                                                   ...editedQuiz.questions[
@@ -1640,37 +1642,109 @@ const QuizBuilder = ({
                                                   options: newOpts,
                                                 });
                                               }}>
-                                              <span className='text-[10px] font-bold uppercase'>
-                                                {cat}
+                                              <span className='text-xs'>
+                                                Q
+                                                {editedQuiz.questions.indexOf(
+                                                  q,
+                                                ) + 1}{' '}
+                                                {q.text.slice(0, 18)}
                                               </span>
                                             </DropdownMenuItem>
                                           ))}
-                                        </>
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
 
-                                  <Button
-                                    variant='ghost'
-                                    size='icon'
-                                    onClick={() => {
-                                      const newOpts = (
-                                        editedQuiz.questions[currentStep]
-                                          .options as QuizOption[]
-                                      ).filter((_, i) => i !== idx);
-                                      updateQuestion(currentStep, {
-                                        ...editedQuiz.questions[currentStep],
-                                        options: newOpts,
-                                      });
-                                    }}
-                                    className='h-7 w-7 hidden group-hover:inline-flex text-pw-danger transition-all duration-200'>
-                                    <Trash2 size={12} />
-                                  </Button>
+                                        {Array.from(
+                                          new Set(
+                                            editedQuiz.questions
+                                              .filter(
+                                                (q) =>
+                                                  (q as any).category &&
+                                                  q.id !==
+                                                    editedQuiz.questions[
+                                                      currentStep
+                                                    ].id,
+                                              )
+                                              .map(
+                                                (q) =>
+                                                  (q as any).category as string,
+                                              ),
+                                          ),
+                                        ).length > 0 && (
+                                          <>
+                                            <div className='px-2 pt-2 pb-1 border-t border-white/5'>
+                                              <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
+                                                Jump to Group
+                                              </p>
+                                            </div>
+                                            {Array.from(
+                                              new Set(
+                                                editedQuiz.questions
+                                                  .filter(
+                                                    (q) =>
+                                                      (q as any).category &&
+                                                      q.id !==
+                                                        editedQuiz.questions[
+                                                          currentStep
+                                                        ].id,
+                                                  )
+                                                  .map(
+                                                    (q) =>
+                                                      (q as any)
+                                                        .category as string,
+                                                  ),
+                                              ),
+                                            ).map((cat) => (
+                                              <DropdownMenuItem
+                                                key={`cat-opt-${cat}`}
+                                                onClick={() => {
+                                                  const newOpts = [
+                                                    ...(editedQuiz.questions[
+                                                      currentStep
+                                                    ].options as QuizOption[]),
+                                                  ];
+                                                  newOpts[idx] = {
+                                                    ...newOpts[idx],
+                                                    skipToCat: cat,
+                                                    skipTo: undefined,
+                                                  };
+                                                  updateQuestion(currentStep, {
+                                                    ...editedQuiz.questions[
+                                                      currentStep
+                                                    ],
+                                                    options: newOpts,
+                                                  });
+                                                }}>
+                                                <span className='text-[10px] font-bold uppercase'>
+                                                  {cat}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            ))}
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    <Button
+                                      variant='ghost'
+                                      size='icon'
+                                      onClick={() => {
+                                        const newOpts = (
+                                          editedQuiz.questions[currentStep]
+                                            .options as QuizOption[]
+                                        ).filter((_, i) => i !== idx);
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          options: newOpts,
+                                        });
+                                      }}
+                                      className='h-7 w-7 hidden group-hover:inline-flex text-pw-danger transition-all duration-200'>
+                                      <Trash2 size={12} />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                         <Button
                           variant='outline'
                           size='sm'

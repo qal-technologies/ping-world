@@ -1348,7 +1348,7 @@ export default function PublicQuizPage() {
 
               <div className='flex flex-col gap-4 items-end pt-1 px-2'>
                 {/* Top Progress Bar */}
-                <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-black/10 z-[100] backdrop-blur-sm'>
+                <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
@@ -1370,8 +1370,13 @@ export default function PublicQuizPage() {
               </div>
             </div>
 
-            <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-start'>
-              <div className='lg:col-span-8'>
+            <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-center'>
+              <div
+                className={cn(
+                  q?.accessory && q.accessory !== 'none' ?
+                    'lg:col-span-8'
+                  : 'lg:col-span-12',
+                )}>
                 {!q ?
                   <div className='flex flex-col items-center justify-center min-h-[40vh] text-center p-6 bg-white/5 rounded-[3rem] border border-white/5'>
                     <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 opacity-50' />
@@ -1388,226 +1393,120 @@ export default function PublicQuizPage() {
                       Return to Start
                     </Button>
                   </div>
-                : <>
-                    <div className='flex flex-col items-center mb-4 w-full'>
-                      <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
-                        {`Question ${currentQuestion + 1} of ${activeQuestions.length}`}
-                      </div>
+                : <div className='flex flex-col items-center mb-4 w-full justify-center'>
+                    <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
+                      {(
+                        quiz.questions.some(
+                          (q) => q.category || q.category !== null,
+                        )
+                      ) ?
+                        `Question ${currentQuestion + 1}`
+                      : `Question ${currentQuestion + 1} of ${activeQuestions.length}`
+                      }
+                    </div>
 
-                      <div className='w-full flex flex-col items-center gap-1 mt-2'>
-                        <AnimatePresence mode='wait'>
-                          <motion.div
-                            key={q.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3, ease: 'easeOut' }}
-                            className='space-y-8 w-full items-center max-w-[600px]'>
-                            <Card className='glass bkblur rounded-4xl p-4 md:p-6 bg-pw-surface/40 border-white/5 shadow-2xl relative overflow-hidden group flex flex-col'>
-                              <div className='flex-1 w-full flex flex-col'>
-                                <div className='flex flex-col gap-6 mb-8'>
-                                  <div className='flex justify-between items-start gap-4'>
-                                    <div className='flex items-center gap-4 flex-1'>
-                                      <div
-                                        className={cn(
-                                          'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
-                                          quiz.type === 'quiz' ?
-                                            'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-                                          : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
-                                        )}>
-                                        {quiz.type === 'quiz' ?
-                                          <Brain
-                                            className='text-pw-primary'
-                                            size={24}
-                                          />
-                                        : <BadgeQuestionMark
-                                            className='text-pw-cyan'
-                                            size={24}
-                                          />
-                                        }
-                                      </div>
-
-                                      <h2 className='text-lg font-medium leading-tight text-balance'>
-                                        {q.text}
-                                      </h2>
+                    <div className='w-full flex flex-col items-center gap-1 mt-2'>
+                      <AnimatePresence mode='wait'>
+                        <motion.div
+                          key={q.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, ease: 'easeOut' }}
+                          className='space-y-8 w-full items-center max-w-[600px]'>
+                          <Card className='glass bkblur rounded-4xl p-4 md:p-6 bg-pw-surface/40 border-white/5 shadow-2xl relative overflow-hidden group flex flex-col'>
+                            <div className='flex-1 w-full flex flex-col'>
+                              <div className='flex flex-col gap-6 mb-8'>
+                                <div className='flex justify-between items-start gap-4'>
+                                  <div className='flex items-center gap-4 flex-1'>
+                                    <div
+                                      className={cn(
+                                        'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
+                                        quiz.type === 'quiz' ?
+                                          'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+                                        : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+                                      )}>
+                                      {quiz.type === 'quiz' ?
+                                        <Brain
+                                          className='text-pw-primary'
+                                          size={24}
+                                        />
+                                      : <BadgeQuestionMark
+                                          className='text-pw-cyan'
+                                          size={24}
+                                        />
+                                      }
                                     </div>
 
-                                    {quiz.type === 'quiz' &&
-                                      quiz.correctOption &&
-                                      showFeedback && (
-                                        <motion.div
-                                          initial={{ opacity: 0, scale: 0.5 }}
-                                          animate={{ opacity: 1, scale: 1 }}
-                                          className={cn(
-                                            'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
-                                            isCorrect ?
-                                              'bg-pw-success/10 border-pw-success text-pw-success'
-                                            : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                                          )}>
-                                          {isCorrect ? 'Correct' : 'Incorrect'}
-                                        </motion.div>
-                                      )}
+                                    <h2 className='text-lg font-medium leading-tight text-balance'>
+                                      {q.text}
+                                    </h2>
                                   </div>
 
                                   {quiz.type === 'quiz' &&
-                                    quiz.correctOptionDes &&
-                                    showFeedback &&
-                                    q?.correctExplanation && (
+                                    quiz.correctOption &&
+                                    showFeedback && (
                                       <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
-                                        <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
-                                          <Brain size={14} /> Explanation
-                                        </div>
-                                        {q.correctExplanation}
+                                        initial={{ opacity: 0, scale: 0.5 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className={cn(
+                                          'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
+                                          isCorrect ?
+                                            'bg-pw-success/10 border-pw-success text-pw-success'
+                                          : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                                        )}>
+                                        {isCorrect ? 'Correct' : 'Incorrect'}
                                       </motion.div>
                                     )}
                                 </div>
 
-                                <div className='space-y-4'>
-                                  {q.type === 'dropdown' ?
-                                    <div className='flex justify-center py-4'>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger>
-                                          <Button
-                                            variant='outline'
-                                            className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
-                                            {selectedOption ?
+                                {quiz.type === 'quiz' &&
+                                  quiz.correctOptionDes &&
+                                  showFeedback &&
+                                  q?.correctExplanation && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: -10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
+                                      <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
+                                        <Brain size={14} /> Explanation
+                                      </div>
+                                      {q.correctExplanation}
+                                    </motion.div>
+                                  )}
+                              </div>
+
+                              <div className='space-y-4'>
+                                {q.type === 'dropdown' ?
+                                  <div className='flex justify-center py-4'>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger>
+                                        <Button
+                                          variant='outline'
+                                          className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
+                                          {selectedOption ?
+                                            (
                                               (
-                                                (
-                                                  shuffledOptions[q.id] ||
-                                                  q.options
-                                                ).find(
-                                                  (o) =>
-                                                    (typeof o === 'string' ? o
-                                                    : o.id) === selectedOption,
-                                                ) as any
-                                              )?.text || selectedOption
-                                            : 'Choose your answer...'}
-                                            <ChevronDown
-                                              size={20}
-                                              className='text-pw-primary'
-                                            />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
-                                          {(
-                                            shuffledOptions[q.id] || q.options
-                                          )?.map((opt, idx) => {
-                                            const optId =
-                                              typeof opt === 'string' ?
-                                                idx.toString()
-                                              : opt.id;
-                                            const optText =
-                                              typeof opt === 'string' ? opt : (
-                                                opt.text
-                                              );
-                                            return (
-                                              <DropdownMenuItem
-                                                key={
-                                                  optId +
-                                                  idx +
-                                                  'dropdown-option'
-                                                }
-                                                onClick={() =>
-                                                  setSelectedOption(optId)
-                                                }
-                                                className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
-                                                {optText}
-                                                {selectedOption === optId && (
-                                                  <Check
-                                                    size={18}
-                                                    className='text-pw-primary'
-                                                  />
-                                                )}
-                                              </DropdownMenuItem>
-                                            );
-                                          })}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                  : q.type === 'input' ?
-                                    <div className='py-2'>
-                                      <textarea
-                                        value={content}
-                                        onChange={(e) =>
-                                          setContent(e.target.value)
-                                        }
-                                        placeholder='Type your answer here...'
-                                        className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-6 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
-                                      />
-                                    </div>
-                                  : q.type === 'range' ?
-                                    <div className='flex flex-col items-center gap-10 py-8'>
-                                      <div className='w-full max-w-md space-y-6'>
-                                        <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
-                                          <span>{q.min || 0}</span>
-                                          <span>
-                                            {selectedOption || q.min || 0}
-                                          </span>
-                                          <span>{q.max || 10}</span>
-                                        </div>
-                                        <input
-                                          type='range'
-                                          min={q.min || 0}
-                                          max={q.max || 10}
-                                          step={q.step || 1}
-                                          value={selectedOption || q.min || 0}
-                                          onChange={(e) =>
-                                            setSelectedOption(e.target.value)
-                                          }
-                                          className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
-                                        />
-                                        <div className='flex justify-center'>
-                                          <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
-                                            {selectedOption || q.min || 0}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  : q.type === 'rating' ?
-                                    <div className='flex flex-col items-center gap-10 py-8'>
-                                      <div className='flex gap-4'>
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                          <button
-                                            key={i}
-                                            onClick={() =>
-                                              setSelectedOption(i.toString())
-                                            }
-                                            className={cn(
-                                              'transition-all transform hover:scale-125 active:scale-95',
-                                              Number(selectedOption) >= i ?
-                                                'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
-                                              : 'text-white/10 hover:text-white/20',
-                                            )}>
-                                            <Star
-                                              size={56}
-                                              fill={
-                                                Number(selectedOption) >= i ?
-                                                  'currentColor'
-                                                : 'none'
-                                              }
-                                              strokeWidth={1.5}
-                                            />
-                                          </button>
-                                        ))}
-                                      </div>
-                                      <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
-                                        {selectedOption ?
-                                          `Rating: ${selectedOption} / 5`
-                                        : 'Select a Rating'}
-                                      </p>
-                                    </div>
-                                  : <div
-                                      className={cn(
-                                        'grid gap-4',
-                                        q.type === 'multiple_choice' ?
-                                          'grid-cols-1'
-                                        : 'grid-cols-1 md:grid-cols-2',
-                                      )}>
-                                      {(shuffledOptions[q.id] || q.options).map(
-                                        (opt, idx) => {
+                                                shuffledOptions[q.id] ||
+                                                q.options
+                                              ).find(
+                                                (o) =>
+                                                  (typeof o === 'string' ? o : (
+                                                    o.id
+                                                  )) === selectedOption,
+                                              ) as any
+                                            )?.text || selectedOption
+                                          : 'Choose your answer...'}
+                                          <ChevronDown
+                                            size={20}
+                                            className='text-pw-primary'
+                                          />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
+                                        {(
+                                          shuffledOptions[q.id] || q.options
+                                        )?.map((opt, idx) => {
                                           const optId =
                                             typeof opt === 'string' ?
                                               idx.toString()
@@ -1616,85 +1515,189 @@ export default function PublicQuizPage() {
                                             typeof opt === 'string' ? opt : (
                                               opt.text
                                             );
-                                          const isSelected =
-                                            q.type === 'checkbox' ?
-                                              selectedOptions.includes(optId)
-                                            : selectedOption === optId;
                                           return (
-                                            <button
+                                            <DropdownMenuItem
                                               key={
-                                                optId +
-                                                idx +
-                                                'assessment-option'
+                                                optId + idx + 'dropdown-option'
                                               }
                                               onClick={() =>
-                                                q.type === 'checkbox' ?
-                                                  setSelectedOptions((p) =>
-                                                    p.includes(optId) ?
-                                                      p.filter(
-                                                        (i) => i !== optId,
-                                                      )
-                                                    : [...p, optId],
-                                                  )
-                                                : setSelectedOption(optId)
+                                                setSelectedOption(optId)
                                               }
-                                              className={cn(
-                                                'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
-                                                isSelected ?
-                                                  'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
-                                                : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                                              )}>
-                                              <span className='font-bold text-base md:text-lg'>
-                                                {optText}
-                                              </span>
-                                              <CheckCircle
-                                                className={cn(
-                                                  'h-5 w-5 transition-all text-pw-primary',
-                                                  isSelected ?
-                                                    'opacity-100 scale-110'
-                                                  : 'opacity-0 scale-50',
-                                                )}
-                                              />
-                                            </button>
+                                              className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
+                                              {optText}
+                                              {selectedOption === optId && (
+                                                <Check
+                                                  size={18}
+                                                  className='text-pw-primary'
+                                                />
+                                              )}
+                                            </DropdownMenuItem>
                                           );
-                                        },
-                                      )}
+                                        })}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                : q.type === 'input' ?
+                                  <div className='py-2'>
+                                    <textarea
+                                      value={content}
+                                      onChange={(e) =>
+                                        setContent(e.target.value)
+                                      }
+                                      placeholder='Type your answer here...'
+                                      className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
+                                    />
+                                  </div>
+                                : q.type === 'range' ?
+                                  <div className='flex flex-col items-center gap-10 py-8'>
+                                    <div className='w-full max-w-md space-y-6'>
+                                      <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
+                                        <span>{q.min || 0}</span>
+                                        <span>
+                                          {selectedOption || q.min || 0}
+                                        </span>
+                                        <span>{q.max || 10}</span>
+                                      </div>
+                                      <input
+                                        type='range'
+                                        min={q.min || 0}
+                                        max={q.max || 10}
+                                        step={q.step || 1}
+                                        value={selectedOption || q.min || 0}
+                                        onChange={(e) =>
+                                          setSelectedOption(e.target.value)
+                                        }
+                                        className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
+                                      />
+                                      <div className='flex justify-center'>
+                                        <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
+                                          {selectedOption || q.min || 0}
+                                        </span>
+                                      </div>
                                     </div>
-                                  }
-                                </div>
+                                  </div>
+                                : q.type === 'rating' ?
+                                  <div className='flex flex-col items-center gap-10 py-8'>
+                                    <div className='flex gap-4'>
+                                      {[1, 2, 3, 4, 5].map((i) => (
+                                        <button
+                                          key={i}
+                                          onClick={() =>
+                                            setSelectedOption(i.toString())
+                                          }
+                                          className={cn(
+                                            'transition-all transform hover:scale-125 active:scale-95',
+                                            Number(selectedOption) >= i ?
+                                              'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
+                                            : 'text-white/10 hover:text-white/20',
+                                          )}>
+                                          <Star
+                                            size={56}
+                                            fill={
+                                              Number(selectedOption) >= i ?
+                                                'currentColor'
+                                              : 'none'
+                                            }
+                                            strokeWidth={1.5}
+                                          />
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
+                                      {selectedOption ?
+                                        `Rating: ${selectedOption} / 5`
+                                      : 'Select a Rating'}
+                                    </p>
+                                  </div>
+                                : <div
+                                    className={cn(
+                                      'grid gap-4',
+                                      q.type === 'multiple_choice' ?
+                                        'grid-cols-1'
+                                      : 'grid-cols-1 md:grid-cols-2',
+                                    )}>
+                                    {(shuffledOptions[q.id] || q.options).map(
+                                      (opt, idx) => {
+                                        const optId =
+                                          typeof opt === 'string' ?
+                                            idx.toString()
+                                          : opt.id;
+                                        const optText =
+                                          typeof opt === 'string' ? opt : (
+                                            opt.text
+                                          );
+                                        const isSelected =
+                                          q.type === 'checkbox' ?
+                                            selectedOptions.includes(optId)
+                                          : selectedOption === optId;
+                                        return (
+                                          <button
+                                            key={
+                                              optId + idx + 'assessment-option'
+                                            }
+                                            onClick={() =>
+                                              q.type === 'checkbox' ?
+                                                setSelectedOptions((p) =>
+                                                  p.includes(optId) ?
+                                                    p.filter((i) => i !== optId)
+                                                  : [...p, optId],
+                                                )
+                                              : setSelectedOption(optId)
+                                            }
+                                            className={cn(
+                                              'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
+                                              isSelected ?
+                                                'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
+                                              : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                                            )}>
+                                            <span className='font-bold text-base md:text-lg'>
+                                              {optText}
+                                            </span>
+                                            <CheckCircle
+                                              className={cn(
+                                                'h-5 w-5 transition-all text-pw-primary',
+                                                isSelected ?
+                                                  'opacity-100 scale-110'
+                                                : 'opacity-0 scale-50',
+                                              )}
+                                            />
+                                          </button>
+                                        );
+                                      },
+                                    )}
+                                  </div>
+                                }
                               </div>
-                            </Card>
-                          </motion.div>
-                        </AnimatePresence>
-
-                        <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>
-                          <AnimatePresence mode='sync'>
-                            {quiz.canGoBack && currentQuestion > 0 && (
-                              <Button
-                                onClick={GoBack}
-                                className='btn-ghost h-10 px-8 text-lg rounded-2xl gap-2 font-bold'>
-                                <ChevronLeft className='h-5 w-5' />
-                                Previous
-                              </Button>
-                            )}
-
-                            <div className='flex items-center gap-3 ml-auto'>
-                              <Button
-                                onClick={handleNext}
-                                className='btn-primary h-10 px-8rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
-                                {(
-                                  currentQuestion + 1 === activeQuestions.length
-                                ) ?
-                                  'FINISH'
-                                : 'NEXT'}
-                                <ChevronRight className='h-5 w-5' />
-                              </Button>
                             </div>
-                          </AnimatePresence>
-                        </div>
+                          </Card>
+                        </motion.div>
+                      </AnimatePresence>
+
+                      <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>
+                        <AnimatePresence mode='sync'>
+                          {quiz.canGoBack && currentQuestion > 0 && (
+                            <Button
+                              onClick={GoBack}
+                              className='btn-ghost h-10 px-8 text-lg rounded-2xl gap-2 font-bold'>
+                              <ChevronLeft className='h-5 w-5' />
+                              Previous
+                            </Button>
+                          )}
+
+                          <div className='flex items-center gap-3 ml-auto'>
+                            <Button
+                              onClick={handleNext}
+                              className='btn-primary h-10 px-8rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
+                              {currentQuestion + 1 === activeQuestions.length ?
+                                'FINISH'
+                              : 'NEXT'}
+                              <ChevronRight className='h-5 w-5' />
+                            </Button>
+                          </div>
+                        </AnimatePresence>
                       </div>
                     </div>
-                  </>
+                  </div>
                 }
               </div>
 
