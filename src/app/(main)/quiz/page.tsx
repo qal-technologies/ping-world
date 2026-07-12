@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -106,6 +106,7 @@ export interface Question {
   skipTo?: string; // Question-level branching: jump to specific question after this one
   skipToCat?: string; // Question-level branching: jump to first question of this category
   category?: string; // Optional category tag for grouping questions
+  timer?: number; // Optional question timer in seconds
 }
 
 interface Details {
@@ -139,6 +140,7 @@ export interface Quiz {
   questions: Question[];
   canGoBack?: boolean;
   showScore?: boolean;
+  showCategoryInPerformance?: boolean;
   askDetails?: Details[];
   //default time is 10mins
   hasTimer?: boolean | string | number;
@@ -193,6 +195,32 @@ const QuizBuilder = ({
   });
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1 for settings
 
+  // Pre-calculate groups for sidebar rendering
+  const sidebarGroups = useMemo(() => {
+    const uncategorized: { question: Question; index: number }[] = [];
+    const categoriesMap: Record<string, { question: Question; index: number }[]> = {};
+
+    editedQuiz.questions.forEach((q, idx) => {
+      const cat = q.category && q.category.trim() !== '' ? q.category.trim() : null;
+      if (!cat) {
+        uncategorized.push({ question: q, index: idx });
+      } else {
+        if (!categoriesMap[cat]) {
+          categoriesMap[cat] = [];
+        }
+        categoriesMap[cat].push({ question: q, index: idx });
+      }
+    });
+
+    return {
+      uncategorized,
+      categories: Object.entries(categoriesMap).map(([name, list]) => ({
+        name,
+        questions: list,
+      })),
+    };
+  }, [editedQuiz.questions]);
+
   useEffect(() => {
     // Autosave to draft storage as the user types
     const timer = setTimeout(async () => {
@@ -206,7 +234,7 @@ const QuizBuilder = ({
     return () => clearTimeout(timer);
   }, [editedQuiz]);
 
-  const addQuestion = () => {
+  const addQuestion = (category?: string) => {
     const qId = Math.random().toString(36).substr(2, 9);
     const newQuestion: Question = {
       id: qId,
@@ -218,7 +246,32 @@ const QuizBuilder = ({
       ],
       correctIndex: `${qId}-opt-0`,
       accessory: 'none',
+      category: category && category.trim() !== '' ? category : undefined,
     };
+
+    if (category && category.trim() !== '') {
+      // Find the index of the last question in this category
+      let lastIndex = -1;
+      for (let i = editedQuiz.questions.length - 1; i >= 0; i--) {
+        if (editedQuiz.questions[i].category === category) {
+          lastIndex = i;
+          break;
+        }
+      }
+
+      if (lastIndex !== -1) {
+        // Insert right after the last question of this category
+        const updatedQuestions = [...editedQuiz.questions];
+        updatedQuestions.splice(lastIndex + 1, 0, newQuestion);
+        setEditedQuiz({
+          ...editedQuiz,
+          questions: updatedQuestions,
+        });
+        setCurrentStep(lastIndex + 1);
+        return;
+      }
+    }
+
     setEditedQuiz({
       ...editedQuiz,
       questions: [...editedQuiz?.questions, newQuestion],
@@ -294,8 +347,9 @@ const QuizBuilder = ({
             <Settings2 className='h-4 w-4' /> Quiz Settings
           </button>
 
-          <div className='flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar'>
-            {editedQuiz.questions.map((q, i) => (
+          <div className='flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar'>
+            {/* Uncategorized Questions */}
+            {sidebarGroups.uncategorized.map(({ question: q, index: i }) => (
               <button
                 key={q.id}
                 onClick={() => setCurrentStep(i)}
@@ -317,10 +371,57 @@ const QuizBuilder = ({
                 />
               </button>
             ))}
+
+            {/* Categorized Questions grouped by Category */}
+            {sidebarGroups.categories.map((cat) => (
+              <div key={cat.name} className='flex flex-col gap-1 mt-2 border-l border-white/10 pl-2'>
+                {/* Category Header */}
+                <div className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/5 rounded-md'>
+                  <span className='truncate'>📂 {cat.name}</span>
+                  <button
+                    type='button'
+                    title={`Add question under ${cat.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addQuestion(cat.name);
+                    }}
+                    className='p-1 rounded hover:bg-white/10 text-pw-muted hover:text-pw-primary transition-all'
+                  >
+                    <Plus className='h-3.5 w-3.5' />
+                  </button>
+                </div>
+
+                {/* Categorized Questions List (with visual indentation) */}
+                <div className='flex flex-col gap-1 ml-4'>
+                  {cat.questions.map(({ question: q, index: i }) => (
+                    <button
+                      key={q.id}
+                      onClick={() => setCurrentStep(i)}
+                      className={cn(
+                        'flex items-center justify-between p-3 rounded-xl text-xs font-medium transition-all group border',
+                        currentStep === i ?
+                          'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                        : 'bg-pw-surface/50 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
+                      )}>
+                      <span className='truncate flex-1 text-left'>
+                        Q{i + 1}: {q.text || 'New Question...'}
+                      </span>
+                      <Trash2
+                        className='h-3 w-3 opacity-0 group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeQuestion(i);
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           <Button
-            onClick={addQuestion}
+            onClick={() => addQuestion()}
             variant='outline'
             className='w-full border-dashed border-white/20 hover:border-pw-primary/50 hover:bg-pw-primary/5 gap-2 h-12'>
             <Plus className='h-4 w-4' /> Add Question
@@ -574,6 +675,31 @@ const QuizBuilder = ({
                               <Check className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
                             {editedQuiz.showScore ? 'ON' : 'OFF'}
+                          </Button>
+                        </QuizSettingItem>
+
+                        <QuizSettingItem
+                          label='Category Breakdown'
+                          description='Display performance scores broken down by question categories on results page.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                showCategoryInPerformance: !editedQuiz.showCategoryInPerformance,
+                              })
+                            }
+                            className={cn(
+                              'h-6 min-w-[80px] gap-2',
+                              editedQuiz.showCategoryInPerformance ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {editedQuiz.showCategoryInPerformance ?
+                              <Check className='h-3 w-3' />
+                            : <X className='h-3 w-3' />}
+                            {editedQuiz.showCategoryInPerformance ? 'ON' : 'OFF'}
                           </Button>
                         </QuizSettingItem>
 
@@ -994,6 +1120,25 @@ const QuizBuilder = ({
                         className='h-9 text-xs bg-white/5 border-white/10 min-w-[200px]'
                       />
                     )}
+
+                    {/* Question Timer */}
+                    <div className='flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 rounded-md h-9'>
+                      <Clock className='h-3.5 w-3.5 text-pw-muted' />
+                      <input
+                        type='number'
+                        placeholder='Timer (s)'
+                        value={editedQuiz.questions[currentStep].timer || ''}
+                        onChange={(e) => {
+                          const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                          updateQuestion(currentStep, {
+                            ...editedQuiz.questions[currentStep],
+                            timer: val && val > 0 ? val : undefined,
+                          });
+                        }}
+                        className='w-14 bg-transparent border-none outline-none text-[10px] text-pw-text font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+                        title='Set question timer in seconds (optional)'
+                      />
+                    </div>
 
                     <div className='w-[1px] h-9 bg-white/5 mx-2' />
 
@@ -1570,6 +1715,8 @@ const QuizBuilder = ({
                                               <Share2 size={10} />
                                               {opt.skipToCat ?
                                                 `To Grp: ${opt.skipToCat}`
+                                              : opt.skipTo === 'end' ?
+                                                'Finish Assessment'
                                               : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
                                               }
                                             </>
@@ -1605,6 +1752,29 @@ const QuizBuilder = ({
                                           }}>
                                           <span className='text-xs text-pw-muted italic'>
                                             Default (Next Question)
+                                          </span>
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            const o = { ...newOpts[idx] };
+                                            o.skipTo = 'end';
+                                            delete o.skipToCat;
+                                            newOpts[idx] = o;
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
+                                          }}>
+                                          <span className='text-xs text-pw-danger'>
+                                            ⛔ Finish Assessment
                                           </span>
                                         </DropdownMenuItem>
 
