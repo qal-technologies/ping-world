@@ -7,13 +7,11 @@ import {
   Plus,
   Save,
   Trash2,
-  Eye,
   Download,
   Upload,
   ChevronRight,
   ChevronLeft,
   CheckCircle2,
-  AlertCircle,
   Settings2,
   Share2,
   FileJson,
@@ -32,6 +30,9 @@ import {
   BadgeQuestionMark,
   Play,
   Star,
+  Grid,
+  File,
+  Folder,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -198,10 +199,14 @@ const QuizBuilder = ({
   // Pre-calculate groups for sidebar rendering
   const sidebarGroups = useMemo(() => {
     const uncategorized: { question: Question; index: number }[] = [];
-    const categoriesMap: Record<string, { question: Question; index: number }[]> = {};
+    const categoriesMap: Record<
+      string,
+      { question: Question; index: number }[]
+    > = {};
 
     editedQuiz.questions.forEach((q, idx) => {
-      const cat = q.category && q.category.trim() !== '' ? q.category.trim() : null;
+      const cat =
+        q.category && q.category.trim() !== '' ? q.category.trim() : null;
       if (!cat) {
         uncategorized.push({ question: q, index: idx });
       } else {
@@ -347,7 +352,7 @@ const QuizBuilder = ({
             <Settings2 className='h-4 w-4' /> Quiz Settings
           </button>
 
-          <div className='flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar'>
+          <div className='flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2 pb-3 custom-scrollbar'>
             {/* Uncategorized Questions */}
             {sidebarGroups.uncategorized.map(({ question: q, index: i }) => (
               <button
@@ -374,19 +379,22 @@ const QuizBuilder = ({
 
             {/* Categorized Questions grouped by Category */}
             {sidebarGroups.categories.map((cat) => (
-              <div key={cat.name} className='flex flex-col gap-1 mt-2 border-l border-white/10 pl-2'>
+              <div
+                key={cat.name}
+                className='flex flex-col gap-1 mt-2 border-l border-white/10 pl-2'>
                 {/* Category Header */}
                 <div className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/5 rounded-md'>
-                  <span className='truncate'>📂 {cat.name}</span>
+                  <span className='truncate flex items-center'>
+                    <Folder className='w-4 h-4 mr-1' /> {cat.name}
+                  </span>
                   <button
                     type='button'
-                    title={`Add question under ${cat.name}`}
+                    title={`Add question under ${cat.name.toUpperCase()}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       addQuestion(cat.name);
                     }}
-                    className='p-1 rounded hover:bg-white/10 text-pw-muted hover:text-pw-primary transition-all'
-                  >
+                    className='p-1 rounded hover:bg-white/10 text-pw-muted hover:text-pw-primary transition-all'>
                     <Plus className='h-3.5 w-3.5' />
                   </button>
                 </div>
@@ -407,7 +415,7 @@ const QuizBuilder = ({
                         Q{i + 1}: {q.text || 'New Question...'}
                       </span>
                       <Trash2
-                        className='h-3 w-3 opacity-0 group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
+                        className='h-3 w-3 base:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
                         onClick={(e) => {
                           e.stopPropagation();
                           removeQuestion(i);
@@ -684,12 +692,23 @@ const QuizBuilder = ({
                           <Button
                             variant='outline'
                             size='sm'
-                            onClick={() =>
+                            onClick={() => {
+                              if (
+                                !editedQuiz.endScreen.showPerformance &&
+                                !editedQuiz.showCategoryInPerformance
+                              ) {
+                                toast.error(
+                                  `To show category breakdown, go to 'Results & Review' and turn on (Show Performance Stats)`,
+                                );
+                                return null;
+                              }
+
                               setEditedQuiz({
                                 ...editedQuiz,
-                                showCategoryInPerformance: !editedQuiz.showCategoryInPerformance,
-                              })
-                            }
+                                showCategoryInPerformance:
+                                  !editedQuiz.showCategoryInPerformance,
+                              });
+                            }}
                             className={cn(
                               'h-6 min-w-[80px] gap-2',
                               editedQuiz.showCategoryInPerformance ?
@@ -699,7 +718,9 @@ const QuizBuilder = ({
                             {editedQuiz.showCategoryInPerformance ?
                               <Check className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
-                            {editedQuiz.showCategoryInPerformance ? 'ON' : 'OFF'}
+                            {editedQuiz.showCategoryInPerformance ?
+                              'ON'
+                            : 'OFF'}
                           </Button>
                         </QuizSettingItem>
 
@@ -1129,13 +1150,16 @@ const QuizBuilder = ({
                         placeholder='Timer (s)'
                         value={editedQuiz.questions[currentStep].timer || ''}
                         onChange={(e) => {
-                          const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                          const val =
+                            e.target.value ?
+                              parseInt(e.target.value, 10)
+                            : undefined;
                           updateQuestion(currentStep, {
                             ...editedQuiz.questions[currentStep],
                             timer: val && val > 0 ? val : undefined,
                           });
                         }}
-                        className='w-14 bg-transparent border-none outline-none text-[10px] text-pw-text font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+                        className='w-14 bg-transparent border-none outline-none text-[10px] text-pw-text font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-outline'
                         title='Set question timer in seconds (optional)'
                       />
                     </div>
@@ -1632,7 +1656,6 @@ const QuizBuilder = ({
                                   isCorrect ?
                                     'bg-pw-success/10 border-pw-success/50 shadow-md shadow-pw-success/5'
                                   : 'bg-white/5 border-white/5 hover:border-pw-primary/30',
-                                  
                                 )}>
                                 <div className='flex items-center gap-3'>
                                   {editedQuiz.type === 'quiz' && (
@@ -2597,7 +2620,7 @@ export default function QuizPage() {
                                           )}
                                         </p>
                                       </div>
-                                      {!ans.correct && (
+                                      {viewingResponses.type === 'quiz' && !ans.correct && (
                                         <div className='flex items-start gap-2 pt-1'>
                                           <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
                                             CORRECT:

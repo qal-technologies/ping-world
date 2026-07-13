@@ -29,6 +29,7 @@ import {
   Lock,
   LogOut,
   BadgeQuestionMark,
+  Folder,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -403,7 +404,6 @@ export default function PublicQuizPage() {
   const [userData, setUserData] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
-  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
   const [lastUncatIndex, setLastUncatIndex] = useState<number>(0);
   const [questionTimeLeft, setQuestionTimeLeft] = useState<number | null>(null);
@@ -432,7 +432,8 @@ export default function PublicQuizPage() {
         }
 
         const isBypass = typeof window !== 'undefined' && (window.location.search.includes('bypassAuth') || window.localStorage.getItem('bypassAuth') === 'true');
-        if (!target.askDetails && !session && !isBypass) {
+        
+        if (!target.askDetails && !session) {
           setAuthRequired(true);
         }
 
@@ -1114,7 +1115,8 @@ export default function PublicQuizPage() {
     );
   }
 
-  if (isFinished && quiz.endScreen) {
+  if(isFinished && quiz.endScreen) {
+    const numberCount = navigationHistory.length;
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
         <div className='container relative z-10 mx-auto px-6 py-20 max-w-2xl text-center'>
@@ -1137,48 +1139,56 @@ export default function PublicQuizPage() {
                   Result
                 </div>
                 <div className='text-3xl font-bold mb-4'>
-                  {score} / {activeQuestions.length}
+                  {score} / {numberCount + 1}
                 </div>
                 <div className='w-full h-3 bg-pw-surface rounded-full overflow-hidden border border-white/5 mb-6'>
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
-                      width: `${(score / activeQuestions.length) * 100}%`,
+                      width: `${(score / numberCount + 1) * 100}%`,
                     }}
                     className='h-full gradient-brand rounded-full'
                   />
                 </div>
 
-                {quiz.showCategoryInPerformance && Object.keys(categoryScores).length > 0 && (
-                  <div className='space-y-4 text-left border-t border-white/5 pt-4'>
-                    <h4 className='text-[10px] font-black text-pw-muted uppercase tracking-[0.2em] mb-3'>
-                      Category Breakdown
-                    </h4>
-                    <div className='grid grid-cols-1 gap-3'>
-                      {Object.entries(categoryScores).map(([cat, stats]) => {
-                        const percent = stats.total > 0 ? (stats.correct / stats.total) * 100 : 0;
-                        const scoreStr = `${stats.correct} / ${stats.total}`;
-                        return (
-                          <div key={cat} className='bg-white/5 p-3 rounded-xl border border-white/5 flex flex-col gap-2'>
-                            <div className='flex justify-between items-center text-xs font-bold'>
-                              <span className='text-pw-text uppercase tracking-wider flex items-center gap-1.5'>
-                                📂 {cat}
-                              </span>
-                              <span className='text-pw-primary'>{scoreStr}</span>
+                {quiz.showCategoryInPerformance &&
+                  Object.keys(categoryScores).length > 0 && (
+                    <div className='space-y-4 text-left border-t border-white/5 pt-4'>
+                      <h4 className='text-[10px] font-black text-pw-muted uppercase tracking-[0.2em] mb-3'>
+                        Category Breakdown
+                      </h4>
+                      <div className='grid grid-cols-1 gap-3'>
+                        {Object.entries(categoryScores).map(([cat, stats]) => {
+                          const percent =
+                            stats.total > 0 ?
+                              (stats.correct / stats.total) * 100
+                            : 0;
+                          const scoreStr = `${stats.correct} / ${stats.total}`;
+                          return (
+                            <div
+                              key={cat}
+                              className='bg-white/5 p-3 rounded-xl border border-white/5 flex flex-col gap-2'>
+                              <div className='flex justify-between items-center text-xs font-bold'>
+                                <span className='text-pw-text uppercase tracking-wider flex items-center gap-1.5'>
+                                  <Folder className='w-4 h-4 mr-1' /> {cat}
+                                </span>
+                                <span className='text-pw-primary'>
+                                  {scoreStr}
+                                </span>
+                              </div>
+                              <div className='w-full h-1.5 bg-black/30 rounded-full overflow-hidden'>
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${percent}%` }}
+                                  className='h-full bg-pw-primary rounded-full'
+                                />
+                              </div>
                             </div>
-                            <div className='w-full h-1.5 bg-black/30 rounded-full overflow-hidden'>
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${percent}%` }}
-                                className='h-full bg-pw-primary rounded-full'
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </Card>
             )}
 
@@ -1250,7 +1260,7 @@ export default function PublicQuizPage() {
           <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
             {quiz.title.toUpperCase()}
           </h1>
-          <p className='text-pw-muted text-lg leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'>
+          <p className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'>
             {quiz.description}
           </p>
 
@@ -1356,7 +1366,7 @@ export default function PublicQuizPage() {
           <div className='container relative z-10 mx-auto px-2 py-10 max-w-lg flex-1 flex flex-col justify-center'>
             <div className='bkblur bg-white/5 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl'>
               <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
-                ENTER YOU DETAILS
+                ENTER YOUR DETAILS
               </h3>
               <div className='space-y-5'>
                 {quiz.askDetails?.map((detail, idx) => (
@@ -1501,6 +1511,8 @@ export default function PublicQuizPage() {
 
                   <Button
                     variant='ghost'
+                    title={`Quit ${capFirst(quiz.type)}`}
+
                     size='sm'
                     onClick={() =>
                       confirmLeaveQuiz(() => (window.location.href = '/quiz'))
@@ -1524,7 +1536,7 @@ export default function PublicQuizPage() {
                 </div>
               </div>
 
-              <div className='flex flex-col gap-4 items-end pt-1 px-2'>
+              <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
                 {/* Top Progress Bar */}
                 <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                   <motion.div
@@ -1540,7 +1552,7 @@ export default function PublicQuizPage() {
                   <Button
                     title={`Submit ${capFirst(quiz.type)}`}
                     onClick={confirmSubmitQuiz}
-                    className='h-10 max-w-[200px] w-1/4 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex sm:hidden '>
+                    className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden '>
                     <CheckCircle2 size={18} />
                     <span className='font-bold'>SUBMIT</span>
                   </Button>
@@ -1603,7 +1615,7 @@ export default function PublicQuizPage() {
                           className='space-y-8 w-full items-center max-w-[600px]'>
                           <Card className='glass bkblur rounded-4xl p-4 md:p-6 bg-pw-surface/40 border-white/5 shadow-2xl relative overflow-hidden group flex flex-col'>
                             <div className='flex-1 w-full flex flex-col'>
-                              <div className='flex flex-col gap-6 mb-8'>
+                              <div className='flex flex-col gap-6 mb-5'>
                                 <div className='flex justify-between items-start gap-4'>
                                   <div className='flex items-center gap-4 flex-1'>
                                     <div
@@ -1725,7 +1737,6 @@ export default function PublicQuizPage() {
                                     </DropdownMenu>
                                   </div>
                                 : q.type === 'input' ?
-                                  <div className='py-2'>
                                     <textarea
                                       value={content}
                                       onChange={(e) =>
@@ -1734,7 +1745,6 @@ export default function PublicQuizPage() {
                                       placeholder='Type your answer here...'
                                       className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
                                     />
-                                  </div>
                                 : q.type === 'range' ?
                                   <div className='flex flex-col items-center gap-10 py-8'>
                                     <div className='w-full max-w-md space-y-6'>
