@@ -38,7 +38,7 @@ export default function Wrapper({
 
   return (
     <Card
-      className='w-full flex flex-col gap-0 overflow-hidden border-white/5 bg-white/[0.02] mb-3 p-0'
+      className='w-full flex flex-col gap-0 overflow-hidden border-white/5 bg-white/[0.02] mb-3 p-0 bkblur'
       key={title + '-wrapper'}>
       <div
         onClick={() => setOpen(!open)}

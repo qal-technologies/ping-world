@@ -14,10 +14,10 @@ import {
   MessageSquare,
   Type,
   ImageIcon,
-  Puzzle,
   ChevronDown,
   Home,
   Pencil,
+  Brain,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,18 @@ import {supabase} from '@/lib/supabase';
 
 const toolLinks = [
   {
+    href: '/quiz',
+    label: 'Quizzable',
+    icon: Brain,
+    description: 'Interactive quiz builder',
+  },
+  {
+    href: '/composer',
+    label: 'Composer',
+    description: 'Compose posts and captions',
+    icon: Pencil,
+  },
+  {
     href: '/message',
     label: 'AnonLink',
     icon: MessageSquare,
@@ -41,12 +53,6 @@ const toolLinks = [
     label: 'Text Editor',
     icon: Type,
     description: 'Rich text and post maker',
-  },
-  {
-    href: '/quiz',
-    label: 'Quizzable',
-    icon: Puzzle,
-    description: 'Interactive quiz builder',
   },
   {
     href: '/image',
@@ -60,18 +66,12 @@ const toolLinks = [
     icon: Zap,
     description: 'Clean links with QR codes',
   },
-  {
-    href: '/composer',
-    label: 'Composer',
-    description: 'Compose posts and captions',
-    icon: Pencil,
-  }
 ];
 
 const navLinks = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/tools', label: 'Browse Tools', icon: Wrench },
-  { href: '/composer', label: 'Composer', icon: PenTool },
+  { href: '/quiz', label: 'Quiz', icon: Brain },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ];
 

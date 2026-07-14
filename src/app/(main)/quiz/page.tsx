@@ -438,7 +438,7 @@ const QuizBuilder = ({
 
         {/* Editor Area */}
         <div className='lg:col-span-3'>
-          <Card className='card-glow p-4 pb-2 pt-6 lg:pt-9 lg:p-8 h-full'>
+          <Card className='bg-transparent p-1 sm:p-4 pb-2 ring-0 sm:ring-1 pt-6 lg:pt-9 lg:p-8 h-full sm:bkblur'>
             {currentStep === -1 ?
               <div className='space-y-4 mt-1'>
                 <div className='flex items-center justify-between'>
@@ -502,6 +502,7 @@ const QuizBuilder = ({
                       </label>
                       <Input
                         value={editedQuiz.title}
+                        maxLength={20}
                         onChange={(e) =>
                           setEditedQuiz({
                             ...editedQuiz,
@@ -2176,10 +2177,14 @@ export default function QuizPage() {
   };
 
   const deleteQuiz = async (id: string) => {
-    await HybridStorage.delete(id, 'quiz');
-    const newQuizzes = quizzes.filter((q) => q.id !== id);
-    setQuizzes(newQuizzes);
-    toast.success('Quiz deleted');
+    const check = confirm('Do you want to delete this assessment? This cannot be undone');
+
+    if(check) {
+      await HybridStorage.delete(id, 'quiz');
+      const newQuizzes = quizzes.filter((q) => q.id !== id);
+      setQuizzes(newQuizzes);
+      toast.success('Quiz deleted');
+    }
   };
 
   const exportQuiz = (quiz: Quiz) => {
@@ -2521,15 +2526,20 @@ export default function QuizPage() {
                             <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
                               {resp.userData.name ||
                                 resp.userData.email ||
-                                'Anonymous'}
+                                resp.userData.pingAuthName ||
+                                resp.userData.pingAuthEmail ||
+                                `Taker ${idx + 1}`}
                             </p>
                             <p className='text-[10px] text-pw-muted italic'>
                               {new Date(resp.timestamp).toLocaleString()}
                             </p>
                           </div>
-                          <div className='bg-pw-primary/10 px-2.5 py-1 rounded-full text-[10px] font-bold text-pw-primary border border-pw-primary/20 shrink-0'>
-                            {resp.score} / {resp.totalQuestions}
-                          </div>
+
+                          {viewingResponses.type === 'quiz' && (
+                            <div className='bg-pw-primary/10 px-2.5 py-1 rounded-full text-[10px] font-bold text-pw-primary border border-pw-primary/20 shrink-0'>
+                              {resp.score} / {resp.totalQuestions}
+                            </div>
+                          )}
                         </div>
 
                         <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5'>
@@ -2620,22 +2630,23 @@ export default function QuizPage() {
                                           )}
                                         </p>
                                       </div>
-                                      {viewingResponses.type === 'quiz' && !ans.correct && (
-                                        <div className='flex items-start gap-2 pt-1'>
-                                          <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
-                                            CORRECT:
-                                          </p>
-                                          <p
-                                            className={cn(
-                                              'text-[11px] font-mono text-white/80',
-                                            )}>
-                                            {resolveCorrectText(
-                                              viewingResponses,
-                                              ans.questionId,
-                                            )}
-                                          </p>
-                                        </div>
-                                      )}
+                                      {viewingResponses.type === 'quiz' &&
+                                        !ans.correct && (
+                                          <div className='flex items-start gap-2 pt-1'>
+                                            <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
+                                              CORRECT:
+                                            </p>
+                                            <p
+                                              className={cn(
+                                                'text-[11px] font-mono text-white/80',
+                                              )}>
+                                              {resolveCorrectText(
+                                                viewingResponses,
+                                                ans.questionId,
+                                              )}
+                                            </p>
+                                          </div>
+                                        )}
                                     </div>
                                   );
                                 })}

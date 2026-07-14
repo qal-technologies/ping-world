@@ -401,7 +401,7 @@ export default function PublicQuizPage() {
 
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
-  const [userData, setUserData] = useState<Record<string, string>>({});
+  const [userData, setUserData] = useState<Record<string, string | null>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
@@ -427,12 +427,26 @@ export default function PublicQuizPage() {
         try {
           const { data } = await supabase.auth.getSession();
           session = data?.session;
+
+          if (session && session !== undefined) {
+            setUserData({
+              ...userData,
+              pingAuthEmail: session.user.email || null,
+              pingAuthName: session.user.user_metadata.username || null,
+            });
+          }
         } catch (err) {
-          console.warn("Supabase auth check failed, defaulting to no session", err);
+          console.warn(
+            'Supabase auth check failed, defaulting to no session',
+            err,
+          );
         }
 
-        const isBypass = typeof window !== 'undefined' && (window.location.search.includes('bypassAuth') || window.localStorage.getItem('bypassAuth') === 'true');
-        
+        const isBypass =
+          typeof window !== 'undefined' &&
+          (window.location.search.includes('bypassAuth') ||
+            window.localStorage.getItem('bypassAuth') === 'true');
+
         if (!target.askDetails && !session) {
           setAuthRequired(true);
         }
@@ -481,7 +495,9 @@ export default function PublicQuizPage() {
         // Shuffle questions
         let questionsToUse = [...migratedQuestions];
         if (finalQuiz.randomizeQuestions) {
-          const uncategorized = migratedQuestions.filter((q) => !q.category || q.category.trim() === '');
+          const uncategorized = migratedQuestions.filter(
+            (q) => !q.category || q.category.trim() === '',
+          );
           const categoriesMap: Record<string, Question[]> = {};
           migratedQuestions.forEach((q) => {
             if (q.category && q.category.trim() !== '') {
@@ -495,7 +511,10 @@ export default function PublicQuizPage() {
           const shuffledUncat = [...uncategorized];
           for (let i = shuffledUncat.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [shuffledUncat[i], shuffledUncat[j]] = [shuffledUncat[j], shuffledUncat[i]];
+            [shuffledUncat[i], shuffledUncat[j]] = [
+              shuffledUncat[j],
+              shuffledUncat[i],
+            ];
           }
 
           const shuffledCategories: Question[] = [];
@@ -503,7 +522,10 @@ export default function PublicQuizPage() {
             const shuffledCat = [...questions];
             for (let i = shuffledCat.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
-              [shuffledCat[i], shuffledCat[j]] = [shuffledCat[j], shuffledCat[i]];
+              [shuffledCat[i], shuffledCat[j]] = [
+                shuffledCat[j],
+                shuffledCat[i],
+              ];
             }
             shuffledCategories.push(...shuffledCat);
           });
@@ -512,7 +534,7 @@ export default function PublicQuizPage() {
         }
         setActiveQuestions(questionsToUse);
         const firstUncatIdx = questionsToUse.findIndex(
-          (quest) => !quest.category || quest.category.trim() === ''
+          (quest) => !quest.category || quest.category.trim() === '',
         );
         if (firstUncatIdx !== -1) {
           setCurrentQuestion(firstUncatIdx);
@@ -542,8 +564,12 @@ export default function PublicQuizPage() {
   // 2. Timer Setup
   useEffect(() => {
     if (started && !isFinished && quiz?.hasTimer) {
-      const totalQuestionTimers = activeQuestions.reduce((sum, q) => sum + (q.timer || 0), 0);
-      let generalTimerSeconds = (typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10) * 60;
+      const totalQuestionTimers = activeQuestions.reduce(
+        (sum, q) => sum + (q.timer || 0),
+        0,
+      );
+      let generalTimerSeconds =
+        (typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10) * 60;
       if (totalQuestionTimers > generalTimerSeconds) {
         const remainder = totalQuestionTimers - generalTimerSeconds;
         generalTimerSeconds += remainder;
@@ -754,7 +780,9 @@ export default function PublicQuizPage() {
   };
   // --- Removed redundant q declaration as it is now memoized ---
 
-  const handleNext = (isAutoSubmit: boolean | React.MouseEvent<HTMLButtonElement> = false) => {
+  const handleNext = (
+    isAutoSubmit: boolean | React.MouseEvent<HTMLButtonElement> = false,
+  ) => {
     const autoSubmit = isAutoSubmit === true;
     let currentSelectedOption = selectedOption;
     if (!autoSubmit) {
@@ -952,7 +980,8 @@ export default function PublicQuizPage() {
       if (q && q.category && q.category.trim() !== '') {
         const currentCat = q.category;
         const nextInCatIdx = activeQuestions.findIndex(
-          (quest, idx) => idx > currentQuestion && quest.category === currentCat
+          (quest, idx) =>
+            idx > currentQuestion && quest.category === currentCat,
         );
         if (nextInCatIdx !== -1) {
           nextIdx = nextInCatIdx;
@@ -960,7 +989,9 @@ export default function PublicQuizPage() {
           // This category has finished!
           // Find the next uncategorized question after the last visited uncategorized question
           const nextUncatIdx = activeQuestions.findIndex(
-            (quest, idx) => idx > lastUncatIndex && (!quest.category || quest.category.trim() === '')
+            (quest, idx) =>
+              idx > lastUncatIndex &&
+              (!quest.category || quest.category.trim() === ''),
           );
           if (nextUncatIdx !== -1) {
             nextIdx = nextUncatIdx;
@@ -972,7 +1003,9 @@ export default function PublicQuizPage() {
       } else {
         // Current question is uncategorized. Default sequential next is the next uncategorized question.
         const nextUncatIdx = activeQuestions.findIndex(
-          (quest, idx) => idx > currentQuestion && (!quest.category || quest.category.trim() === '')
+          (quest, idx) =>
+            idx > currentQuestion &&
+            (!quest.category || quest.category.trim() === ''),
         );
         if (nextUncatIdx !== -1) {
           nextIdx = nextUncatIdx;
@@ -1115,7 +1148,7 @@ export default function PublicQuizPage() {
     );
   }
 
-  if(isFinished && quiz.endScreen) {
+  if (isFinished && quiz.endScreen) {
     const numberCount = navigationHistory.length;
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
@@ -1217,7 +1250,7 @@ export default function PublicQuizPage() {
     <div
       onContextMenu={(e) => quiz.enforceSecurity && e.preventDefault()}
       className={cn(
-        'relative min-h-screen flex flex-col transition-colors duration-500 pb-20 overflow-x-hidden',
+        'relative min-h-screen flex flex-col transition-colors duration-500 overflow-x-hidden',
         quizTheme === 'dark' ? 'bg-pw-bg text-white' : 'bg-slate-50 text-black',
         quiz.enforceSecurity && 'select-none',
       )}>
@@ -1251,7 +1284,7 @@ export default function PublicQuizPage() {
 
       {/* 1. Intro Gate */}
       {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
-        <div className='container relative z-10 mx-auto px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
+        <div className=' relative z-10 mx-auto px-4 max-w-2xl text-center flex-1 flex flex-col justify-center'>
           <div className='flex justify-center mb-6 text-pw-primary'>
             {quiz.type === 'quiz' ?
               <Brain size={60} />
@@ -1469,22 +1502,19 @@ export default function PublicQuizPage() {
         <>
           <div
             className={cn(
-              'container relative z-10 mx-auto px-4 md:px-6 pt-12 pb-10 max-w-7xl',
+              'container relative items-center z-10 mx-auto px-4 md:px-6 pt-12 pb-10 max-w-7xl',
               quizTheme === 'dark' ? 'text-white' : 'text-black',
             )}>
-            <div className='mb-8 flex flex-col gap-2 w-full'>
+            <div
+              className='mb-8 flex flex-col gap-2 w-full max-w-[650px]'
+              style={{ placeSelf: 'center' }}>
               {/* Header Row */}
               <div className='flex flex-wrap items-center justify-between gap-4 bg-white/2 p-2 rounded-full border border-white/4 bkblur'>
                 <div className='flex items-center gap-4 pl-3'>
                   <div className='flex flex-col'>
-                    <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
+                    <h1 className='text-lg md:text-xl font-bold font-display tracking-tight leading-none'>
                       {quiz.title}
                     </h1>
-                    <span
-                      className='text-[8px] leading-none opacity-40 hidden'
-                      style={{ placeSelf: 'flex-start' }}>
-                      {quiz.type.toUpperCase()}
-                    </span>
                   </div>
                 </div>
 
@@ -1512,7 +1542,6 @@ export default function PublicQuizPage() {
                   <Button
                     variant='ghost'
                     title={`Quit ${capFirst(quiz.type)}`}
-
                     size='sm'
                     onClick={() =>
                       confirmLeaveQuiz(() => (window.location.href = '/quiz'))
@@ -1536,7 +1565,7 @@ export default function PublicQuizPage() {
                 </div>
               </div>
 
-              <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
+              <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-4'>
                 {/* Top Progress Bar */}
                 <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                   <motion.div
@@ -1584,8 +1613,8 @@ export default function PublicQuizPage() {
                     </Button>
                   </div>
                 : <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
-                    <div className='flex items-center gap-2'>
-                      <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
+                    <div className='flex sm:items-center gap-2'>
+                      <div className='bg-pw-primary/6 text-white border border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
                         {(
                           quiz.questions.some(
                             (q) => q.category || q.category !== null,
@@ -1598,7 +1627,10 @@ export default function PublicQuizPage() {
 
                       {questionTimeLeft !== null && (
                         <div className='badge bg-pw-warning/10 text-pw-warning border-pw-warning/20 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1'>
-                          <Clock size={12} className='animate-pulse' />
+                          <Clock
+                            size={12}
+                            className='animate-pulse'
+                          />
                           <span>{questionTimeLeft}s</span>
                         </div>
                       )}
@@ -1612,8 +1644,8 @@ export default function PublicQuizPage() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -20 }}
                           transition={{ duration: 0.3, ease: 'easeOut' }}
-                          className='space-y-8 w-full items-center max-w-[600px]'>
-                          <Card className='glass bkblur rounded-4xl p-4 md:p-6 bg-pw-surface/40 border-white/5 shadow-2xl relative overflow-hidden group flex flex-col'>
+                          className='space-y-8 w-full items-center max-w-[700px]'>
+                          <Card className='sm:glass sm:bkblur sm:rounded-4xl sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 ring-0 sm:ring-1 sm:shadow-2xl relative bg-transparent overflow-hidden group flex flex-col'>
                             <div className='flex-1 w-full flex flex-col'>
                               <div className='flex flex-col gap-6 mb-5'>
                                 <div className='flex justify-between items-start gap-4'>
@@ -1675,7 +1707,7 @@ export default function PublicQuizPage() {
                                   )}
                               </div>
 
-                              <div className='space-y-4'>
+                              <div className='space-y-4 px-2 sm:px-0'>
                                 {q.type === 'dropdown' ?
                                   <div className='flex justify-center py-4'>
                                     <DropdownMenu>
@@ -1737,14 +1769,12 @@ export default function PublicQuizPage() {
                                     </DropdownMenu>
                                   </div>
                                 : q.type === 'input' ?
-                                    <textarea
-                                      value={content}
-                                      onChange={(e) =>
-                                        setContent(e.target.value)
-                                      }
-                                      placeholder='Type your answer here...'
-                                      className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
-                                    />
+                                  <textarea
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    placeholder='Type your answer here...'
+                                    className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
+                                  />
                                 : q.type === 'range' ?
                                   <div className='flex flex-col items-center gap-10 py-8'>
                                     <div className='w-full max-w-md space-y-6'>

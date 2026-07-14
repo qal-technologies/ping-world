@@ -17,6 +17,8 @@ import {
   ChevronUp,
   Wifi,
   Star,
+  Check,
+  CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -179,12 +181,16 @@ export function ComposerLayout() {
          xl:grid-cols-12 gap-6 mt-10 lg:mt-12'>
           {/* ─── Left: Editor + Tools ─── */}
           <div className='md:col-span-3 xl:col-span-8 space-y-4'>
-
             {/* Platform Editor */}
             <div className='flex items-center flex-col w-full gap-2'>
-
               {/* Add Network / Add Social button */}
-              <div className='h-12 bg-transparent w-full items-center justify-end flex'>
+              <div className='h-12 bg-transparent w-full items-center justify-end flex gap-2'>
+                <button
+                  title='Post to social platforms'
+                  className='btn-primary h-10 rounded-full flex items-center justify-between gap-3' style={{borderRadius:'200px'}}>
+                  <CheckCircle className='w-4 h-4' />
+                  Post
+                </button>
                 <button
                   title='Add New Social Platform'
                   onClick={() =>

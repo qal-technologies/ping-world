@@ -904,3 +904,10 @@ button,
   border-top-left-radius: 60px;
   border-bottom-right-radius: 60px;
 }
+
+
+.no-border {
+  border: none !important;
+  border-style: none !important;
+  border-color: transparent !important;
+}
