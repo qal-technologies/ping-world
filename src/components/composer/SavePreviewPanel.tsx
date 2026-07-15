@@ -59,6 +59,8 @@ export function SavePreviewPanel() {
         scale: 1.5,
         backgroundColor: '#02040f',
         logging: false,
+        useCORS: true,
+        allowTaint: true
       });
 
       const ctx = canvas.getContext('2d');
@@ -177,19 +179,18 @@ export function SavePreviewPanel() {
       <div className='overflow-x-auto hide-scrollbar w-full flex justify-center items-center'>
         <div
           ref={previewRef}
-          className='py-4 sm:p-4 bg-[#02040f] w-auto items-center'>
-          {/* <LivePreview
+          className='py-4 sm:p-4 bg-[#02040f] w-full max-w-[420px] items-center'>
+          {/* jules edit: Uncommented LivePreview with safe rendering configurations */}
+          <LivePreview
             forExport
             dark={darkMode}
             platformOverride={exportPlatform}
-          /> */}
+          />
 
-          <img src='/favicon.ico' width='200px' height='200px'/>
           {!state.isPremium && (
             <div className='mt-4 flex flex-col items-center opacity-50 w-full'>
               <div className='flex flex-col items-center'>
-                <div className='flex items-center gap-1 w-full mb-[-3px]'>
-                  {/* <div className='w-1.5 h-1.5 rounded-full bg-pw-primary' /> */}
+                <div className='flex items-center gap-1 w-full mb-[-3px] justify-center'>
                   <span
                     className='text-[10px] font-bold tracking-wider'
                     style={{

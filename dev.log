@@ -1,0 +1,11 @@
+
+> pingwrld@0.1.0 dev
+> next dev --turbopack
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+✓ Ready in 541ms
+
+○ Compiling /tools/colors ...
+ GET /tools/colors 200 in 9.2s (next.js: 8.1s, application-code: 1088ms)
