@@ -382,6 +382,13 @@ pre {
   outline: 1px solid #5c6fff;
   outline-offset: 1px;
 }
+
+::-ms-tooltip {
+  background: var(--background);
+  color: var(--pw-cyan);
+  border-radius: 10px;
+}
+
 .no-outline:focus-visible {
   outline: none;
   outline-offset: 0;
@@ -904,7 +911,6 @@ button,
   border-top-left-radius: 60px;
   border-bottom-right-radius: 60px;
 }
-
 
 .no-border {
   border: none !important;

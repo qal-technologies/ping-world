@@ -2,15 +2,11 @@
 
 import Link from 'next/link';
 import { motion, Variants } from 'framer-motion';
-import {
-  ArrowRight,
-  Sparkles,
-  Globe,
-} from 'lucide-react';
+import { ArrowRight, Sparkles, Globe } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import {useEffect, useState} from 'react';
-import {supabase} from '@/lib/supabase';
-import {tools} from '@/lib/general/data';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { tools } from '@/lib/general/data';
 const stagger: Variants = {
   hidden: {},
   visible: {
@@ -136,10 +132,10 @@ export const HeroSection = () => {
 
 export const ToolsGrid = () => {
   return (
-    <section className='relative py-30 md:py-48 px-6 overflow-hidden'>
+    <section className='relative py-30 md:py-48 px-6 overflow-hidden gap-4 flex flex-col'>
       <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-pw-primary/5 rounded-full blur-[150px] -z-10' />
 
-      <div className='mx-auto max-w-7xl'>
+      <div className='mx-auto max-w-7xl items-center'>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -150,7 +146,7 @@ export const ToolsGrid = () => {
           </div>
           <h2 className='text-4xl md:text-6xl font-extrabold font-display leading-[1.1]'>
             Powerful tools for <br />
-            <span className='gradient-text'>curious creators.</span>
+            <span className='gradient-text'>Everyone.</span>
           </h2>
           <p className='mt-6 text-pw-muted text-lg max-w-2xl mx-auto leading-relaxed font-medium'>
             Take a test drive of our core utility suite. Built with speed,
@@ -158,8 +154,8 @@ export const ToolsGrid = () => {
           </p>
         </motion.div>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-          {tools.slice(0, 6).map((tool, i) => (
+        <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8'>
+          {tools.slice(0, 4).map((tool, i) => (
             <motion.div
               key={tool.title}
               initial={{ opacity: 0, scale: 0.95 }}
@@ -167,7 +163,7 @@ export const ToolsGrid = () => {
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}>
               <Link href={tool.href}>
-                <Card className='card-glow p-8 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden'>
+                <Card className='card-glow p-5 pt-6 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden'>
                   <div className='absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity'>
                     <tool.icon
                       className='h-24 w-24'
@@ -207,6 +203,18 @@ export const ToolsGrid = () => {
           ))}
         </div>
       </div>
+
+      <div
+        className='min-w-full flex-col flex items-center mt-1'
+        style={{ placeSelf: 'center' }}>
+        <a
+          title='Browse other Ping World Tools'
+          className='w-1/2 max-w-[350px] p-2 rounded-full text-center bg-pw-primary/10 bkblur border border-transparent hover:border-pw-primary/20 hover:scale-[1.05]'
+          target='_self'
+          about='Tools'>
+          Browse Tools
+        </a>
+      </div>
     </section>
   );
 };
@@ -215,13 +223,15 @@ export const CTASection = () => {
   const [isUser, setIsUser] = useState(false);
   useEffect(() => {
     const getUser = async () => {
-      const {data: {user}} = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         setIsUser(true);
       }
-    }
+    };
     getUser();
-  }, [])
+  }, []);
   return (
     <section className='relative py-20 md:py-28'>
       <div className='mx-auto max-w-3xl px-6 text-center'>
@@ -241,7 +251,10 @@ export const CTASection = () => {
                 Ready to explore your world of tools?
               </h2>
               <p className='mt-4 text-pw-muted max-w-md mx-auto'>
-               {isUser ? 'Navigate to your dashboard to access and use the tools and features available to you.' : 'Sign up for free and unlock your dashboard, saved quizzes, message inbox, and more.'}
+                {isUser ?
+                  'Navigate to your dashboard to access and use the tools and features available to you.'
+                : 'Sign up for free and unlock your dashboard, saved quizzes, message inbox, and more.'
+                }
               </p>
               <div className='mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center'>
                 <Link

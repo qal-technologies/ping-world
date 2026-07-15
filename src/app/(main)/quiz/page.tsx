@@ -2279,7 +2279,7 @@ export default function QuizPage() {
             </div>
 
             {quizzes.length > 0 ?
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
                 {quizzes.map((quiz, i) => (
                   <motion.div
                     key={quiz.id}
@@ -2312,7 +2312,7 @@ export default function QuizPage() {
                           )}
                         </div>
 
-                        <div className='flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity'>
+                        <div className='flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity'>
                           <Button
                             variant='ghost'
                             title='View Feedback'

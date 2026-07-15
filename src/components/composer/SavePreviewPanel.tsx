@@ -201,7 +201,7 @@ export function SavePreviewPanel() {
                 </div>
 
                 <span className='text-[8px] min-w-full text-center opacity-25 tracking-wider pb-1'>
-                  www.ping-world.com
+                  www.ping-world.website
                 </span>
               </div>
             </div>
