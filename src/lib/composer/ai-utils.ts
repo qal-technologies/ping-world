@@ -7,6 +7,8 @@
  *
  * Local text analysis features (readability, sentiment, spam check)
  * work entirely client-side with no API key needed.
+ *
+ * jules edit: Modified real calls to delegate to unified server-side route handler
  */
 
 import { AI_CONFIG, FLAGGED_WORDS, PINGWORLD_HASHTAG } from './constants';
@@ -370,14 +372,13 @@ function simulateDelay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ─── Real AI Calls (Slot — wire up with GEMINI_API_KEY) ──────
+// ─── Real AI Calls (Modified to route to server-side API) ───
 
 async function callRealAiForHashtags(text: string): Promise<HashTag[]> {
-  // Example Gemini API call — replace with your actual integration
-  const response = await fetch('/api/ai/hashtags', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ action: 'hashtags', text }),
   });
   const data = await response.json();
   return data.tags ?? [];
@@ -388,10 +389,10 @@ async function callRealAiForRephrase(
   style: AiStyle,
   context: string,
 ): Promise<string> {
-  const response = await fetch('/api/ai/rephrase', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, style, context }),
+    body: JSON.stringify({ action: 'rephrase', text, style, context }),
   });
   const data = await response.json();
   return data.result ?? text;
@@ -402,10 +403,10 @@ async function callRealAiForSuggestions(
   style: AiStyle,
   context: string,
 ): Promise<string[]> {
-  const response = await fetch('/api/ai/suggest', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, style, context }),
+    body: JSON.stringify({ action: 'suggest', title, style, context }),
   });
   const data = await response.json();
   return data.suggestions ?? [];
@@ -416,10 +417,10 @@ async function callRealAiForTranslation(
   targetLanguageCode: string,
   targetLanguageName: string,
 ): Promise<string> {
-  const response = await fetch('/api/ai/translate', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, targetLanguageCode, targetLanguageName }),
+    body: JSON.stringify({ action: 'translate', text, targetLanguageCode, targetLanguageName }),
   });
   const data = await response.json();
   return data.translated ?? text;
