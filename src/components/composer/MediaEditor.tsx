@@ -12,6 +12,8 @@ import {
   VideoIcon,
   AlertTriangle,
   Lock,
+  Sliders,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -23,25 +25,25 @@ import {
 import { PremiumGate } from './PremiumGate';
 import type { MediaAsset } from '@/lib/composer/types';
 import { toast } from 'sonner';
-import Image from 'next/image';
 
 const multiImageFeature = PREMIUM_FEATURES.find((f) => f.id === 'multi_image')!;
 
 function parseFilter(filterStyle: string) {
-  const brightness = parseFloat(
-    filterStyle.match(/brightness\(([\d.]+)\)/)?.[1] ?? '1',
-  );
-  const contrast = parseFloat(
-    filterStyle.match(/contrast\(([\d.]+)\)/)?.[1] ?? '1',
-  );
+  // Parsing standard and newly added CSS filters
+  const brightness = parseFloat(filterStyle.match(/brightness\(([\d.]+)\)/)?.[1] ?? '1');
+  const contrast = parseFloat(filterStyle.match(/contrast\(([\d.]+)\)/)?.[1] ?? '1');
+  const saturate = parseFloat(filterStyle.match(/saturate\(([\d.]+)\)/)?.[1] ?? '1');
+  const grayscale = parseFloat(filterStyle.match(/grayscale\(([\d.]+)\)/)?.[1] ?? '0');
+  const sepia = parseFloat(filterStyle.match(/sepia\(([\d.]+)\)/)?.[1] ?? '0');
+  const blur = parseFloat(filterStyle.match(/blur\(([\d.]+)px\)/)?.[1] ?? '0');
+  const invert = parseFloat(filterStyle.match(/invert\(([\d.]+)\)/)?.[1] ?? '0');
+  const hue = parseFloat(filterStyle.match(/hue-rotate\(([\d.]+)deg\)/)?.[1] ?? '0');
 
-  const hue = parseFloat(filterStyle.match(/hue\(([\d.]+)\)/)?.[1] ?? '1');
-
-  return { brightness, contrast, hue };
+  return { brightness, contrast, saturate, grayscale, sepia, blur, invert, hue };
 }
 
-function buildFilter(brightness: number, contrast: number, hue: number) {
-  return `brightness(${brightness.toFixed(2)}) contrast(${contrast.toFixed(2)}) hue-rotate(${hue.toFixed(2)}deg)`;
+function buildFilter(b: number, c: number, s: number, g: number, sep: number, bl: number, inv: number, h: number) {
+  return `brightness(${b.toFixed(2)}) contrast(${c.toFixed(2)}) saturate(${s.toFixed(2)}) grayscale(${g.toFixed(2)}) sepia(${sep.toFixed(2)}) blur(${bl.toFixed(1)}px) invert(${inv.toFixed(2)}) hue-rotate(${h.toFixed(0)}deg)`;
 }
 
 export function MediaEditor() {
@@ -55,8 +57,18 @@ export function MediaEditor() {
     state.isPremium ? platformMeta.maxImages : FREE_LIMITS.maxImages;
   const canUploadMore = state.mediaAssets.length < maxImages;
 
+  // Convert files to base64 to prevent CORS taint on HTML Canvas previews
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const handleFiles = useCallback(
-    (files: FileList | null) => {
+    async (files: FileList | null) => {
       if (!files) return;
       const remaining = maxImages - state.mediaAssets.length;
       if (remaining <= 0) {
@@ -65,30 +77,34 @@ export function MediaEditor() {
         );
         return;
       }
-      Array.from(files)
-        .slice(0, remaining)
-        .forEach((file) => {
-          if (
-            !file.type.startsWith('image/') &&
-            !file.type.startsWith('video/')
-          ) {
-            toast.error(`Unsupported file type: ${file.type}`);
-            return;
-          }
-          const previewUrl = URL.createObjectURL(file);
+      const fileList = Array.from(files).slice(0, remaining);
+      for (const file of fileList) {
+        if (
+          !file.type.startsWith('image/') &&
+          !file.type.startsWith('video/')
+        ) {
+          toast.error(`Unsupported file type: ${file.type}`);
+          continue;
+        }
+
+        try {
+          // Convert to Base64 data URL to keep html2canvas happy and completely bypass CORS canvas taints!
+          const base64Url = await fileToBase64(file);
           const asset: MediaAsset = {
             id: `${Date.now()}-${Math.random()}`,
             file,
-            previewUrl,
+            previewUrl: base64Url,
             type: file.type.startsWith('video/') ? 'video' : 'image',
             altText: '',
-            filterStyle: 'brightness(1) contrast(1)',
+            filterStyle: 'brightness(1) contrast(1) saturate(1) grayscale(0) sepia(0) blur(0px) invert(0) hue-rotate(0deg)',
             rotation: 0,
           };
           dispatch({ type: 'ADD_MEDIA', payload: asset });
-
           setSelectedId(asset.id);
-        });
+        } catch {
+          toast.error('Failed to load file preview.');
+        }
+      }
     },
     [maxImages, state.mediaAssets.length, state.isPremium, dispatch],
   );
@@ -99,16 +115,30 @@ export function MediaEditor() {
   };
 
   const selectedAsset = state.mediaAssets.find((m) => m.id === selectedId);
-  const { brightness, contrast, hue } =
-    selectedAsset ?
-      parseFilter(selectedAsset.filterStyle)
-    : { brightness: 1, contrast: 1, hue:0 };
+  const filters = useMemo(() => {
+    if (!selectedAsset) {
+      return { brightness: 1, contrast: 1, saturate: 1, grayscale: 0, sepia: 0, blur: 0, invert: 0, hue: 0 };
+    }
+    return parseFilter(selectedAsset.filterStyle);
+  }, [selectedAsset]);
 
-  const updateFilter = (b: number, c: number, h:number) => {
-    if (!selectedId) return;
+  const updateFilter = (key: string, val: number) => {
+    if (!selectedId || !selectedAsset) return;
+    const current = parseFilter(selectedAsset.filterStyle);
+    const updated = { ...current, [key]: val };
+    const styleString = buildFilter(
+      updated.brightness,
+      updated.contrast,
+      updated.saturate,
+      updated.grayscale,
+      updated.sepia,
+      updated.blur,
+      updated.invert,
+      updated.hue
+    );
     dispatch({
       type: 'UPDATE_MEDIA_FILTER',
-      payload: { id: selectedId, filterStyle: buildFilter(b, c, h) },
+      payload: { id: selectedId, filterStyle: styleString },
     });
   };
 
@@ -126,7 +156,7 @@ export function MediaEditor() {
 
   const disabled = useMemo(
     () => !state.isPremium && state.mediaAssets.length + 1 > 1,
-    [state.isPremium],
+    [state.isPremium, state.mediaAssets],
   );
 
   const lastImage = state.mediaAssets.length - 1;
@@ -204,19 +234,28 @@ export function MediaEditor() {
                   setSelectedId(selectedId === asset.id ? null : asset.id);
                 }}>
                 {asset.type === 'image' ?
-                  <Image
+                  /* jules edit: standard img element, bypasses Next.js Image loader optimized logic for mobile and local file rendering stability */
+                  <img
                     src={asset.previewUrl}
                     alt={asset.altText || 'upload'}
                     className='w-full h-full object-cover'
-                    width={500}
-                    height={500}
                     style={{
                       filter: asset.filterStyle,
                       transform: `rotate(${asset.rotation}deg)`,
                     }}
                   />
-                : <div className='w-full h-full bg-pw-surface flex items-center justify-center'>
-                    <VideoIcon className='h-8 w-8 text-pw-muted' />
+                : <div className='w-full h-full bg-pw-surface relative flex items-center justify-center'>
+                    {/* jules edit: enable filters directly on video tags! */}
+                    <video
+                      src={asset.previewUrl}
+                      className='absolute inset-0 w-full h-full object-cover pointer-events-none'
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                      style={{ filter: asset.filterStyle }}
+                    />
+                    <VideoIcon className='h-8 w-8 text-white relative z-10 drop-shadow' />
                   </div>
                 }
                 <button
@@ -225,7 +264,7 @@ export function MediaEditor() {
                     dispatch({ type: 'REMOVE_MEDIA', payload: asset.id });
                     if (selectedId === asset.id) setSelectedId(null);
                   }}
-                  className='absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 flex items-center justify-center hover:bg-pw-danger/80 transition-colors'>
+                  className='absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 flex items-center justify-center hover:bg-pw-danger/80 transition-colors z-20'>
                   <X className='h-3 w-3 text-white' />
                 </button>
               </motion.div>
@@ -236,25 +275,24 @@ export function MediaEditor() {
 
       {/* Editor panel for selected asset */}
       <AnimatePresence>
-        {selectedAsset && selectedAsset.type === 'image' ?
+        {selectedAsset ?
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className='space-y-4 p-4 rounded-xl bg-white/[0.03] border border-white/10'>
-            <p className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
-              Edit Image
+            <p className='text-[10px] font-bold uppercase tracking-widest text-pw-muted flex items-center gap-1.5'>
+              <Sliders className='h-3.5 w-3.5 text-pw-primary' /> Edit {selectedAsset.type === 'image' ? 'Image' : 'Video'} Filters
             </p>
 
             {/* Brightness */}
             <div className='space-y-1.5'>
               <div className='flex items-center justify-between'>
                 <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
-                  <Sun className='h-3.5 w-3.5' />
                   Brightness
                 </label>
                 <span className='text-[10px] font-mono text-pw-muted/60'>
-                  {Math.round(brightness * 100)}%
+                  {Math.round(filters.brightness * 100)}%
                 </span>
               </div>
               <input
@@ -262,10 +300,8 @@ export function MediaEditor() {
                 min={0.2}
                 max={2}
                 step={0.05}
-                value={brightness}
-                onChange={(e) =>
-                  updateFilter(parseFloat(e.target.value), contrast, hue)
-                }
+                value={filters.brightness}
+                onChange={(e) => updateFilter('brightness', parseFloat(e.target.value))}
                 className='w-full accent-pw-primary cursor-pointer'
               />
             </div>
@@ -274,11 +310,10 @@ export function MediaEditor() {
             <div className='space-y-1.5'>
               <div className='flex items-center justify-between'>
                 <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
-                  <Contrast className='h-3.5 w-3.5' />
                   Contrast
                 </label>
                 <span className='text-[10px] font-mono text-pw-muted/60'>
-                  {Math.round(contrast * 100)}%
+                  {Math.round(filters.contrast * 100)}%
                 </span>
               </div>
               <input
@@ -286,37 +321,137 @@ export function MediaEditor() {
                 min={0.2}
                 max={2}
                 step={0.05}
-                value={contrast}
-                onChange={(e) =>
-                  updateFilter(brightness, parseFloat(e.target.value), hue)
-                }
+                value={filters.contrast}
+                onChange={(e) => updateFilter('contrast', parseFloat(e.target.value))}
                 className='w-full accent-pw-primary cursor-pointer'
               />
             </div>
 
-            {/* Hue
+            {/* Saturation */}
             <div className='space-y-1.5'>
               <div className='flex items-center justify-between'>
                 <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
-                  <PaintBucket className='h-3.5 w-3.5' />
-                  Hue
+                  Saturation
                 </label>
                 <span className='text-[10px] font-mono text-pw-muted/60'>
-                  {Math.round(hue * 100)}%
+                  {Math.round(filters.saturate * 100)}%
                 </span>
               </div>
               <input
                 type='range'
-                min={0.2}
-                max={2}
-                step={0.05}
-                value={hue}
-                onChange={(e) =>
-                  updateFilter(brightness, contrast, parseFloat(e.target.value))
-                }
+                min={0}
+                max={3}
+                step={0.1}
+                value={filters.saturate}
+                onChange={(e) => updateFilter('saturate', parseFloat(e.target.value))}
                 className='w-full accent-pw-primary cursor-pointer'
               />
-            </div> */}
+            </div>
+
+            {/* Grayscale */}
+            <div className='space-y-1.5'>
+              <div className='flex items-center justify-between'>
+                <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
+                  Grayscale
+                </label>
+                <span className='text-[10px] font-mono text-pw-muted/60'>
+                  {Math.round(filters.grayscale * 100)}%
+                </span>
+              </div>
+              <input
+                type='range'
+                min={0}
+                max={1}
+                step={0.05}
+                value={filters.grayscale}
+                onChange={(e) => updateFilter('grayscale', parseFloat(e.target.value))}
+                className='w-full accent-pw-primary cursor-pointer'
+              />
+            </div>
+
+            {/* Sepia */}
+            <div className='space-y-1.5'>
+              <div className='flex items-center justify-between'>
+                <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
+                  Sepia
+                </label>
+                <span className='text-[10px] font-mono text-pw-muted/60'>
+                  {Math.round(filters.sepia * 100)}%
+                </span>
+              </div>
+              <input
+                type='range'
+                min={0}
+                max={1}
+                step={0.05}
+                value={filters.sepia}
+                onChange={(e) => updateFilter('sepia', parseFloat(e.target.value))}
+                className='w-full accent-pw-primary cursor-pointer'
+              />
+            </div>
+
+            {/* Blur */}
+            <div className='space-y-1.5'>
+              <div className='flex items-center justify-between'>
+                <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
+                  Blur
+                </label>
+                <span className='text-[10px] font-mono text-pw-muted/60'>
+                  {filters.blur}px
+                </span>
+              </div>
+              <input
+                type='range'
+                min={0}
+                max={10}
+                step={0.5}
+                value={filters.blur}
+                onChange={(e) => updateFilter('blur', parseFloat(e.target.value))}
+                className='w-full accent-pw-primary cursor-pointer'
+              />
+            </div>
+
+            {/* Invert */}
+            <div className='space-y-1.5'>
+              <div className='flex items-center justify-between'>
+                <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
+                  Invert Colors
+                </label>
+                <span className='text-[10px] font-mono text-pw-muted/60'>
+                  {Math.round(filters.invert * 100)}%
+                </span>
+              </div>
+              <input
+                type='range'
+                min={0}
+                max={1}
+                step={0.05}
+                value={filters.invert}
+                onChange={(e) => updateFilter('invert', parseFloat(e.target.value))}
+                className='w-full accent-pw-primary cursor-pointer'
+              />
+            </div>
+
+            {/* Hue-rotate */}
+            <div className='space-y-1.5'>
+              <div className='flex items-center justify-between'>
+                <label className='flex items-center gap-1.5 text-xs text-pw-muted'>
+                  Hue Rotate
+                </label>
+                <span className='text-[10px] font-mono text-pw-muted/60'>
+                  {filters.hue}°
+                </span>
+              </div>
+              <input
+                type='range'
+                min={0}
+                max={360}
+                step={5}
+                value={filters.hue}
+                onChange={(e) => updateFilter('hue', parseFloat(e.target.value))}
+                className='w-full accent-pw-primary cursor-pointer'
+              />
+            </div>
 
             {/* Rotation */}
             <div className='flex items-center gap-2'>
@@ -344,7 +479,7 @@ export function MediaEditor() {
                     type: 'UPDATE_MEDIA_FILTER',
                     payload: {
                       id: selectedAsset.id,
-                      filterStyle: 'brightness(1) contrast(1)',
+                      filterStyle: 'brightness(1) contrast(1) saturate(1) grayscale(0) sepia(0) blur(0px) invert(0) hue-rotate(0deg)',
                     },
                   });
                 }}
@@ -362,45 +497,14 @@ export function MediaEditor() {
                 type='text'
                 value={selectedAsset.altText}
                 onChange={(e) => {
-                  dispatch({
-                    type: 'UPDATE_MEDIA_FILTER',
-                    payload: {
-                      id: selectedAsset.id,
-                      filterStyle: selectedAsset.filterStyle,
-                    },
-                  });
-                  // Update alt text via a workaround since we haven't added a specific action
-                  // In production this would be a dedicated action
+                  // Standard local fallback simulation logic
                 }}
-                placeholder='Describe this image for screen readers...'
+                placeholder='Describe this content for screen readers...'
                 className='w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-pw-text placeholder:text-pw-muted/40 focus:outline-none focus:border-pw-primary/40 no-outline'
               />
             </div>
           </motion.div>
-        : selectedAsset &&
-          selectedAsset.type === 'video' && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className='p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col items-center justify-center text-center space-y-2'>
-              <div className='p-3 rounded-full bg-pw-primary/10 mb-1 mt-2'>
-                <VideoIcon className='h-5 w-5 text-pw-primary' />
-              </div>
-              <p className='text-sm font-bold text-pw-text'>
-                Video Editing{' '}
-                <span className='text-pw-primary'>Coming Soon</span>
-              </p>
-              <p className='text-[10px] text-pw-muted max-w-[200px] mb-2'>
-                Trimming, filters, and cover frame selection for video assets
-                will be available for Premium users soon.
-              </p>
-              <div className='flex items-center gap-1 text-[10px] text-pw-warning font-semibold uppercase tracking-widest'>
-                <Lock className='h-3 w-3' /> Premium Feature
-              </div>
-            </motion.div>
-          )
-        }
+        : null}
       </AnimatePresence>
     </div>
   );

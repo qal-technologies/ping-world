@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Languages, Loader2, ArrowRight, X, Check, MousePointer2 } from 'lucide-react';
+import { Languages, Loader2, X, Check, MousePointer2, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { translateText } from '@/lib/composer/ai-utils';
@@ -13,9 +13,40 @@ import { toast } from 'sonner';
 const translationFeature = PREMIUM_FEATURES.find((f) => f.id === 'unlimited_translation')!;
 
 export function TranslationPanel() {
-  const { state, dispatch } = useComposer();
+  const { state, dispatch, getContentForPlatform } = useComposer();
   const [selectedLang, setSelectedLang] = useState('es');
   const [isTranslating, setIsTranslating] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
+
+  // jules edit: 2-level undo/redo translation history tracking
+  const [translationHistory, setTranslationHistory] = useState<string[]>([]);
+
+  const activeContent = getContentForPlatform(state.activeEditorPlatform);
+
+  // Monitor text selections in the document
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const activeEl = document.activeElement as HTMLTextAreaElement;
+      if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+        const start = activeEl.selectionStart;
+        const end = activeEl.selectionEnd;
+        if (start !== end) {
+          const selectedVal = activeEl.value.slice(start, end);
+          setSelectedText(selectedVal);
+          setSelectionRange({ start, end });
+          return;
+        }
+      }
+      setSelectedText('');
+      setSelectionRange(null);
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
 
   const atLimit =
     !state.isPremium &&
@@ -23,10 +54,11 @@ export function TranslationPanel() {
 
   const selectedLanguage = LANGUAGES.find((l) => l.code === selectedLang);
 
-  const handleTranslate = async () => {
-    //check for selection to translate only section instead.
-    if (!state.baseContent.trim()) {
-      toast.error('Write some content first to translate.');
+  const handleTranslate = async (translateSelectionOnly: boolean) => {
+    const textToTranslate = translateSelectionOnly ? selectedText : activeContent;
+
+    if (!textToTranslate.trim()) {
+      toast.error('Write or select some content first to translate.');
       return;
     }
     if (atLimit) {
@@ -40,14 +72,14 @@ export function TranslationPanel() {
     setIsTranslating(true);
     try {
       const result = await translateText(
-        state.baseContent,
+        textToTranslate,
         selectedLang,
         selectedLanguage?.name ?? selectedLang,
       );
       dispatch({
         type: 'SET_TRANSLATION',
         payload: {
-          originalText: state.baseContent,
+          originalText: textToTranslate,
           translatedText: result,
           targetLanguage: selectedLanguage?.name ?? selectedLang,
           targetLanguageCode: selectedLang,
@@ -63,9 +95,54 @@ export function TranslationPanel() {
 
   const handleApply = () => {
     if (!state.translationResult) return;
-    dispatch({ type: 'SET_BASE_CONTENT', payload: state.translationResult.translatedText });
+
+    // Push previous base content to history (keep max 2 items)
+    setTranslationHistory((prev) => [activeContent, ...prev].slice(0, 2));
+
+    if (selectionRange && selectedText) {
+      // Inline replacement of selected text only
+      const before = activeContent.slice(0, selectionRange.start);
+      const after = activeContent.slice(selectionRange.end);
+      const updatedText = before + state.translationResult.translatedText + after;
+
+      if (state.activeEditorPlatform && state.platformVariants.find(v => v.platform === state.activeEditorPlatform)?.isOverridden) {
+        dispatch({
+          type: 'SET_PLATFORM_VARIANT',
+          payload: { platform: state.activeEditorPlatform, content: updatedText },
+        });
+      } else {
+        dispatch({ type: 'SET_BASE_CONTENT', payload: updatedText });
+      }
+      toast.success('Selection translation applied!');
+    } else {
+      // Full apply
+      if (state.activeEditorPlatform && state.platformVariants.find(v => v.platform === state.activeEditorPlatform)?.isOverridden) {
+        dispatch({
+          type: 'SET_PLATFORM_VARIANT',
+          payload: { platform: state.activeEditorPlatform, content: state.translationResult.translatedText },
+        });
+      } else {
+        dispatch({ type: 'SET_BASE_CONTENT', payload: state.translationResult.translatedText });
+      }
+      toast.success('Translation applied!');
+    }
+
     dispatch({ type: 'SET_TRANSLATION', payload: null });
-    toast.success('Translation applied!');
+  };
+
+  const handleUndo = () => {
+    if (translationHistory.length === 0) return;
+    const [previous, ...rest] = translationHistory;
+    if (state.activeEditorPlatform && state.platformVariants.find(v => v.platform === state.activeEditorPlatform)?.isOverridden) {
+      dispatch({
+        type: 'SET_PLATFORM_VARIANT',
+        payload: { platform: state.activeEditorPlatform, content: previous },
+      });
+    } else {
+      dispatch({ type: 'SET_BASE_CONTENT', payload: previous });
+    }
+    setTranslationHistory(rest);
+    toast.success('Translation undone!');
   };
 
   const handleDismiss = () => {
@@ -97,23 +174,50 @@ export function TranslationPanel() {
 
       {/* Actions */}
       <div className='flex gap-2 flex-wrap items-center'>
-        <button
-          onClick={handleTranslate}
-          disabled={isTranslating || !state.isOnline || atLimit}
-          className={cn(
-            'flex items-center gap-2 py-2 rounded-xl text-xs font-semibold transition-all',
-            !state.isOnline || atLimit
-              ? 'bg-white/5 border border-white/10 text-pw-muted/50 cursor-not-allowed'
-              : 'btn-primary',
-          )}
-        >
-          {isTranslating ? (
-            <Loader2 className='h-3.5 w-3.5 animate-spin' />
-          ) : (
-            <Languages className='h-3.5 w-3.5' />
-          )}
-          {isTranslating ? 'Translating...' : 'Translate All'}
-        </button>
+        {selectedText ? (
+          <button
+            onClick={() => handleTranslate(true)}
+            disabled={isTranslating || !state.isOnline || atLimit}
+            className={cn(
+              'flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold transition-all btn-primary',
+              (!state.isOnline || atLimit) && 'bg-white/5 border border-white/10 text-pw-muted/50 cursor-not-allowed'
+            )}
+          >
+            {isTranslating ? (
+              <Loader2 className='h-3.5 w-3.5 animate-spin' />
+            ) : (
+              <Languages className='h-3.5 w-3.5' />
+            )}
+            Translate This
+          </button>
+        ) : (
+          <button
+            onClick={() => handleTranslate(false)}
+            disabled={isTranslating || !state.isOnline || atLimit}
+            className={cn(
+              'flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold transition-all btn-primary',
+              (!state.isOnline || atLimit) && 'bg-white/5 border border-white/10 text-pw-muted/50 cursor-not-allowed'
+            )}
+          >
+            {isTranslating ? (
+              <Loader2 className='h-3.5 w-3.5 animate-spin' />
+            ) : (
+              <Languages className='h-3.5 w-3.5' />
+            )}
+            Translate All
+          </button>
+        )}
+
+        {/* Undo Action */}
+        {translationHistory.length > 0 && (
+          <button
+            onClick={handleUndo}
+            className='flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-pw-text hover:bg-white/10 transition-all'
+          >
+            <Undo2 className='h-3.5 w-3.5' />
+            Undo
+          </button>
+        )}
 
         {!state.isPremium && (
           <UsageCounter
@@ -129,8 +233,13 @@ export function TranslationPanel() {
       <div className='flex items-start gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] text-pw-muted'>
         <MousePointer2 className='h-3.5 w-3.5 mt-0.5 shrink-0' />
         <span>
-          To translate a selection, highlight text in the editor, then use the Translate
-          button above. The result will appear here for review before applying.
+          {selectedText ? (
+            <span className='text-pw-primary font-semibold'>
+              Selection detected! Click &quot;Translate This&quot; to translate only the highlighted text inline.
+            </span>
+          ) : (
+            'Highlight a block of text in the editor above, and a "Translate This" button will instantly appear to perform localized replacements.'
+          )}
         </span>
       </div>
 

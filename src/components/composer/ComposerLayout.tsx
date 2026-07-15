@@ -35,6 +35,8 @@ import { MediaEditor } from './MediaEditor';
 import { CanvasBuilder } from './CanvasBuilder';
 import { LivePreview } from './LivePreview';
 import { SavePreviewPanel } from './SavePreviewPanel';
+// jules edit: imported InstagramCanvasSettings styling configuration trigger
+import { InstagramCanvasSettings } from './InstagramCanvasSettings';
 import { toast } from 'sonner';
 
 type ToolTab =
@@ -201,6 +203,9 @@ export function ComposerLayout() {
                   </span>
                 </button>
               </div>
+
+              {/* jules edit: Added Instagram Canvas configuration trigger for auto text-to-canvas rendering */}
+              <InstagramCanvasSettings />
 
               <Card
                 className={cn(
