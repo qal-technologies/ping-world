@@ -118,12 +118,11 @@ export function PlatformEditor({
   return (
     <div className={cn('transition-all duration-500')}>
       {/* Platform Selector Row */}
-      <div className='w-full overflow-x-auto hide-scrollbar border-b border-white/5'>
+      <div className='w-full overflow-x-auto hide-scrollbar sm:border-b sm:border-white/5'>
         <div
-          className='flex w-max min-w-full'
+          className='flex w-max min-w-full items-center'
           style={
-            isSinglePlatform ? { borderColor: `${activeMeta.iconHex}20` } : {}
-          }>
+            isSinglePlatform ? { borderColor: `${activeMeta.iconHex}20` } : {}}>
           {PLATFORMS.map((platform) => {
             const isSelected = state.selectedPlatforms.includes(platform.id);
             const isActive = activePlatformTab === platform.id && isSelected;
@@ -244,7 +243,7 @@ export function PlatformEditor({
 
       {/* Editor area */}
       <AnimatePresence mode='wait'>
-        {state.selectedPlatforms.map((platform) => {
+        {state.selectedPlatforms.map((platform, idx) => {
           if (platform !== activePlatformTab) return null;
           const meta = getPlatform(platform);
           const overridden = isOverridden(platform);
@@ -258,19 +257,19 @@ export function PlatformEditor({
 
           return (
             <motion.div
-              key={platform}
+              key={`${platform}_${idx}`}
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}
-              className={cn('p-4 space-y-2')}
+              className={cn('p-1 sm:p-4 space-y-2')}
               style={
                 isSinglePlatform ?
                   { backgroundColor: `${meta.brandColor}06` }
                 : {}
               }>
               {/* Override toggle */}
-              <div className='flex items-center justify-between'>
+              <div className='flex items-center justify-between p-2 sm:p-0'>
                 <div className='flex items-center gap-2'>
                   <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
                     {meta.name} Post

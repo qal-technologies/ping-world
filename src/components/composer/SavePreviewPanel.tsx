@@ -16,6 +16,8 @@ import {
   Linkedin,
   ToggleLeft,
   ToggleRight,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -41,6 +43,9 @@ export function SavePreviewPanel() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<string | null>(null);
+
+  const [darkMode, setDarkMode] = useState(true);
+
   const [exportPlatform, setExportPlatform] = useState<Platform>(
     state.selectedPlatforms[0] ?? 'x',
   );
@@ -51,7 +56,7 @@ export function SavePreviewPanel() {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(previewRef.current, {
-        scale: 2,
+        scale: 1.5,
         backgroundColor: '#02040f',
         logging: false,
       });
@@ -138,24 +143,48 @@ export function SavePreviewPanel() {
         </div>
       )}
 
-      {/* Reactions toggle */}
-      <button
-        onClick={() => dispatch({ type: 'TOGGLE_REACTIONS' })}
-        className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'>
-        {state.showReactions ?
-          <ToggleRight className='h-4 w-4 text-pw-primary' />
-        : <ToggleLeft className='h-4 w-4' />}
-        {state.showReactions ? 'Show Reactions' : 'Hide Reactions'}
-      </button>
+      <div className='flex items-center gap-2 justify-between w-full'>
+        {/* Reactions toggle */}
+        <button
+          onClick={() => dispatch({ type: 'TOGGLE_REACTIONS' })}
+          className='flex items-center gap-1.5 text-[10px] font-semibold text-pw-muted hover:text-pw-text transition-colors'>
+          {state.showReactions ?
+            <ToggleRight className='h-4 w-4 text-pw-primary' />
+          : <ToggleLeft className='h-4 w-4' />}
+          {state.showReactions ? 'Show Reactions' : 'Hide Reactions'}
+        </button>
+
+        {/* Theme selector header inside Live Preview */}
+        <div className='flex items-center justify-between gap-1 pb-2'>
+          <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>
+            Theme
+          </span>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className='flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border border-white/10 bg-white/5 text-pw-text hover:bg-white/10 transition-colors'>
+            {darkMode ?
+              <>
+                <Sun className='h-3.5 w-3.5 text-yellow-400' /> Light 
+              </>
+            : <>
+                <Moon className='h-3.5 w-3.5 text-sky-400' /> Dark
+              </>
+            }
+          </button>
+        </div>
+      </div>
 
       <div className='overflow-x-auto hide-scrollbar w-full flex justify-center items-center'>
         <div
           ref={previewRef}
-          className='p-4 bg-[#02040f] w-[400px] items-center'>
-          <LivePreview
+          className='py-4 sm:p-4 bg-[#02040f] w-auto items-center'>
+          {/* <LivePreview
             forExport
+            dark={darkMode}
             platformOverride={exportPlatform}
-          />
+          /> */}
+
+          <img src='/favicon.ico' width='200px' height='200px'/>
           {!state.isPremium && (
             <div className='mt-4 flex flex-col items-center opacity-50 w-full'>
               <div className='flex flex-col items-center'>
@@ -171,7 +200,7 @@ export function SavePreviewPanel() {
                   </span>
                 </div>
 
-                <span className='text-[8px] min-w-full text-center opacity-25 tracking-wider'>
+                <span className='text-[8px] min-w-full text-center opacity-25 tracking-wider pb-1'>
                   www.ping-world.com
                 </span>
               </div>
@@ -180,6 +209,7 @@ export function SavePreviewPanel() {
         </div>
       </div>
 
+      <div className='flex flex-col items-center gap-1 px-3 sm:px-0'>
       {/* Capture button */}
       <button
         onClick={capturePreview}
@@ -196,7 +226,7 @@ export function SavePreviewPanel() {
         feature={cleanExportFeature}
         isPremium={state.isPremium}
         showPartial={false}
-        className='h-12'>
+        className='h-12 min-w-full'>
         <div className='px-3 py-2 flex items-center h-12 gap-2'>
           <Crown className='h-3.5 w-3.5 text-pw-warning' />
           <span className='text-xs text-pw-muted'>
@@ -204,7 +234,8 @@ export function SavePreviewPanel() {
           </span>
         </div>
       </PremiumGate>
-
+      </div>
+      
       {/* Preview modal */}
       <AnimatePresence>
         {previewBlob && (

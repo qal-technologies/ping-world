@@ -7,6 +7,8 @@
  *
  * Local text analysis features (readability, sentiment, spam check)
  * work entirely client-side with no API key needed.
+ *
+ * jules edit: Modified real calls to delegate to unified server-side route handler
  */
 
 import { AI_CONFIG, FLAGGED_WORDS, PINGWORLD_HASHTAG } from './constants';
@@ -333,12 +335,17 @@ export async function suggestFromTitle(
   return suggestions.slice(0, 3);
 }
 
-export async function translateText(
+export type TransText = {
+  ok: boolean,
+  data: string,
+};
+
+export async function translateText (
   text: string,
   targetLanguageCode: string,
   targetLanguageName: string,
-): Promise<string> {
-  if (AI_CONFIG.useRealAi) {
+): Promise<TransText> {
+  if(AI_CONFIG.useRealAi) {
     return callRealAiForTranslation(
       text,
       targetLanguageCode,
@@ -352,17 +359,16 @@ export async function translateText(
       `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLanguageCode}`,
     );
     const data = await res.json();
-    if (data.responseData?.translatedText) {
-      return data.responseData.translatedText;
+    if(data.responseData?.translatedText) {
+      return {ok: true, data: data.responseData.translatedText};
     }
-  } catch (e) {
+  } catch(e) {
     console.warn('Keyless Translation failed, falling back to mock', e);
   }
 
   await simulateDelay(1000);
 
-  // Demo fallback
-  return `[${targetLanguageName} — Demo Translation]\n\nWe couldn't connect to the free translation API. Original:\n\n${text}`;
+  return {ok: false, data:`${targetLanguageName} — Demo Translation]\nWe couldn't connect to the translation server. \n\nOriginal: ${text}`};
 }
 
 // ─── Delay Simulation ────────────────────────────────────────
@@ -370,14 +376,13 @@ function simulateDelay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ─── Real AI Calls (Slot — wire up with GEMINI_API_KEY) ──────
+// ─── Real AI Calls (Modified to route to server-side API) ───
 
 async function callRealAiForHashtags(text: string): Promise<HashTag[]> {
-  // Example Gemini API call — replace with your actual integration
-  const response = await fetch('/api/ai/hashtags', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ action: 'hashtags', text }),
   });
   const data = await response.json();
   return data.tags ?? [];
@@ -388,10 +393,10 @@ async function callRealAiForRephrase(
   style: AiStyle,
   context: string,
 ): Promise<string> {
-  const response = await fetch('/api/ai/rephrase', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, style, context }),
+    body: JSON.stringify({ action: 'rephrase', text, style, context }),
   });
   const data = await response.json();
   return data.result ?? text;
@@ -402,10 +407,10 @@ async function callRealAiForSuggestions(
   style: AiStyle,
   context: string,
 ): Promise<string[]> {
-  const response = await fetch('/api/ai/suggest', {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, style, context }),
+    body: JSON.stringify({ action: 'suggest', title, style, context }),
   });
   const data = await response.json();
   return data.suggestions ?? [];
@@ -415,12 +420,12 @@ async function callRealAiForTranslation(
   text: string,
   targetLanguageCode: string,
   targetLanguageName: string,
-): Promise<string> {
-  const response = await fetch('/api/ai/translate', {
+): Promise<TransText> {
+  const response = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, targetLanguageCode, targetLanguageName }),
+    body: JSON.stringify({ action: 'translate', text, targetLanguageCode, targetLanguageName }),
   });
   const data = await response.json();
-  return data.translated ?? text;
+  return {ok: data.translated, data: data.translated ?? text};
 }

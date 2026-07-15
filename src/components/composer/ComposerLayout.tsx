@@ -17,7 +17,6 @@ import {
   ChevronUp,
   Wifi,
   Star,
-  Check,
   CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,6 +36,7 @@ import { MediaEditor } from './MediaEditor';
 import { CanvasBuilder } from './CanvasBuilder';
 import { LivePreview } from './LivePreview';
 import { SavePreviewPanel } from './SavePreviewPanel';
+import { InstagramCanvasSettings } from './InstagramCanvasSettings';
 import { toast } from 'sonner';
 
 type ToolTab =
@@ -184,36 +184,43 @@ export function ComposerLayout() {
             {/* Platform Editor */}
             <div className='flex items-center flex-col w-full gap-2'>
               {/* Add Network / Add Social button */}
-              <div className='h-12 bg-transparent w-full items-center justify-end flex gap-2'>
-                <button
-                  title='Post to social platforms'
-                  className='btn-primary h-10 rounded-full flex items-center justify-between gap-3' style={{borderRadius:'200px'}}>
-                  <CheckCircle className='w-4 h-4' />
-                  Post
-                </button>
-                <button
-                  title='Add New Social Platform'
-                  onClick={() =>
-                    toast.error(
-                      'Additional premium social networks coming soon!',
-                    )
-                  }
-                  className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10 sm:bg-transparent'>
-                  <div className='h-5 w-5 rounded-full border border-current flex items-center justify-center'>
-                    <span className='font-bold text-lg'>+</span>
-                  </div>
-                  <span className='text-[8px] font-bold uppercase tracking-widest hidden sm:block'>
-                    Add
-                  </span>
-                </button>
-              </div>
+
+              <AnimatePresence mode='popLayout'>
+                <div className='h-12 bg-transparent w-full items-center justify-end flex gap-2'>
+                  <button
+                    title='Post to social platforms'
+                    className='btn-primary h-10 rounded-full flex items-center justify-between gap-3'
+                    style={{ borderRadius: '200px' }}>
+                    <CheckCircle className='w-4 h-4' />
+                    Post
+                  </button>
+                  <button
+                    title='Add New Social Platform'
+                    onClick={() =>
+                      toast.error(
+                        'Additional premium social networks coming soon!',
+                      )
+                    }
+                    className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10 sm:bg-transparent'>
+                    <div className='h-5 w-5 rounded-full border border-current flex items-center justify-center'>
+                      <span className='font-bold text-lg'>+</span>
+                    </div>
+                    <span className='text-[8px] font-bold uppercase tracking-widest hidden sm:block'>
+                      Add
+                    </span>
+                  </button>
+                </div>
+
+                {/* jules edit: Added Instagram Canvas configuration trigger for auto text-to-canvas rendering */}
+                <InstagramCanvasSettings />
+              </AnimatePresence>
 
               <Card
                 className={cn(
-                  'overflow-hidden w-full p-0 bg-white/[0.02] bkblur rounded-[25px]',
+                  'overflow-hidden bg-transparent ring-0 sm:ring-1 w-full p-0 sm:bg-white/[0.02] sm:bkblur sm:rounded-[25px]',
                   isPremiumUI ?
-                    'border-pw-warning/20 shadow-[0_0_30px_rgba(255,179,71,0.08)]'
-                  : 'border-white/10',
+                    'sm:border-pw-warning/20 sm:shadow-[0_0_30px_rgba(255,179,71,0.08)]'
+                  : 'sm:border-white/10',
                 )}>
                 <PlatformEditor
                   onOpenTag={() => setActiveTab('tags')}
@@ -221,11 +228,13 @@ export function ComposerLayout() {
                 />
               </Card>
             </div>
+
+            <div className='divider h-1 my-10 sm:hidden' />
             {/* Tool Tabs */}
             <Card
               className={cn(
-                'overflow-hidden p-0 bg-pw-surface/60',
-                isPremiumUI ? 'border-pw-warning/20' : 'border-white/10',
+                'overflow-hidden ring-0 sm:ring-1 p-0 bg-transparent sm:bg-pw-surface/60',
+                isPremiumUI ? 'sm:border-pw-warning/20' : 'sm:border-white/10',
               )}>
               {/* Tab bar */}
               <div className='flex overflow-x-auto scrollable-row pt-3 px-1'>
@@ -276,64 +285,29 @@ export function ComposerLayout() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
-                  className='p-4 pt-0'>
+                  className='sm:p-4 pt-0'>
                   <ToolPanel activeTab={activeTab} />
                 </motion.div>
               </AnimatePresence>
             </Card>
           </div>
 
+          <div className='divider h-1 my-10 sm:hidden' />
+
           {/* ─── Right: Live Preview + Save ─── */}
           <div className='md:col-span-2 xl:col-span-4 space-y-4'>
-            <Card
-              className={cn(
-                'overflow-hidden bg-pw-surface/40 p-0 hidden',
-                isPremiumUI ? 'border-pw-warning/20' : 'border-white/10',
-              )}>
-              {/* Preview header */}
-              <div className='flex items-center justify-between p-5 border-b border-white/5'>
-                <div className='flex items-center gap-2'>
-                  <div className='h-2 w-2 rounded-full bg-pw-success animate-pulse' />
-                  <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
-                    Live Preview
-                  </span>
-                </div>
-                <button
-                  onClick={() => setRightCollapsed((v) => !v)}
-                  className='text-pw-muted hover:text-pw-text transition-colors p-1'>
-                  {rightCollapsed ?
-                    <ChevronDown className='h-3.5 w-3.5' />
-                  : <ChevronUp className='h-3.5 w-3.5' />}
-                </button>
-              </div>
-
-              <AnimatePresence>
-                {!rightCollapsed && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className='overflow-hidden'>
-                    <div className='p-3 lg:p-5 pt-0'>
-                      <LivePreview />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Card>
-
             {/* Save preview */}
             <Card
               className={cn(
-                'overflow-hidden bg-pw-surface/40 p-0',
-                isPremiumUI ? 'border-pw-warning/20' : 'border-white/10',
+                'overflow-hidden bg-transparent sm:bg-pw-surface/40 p-0 ring-0 sm:ring-1',
+                isPremiumUI ? 'sm:border-pw-warning/20' : 'sm:border-white/10',
               )}>
-              <div className='p-5 border-b border-white/5'>
+              <div className='pb-5 sm:p-5 border-b border-white/5'>
                 <span className='text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
                   Live Preview
                 </span>
               </div>
-              <div className='p-3 lg:p-5 pt-0'>
+              <div className='sm:p-3 lg:p-5 pt-0'>
                 <SavePreviewPanel />
               </div>
             </Card>

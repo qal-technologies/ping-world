@@ -56,6 +56,7 @@ export interface TextAnalysis {
 export interface TranslationResult {
   originalText: string;
   translatedText: string;
+  translatedStatus: boolean;
   targetLanguage: string;
   targetLanguageCode: string;
 }
@@ -131,6 +132,10 @@ export interface ComposerState {
 
   // Online
   isOnline: boolean;
+
+  // jules edit: Instagram canvas setting fields for live rendering preview
+  instaCanvasThemeIdx?: number;
+  instaCanvasFont?: string;
 }
 
 export type ToolTab =
@@ -183,4 +188,5 @@ export type ComposerAction =
   | { type: 'SET_PREMIUM'; payload: boolean }
   | { type: 'INCREMENT_USAGE'; payload: keyof PremiumUsageCounters }
   | { type: 'SET_TRANSLATION'; payload: TranslationResult | null }
-  | { type: 'SET_ONLINE'; payload: boolean };
+  | { type: 'SET_ONLINE'; payload: boolean }
+  | { type: 'SET_INSTA_CANVAS_SETTINGS'; payload: { themeIdx?: number; font?: string } };

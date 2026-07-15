@@ -17,15 +17,23 @@ const STYLE_OPTIONS: { id: AiStyle; label: string; emoji: any }[] = [
   { id: 'professional', label: 'Professional', emoji: Briefcase },
   { id: 'casual', label: 'Casual', emoji: SmileIcon },
   { id: 'viral', label: 'Viral', emoji: TrendingUp },
-  { id: 'educational', label: 'Educational', emoji:GraduationCap },
+  { id: 'educational', label: 'Educational', emoji: GraduationCap },
 ];
 
 export function AiSuggestionsPanel() {
-  const { state, dispatch } = useComposer();
+  const { state, dispatch, getContentForPlatform } = useComposer();
   const [selectedStyle, setSelectedStyle] = useState<AiStyle>('professional');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRephrasing, setIsRephrasing] = useState(false);
   const [insertedIndex, setInsertedIndex] = useState<number | null>(null);
+
+  const activePlatform = state.activeEditorPlatform;
+
+  // jules edit: Determine if active platform override text is turned on
+  const isOverridden = state.platformVariants.find(v => v.platform === activePlatform)?.isOverridden ?? false;
+
+  // jules edit: Focused-platform context content fetching
+  const activeContent = isOverridden ? getContentForPlatform(activePlatform) : state.baseContent;
 
   const atSuggestLimit =
     !state.isPremium &&
@@ -79,7 +87,7 @@ export function AiSuggestionsPanel() {
   };
 
   const handleRephrase = async () => {
-    if (!state.baseContent.trim()) {
+    if (!activeContent.trim()) {
       toast.error('Write some content first.');
       return;
     }
@@ -94,13 +102,23 @@ export function AiSuggestionsPanel() {
     setIsRephrasing(true);
     try {
       const rephrased = await rephraseText(
-        state.baseContent,
+        activeContent,
         selectedStyle,
         getContext(),
       );
-      dispatch({ type: 'SET_BASE_CONTENT', payload: rephrased });
+
+      // jules edit: Apply changes exclusively to the active platform if overridden, otherwise fallback to base content syncing
+      if (isOverridden) {
+        dispatch({
+          type: 'SET_PLATFORM_VARIANT',
+          payload: { platform: activePlatform, content: rephrased },
+        });
+      } else {
+        dispatch({ type: 'SET_BASE_CONTENT', payload: rephrased });
+      }
+
       dispatch({ type: 'INCREMENT_USAGE', payload: 'aiRephrasesToday' });
-      toast.success('Content rephrased!');
+      toast.success(`Active content rephrased for ${isOverridden ? activePlatform.toUpperCase() : 'all platforms'}!`);
     } catch {
       toast.error('Rephrase failed. Try again.');
     } finally {
@@ -109,7 +127,16 @@ export function AiSuggestionsPanel() {
   };
 
   const handleInsert = (text: string, index: number) => {
-    dispatch({ type: 'SET_BASE_CONTENT', payload: text });
+    // jules edit: Insert directly into focus platform overridden state or base content
+    if (isOverridden) {
+      dispatch({
+        type: 'SET_PLATFORM_VARIANT',
+        payload: { platform: activePlatform, content: text },
+      });
+    } else {
+      dispatch({ type: 'SET_BASE_CONTENT', payload: text });
+    }
+
     setInsertedIndex(index);
     setTimeout(() => setInsertedIndex(null), 2000);
     toast.success('Suggestion inserted!');
@@ -117,7 +144,14 @@ export function AiSuggestionsPanel() {
 
   return (
     <div className='space-y-5'>
-      {/* Post Title Input */}
+      {/* Platform override warning info */}
+      {isOverridden && (
+        <div className='p-2.5 rounded-xl bg-pw-primary/10 border border-pw-primary/30 text-[11px] text-pw-text leading-snug'>
+          ✨ <span className='font-bold uppercase'>{activePlatform}</span> has custom text active. AI suggestions and rephrases will apply only to this platform.
+        </div>
+      )}
+
+      {/* Post Topic Input */}
       <div className='space-y-1.5'>
         <label className='text-[10px] font-bold uppercase pl-1 tracking-widest text-pw-muted mb-1'>
           Post Topic / Title

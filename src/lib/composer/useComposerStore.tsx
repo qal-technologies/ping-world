@@ -53,6 +53,10 @@ const initialState: ComposerState = {
 
   translationResult: null,
   isOnline: true,
+
+  // jules edit: Initialize default Instagram Canvas values for live preview
+  instaCanvasThemeIdx: 0,
+  instaCanvasFont: 'Syne',
 };
 
 // ─── Reducer ─────────────────────────────────────────────────
@@ -272,6 +276,14 @@ function composerReducer(
 
     case 'SET_ONLINE':
       return { ...state, isOnline: action.payload };
+
+    // jules edit: Reducer action to set Instagram auto text-to-canvas rendering style variables
+    case 'SET_INSTA_CANVAS_SETTINGS':
+      return {
+        ...state,
+        instaCanvasThemeIdx: action.payload.themeIdx !== undefined ? action.payload.themeIdx : state.instaCanvasThemeIdx,
+        instaCanvasFont: action.payload.font !== undefined ? action.payload.font : state.instaCanvasFont,
+      };
 
     default:
       return state;
