@@ -1,75 +1,165 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { 
-  QrCode, 
-  Download, 
-  Share2, 
-  RefreshCw, 
-  Settings2, 
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import {
+  QrCode,
+  Download,
+  Share2,
+  RefreshCw,
+  Settings2,
   Palette,
   Type,
   FileText,
   Wifi,
   Mail,
-  Check
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { QRCodeSVG } from "qrcode.react";
+  Check,
+  Phone,
+  MessageSquare,
+  Lock,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { QRCodeSVG } from 'qrcode.react';
 
-
-const metadata = {
-  title:"QR Code Generator",
-  description:"Generate high-quality, customizable QR codes for any type of data.",
-  keywords:["QR Code Generator", "QR Code", "Generator", "Ping World", "pingwrld", "pingworld", "pingwrld qr code", "pingwrld generator", "pingwrld qr code generator", "pingwrld pingworld", "pingwrld pingwrld", 'Ping World', 'pingworld', 'pingwrld', 'qal tech', 'qal technologies', 'trending', 'trend'],
-}
 export default function QrCodeGeneratorPage() {
-  const [data, setData] = useState("");
-  const [qrType, setQrType] = useState("url");
-  const [fgColor, setFgColor] = useState("#FFFFFF");
-  const [bgColor, setBgColor] = useState("transparent");
+  const [data, setData] = useState('');
+  const [qrType, setQrType] = useState('url');
+  const [fgColor, setFgColor] = useState('#FFFFFF');
+  const [bgColor, setBgColor] = useState('transparent');
   const [isCopied, setIsCopied] = useState(false);
+
+  // jules edit: helper states for various tabs
+  const [wifiSsid, setWifiSsid] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
+  const [wifiEncryption, setWifiEncryption] = useState('WPA');
+  const [wifiHidden, setWifiHidden] = useState(false);
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
+
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+
+  const [smsPhone, setSmsPhone] = useState('');
+  const [smsMessage, setSmsMessage] = useState('');
+
+  const [phoneNumber, setPhoneNumber] = useState('');
+
+  // jules edit: dynamically construct data for standardized format strings
+  useEffect(() => {
+    if (qrType === 'wifi') {
+      const encryption = wifiEncryption === 'nopass' ? '' : wifiEncryption;
+      const hiddenStr = wifiHidden ? 'H:true;' : '';
+      const passStr = encryption ? `P:${wifiPassword};` : '';
+      setData(`WIFI:S:${wifiSsid};T:${encryption};${passStr}${hiddenStr};`);
+    } else if (qrType === 'mail') {
+      const subjectParam =
+        emailSubject ? `?subject=${encodeURIComponent(emailSubject)}` : '';
+      const bodyParam =
+        emailBody ?
+          `${subjectParam ? '&' : '?'}body=${encodeURIComponent(emailBody)}`
+        : '';
+      setData(`mailto:${emailTo}${subjectParam}${bodyParam}`);
+    } else if (qrType === 'sms') {
+      setData(`SMSTO:${smsPhone}:${smsMessage}`);
+    } else if (qrType === 'phone') {
+      setData(`tel:${phoneNumber}`);
+    }
+  }, [
+    qrType,
+    wifiSsid,
+    wifiPassword,
+    wifiEncryption,
+    wifiHidden,
+    emailTo,
+    emailSubject,
+    emailBody,
+    smsPhone,
+    smsMessage,
+    phoneNumber,
+  ]);
+
+  const handleReset = () => {
+    setData('');
+    setWifiSsid('');
+    setWifiPassword('');
+    setWifiEncryption('WPA');
+    setWifiHidden(false);
+    setEmailTo('');
+    setEmailSubject('');
+    setEmailBody('');
+    setSmsPhone('');
+    setSmsMessage('');
+    setPhoneNumber('');
+    toast.success('Generator fields reset!');
+  };
 
   const handleDownload = () => {
     if (!data) return;
-    const svg = document.getElementById("qr-svg");
+    const svg = document.getElementById('qr-svg');
     if (!svg) return;
 
     const svgData = new XMLSerializer().serializeToString(svg);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
     const img = new Image();
-    
+
     img.onload = () => {
       canvas.width = img.width + 40;
       canvas.height = img.height + 40;
       if (ctx) {
-        ctx.fillStyle = bgColor === "transparent" ? "#0A0C1B" : bgColor;
+        ctx.fillStyle = bgColor === 'transparent' ? '#0A0C1B' : bgColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 20, 20);
-        const pngFile = canvas.toDataURL("image/png");
-        const downloadLink = document.createElement("a");
-        downloadLink.download = "pingworld-qr-code.png";
+        const pngFile = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.download = 'pingworld-qr-code.png';
         downloadLink.href = pngFile;
         downloadLink.click();
       }
     };
-    
-    img.src = "data:image/svg+xml;base64," + btoa(svgData);
+
+    img.src =
+      'data:image/svg+xml;base64,' +
+      btoa(unescape(encodeURIComponent(svgData)));
   };
 
   const copyToClipboard = () => {
-    // In a real app, we'd copy the image blob, but for now we'll copy the data
+    if (!data) {
+      toast.error('No QR data to copy!');
+      return;
+    }
     navigator.clipboard.writeText(data);
     setIsCopied(true);
-    toast.success("QR data copied!");
+    toast.success('QR data copied to clipboard!');
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleShare = async () => {
+    if (!data) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'PingWorld QR Code',
+          text: `Scan or use this QR Code Data: ${data}`,
+          url: window.location.href,
+        });
+        toast.success('Shared successfully!');
+      } catch (err) {
+        toast.error('Sharing cancelled or failed');
+      }
+    } else {
+      navigator.clipboard.writeText(data);
+      toast.success(
+        'Share not supported in this browser. QR data copied instead!',
+      );
+    }
   };
 
   return (
@@ -87,12 +177,10 @@ export default function QrCodeGeneratorPage() {
             Generate high-quality, customizable QR codes for any type of data.
           </p>
         </div>
-        <div className='flex gap-3'>
+        <div className='sm:flex gap-3 hidden'>
           <Button
             variant='outline'
-            onClick={() => {
-              setData('');
-            }}
+            onClick={handleReset}
             className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
             <RefreshCw className='h-4 w-4' /> Reset
           </Button>
@@ -108,35 +196,50 @@ export default function QrCodeGeneratorPage() {
       <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
         {/* Editor Sidebar */}
         <div className='lg:col-span-7 space-y-6'>
-          <Card className='card-glow p-8'>
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-6'>
             <Tabs
               defaultValue='url'
-              onValueChange={setQrType}
-              className='w-full'>
-              <TabsList className='grid grid-cols-4 bg-white/5 mb-8'>
+              onValueChange={(val) => {
+                setQrType(val);
+                setData('');
+              }}
+              className='w-full flex flex-col items-center'>
+              <TabsList
+                className='flex bg-white/5 mb-8 gap-2 h-auto p-1 px-2 pl-3 w-full max-w-[95%] sm:min-w-full rounded-full gap-1 overflow-x-auto'
+                style={{ placeSelf: 'center', scrollbarWidth: 'none' }}>
                 <TabsTrigger
                   value='url'
-                  className='gap-2'>
-                  <Type className='h-4 w-4' /> URL
+                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  <Type className='h-3.5 w-3.5' /> URL
                 </TabsTrigger>
                 <TabsTrigger
                   value='text'
-                  className='gap-2'>
-                  <FileText className='h-4 w-4' /> Text
+                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  <FileText className='h-3.5 w-3.5' /> Text
                 </TabsTrigger>
                 <TabsTrigger
                   value='wifi'
-                  className='gap-2'>
-                  <Wifi className='h-4 w-4' /> WiFi
+                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  <Wifi className='h-3.5 w-3.5' /> WiFi
                 </TabsTrigger>
                 <TabsTrigger
                   value='mail'
-                  className='gap-2'>
-                  <Mail className='h-4 w-4' /> Email
+                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  <Mail className='h-3.5 w-3.5' /> Email
+                </TabsTrigger>
+                <TabsTrigger
+                  value='sms'
+                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  <MessageSquare className='h-3.5 w-3.5' /> SMS
+                </TabsTrigger>
+                <TabsTrigger
+                  value='phone'
+                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  <Phone className='h-3.5 w-3.5' /> Phone
                 </TabsTrigger>
               </TabsList>
 
-              <div className='space-y-6'>
+              <div className='space-y-6 w-[95%] sm:min-w-full '>
                 <TabsContent
                   value='url'
                   className='space-y-2 m-0'>
@@ -166,34 +269,176 @@ export default function QrCodeGeneratorPage() {
                 <TabsContent
                   value='wifi'
                   className='space-y-4 m-0'>
-                  <p className='text-sm text-pw-muted italic'>
-                    WiFi helper coming soon...
-                  </p>
-                  <Input
-                    value={data}
-                    onChange={(e) => setData(e.target.value)}
-                    placeholder='SSID:Password'
-                    className='bg-white/5 border-white/10 h-12'
-                  />
+                  <div className='space-y-3'>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Network Name (SSID)
+                      </label>
+                      <Input
+                        value={wifiSsid}
+                        onChange={(e) => setWifiSsid(e.target.value)}
+                        placeholder='My Home WiFi'
+                        className='bg-white/5 border-white/10 h-12'
+                      />
+                    </div>
+                    {wifiEncryption !== 'nopass' && (
+                      <div>
+                        <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                          Password
+                        </label>
+                        <div className='relative'>
+                          <Input
+                            type={showWifiPassword ? 'text' : 'password'}
+                            value={wifiPassword}
+                            onChange={(e) => setWifiPassword(e.target.value)}
+                            placeholder='••••••••'
+                            className='bg-white/5 border-white/10 h-12 pr-10'
+                          />
+                          <button
+                            type='button'
+                            onClick={() =>
+                              setShowWifiPassword(!showWifiPassword)
+                            }
+                            className='absolute right-3 top-1/2 -translate-y-1/2 text-pw-muted hover:text-pw-text transition-colors'>
+                            {showWifiPassword ?
+                              <EyeOff className='h-4 w-4' />
+                            : <Eye className='h-4 w-4' />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className='grid grid-cols-2 gap-4'>
+                      <div>
+                        <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                          Encryption
+                        </label>
+                        <select
+                          value={wifiEncryption}
+                          onChange={(e) => setWifiEncryption(e.target.value)}
+                          className='w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none h-12 appearance-none cursor-pointer'>
+                          <option
+                            value='WPA'
+                            className='bg-pw-surface'>
+                            WPA/WPA2
+                          </option>
+                          <option
+                            value='WEP'
+                            className='bg-pw-surface'>
+                            WEP
+                          </option>
+                          <option
+                            value='nopass'
+                            className='bg-pw-surface'>
+                            No Password
+                          </option>
+                        </select>
+                      </div>
+                      <div className='flex flex-col justify-end pb-3'>
+                        <label className='flex items-center gap-2 cursor-pointer select-none text-sm text-pw-muted font-bold uppercase'>
+                          <input
+                            type='checkbox'
+                            checked={wifiHidden}
+                            onChange={(e) => setWifiHidden(e.target.checked)}
+                            className='rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary'
+                          />
+                          Hidden Network
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                 </TabsContent>
                 <TabsContent
                   value='mail'
                   className='space-y-4 m-0'>
-                  <p className='text-sm text-pw-muted italic'>
-                    Email helper coming soon...
-                  </p>
-                  <Input
-                    value={data}
-                    onChange={(e) => setData(e.target.value)}
-                    placeholder='mailto:user@example.com'
-                    className='bg-white/5 border-white/10 h-12'
-                  />
+                  <div className='space-y-3'>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Recipient Email
+                      </label>
+                      <Input
+                        type='email'
+                        value={emailTo}
+                        onChange={(e) => setEmailTo(e.target.value)}
+                        placeholder='recipient@example.com'
+                        className='bg-white/5 border-white/10 h-12'
+                      />
+                    </div>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Subject
+                      </label>
+                      <Input
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        placeholder='Inquiry/Feedback'
+                        className='bg-white/5 border-white/10 h-12'
+                      />
+                    </div>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Message Body
+                      </label>
+                      <textarea
+                        value={emailBody}
+                        onChange={(e) => setEmailBody(e.target.value)}
+                        placeholder='Type your email body...'
+                        className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent
+                  value='sms'
+                  className='space-y-4 m-0'>
+                  <div className='space-y-3'>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Phone Number
+                      </label>
+                      <Input
+                        type='tel'
+                        value={smsPhone}
+                        onChange={(e) => setSmsPhone(e.target.value)}
+                        placeholder='+1 (555) 019-2834'
+                        className='bg-white/5 border-white/10 h-12'
+                      />
+                    </div>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Message
+                      </label>
+                      <textarea
+                        value={smsMessage}
+                        onChange={(e) => setSmsMessage(e.target.value)}
+                        placeholder='Hello, please get in touch!'
+                        className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent
+                  value='phone'
+                  className='space-y-4 m-0'>
+                  <div>
+                    <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                      Phone Number
+                    </label>
+                    <Input
+                      type='tel'
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder='+1 (555) 019-2834'
+                      className='bg-white/5 border-white/10 h-12'
+                    />
+                  </div>
                 </TabsContent>
               </div>
             </Tabs>
           </Card>
 
-          <Card className='card-glow p-8 space-y-8'>
+          <div className='divider sm:hidden' />
+
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-8  mt-10 sm:mt-0'>
             <h3 className='text-lg font-bold flex items-center gap-2'>
               <Palette className='h-5 w-5 text-pw-primary' /> Appearance
             </h3>
@@ -237,10 +482,11 @@ export default function QrCodeGeneratorPage() {
             </div>
           </Card>
         </div>
-
+        <div className='divider sm:hidden' />
+        
         {/* Preview Area */}
         <div className='lg:col-span-5 flex flex-col gap-6'>
-          <Card className='card-glow p-12 bg-pw-surface/50 flex flex-col items-center justify-center min-h-[400px]'>
+          <Card className='bg-transparent sm:card-glow sm:p-8 sm:bg-pw-surface/50 flex flex-col items-center justify-center min-h-[400px] ring-0 sm:ring-1 mt-10 sm:mt-0'>
             <div className='relative group'>
               <div className='absolute -inset-8 bg-pw-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity' />
               <div className='relative p-6 bg-white rounded-3xl shadow-[0_0_50px_rgba(92,111,255,0.3)]'>
@@ -270,8 +516,25 @@ export default function QrCodeGeneratorPage() {
                   : <Settings2 className='h-4 w-4' />}
                   Copy Data
                 </Button>
-                <Button className='flex-1 btn-primary h-12 gap-2'>
+                <Button
+                  onClick={handleShare}
+                  className='flex-1 btn-primary h-12 gap-2'>
                   <Share2 className='h-4 w-4' /> Share QR
+                </Button>
+              </div>
+              <div className='gap-3 flex flex-wrap'>
+                <Button
+                  variant='outline'
+                  title='Reset'
+                  onClick={handleReset}
+                  className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 rounded-full h-11 px-4'>
+                  <RefreshCw className='h-4 w-4' />
+                </Button>
+                <Button
+                  onClick={handleDownload}
+                  disabled={!data}
+                  className=' rounded-full hover:scale-[1.05] bg-pw-primary flex-1 gap-2 h-11 px-8'>
+                  <Download className='h-4 w-4' /> Download PNG
                 </Button>
               </div>
             </div>

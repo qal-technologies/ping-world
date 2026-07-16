@@ -1,4 +1,21 @@
-import {Brain, ImageIcon, Link2, MessageCircle, Palette, PenTool, QrCode, Type} from "lucide-react";
+import {
+  Brain,
+  ImageIcon,
+  Link2,
+  MessageCircle,
+  Palette,
+  PenTool,
+  QrCode,
+  Type,
+  Lock,
+  FileText,
+  Trophy,
+  Compass,
+  Globe,
+  Calculator,
+  FileCode,
+  FileText as PdfIcon
+} from "lucide-react";
 
 export const tools = [
   {
@@ -97,4 +114,100 @@ export const tools = [
     category: 'Utility',
     version: { v: '1.0', s: 'Stable' },
   },
+  {
+    icon: Lock,
+    title: 'Password Generator',
+    description:
+      'Generate ultra secure random passwords locally to keep your social and business accounts completely protected.',
+    href: '/tools/password-gen',
+    color: '#00ba7c',
+    tag: 'Secure',
+    id: 'password-gen',
+    category: 'Security',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: FileText,
+    title: 'Word Counter',
+    description:
+      'Live lexical analysis tool counting words, chars, density, readability metrics, and speech readability indexes.',
+    href: '/tools/word-counter',
+    color: '#ff8c42',
+    tag: 'Utility',
+    id: 'word-counter',
+    category: 'Content',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Trophy,
+    title: 'Games Standings',
+    description:
+      'Interactive tournament or league standings table to track points, goals, wins, and draws automatically.',
+    href: '/tools/games',
+    color: '#bc1888',
+    tag: 'New',
+    id: 'games',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Compass,
+    title: 'IP Locator',
+    description:
+      'Locate and fetch detailed geospatial coordinates, ISP data, and country information from any input IP.',
+    href: '/tools/ip-locator',
+    color: '#ff5c7a',
+    tag: 'Network',
+    id: 'ip-locator',
+    category: 'Security',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Calculator,
+    title: 'Multi Calculator',
+    description:
+      'Perform weight/volume unit conversions, complex percentages, interest pricing, and real-time live currency conversion.',
+    href: '/tools/calculator',
+    color: '#1d9bf0',
+    tag: 'Finance',
+    id: 'calculator',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: FileCode,
+    title: 'Offline Notes',
+    description:
+      'Local-first secure offline text notes with custom categorizations, stacking, search capability, and sync option.',
+    href: '/tools/notes',
+    color: '#22c985',
+    tag: 'Utility',
+    id: 'notes',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Lock,
+    title: 'Secure Encryption',
+    description:
+      'Encrypt and decrypt data using highly secure client-side cryptography algorithms (AES, TripleDES, RC4) and passkeys.',
+    href: '/tools/encryption',
+    color: '#985cff',
+    tag: 'Secure',
+    id: 'encryption',
+    category: 'Security',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: PdfIcon,
+    title: 'PDF Tool Studio',
+    description:
+      'Image to PDF, PDF merging/splitting, text-to-pdf, and pdf-to-text conversion tool purely client-side.',
+    href: '/tools/pdf',
+    color: '#ff3b30',
+    tag: 'New',
+    id: 'pdf-tools',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  }
 ];
