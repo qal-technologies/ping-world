@@ -101,7 +101,7 @@ export default function UrlShortenerPage() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder='Paste your long link here...'
-              className='w-full pl-12 h-12 bg-white/5 border-white/10 text-lg focus:border-pw-primary rounded-xl'
+              className='w-full pl-12 h-12 bg-white/5 border-white/10 focus:border-pw-primary rounded-xl'
               disabled={isShortening}
             />
           </div>

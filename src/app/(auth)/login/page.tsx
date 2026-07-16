@@ -21,15 +21,20 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        router.push('/dashboard');
+      if(navigator.onLine) {
+        const {
+          data: {session},
+        } = await supabase.auth.getSession();
+        if(session) {
+          router.push('/dashboard');
+        }
+        setPageLoading(false);
+      } else {
+        setPageLoading(false);
       }
-      setPageLoading(false);
     };
     checkUser();
+    () => checkUser();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -48,9 +53,10 @@ export default function LoginPage() {
       if (error) throw error;
 
       toast.success('Welcome back!');
-      router.push('/dashboard'); // Assuming admin is the dashboard
+      router.push('/dashboard');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to login');
+      if (!navigator.onLine) toast.error('No internet connection, Try again!');
+      else toast.error(err.message || 'Failed to login');
     } finally {
       setLoading(false);
     }
@@ -63,10 +69,12 @@ export default function LoginPage() {
           Ping World
         </p>
         <div className='divider' />
-        <p className='text-xs mt-[-10px] opacity-60'>Checking your login status...</p>
+        <p className='text-xs mt-[-10px] animate-pulse'>
+          Checking your login status...
+        </p>
       </div>
     );
-  };
+  }
 
   return (
     <div className='min-h-screen w-full p-2 md:p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
@@ -81,6 +89,9 @@ export default function LoginPage() {
           <div>
             <h1 className='text-xl opacity-80 mb-2 font-display'>Ping World</h1>
             <h1 className='text-3xl font-bold tracking-tight'>WELCOME</h1>
+            <h2 className='text-lg font-bold tracking-tight text-right w-full hidden'>
+              BACK
+            </h2>
           </div>
 
           <div className='space-y-4 mb-8 hidden md:block'>
@@ -146,7 +157,7 @@ export default function LoginPage() {
           <div className='mt-4 space-y-6'>
             <Button
               type='submit'
-              disabled={loading}
+              disabled={loading || !formData.email || !formData.password}
               className='btn-primary w-full h-12 text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-100 flex gap-2'>
               {loading ? 'SIGNING IN...' : 'SIGN IN'}
               {!loading && <ArrowRight size={18} />}

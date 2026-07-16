@@ -86,7 +86,7 @@ export default function ToolsHubPage() {
         <div className='max-w-2xl text-center md:text-left mb-2'>
           <div className='badge mb-4 inline-flex'>
             <Sparkles className='h-3.5 w-3.5' />
-            Utility Suite
+            Tool Space
           </div>
           <h1 className='text-4xl md:text-6xl font-extrabold font-display leading-tight mb-4'>
             Discover your <span className='gradient-text'>World.</span>
@@ -103,8 +103,8 @@ export default function ToolsHubPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search tools (e.g. 'quiz', 'link')..."
-              className='card-glow pl-12 h-11 bg-transparent border-none focus-visible:ring-0 text-lg'
+              placeholder="Search tools..."
+              className='card-glow pl-12 h-11 bg-transparent border-none focus-visible:ring-0'
             />
           </div>
           <div

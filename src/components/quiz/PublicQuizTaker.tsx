@@ -48,6 +48,7 @@ import React from 'react';
 import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
 
+
 export type QuestionType =
   | 'multiple_choice'
   | 'true_false'
@@ -371,17 +372,19 @@ export default function PublicQuizTaker() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [shuffledOptions, setShuffledOptions] = useState<
     Record<string, (string | QuizOption)[]>
-  >({});
+    >({});
+  
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
 
   const [started, setStart] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
-
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
+
+
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
@@ -1082,7 +1085,7 @@ export default function PublicQuizTaker() {
 
   if (!quiz) {
     return (
-      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
+      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl md:text-3xl font-bold mb-1'>
           Assessment Not Found
@@ -1104,7 +1107,7 @@ export default function PublicQuizTaker() {
     const numberCount = navigationHistory.length;
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
-        <div className='container relative z-10 mx-auto px-6 py-20 max-w-2xl text-center'>
+        <div className='container relative z-10 mx-auto px-3 py-10 max-w-2xl text-center'>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}>
@@ -1236,7 +1239,7 @@ export default function PublicQuizTaker() {
 
       {/* 1. Intro Gate */}
       {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
-        <div className='container relative z-10 mx-auto px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
+        <div className='container relative z-10 mx-auto px-5 sm:px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
           <div className='flex justify-center mb-6 text-pw-primary'>
             {quiz.type === 'quiz' ?
               <Brain size={60} />
@@ -1245,13 +1248,13 @@ export default function PublicQuizTaker() {
           <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
             {quiz.title.toUpperCase()}
           </h1>
-          <p className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'>
+          <p className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4' style={{lineHeight:'20px'}}>
             {quiz.description}
           </p>
 
           <div className='max-w-sm mx-auto w-full'>
             {authRequired ?
-              <div className='bg-pw-danger/5 p-4 rounded-2xl border border-pw-danger/20 space-y-6'>
+              <div className='bg-pw-danger/5 p-2 py-3 rounded-2xl border border-pw-danger/20 space-y-6'>
                 <Lock className='h-12 w-12 text-pw-danger mx-auto mt-10' />
                 <h3 className='text-xl font-bold'>Authentication Required</h3>
                 <p className='text-sm text-white/70 '>
@@ -1291,8 +1294,8 @@ export default function PublicQuizTaker() {
         showSecurityProtocol &&
         !started &&
         !detailsCollected && (
-          <div className='container relative z-10 mx-auto px-2 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
-            <div className='bg-pw-primary/5 p-6 rounded-[2.5rem] border border-pw-primary/20 space-y-8 backdrop-blur-xl'>
+          <div className='container relative z-10 mx-auto px-5 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
+            <div className='sm:bg-pw-primary/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-pw-primary/20 space-y-8 sm:backdrop-blur-xl'>
               <div className='flex flex-col items-center gap-4 mt-2'>
                 <ShieldCheck className='h-16 w-16 text-pw-primary animate-pulse' />
                 <div className='text-center'>
@@ -1348,8 +1351,8 @@ export default function PublicQuizTaker() {
       {showDetails &&
         !detailsCollected &&
         (quiz.askDetails || []).length > 0 && (
-          <div className='container relative z-10 mx-auto px-2 py-10 max-w-lg flex-1 flex flex-col justify-center'>
-            <div className='bkblur bg-white/5 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl'>
+          <div className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
+            <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl'>
               <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
                 ENTER YOUR DETAILS
               </h3>
@@ -1522,15 +1525,17 @@ export default function PublicQuizTaker() {
 
               <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
                 {/* Top Progress Bar */}
-                <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{
-                      width: `${(answeredCount / activeQuestions.length) * 100}%`,
-                    }}
-                    className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
-                  />
-                </div>
+                {quiz.type === 'quiz' &&
+                  <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
+                    <motion.div
+                      initial={{width: 0}}
+                      animate={{
+                        width: `${(answeredCount / activeQuestions.length) * 100}%`,
+                      }}
+                      className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
+                    />
+                  </div>
+                }
 
                 {quiz?.allowEarlySubmit && (
                   <Button
@@ -1600,7 +1605,7 @@ export default function PublicQuizTaker() {
                           exit={{ opacity: 0, y: -20 }}
                           transition={{ duration: 0.3, ease: 'easeOut' }}
                           className='space-y-8 w-full items-center max-w-[600px]'>
-                          <Card className='glass bkblur rounded-4xl p-4 md:p-6 bg-pw-surface/40 border-white/5 shadow-2xl relative overflow-hidden group flex flex-col'>
+                          <Card className='sm:glass sm:bkblur sm:rounded-4xl bg-transparent sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 relative overflow-hidden group flex flex-col'>
                             <div className='flex-1 w-full flex flex-col'>
                               <div className='flex flex-col gap-6 mb-5'>
                                 <div className='flex justify-between items-start gap-4'>
@@ -1662,7 +1667,7 @@ export default function PublicQuizTaker() {
                                   )}
                               </div>
 
-                              <div className='space-y-4'>
+                              <div className='space-y-4 px-1'>
                                 {q.type === 'dropdown' ?
                                   <div className='flex justify-center py-4'>
                                     <DropdownMenu>

@@ -25,13 +25,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function QrCodeGeneratorPage() {
   const [data, setData] = useState('');
   const [qrType, setQrType] = useState('url');
-  const [fgColor, setFgColor] = useState('#FFFFFF');
+  const [fgColor, setFgColor] = useState('#4500bbff');
   const [bgColor, setBgColor] = useState('transparent');
   const [isCopied, setIsCopied] = useState(false);
 
@@ -51,7 +50,7 @@ export default function QrCodeGeneratorPage() {
 
   const [phoneNumber, setPhoneNumber] = useState('');
 
-  // jules edit: dynamically construct data for standardized format strings
+
   useEffect(() => {
     if (qrType === 'wifi') {
       const encryption = wifiEncryption === 'nopass' ? '' : wifiEncryption;
@@ -114,7 +113,7 @@ export default function QrCodeGeneratorPage() {
       canvas.width = img.width + 40;
       canvas.height = img.height + 40;
       if (ctx) {
-        ctx.fillStyle = bgColor === 'transparent' ? '#0A0C1B' : bgColor;
+        ctx.fillStyle = bgColor === 'transparent' ? '#ffffff00' : bgColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 20, 20);
         const pngFile = canvas.toDataURL('image/png');
@@ -203,9 +202,9 @@ export default function QrCodeGeneratorPage() {
                 setQrType(val);
                 setData('');
               }}
-              className='w-full flex flex-col'>
+              className='w-full flex flex-col max-w-[700px]'>
               <TabsList
-                className='flex bg-white/5 mb-8 gap-2 h-auto p-1 w-full max-w-[95%] sm:min-w-full rounded-full gap-1 overflow-x-auto'
+                className='flex bg-white/5 mb-8 gap-2 px-1 min-h-10 w-full sm:min-w-full rounded-full gap-1 overflow-x-auto'
                 style={{
                   placeSelf: 'center',
                   justifyContent: 'flex-start',
@@ -213,37 +212,37 @@ export default function QrCodeGeneratorPage() {
                 }}>
                 <TabsTrigger
                   value='url'
-                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  className='gap-1.5 h-8 text-xs rounded-full px-4'>
                   <Type className='h-3.5 w-3.5' /> URL
                 </TabsTrigger>
                 <TabsTrigger
                   value='text'
-                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  className='gap-1.5 h-8 text-xs rounded-full px-4'>
                   <FileText className='h-3.5 w-3.5' /> Text
                 </TabsTrigger>
                 <TabsTrigger
                   value='wifi'
-                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  className='gap-1.5 h-8 text-xs rounded-full px-4'>
                   <Wifi className='h-3.5 w-3.5' /> WiFi
                 </TabsTrigger>
                 <TabsTrigger
                   value='mail'
-                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  className='gap-1.5 h-8 text-xs rounded-full px-4'>
                   <Mail className='h-3.5 w-3.5' /> Email
                 </TabsTrigger>
                 <TabsTrigger
                   value='sms'
-                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  className='gap-1.5 h-8 text-xs rounded-full px-4'>
                   <MessageSquare className='h-3.5 w-3.5' /> SMS
                 </TabsTrigger>
                 <TabsTrigger
                   value='phone'
-                  className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
+                  className='gap-1.5 h-8 text-xs rounded-full px-4'>
                   <Phone className='h-3.5 w-3.5' /> Phone
                 </TabsTrigger>
               </TabsList>
 
-              <div className='space-y-6 w-[95%] sm:min-w-full '>
+              <div className='space-y-6 px-1 '>
                 <TabsContent
                   value='url'
                   className='space-y-2 m-0'>
@@ -254,7 +253,7 @@ export default function QrCodeGeneratorPage() {
                     value={data}
                     onChange={(e) => setData(e.target.value)}
                     placeholder='https://example.com'
-                    className='bg-white/5 border-white/10 h-12 focus:border-pw-primary'
+                    className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
                   />
                 </TabsContent>
                 <TabsContent
@@ -282,7 +281,7 @@ export default function QrCodeGeneratorPage() {
                         value={wifiSsid}
                         onChange={(e) => setWifiSsid(e.target.value)}
                         placeholder='My Home WiFi'
-                        className='bg-white/5 border-white/10 h-12'
+                        className='bg-white/5 border-white/10 h-10'
                       />
                     </div>
                     {wifiEncryption !== 'nopass' && (
@@ -296,7 +295,7 @@ export default function QrCodeGeneratorPage() {
                             value={wifiPassword}
                             onChange={(e) => setWifiPassword(e.target.value)}
                             placeholder='••••••••'
-                            className='bg-white/5 border-white/10 h-12 pr-10'
+                            className='bg-white/5 border-white/10 h-10 pr-10'
                           />
                           <button
                             type='button'
@@ -319,7 +318,7 @@ export default function QrCodeGeneratorPage() {
                         <select
                           value={wifiEncryption}
                           onChange={(e) => setWifiEncryption(e.target.value)}
-                          className='w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none h-12 appearance-none cursor-pointer'>
+                          className='w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none h-10 appearance-none cursor-pointer'>
                           <option
                             value='WPA'
                             className='bg-pw-surface'>
@@ -364,7 +363,7 @@ export default function QrCodeGeneratorPage() {
                         value={emailTo}
                         onChange={(e) => setEmailTo(e.target.value)}
                         placeholder='recipient@example.com'
-                        className='bg-white/5 border-white/10 h-12'
+                        className='bg-white/5 border-white/10 h-h-10'
                       />
                     </div>
                     <div>
@@ -375,7 +374,7 @@ export default function QrCodeGeneratorPage() {
                         value={emailSubject}
                         onChange={(e) => setEmailSubject(e.target.value)}
                         placeholder='Inquiry/Feedback'
-                        className='bg-white/5 border-white/10 h-12'
+                        className='bg-white/5 border-white/10 h-10'
                       />
                     </div>
                     <div>
@@ -404,7 +403,7 @@ export default function QrCodeGeneratorPage() {
                         value={smsPhone}
                         onChange={(e) => setSmsPhone(e.target.value)}
                         placeholder='+1 (555) 019-2834'
-                        className='bg-white/5 border-white/10 h-12'
+                        className='bg-white/5 border-white/10 h-10'
                       />
                     </div>
                     <div>
@@ -432,7 +431,7 @@ export default function QrCodeGeneratorPage() {
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       placeholder='+1 (555) 019-2834'
-                      className='bg-white/5 border-white/10 h-12'
+                      className='bg-white/5 border-white/10 h-10'
                     />
                   </div>
                 </TabsContent>
@@ -494,17 +493,19 @@ export default function QrCodeGeneratorPage() {
             <Card className='bg-transparent sm:card-glow sm:p-8 sm:bg-pw-surface/50 flex flex-col items-center justify-center min-h-[400px] ring-0 sm:ring-1 mt-10 sm:mt-0'>
               <div className='relative group'>
                 <div className='absolute -inset-8 bg-pw-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity' />
-                <div className='relative p-6 bg-white rounded-3xl shadow-[0_0_50px_rgba(92,111,255,0.3)]'>
+                <div className='relative p-4 bg-white rounded-3xl shadow-[0_0_50px_rgba(92,111,255,0.3)]'>
                   {data ?
                     <QRCodeSVG
                       id='qr-svg'
                       value={data}
+                      style={{ background: bgColor }}
                       size={250}
                       includeMargin={false}
                       fgColor={fgColor}
+                      bgColor={bgColor}
                     />
                   : <div className='w-[250px] h-[250px] flex items-center justify-center border-2 border-dashed border-pw-primary/20 rounded-xl bg-pw-primary/5'>
-                      <QrCode className='h-12 w-12 text-pw-primary/30 animate-pulse' />
+                      <QrCode className='h-14 w-14 text-pw-primary/30 animate-pulse' />
                     </div>
                   }
                 </div>
@@ -516,7 +517,7 @@ export default function QrCodeGeneratorPage() {
                     onClick={copyToClipboard}
                     variant='outline'
                     disabled={!data}
-                    className='flex-1 border-white/10 hover:bg-white/5 h-12 gap-2'>
+                    className='flex-1 border-white/10 hover:bg-white/5 h-10 gap-2'>
                     {isCopied ?
                       <Check className='h-4 w-4' />
                     : <Settings2 className='h-4 w-4' />}
@@ -525,7 +526,7 @@ export default function QrCodeGeneratorPage() {
                   <Button
                     disabled={!data}
                     onClick={handleShare}
-                    className='flex-1 btn-primary h-12 gap-2'>
+                    className='flex-1 btn-primary h-10 gap-2'>
                     <Share2 className='h-4 w-4' /> Share QR
                   </Button>
                 </div>

@@ -50,7 +50,8 @@ export default function RegisterPage() {
       toast.success('Registration successful! Please check your email.');
       router.push('/login');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to register');
+      if (!navigator.onLine) toast.error('No internet connection, Try again!');
+      else toast.error(err.message || 'Failed to Regiter');
     } finally {
       setLoading(false);
     }
@@ -148,7 +149,7 @@ export default function RegisterPage() {
           <div className='mt-4 space-y-6'>
             <Button
               type='submit'
-              disabled={loading}
+              disabled={loading || !formData.email || !formData.name || !formData.password}
               className='btn-primary w-full h-12 text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-100 flex gap-2'>
               {loading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
               {!loading && <ArrowRight size={18} />}

@@ -95,8 +95,8 @@ export default function PasswordGeneratorPage() {
               <div className='flex-1 bg-white/5 border border-white/10 rounded-2xl h-12 px-4 flex items-center justify-between text-lg font-mono tracking-wider overflow-x-auto select-all'>
                 {password ?
                   password
-                : <span className='text-pw-muted/40 text-sm font-sans font-normal'>
-                    Your generated password...
+                : <span className='text-pw-muted/40 text-xs sm:text-sm font-sans font-normal'>
+                    Your password...
                   </span>
                 }
               </div>

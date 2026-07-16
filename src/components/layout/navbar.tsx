@@ -6,11 +6,9 @@ import { motion } from 'framer-motion';
 import {
   Zap,
   Wrench,
-  PenTool,
   LayoutDashboard,
   Menu,
   X,
-  Search,
   MessageSquare,
   Type,
   ImageIcon,
@@ -176,11 +174,6 @@ export const Navbar = () => {
 
         {/* Right section */}
         <div className='flex items-center gap-3'>
-          <Link
-            href='/tools'
-            className='hidden md:flex h-9 w-9 items-center justify-center rounded-lg text-pw-muted hover:text-pw-text hover:bg-pw-primary/10 transition-colors duration-200'>
-            <Search className='h-4 w-4' />
-          </Link>
           {
             session && pathname !== '/dashboard' ? (
               <Link

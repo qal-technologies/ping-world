@@ -9,13 +9,11 @@ import {
   Delete,
   Undo,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { capFirst, cn } from '@/lib/utils';
-import { useComposer } from '@/lib/composer/useComposerStore';
 
 export default function CalculatorPage() {
   // Tab control
@@ -215,13 +213,14 @@ export default function CalculatorPage() {
         </div>
       </div>
 
-      <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow p-5 space-y-8'>
+      <Card className='bg-transparent ring-0 space-y-8 flex items-center shrink-0'>
         <Tabs
           defaultValue='basic'
           onValueChange={setActiveTab}
-          className='w-full flex flex-col'>
+          className='w-full flex flex-col max-w-[700px]'>
           <TabsList
-            className='flex bg-white/5 mb-8 gap-2 h-auto p-1 w-full sm:min-w-full rounded-full gap-1 overflow-x-auto'
+            className='flex bg-white/5 mb-8 gap-2 px-1 min-h-10 w-full sm:min-w-full rounded-full gap-1 overflow-x-auto'
+            
             style={{
               placeSelf: 'center',
               justifyContent: 'flex-start',
@@ -229,27 +228,27 @@ export default function CalculatorPage() {
             }}>
             <TabsTrigger
               value='basic'
-              className='gap-2 py-3 text-xs rounded-full px-2'>
+              className='gap-2 h-8 text-xs rounded-full px-4'>
               <Calculator className='h-4 w-4' /> Math
             </TabsTrigger>
             <TabsTrigger
               value='currency'
-              className='gap-2 py-3 text-xs rounded-full px-2'>
+              className='gap-2 h-8 text-xs rounded-full px-4'>
               <DollarSign className='h-4 w-4' /> Currency
             </TabsTrigger>
             <TabsTrigger
               value='units'
-              className='gap-2 py-3 text-xs rounded-full px-2'>
+              className='gap-2 h-8 text-xs rounded-full px-4'>
               <Scale className='h-4 w-4' /> Units
             </TabsTrigger>
             <TabsTrigger
               value='finance'
-              className='gap-2 py-3 text-xs rounded-full px-2'>
+              className='gap-2 h-8 text-xs rounded-full px-4'>
               <Percent className='h-4 w-4' /> Interest
             </TabsTrigger>
             <TabsTrigger
               value='pricing'
-              className='gap-2 py-3 text-xs rounded-full px-2'>
+              className='gap-2 h-8 text-xs rounded-full px-4'>
               <DollarSign className='h-4 w-4' /> Pricing
             </TabsTrigger>
           </TabsList>
