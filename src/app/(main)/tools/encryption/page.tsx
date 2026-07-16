@@ -59,7 +59,7 @@ export default function EncryptionDecryptionPage() {
       const payloadObj = {
         data: plainText,
         algo: algo,
-        marker: "PINGWORLD_SECURE"
+        marker: "PINGWORLD_ENCRYPTION"
       };
 
       const rawString = JSON.stringify(payloadObj);
@@ -122,7 +122,7 @@ export default function EncryptionDecryptionPage() {
       }
 
       const payload = JSON.parse(decryptedStr);
-      if (payload.marker === "PINGWORLD_SECURE" && payload.algo === algo) {
+      if (payload.marker === "PINGWORLD_ENCRYPTION" && payload.algo === algo) {
         setDecryptedText(payload.data);
         toast.success("Information unlocked successfully!");
       } else {
@@ -149,23 +149,24 @@ export default function EncryptionDecryptionPage() {
         <div>
           <div className='badge mb-4'>
             <Lock className='h-3.5 w-3.5' />
-            Cyber Suite
+            Security
           </div>
           <h1 className='text-4xl font-extrabold font-display leading-[1.1]'>
             Secure <span className='gradient-text'>Encryption.</span>
           </h1>
           <p className='mt-2 text-pw-muted'>
-            Encrypt or decrypt messages and files completely client-side. No data is ever sent to any database.
+            Encrypt or decrypt messages and files completely client-side. No
+            data is ever sent to our server.
           </p>
         </div>
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
         {/* ENCRYPT SECTION */}
-        <Card className='card-glow p-8 space-y-6 flex flex-col justify-between'>
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Lock className="h-5 w-5 text-pw-primary" /> Encrypt Workspace
+        <Card className='bg-transparent px-1 ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-6 flex flex-col justify-between' id='encryption'>
+          <div className='space-y-4'>
+            <h3 className='text-lg font-bold flex items-center gap-2'>
+              <Lock className='h-5 w-5 text-pw-primary' /> Encryption
             </h3>
 
             <div>
@@ -175,75 +176,98 @@ export default function EncryptionDecryptionPage() {
               <select
                 value={algo}
                 onChange={(e) => setAlgo(e.target.value as any)}
-                className="w-full h-12 bg-white/5 border border-white/10 rounded-lg px-3 focus:border-pw-primary focus:outline-none appearance-none cursor-pointer">
-                <option value="AES" className="bg-pw-surface text-pw-text">AES (Standard Secure)</option>
-                <option value="TripleDES" className="bg-pw-surface text-pw-text">TripleDES (Legacy Complex)</option>
-                <option value="RC4" className="bg-pw-surface text-pw-text">RC4 (Fast Stream)</option>
+                className='w-full h-10 bg-white/5 border border-white/10 rounded-lg px-3 focus:border-pw-primary focus:outline-none cursor-pointer'>
+                <option
+                  value='AES'
+                  className='bg-pw-surface text-pw-text'>
+                  AES (Standard Secure)
+                </option>
+                <option
+                  value='TripleDES'
+                  className='bg-pw-surface text-pw-text'>
+                  TripleDES (Legacy Complex)
+                </option>
+                <option
+                  value='RC4'
+                  className='bg-pw-surface text-pw-text'>
+                  RC4 (Fast Stream)
+                </option>
               </select>
             </div>
 
             <div>
               <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
-                Plain Text Message
+                Plain Text
               </label>
               <textarea
                 value={plainText}
                 onChange={(e) => setPlainText(e.target.value)}
-                placeholder="Type your sensitive secret message here..."
+                placeholder='Enter text for encryption...'
                 className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
               />
             </div>
 
             <div>
               <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
-                Encryption Passkey
+                Encryption key
               </label>
-              <div className="flex gap-2">
+              <div className='flex gap-2'>
                 <Input
                   value={encryptKey}
                   onChange={(e) => setEncryptKey(e.target.value)}
-                  placeholder="Create or generate key..."
-                  className="bg-white/5 border-white/10 h-12"
+                  placeholder='Secret key...'
+                  className='bg-white/5 border-white/10 h-10'
                 />
                 <Button
                   onClick={generatePasskey}
-                  variant="outline"
-                  className="h-12 border-white/10 hover:bg-white/10 shrink-0 font-bold text-xs gap-1.5 px-4">
-                  <RefreshCw className="h-4 w-4" /> Generate
+                  disabled={!plainText}
+                  title={'Generate Passkey'}
+                  variant='outline'
+                  className='h-10 border-white/10 hover:bg-white/10 shrink-0 font-bold text-xs gap-1.5 px-4'>
+                  <RefreshCw className='h-4 w-4' /> Generate
                 </Button>
               </div>
             </div>
 
             <Button
               onClick={handleEncrypt}
-              className="w-full btn-primary h-12 text-sm font-bold mt-2">
-              Encrypt Information
+              disabled={!plainText || !encryptKey}
+              title={'Encrypt Plain Text'}
+              className={cn('w-full btn-primary h-12 text-sm font-bold mt-2')}>
+              Encrypt Data
             </Button>
           </div>
 
           {cipherText && (
-            <div className="pt-4 border-t border-white/5 space-y-3">
-              <label className="text-[10px] text-pw-muted font-bold uppercase block tracking-wider">Encrypted Payload Output</label>
-              <div className="flex gap-2">
-                <div className="flex-1 bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono h-12 overflow-x-auto truncate flex items-center select-all">
+            <div className='pt-4 border-t border-white/5 space-y-3'>
+              <label className='text-[10px] text-pw-muted font-bold uppercase block tracking-wider'>
+                Encrypted Data
+              </label>
+              <div className='flex gap-2'>
+                <div className='flex-1 bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono h-12 overflow-x-auto truncate flex items-center select-all'>
                   {cipherText}
                 </div>
                 <Button
                   onClick={copyCipherText}
-                  variant="outline"
-                  className="h-12 border-white/10 hover:bg-pw-primary/10">
-                  {isCopied ? <Check className="h-4 w-4 text-pw-success" /> : <Copy className="h-4 w-4" />}
+                  variant='outline'
+                  title='Copy Encrypted data'
+                  className='h-12 border-white/10 hover:bg-pw-primary/10'>
+                  {isCopied ?
+                    <Check className='h-4 w-4 text-pw-success' />
+                  : <Copy className='h-4 w-4' />}
                 </Button>
               </div>
             </div>
           )}
         </Card>
 
+        <div className='divider sm:hidden my-3' />
+        
         {/* DECRYPT SECTION */}
-        <Card className='card-glow p-8 space-y-6 flex flex-col justify-between'>
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Unlock className="h-5 w-5 text-pw-secondary" /> Decrypt Workspace
+        <Card className='bg-transparent px-1 ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-6 flex flex-col justify-between' id='decryption'>
+          <div className='space-y-4'>
+            <h3 className='text-lg font-bold flex items-center gap-2'>
+              <Unlock className='h-5 w-5 text-pw-secondary' /> Decryption
             </h3>
 
             <div>
@@ -253,10 +277,22 @@ export default function EncryptionDecryptionPage() {
               <select
                 value={algo}
                 onChange={(e) => setAlgo(e.target.value as any)}
-                className="w-full h-12 bg-white/5 border border-white/10 rounded-lg px-3 focus:border-pw-primary focus:outline-none appearance-none cursor-pointer">
-                <option value="AES" className="bg-pw-surface text-pw-text">AES (Standard Secure)</option>
-                <option value="TripleDES" className="bg-pw-surface text-pw-text">TripleDES (Legacy Complex)</option>
-                <option value="RC4" className="bg-pw-surface text-pw-text">RC4 (Fast Stream)</option>
+                className='w-full h-10 bg-white/5 border border-white/10 rounded-lg px-3 focus:border-pw-primary focus:outline-none cursor-pointer'>
+                <option
+                  value='AES'
+                  className='bg-pw-surface text-pw-text'>
+                  AES (Standard Secure)
+                </option>
+                <option
+                  value='TripleDES'
+                  className='bg-pw-surface text-pw-text'>
+                  TripleDES (Legacy Complex)
+                </option>
+                <option
+                  value='RC4'
+                  className='bg-pw-surface text-pw-text'>
+                  RC4 (Fast Stream)
+                </option>
               </select>
             </div>
 
@@ -267,7 +303,7 @@ export default function EncryptionDecryptionPage() {
               <textarea
                 value={decryptInput}
                 onChange={(e) => setDecryptInput(e.target.value)}
-                placeholder="Paste the raw encrypted code string here..."
+                placeholder='Paste the encrypted data here...'
                 className='w-full h-24 bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
               />
             </div>
@@ -279,36 +315,39 @@ export default function EncryptionDecryptionPage() {
               <Input
                 value={decryptKey}
                 onChange={(e) => setDecryptKey(e.target.value)}
-                placeholder="Enter the matching secret passkey..."
-                className="bg-white/5 border-white/10 h-12"
+                placeholder='Enter the encryption key...'
+                className='bg-white/5 border-white/10 h-10'
               />
             </div>
 
             <Button
+              title='Decypt the Encrypted Data'
               onClick={handleDecrypt}
-              className="w-full btn-primary h-12 text-sm font-bold mt-2">
+              disabled={!decryptInput || !decryptKey}
+              className='w-full btn-primary h-10 text-sm font-bold mt-2'>
               Decrypt & Unlock
             </Button>
           </div>
 
           {decryptedText && (
-            <div className="pt-4 border-t border-white/5 space-y-3">
-              <label className="text-[10px] text-pw-success font-bold uppercase flex items-center gap-1.5 tracking-wider">
-                <ShieldCheck className="h-4 w-4" /> Unlocked Message
+            <div className='pt-4 border-t border-white/5 space-y-3'>
+              <label className='text-[10px] text-pw-success font-bold uppercase flex items-center gap-1.5 tracking-wider'>
+                <ShieldCheck className='h-4 w-4' /> Unlocked Data
               </label>
-              <div className="bg-pw-success/5 border border-pw-success/20 rounded-xl p-4 text-sm text-pw-text leading-relaxed whitespace-pre-wrap select-all">
+              <div className='bg-pw-success/5 border border-pw-success/20 rounded-xl p-4 text-sm text-pw-text leading-relaxed whitespace-pre-wrap select-all'>
                 {decryptedText}
               </div>
             </div>
           )}
 
           {decryptError && (
-            <div className="pt-4 border-t border-white/5 space-y-3">
-              <label className="text-[10px] text-pw-danger font-bold uppercase flex items-center gap-1.5 tracking-wider">
-                <ShieldAlert className="h-4 w-4" /> Access Denied
+            <div className='pt-4 border-t border-white/5 space-y-3'>
+              <label className='text-[10px] text-pw-danger font-bold uppercase flex items-center gap-1.5 tracking-wider'>
+                <ShieldAlert className='h-4 w-4' /> Access Denied
               </label>
-              <div className="bg-pw-danger/5 border border-pw-danger/20 rounded-xl p-4 text-xs text-pw-muted leading-relaxed">
-                Credentials mismatch. The system failed to decapsulate the payload because the decryption algorithm or passkey is invalid.
+              <div className='bg-pw-danger/5 border border-pw-danger/20 rounded-xl p-4 text-xs text-pw-muted leading-relaxed'>
+                Credentials mismatch. The system failed to decapsulate the
+                payload because the decryption algorithm or passkey is invalid.
               </div>
             </div>
           )}

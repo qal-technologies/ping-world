@@ -132,7 +132,7 @@ export default function IpLocatorPage() {
       <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
         {/* Search Panel */}
         <div className='lg:col-span-7 space-y-6'>
-          <Card className='card-glow p-1'>
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-1'>
             <form
               onSubmit={handleSearch}
               className='flex gap-3'>
@@ -142,22 +142,21 @@ export default function IpLocatorPage() {
                   value={ipInput}
                   onChange={(e) => setIpInput(e.target.value)}
                   placeholder='Enter IP Address'
-                  className='pl-12 bg-white/5 border-white/10 h-10 no-outline text-sm focus:border-pw-primary rounded-2xl'
+                  className='pl-12 bg-white/5 border-white/10 h-11 no-outline text-sm focus:border-pw-primary rounded-2xl'
                 />
               </div>
               <Button
                 type='submit'
                 disabled={isLoading}
-                className='btn-primary h-10 px-8 rounded-2xl font-bold flex gap-2 shrink-0'>
+                className='btn-primary h-10 px-2 sm:px-6 rounded-4xl font-bold flex gap-2 shrink-0'>
                 {isLoading ?
                   <RefreshCw className='h-5 w-5 animate-spin' />
                 : <Search className='h-5 w-5' />}
-                Locate
               </Button>
             </form>
 
             {ipData && (
-              <div className='grid grid-cols-2 gap-4 pt-4 border-t border-white/5'>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/5'>
                 <div className='p-2 pl-3 rounded-xl border border-white/5 bg-white/[0.02] flex items-start gap-3'>
                   <Globe className='h-5 w-5 text-pw-primary shrink-0 mt-0.5' />
                   <div>
@@ -218,7 +217,7 @@ export default function IpLocatorPage() {
 
         {/* Maps Embed Panel */}
         <div className='lg:col-span-5 flex flex-col gap-6'>
-          <Card className='card-glow p-4 bg-pw-surface/50 min-h-[300px] flex flex-col items-center justify-center relative overflow-hidden'>
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-4 sm:bg-pw-surface/50 min-h-[300px] flex flex-col items-center justify-center relative overflow-hidden'>
             {ipData ?
               <iframe
                 title='Leaflet IP Map'
@@ -228,6 +227,7 @@ export default function IpLocatorPage() {
                 scrolling='no'
                 marginHeight={0}
                 marginWidth={0}
+                allowTransparency
                 className='rounded-xl border border-white/10'
                 src={`https://maps.google.com/maps?q=${ipData.lat},${ipData.lon}&z=10&output=embed`}
               />
@@ -241,7 +241,7 @@ export default function IpLocatorPage() {
             }
           </Card>
 
-          <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-2xl p-6 flex items-start gap-3'>
+          <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-2xl p-4 sm:p-6 flex items-start gap-3'>
             <Info className='h-5 w-5 text-pw-primary shrink-0 mt-0.5' />
             <p className='text-xs text-pw-muted leading-relaxed'>
               Your browser utilizes keyless, rate-limit-protected IP mapping

@@ -8,6 +8,8 @@ import {
   ArrowRight,
   ChevronRight,
   Sparkles,
+  Filter,
+  X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,7 +20,8 @@ import { tools } from '@/lib/general/data';
 
 const metadata = {
   title: 'Tools',
-  description:'Access all the designed tools for quiz, social management, text editing, image editing and many more.',
+  description:
+    'Access all the designed tools for quiz, social management, text editing, image editing and many more.',
   keywords: [
     'Tools',
     'Tool',
@@ -59,6 +62,7 @@ const metadata = {
 export default function ToolsHubPage() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [viewCat, setViewCat] = useState(false);
 
   const TOOLS = tools;
 
@@ -78,8 +82,8 @@ export default function ToolsHubPage() {
 
   return (
     <div className='container mx-auto px-6 py-12 max-w-7xl min-h-screen'>
-      <div className='flex flex-col md:flex-row items-center justify-between gap-8 mb-16'>
-        <div className='max-w-2xl text-center md:text-left'>
+      <div className='w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-16'>
+        <div className='max-w-2xl text-center md:text-left mb-2'>
           <div className='badge mb-4 inline-flex'>
             <Sparkles className='h-3.5 w-3.5' />
             Utility Suite
@@ -93,36 +97,44 @@ export default function ToolsHubPage() {
           </p>
         </div>
 
-        <div className='w-full md:w-[400px]'>
-          <Card className='p-2 card-glow bg-white/5 border-white/10 group'>
-            <div className='relative'>
-              <Search className='absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-pw-muted group-focus-within:text-pw-primary transition-colors' />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tools (e.g. 'quiz', 'link')..."
-                className='pl-12 h-8 bg-transparent border-none focus-visible:ring-0 text-lg'
-              />
-            </div>
-          </Card>
-        </div>
-      </div>
+        <div className='w-full md:w-[400px] flex flex-wrap gap-2 items-center flex-1'>
+          <div className='relative flex-1'>
+            <Search className='absolute left-4 top-5 -translate-y-1/2 h-5 w-5 text-pw-muted transition-colors' />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tools (e.g. 'quiz', 'link')..."
+              className='card-glow pl-12 h-11 bg-transparent border-none focus-visible:ring-0 text-lg'
+            />
+          </div>
+          <div
+            className='p-2 card-glow rounded-xl w-11 h-11 flex-col flex items-center cursor-pointer opacity-90'
+            onClick={() => setViewCat(!viewCat)}>
+            {viewCat ?
+              <X className='w-6 h-6 text-red-500' />
+            : <Filter className='w-6 h-6' />}
+          </div>
 
-      <div className='flex flex-wrap gap-2 mb-12'>
-        {categories.map((cat) => (
-          <Button
-            key={cat}
-            variant='ghost'
-            onClick={() => setActiveCategory(cat)}
-            className={cn(
-              'h-8 rounded-full px-6 transition-all cursor-pointer',
-              activeCategory === cat ?
-                'bg-pw-primary text-white shadow-lg shadow-pw-primary/20'
-              : 'bg-white/5 text-pw-muted hover:text-pw-text hover:bg-white/10',
-            )}>
-            {cat.toUpperCase()}
-          </Button>
-        ))}
+          {viewCat && (
+            <div className='flex flex-wrap gap-2 min-w-full'>
+              {categories.map((cat) => (
+                <Button
+                  key={cat}
+                  variant='ghost'
+                  onClick={() => setActiveCategory(cat)}
+                  className={cn(
+                    'h-8 rounded-full px-6 transition-all cursor-pointer text-[12px]',
+                    activeCategory === cat ?
+                      'bg-pw-primary text-white shadow-lg shadow-pw-primary/20'
+                    : 'bg-white/5 text-pw-muted hover:text-pw-text hover:bg-white/10',
+                  )}
+                  style={{ letterSpacing: '0.5px' }}>
+                  {cat.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6'>
@@ -157,7 +169,17 @@ export default function ToolsHubPage() {
                     {tool.description}
                   </p>
 
-                  <div className='mt-8 pt-5 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors'>
+                  <div className='min-w-full flex items-end mt-4 '>
+                    <Link
+                      title={`Read about ${tool.title.toUpperCase()}, it's features and how to use it.`}
+                      href={`/docs/${tool.id}`}
+                      className='text-pw-muted text-xs underline cursor-pointer hover:text-pw-primary hover:font-bold'
+                      style={{ letterSpacing: '0.5px' }}>
+                      View Docs
+                    </Link>
+                  </div>
+
+                  <div className='pt-5 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors'>
                     <span className='text-[10px] font-bold text-pw-muted tracking-widest font-mono'>
                       v-{tool.version.v.toString()} ({tool.version.s})
                     </span>

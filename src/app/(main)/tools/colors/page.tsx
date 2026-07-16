@@ -12,7 +12,8 @@ import {
   Sparkles,
   RefreshCw,
   Plus,
-  Trash2
+  Trash2,
+  Droplet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -222,27 +223,28 @@ export default function ColorPalettePage() {
             Chromatic <span className='gradient-text'>Palette.</span>
           </h1>
           <p className='mt-2 text-pw-muted'>
-            Pick, generate, and extract gorgeous color harmonies. Save or export in standard formats.
+            Pick, generate, and extract gorgeous color harmonies. Save or export
+            in standard formats.
           </p>
         </div>
-        <div className='flex gap-3'>
+        <div className='flex gap-3 flex-wrap'>
           <Button
             variant='outline'
             onClick={randomizePalette}
             className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
-            <Shuffle className='h-4 w-4' /> Randomize Palette
+            <Shuffle className='h-4 w-4' /> Randomize
           </Button>
           <Button
             variant='outline'
             onClick={() => fileInputRef.current?.click()}
-            className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
-            <Upload className='h-4 w-4' /> Extract Image
+            className='btn-primary bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
+            <Droplet className='h-4 w-4' /> Pick Image
           </Button>
           <input
             ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
+            type='file'
+            accept='image/*'
+            className='hidden'
             onChange={handleImageUpload}
           />
         </div>
@@ -252,82 +254,99 @@ export default function ColorPalettePage() {
         {/* Left column: Color Picker & Harmony generator */}
         <div className='lg:col-span-7 space-y-6'>
           {/* Main Color Picker Card */}
-          <Card className='card-glow p-8 space-y-6'>
-            <div className="flex flex-col md:flex-row gap-6 items-center">
-              <div className="relative">
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-6'>
+            <div className='flex flex-col md:flex-row gap-6 items-center'>
+              <div className='relative'>
                 <input
-                  type="color"
+                  type='color'
                   value={selectedColor}
                   onChange={(e) => setSelectedColor(e.target.value)}
-                  className="w-32 h-32 rounded-3xl cursor-pointer border-none bg-transparent"
+                  className='w-32 h-32 rounded-3xl cursor-pointer border-none bg-transparent'
                 />
                 <div
                   onClick={generateRandomColor}
-                  className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-pw-primary flex items-center justify-center cursor-pointer hover:scale-110 transition-transform">
-                  <Shuffle className="h-4 w-4 text-white" />
+                  className='absolute bottom-1 right-1 w-8 h-8 rounded-full bg-pw-primary flex items-center justify-center cursor-pointer hover:scale-110 transition-transform'>
+                  <Shuffle className='h-4 w-4 text-white' />
                 </div>
               </div>
 
-              <div className="flex-1 space-y-4 w-full">
+              <div className='flex-1 space-y-4 w-full'>
                 <div>
                   <label className='text-xs font-bold text-pw-muted uppercase block mb-1.5'>
                     Color Codes
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className='grid grid-cols-3 gap-2'>
                     <Button
-                      variant="outline"
-                      onClick={() => setExportFormat("hex")}
-                      className={cn("text-xs border-white/10 h-10", exportFormat === "hex" && "border-pw-primary bg-pw-primary/15")}>
+                      variant='outline'
+                      onClick={() => setExportFormat('hex')}
+                      className={cn(
+                        'text-xs border-white/10 h-10',
+                        exportFormat === 'hex' &&
+                          'border-pw-primary bg-pw-primary/15',
+                      )}>
                       HEX
                     </Button>
                     <Button
-                      variant="outline"
-                      onClick={() => setExportFormat("rgb")}
-                      className={cn("text-xs border-white/10 h-10", exportFormat === "rgb" && "border-pw-primary bg-pw-primary/15")}>
+                      variant='outline'
+                      onClick={() => setExportFormat('rgb')}
+                      className={cn(
+                        'text-xs border-white/10 h-10',
+                        exportFormat === 'rgb' &&
+                          'border-pw-primary bg-pw-primary/15',
+                      )}>
                       RGB
                     </Button>
                     <Button
-                      variant="outline"
-                      onClick={() => setExportFormat("hsl")}
-                      className={cn("text-xs border-white/10 h-10", exportFormat === "hsl" && "border-pw-primary bg-pw-primary/15")}>
+                      variant='outline'
+                      onClick={() => setExportFormat('hsl')}
+                      className={cn(
+                        'text-xs border-white/10 h-10',
+                        exportFormat === 'hsl' &&
+                          'border-pw-primary bg-pw-primary/15',
+                      )}>
                       HSL
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className='flex gap-2'>
                   <Input
                     value={selectedColor}
                     onChange={(e) => setSelectedColor(e.target.value)}
-                    className="bg-white/5 border-white/10 h-12 text-sm font-mono focus:border-pw-primary"
+                    className='bg-white/5 border-white/10 h-12 text-sm font-mono focus:border-pw-primary'
                   />
                   <Button
                     onClick={() => copyColor(selectedColor, exportFormat)}
-                    className="btn-primary h-12 w-12 shrink-0">
-                    <Copy className="h-4 w-4" />
+                    className='btn-primary h-12 w-12 shrink-0'>
+                    <Copy className='h-4 w-4' />
                   </Button>
                 </div>
               </div>
             </div>
 
             {/* Harmony Suggestions */}
-            <div className="space-y-4 pt-4 border-t border-white/5">
-              <h3 className="text-sm font-bold flex items-center gap-1.5 text-pw-muted">
-                <Sparkles className="h-4 w-4 text-pw-secondary" /> Suggestions & Harmonies
+            <div className='space-y-4 pt-4 border-t border-white/5'>
+              <h3 className='text-sm font-bold flex items-center gap-1.5 text-pw-muted'>
+                <Sparkles className='h-4 w-4 text-pw-secondary' /> Suggestions &
+                Harmonies
               </h3>
 
               {/* Shades */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-pw-muted">Shades</p>
-                <div className="grid grid-cols-5 gap-1.5">
+              <div className='space-y-2'>
+                <p className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>
+                  Shades
+                </p>
+                <div className='grid grid-cols-5 gap-1.5'>
                   {getShades(selectedColor).map((c, i) => (
                     <div
                       key={i}
                       onClick={() => setSelectedColor(c)}
-                      className="group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105"
+                      className='group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105'
                       style={{ backgroundColor: c }}>
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
-                        <span className="text-[9px] font-mono font-bold text-white uppercase">{c}</span>
+                      <div className='absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg'>
+                        <span className='text-[9px] font-mono font-bold text-white uppercase'>
+                          {c}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -335,17 +354,21 @@ export default function ColorPalettePage() {
               </div>
 
               {/* Analogous */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-pw-muted">Analogous</p>
-                <div className="grid grid-cols-5 gap-1.5">
+              <div className='space-y-2'>
+                <p className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>
+                  Analogous
+                </p>
+                <div className='grid grid-cols-5 gap-1.5 px-1 sm:px-0'>
                   {getAnalogous(selectedColor).map((c, i) => (
                     <div
                       key={i}
                       onClick={() => setSelectedColor(c)}
-                      className="group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105"
+                      className='group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105'
                       style={{ backgroundColor: c }}>
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
-                        <span className="text-[9px] font-mono font-bold text-white uppercase">{c}</span>
+                      <div className='absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg'>
+                        <span className='text-[9px] font-mono font-bold text-white uppercase'>
+                          {c}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -353,17 +376,21 @@ export default function ColorPalettePage() {
               </div>
 
               {/* Complementary */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-pw-muted">Complementary</p>
-                <div className="grid grid-cols-3 gap-1.5">
+              <div className='space-y-2'>
+                <p className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>
+                  Complementary
+                </p>
+                <div className='grid grid-cols-3 gap-1.5 px-1 sm:px-0'>
                   {getComplementary(selectedColor).map((c, i) => (
                     <div
                       key={i}
                       onClick={() => setSelectedColor(c)}
-                      className="group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105"
+                      className='group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105'
                       style={{ backgroundColor: c }}>
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
-                        <span className="text-[9px] font-mono font-bold text-white uppercase">{c}</span>
+                      <div className='absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg'>
+                        <span className='text-[9px] font-mono font-bold text-white uppercase'>
+                          {c}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -371,17 +398,21 @@ export default function ColorPalettePage() {
               </div>
 
               {/* Triadic */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-pw-muted">Triadic</p>
-                <div className="grid grid-cols-3 gap-1.5">
+              <div className='space-y-2'>
+                <p className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>
+                  Triadic
+                </p>
+                <div className='grid grid-cols-3 gap-1.5 px-1 sm:px-0'>
                   {getTriadic(selectedColor).map((c, i) => (
                     <div
                       key={i}
                       onClick={() => setSelectedColor(c)}
-                      className="group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105"
+                      className='group relative aspect-video rounded-lg cursor-pointer transition-all border border-white/5 hover:scale-105'
                       style={{ backgroundColor: c }}>
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
-                        <span className="text-[9px] font-mono font-bold text-white uppercase">{c}</span>
+                      <div className='absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg'>
+                        <span className='text-[9px] font-mono font-bold text-white uppercase'>
+                          {c}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -391,55 +422,67 @@ export default function ColorPalettePage() {
           </Card>
         </div>
 
+        <div className='divider sm:hidden my-1' />
+
         {/* Right column: Active Palette & Image Extraction Preview */}
         <div className='lg:col-span-5 flex flex-col gap-6'>
-          <Card className='card-glow p-8 space-y-6'>
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Sliders className="h-5 w-5 text-pw-primary" /> Active Palette
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-6'>
+            <h3 className='text-lg font-bold flex items-center gap-2'>
+              <Sliders className='h-5 w-5 text-pw-primary' /> Active Palette
             </h3>
 
-            <div className="space-y-3">
+            <div className='space-y-3'>
               {palette.map((color, idx) => {
                 const rgb = hexToRgb(color);
                 const hsl = rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null;
-                const activeVal = exportFormat === "rgb" && rgb
-                  ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
-                  : exportFormat === "hsl" && hsl
-                    ? `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`
-                    : color;
+                const activeVal =
+                  exportFormat === 'rgb' && rgb ?
+                    `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
+                  : exportFormat === 'hsl' && hsl ?
+                    `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`
+                  : color;
 
                 return (
                   <div
                     key={idx}
                     className={cn(
-                      "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
-                      selectedColor === color ? "border-pw-primary bg-pw-primary/5" : "border-white/5 bg-white/[0.02] hover:border-white/10"
+                      'flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer',
+                      selectedColor === color ?
+                        'border-pw-primary bg-pw-primary/5'
+                      : 'border-white/5 bg-white/[0.02] hover:border-white/10',
                     )}
                     onClick={() => setSelectedColor(color)}>
                     <div
-                      className="w-12 h-12 rounded-lg border border-white/10 shrink-0"
+                      className='w-12 h-12 rounded-lg border border-white/10 shrink-0'
                       style={{ backgroundColor: color }}
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold font-mono uppercase truncate">{activeVal}</p>
-                      <p className="text-[10px] text-pw-muted">Palette Index {idx + 1}</p>
+                    <div className='flex-1 min-w-0'>
+                      <p className='text-xs font-bold font-mono uppercase truncate'>
+                        {activeVal}
+                      </p>
+                      <p className='text-[10px] text-pw-muted'>
+                        Palette {idx + 1}
+                      </p>
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className='flex gap-1.5'>
                       <Button
-                        onClick={(e) => { e.stopPropagation(); copyColor(color, exportFormat); }}
-                        variant="outline"
-                        className="h-8 w-8 p-0 border-white/5 hover:bg-white/5">
-                        <Copy className="h-3.5 w-3.5" />
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyColor(color, exportFormat);
+                        }}
+                        variant='outline'
+                        className='h-8 w-8 p-0 border-white/5 hover:bg-white/5'>
+                        <Copy className='h-3.5 w-3.5' />
                       </Button>
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
                           setPalette(palette.filter((_, i) => i !== idx));
-                          toast.success("Color removed from palette");
+                          toast.success('Color removed from palette');
                         }}
-                        variant="outline"
-                        className="h-8 w-8 p-0 border-white/5 hover:bg-white/5 text-pw-danger hover:text-pw-danger">
-                        <Trash2 className="h-3.5 w-3.5" />
+                        variant='outline'
+                        className='h-8 w-8 p-0 border-white/5 hover:bg-white/5 text-pw-danger hover:text-pw-danger'>
+                        <Trash2 className='h-3.5 w-3.5' />
                       </Button>
                     </div>
                   </div>
@@ -450,31 +493,40 @@ export default function ColorPalettePage() {
                 <Button
                   onClick={() => {
                     if (palette.includes(selectedColor)) {
-                      toast.error("Color already in palette!");
+                      toast.error('Color already in palette!');
                       return;
                     }
                     setPalette([...palette, selectedColor]);
-                    toast.success("Added color to palette!");
+                    toast.success('Added color to palette!');
                   }}
-                  variant="outline"
-                  className="w-full border-dashed border-white/10 hover:border-pw-primary/40 h-11 text-xs gap-1.5">
-                  <Plus className="h-4 w-4" /> Add selected color
+                  variant='outline'
+                  className='w-full border-dashed border-white/10 hover:border-pw-primary/40 h-11 text-xs gap-1.5'>
+                  <Plus className='h-4 w-4' /> Add selected color
                 </Button>
               )}
             </div>
 
             {/* Hidden canvas for extraction */}
-            <canvas ref={canvasRef} className="hidden" />
+            <canvas
+              ref={canvasRef}
+              className='hidden'
+            />
 
             {imageSrc && (
-              <div className="pt-4 border-t border-white/5">
-                <p className="text-xs font-bold uppercase tracking-wider text-pw-muted mb-2">Extraction Image Preview</p>
-                <div className="aspect-video w-full rounded-xl overflow-hidden border border-white/5 relative">
-                  <img src={imageSrc} alt="Extract Source" className="w-full h-full object-cover" />
+              <div className='pt-4 border-t border-white/5'>
+                <p className='text-xs font-bold uppercase tracking-wider text-pw-muted mb-2'>
+                  Extraction Image Preview
+                </p>
+                <div className='aspect-video w-full rounded-xl overflow-hidden border border-white/5 relative'>
+                  <img
+                    src={imageSrc}
+                    alt='Extract Source'
+                    className='w-full h-full object-cover'
+                  />
                   <button
                     onClick={() => setImageSrc(null)}
-                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors">
-                    <Trash2 className="h-3.5 w-3.5" />
+                    className='absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors'>
+                    <Trash2 className='h-3.5 w-3.5' />
                   </button>
                 </div>
               </div>

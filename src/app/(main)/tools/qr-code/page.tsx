@@ -203,10 +203,14 @@ export default function QrCodeGeneratorPage() {
                 setQrType(val);
                 setData('');
               }}
-              className='w-full flex flex-col items-center'>
+              className='w-full flex flex-col'>
               <TabsList
-                className='flex bg-white/5 mb-8 gap-2 h-auto p-1 px-2 pl-3 w-full max-w-[95%] sm:min-w-full rounded-full gap-1 overflow-x-auto'
-                style={{ placeSelf: 'center', scrollbarWidth: 'none' }}>
+                className='flex bg-white/5 mb-8 gap-2 h-auto p-1 w-full max-w-[95%] sm:min-w-full rounded-full gap-1 overflow-x-auto'
+                style={{
+                  placeSelf: 'center',
+                  justifyContent: 'flex-start',
+                  scrollbarWidth: 'none',
+                }}>
                 <TabsTrigger
                   value='url'
                   className='gap-1.5 py-2.5 text-xs rounded-full px-2'>
@@ -483,62 +487,68 @@ export default function QrCodeGeneratorPage() {
           </Card>
         </div>
         <div className='divider sm:hidden' />
-        
+
         {/* Preview Area */}
         <div className='lg:col-span-5 flex flex-col gap-6'>
-          <Card className='bg-transparent sm:card-glow sm:p-8 sm:bg-pw-surface/50 flex flex-col items-center justify-center min-h-[400px] ring-0 sm:ring-1 mt-10 sm:mt-0'>
-            <div className='relative group'>
-              <div className='absolute -inset-8 bg-pw-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity' />
-              <div className='relative p-6 bg-white rounded-3xl shadow-[0_0_50px_rgba(92,111,255,0.3)]'>
-                {data ?
-                  <QRCodeSVG
-                    id='qr-svg'
-                    value={data}
-                    size={250}
-                    includeMargin={false}
-                    fgColor={fgColor}
-                  />
-                : <div className='w-[250px] h-[250px] flex items-center justify-center border-2 border-dashed border-pw-primary/20 rounded-xl bg-pw-primary/5'>
-                    <QrCode className='h-12 w-12 text-pw-primary/30 animate-pulse' />
-                  </div>
-                }
+          {data && (
+            <Card className='bg-transparent sm:card-glow sm:p-8 sm:bg-pw-surface/50 flex flex-col items-center justify-center min-h-[400px] ring-0 sm:ring-1 mt-10 sm:mt-0'>
+              <div className='relative group'>
+                <div className='absolute -inset-8 bg-pw-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity' />
+                <div className='relative p-6 bg-white rounded-3xl shadow-[0_0_50px_rgba(92,111,255,0.3)]'>
+                  {data ?
+                    <QRCodeSVG
+                      id='qr-svg'
+                      value={data}
+                      size={250}
+                      includeMargin={false}
+                      fgColor={fgColor}
+                    />
+                  : <div className='w-[250px] h-[250px] flex items-center justify-center border-2 border-dashed border-pw-primary/20 rounded-xl bg-pw-primary/5'>
+                      <QrCode className='h-12 w-12 text-pw-primary/30 animate-pulse' />
+                    </div>
+                  }
+                </div>
               </div>
-            </div>
 
-            <div className='mt-12 w-full space-y-4'>
-              <div className='flex gap-3'>
-                <Button
-                  onClick={copyToClipboard}
-                  variant='outline'
-                  className='flex-1 border-white/10 hover:bg-white/5 h-12 gap-2'>
-                  {isCopied ?
-                    <Check className='h-4 w-4' />
-                  : <Settings2 className='h-4 w-4' />}
-                  Copy Data
-                </Button>
-                <Button
-                  onClick={handleShare}
-                  className='flex-1 btn-primary h-12 gap-2'>
-                  <Share2 className='h-4 w-4' /> Share QR
-                </Button>
+              <div className='mt-12 w-full space-y-4'>
+                <div className='flex gap-3'>
+                  <Button
+                    onClick={copyToClipboard}
+                    variant='outline'
+                    disabled={!data}
+                    className='flex-1 border-white/10 hover:bg-white/5 h-12 gap-2'>
+                    {isCopied ?
+                      <Check className='h-4 w-4' />
+                    : <Settings2 className='h-4 w-4' />}
+                    Copy Data
+                  </Button>
+                  <Button
+                    disabled={!data}
+                    onClick={handleShare}
+                    className='flex-1 btn-primary h-12 gap-2'>
+                    <Share2 className='h-4 w-4' /> Share QR
+                  </Button>
+                </div>
+                <div className='gap-3 flex flex-wrap'>
+                  <Button
+                    variant='outline'
+                    title='Reset QR code'
+                    disabled={!data}
+                    onClick={handleReset}
+                    className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 rounded-full h-11 px-4'>
+                    <RefreshCw className='h-4 w-4' />
+                  </Button>
+                  <Button
+                    onClick={handleDownload}
+                    disabled={!data}
+                    title='Download QR code png'
+                    className=' rounded-full hover:scale-[1.05] bg-pw-primary flex-1 gap-2 h-11 px-8'>
+                    <Download className='h-4 w-4' /> Download PNG
+                  </Button>
+                </div>
               </div>
-              <div className='gap-3 flex flex-wrap'>
-                <Button
-                  variant='outline'
-                  title='Reset'
-                  onClick={handleReset}
-                  className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 rounded-full h-11 px-4'>
-                  <RefreshCw className='h-4 w-4' />
-                </Button>
-                <Button
-                  onClick={handleDownload}
-                  disabled={!data}
-                  className=' rounded-full hover:scale-[1.05] bg-pw-primary flex-1 gap-2 h-11 px-8'>
-                  <Download className='h-4 w-4' /> Download PNG
-                </Button>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-2xl p-6'>
             <h4 className='text-sm font-bold flex items-center gap-2 mb-2 text-pw-primary'>

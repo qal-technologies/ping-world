@@ -81,7 +81,8 @@ export default function PasswordGeneratorPage() {
             Safe <span className='gradient-text'>Passkey.</span>
           </h1>
           <p className='mt-2 text-pw-muted'>
-            Generate robust, customizable, and cryptographically secure passwords locally.
+            Generate robust, customizable, and cryptographically secure
+            passwords locally.
           </p>
         </div>
       </div>
@@ -89,24 +90,35 @@ export default function PasswordGeneratorPage() {
       <div className='grid grid-cols-1 md:grid-cols-12 gap-8'>
         {/* Output Panel */}
         <div className='md:col-span-7 space-y-6'>
-          <Card className='card-glow p-1'>
-            <div className="flex gap-3 m-1">
-              <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl h-12 px-4 flex items-center justify-between text-lg font-mono tracking-wider overflow-x-auto select-all">
-                {password ? password : <span className="text-pw-muted/40 text-sm font-sans font-normal">Your generated password...</span>}
+          <Card className='bg-transparent ring-0 sm:ring-1 p-0 sm:card-glow sm:p-1'>
+            <div className='flex gap-3 m-1'>
+              <div className='flex-1 bg-white/5 border border-white/10 rounded-2xl h-12 px-4 flex items-center justify-between text-lg font-mono tracking-wider overflow-x-auto select-all'>
+                {password ?
+                  password
+                : <span className='text-pw-muted/40 text-sm font-sans font-normal'>
+                    Your generated password...
+                  </span>
+                }
               </div>
               <Button
                 onClick={generatePassword}
-                className="btn-primary h-12 w-12 shrink-0 rounded-4xl">
-                <RefreshCw className="h-5 w-5" />
+                className='btn-primary h-11 w-11 shrink-0 rounded-full'>
+                <RefreshCw className='h-5 w-5' />
               </Button>
             </div>
 
             {password && (
-              <div className="flex items-center justify-between p-2 pl-3 rounded-xl border border-purple/6 bg-purple/[1.02]">
-                <div className="flex items-center gap-3">
+              <div className='flex items-center justify-between p-2 pl-3 rounded-xl border border-purple/6 bg-purple/[1.02]'>
+                <div className='flex items-center gap-3'>
                   <div>
-                    <p className="text-xs text-pw-muted font-bold uppercase">Password Strength</p>
-                    <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border inline-block mt-1", strength.color)}>
+                    <p className='text-xs text-pw-muted font-bold uppercase'>
+                      Password Strength
+                    </p>
+                    <span
+                      className={cn(
+                        'text-xs font-bold px-2 py-0.5 rounded-full border inline-block mt-1',
+                        strength.color,
+                      )}>
                       {strength.label}
                     </span>
                   </div>
@@ -114,9 +126,11 @@ export default function PasswordGeneratorPage() {
 
                 <Button
                   onClick={copyToClipboard}
-                  variant="outline"
-                  className="h-8 px-4 border-white/10 hover:bg-pw-primary/10 gap-2 text-[10px] rounded-4xl">
-                  {isCopied ? <Check className="h-4 w-4 text-pw-success" /> : <Copy className="h-4 w-4" />}
+                  variant='outline'
+                  className='h-8 px-4 border-white/10 hover:bg-pw-primary/10 gap-2 text-[10px] rounded-4xl'>
+                  {isCopied ?
+                    <Check className='h-4 w-4 text-pw-success' />
+                  : <Copy className='h-4 w-4' />}
                   Copy
                 </Button>
               </div>
@@ -124,77 +138,85 @@ export default function PasswordGeneratorPage() {
           </Card>
 
           {/* Quick Info */}
-          <div className="p-6 rounded-2xl border border-pw-primary/20 bg-pw-primary/5">
-            <h3 className="text-sm font-bold flex items-center gap-2 mb-2 text-pw-primary">
-              <Key className="h-4 w-4" /> Client-Side Entropy
+          <div className='p-4 sm:p-6 rounded-2xl border border-pw-primary/20 bg-pw-primary/5'>
+            <h3 className='text-sm font-bold flex items-center gap-2 mb-2 text-pw-primary'>
+              <Key className='h-4 w-4' /> Client-Side Entropy
             </h3>
-            <p className="text-xs text-pw-muted leading-relaxed">
-              This passkey is mathematically randomized and structured entirely inside your browser. No password data is ever sent over the network or saved anywhere.
+            <p className='text-xs text-pw-muted leading-relaxed'>
+              This passkey is mathematically randomized and structured entirely
+              inside your browser. No password data is ever sent over the
+              network or saved anywhere.
             </p>
           </div>
         </div>
 
+        <div className='divider sm:hidden my-3' />
+
         {/* Configuration Panel */}
         <div className='md:col-span-5 space-y-6'>
-          <Card className='card-glow p-8 space-y-6'>
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Sliders className="h-5 w-5 text-pw-primary" /> Settings
+          <Card className='bg-transparent ring-0 sm:ring-1 px-1  sm:card-glow sm:p-8 space-y-6'>
+            <h3 className='text-lg font-bold flex items-center gap-2'>
+              <Sliders className='h-5 w-5 text-pw-primary' /> Settings
             </h3>
 
             {/* Length slider */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-pw-muted uppercase">Length</span>
-                <span className="text-sm font-mono font-bold text-pw-primary">{length} chars</span>
+            <div className='space-y-2'>
+              <div className='flex justify-between items-center'>
+                <span className='text-xs font-bold text-pw-muted uppercase'>
+                  Length
+                </span>
+                <span className='text-sm font-mono font-bold text-pw-primary'>
+                  {length} chars
+                </span>
               </div>
               <input
-                type="range"
+                type='range'
                 min={8}
                 max={64}
                 value={length}
                 onChange={(e) => setLength(Number(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary"
+                className='w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary'
               />
             </div>
 
             {/* Checkboxes */}
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium">
+            <div className='space-y-3 pt-2'>
+              <label className='flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium'>
                 <input
-                  type="checkbox"
+                  type='checkbox'
                   checked={includeUppercase}
                   onChange={(e) => setIncludeUppercase(e.target.checked)}
-                  className="rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary"
+                  className='rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary'
                 />
                 Uppercase (A-Z)
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium">
+              <label className='flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium'>
                 <input
-                  type="checkbox"
+                  type='checkbox'
                   checked={includeLowercase}
                   onChange={(e) => setIncludeLowercase(e.target.checked)}
-                  className="rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary"
+                  className='rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary'
                 />
                 Lowercase (a-z)
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium">
+              <label className='flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium'>
                 <input
-                  type="checkbox"
+                  type='checkbox'
                   checked={includeNumbers}
                   onChange={(e) => setIncludeNumbers(e.target.checked)}
-                  className="rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary"
+                  className='rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary'
                 />
                 Numbers (0-9)
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium">
+              <label className='flex items-center gap-3 cursor-pointer select-none text-sm text-pw-text font-medium'>
                 <input
-                  type="checkbox"
+                  type='checkbox'
                   checked={includeSymbols}
                   onChange={(e) => setIncludeSymbols(e.target.checked)}
-                  className="rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary"
+                  className='rounded border-white/10 bg-white/5 h-4 w-4 text-pw-primary accent-pw-primary'
                 />
                 Symbols (!@#$%)
               </label>
@@ -202,7 +224,7 @@ export default function PasswordGeneratorPage() {
 
             <Button
               onClick={generatePassword}
-              className="w-full btn-primary h-12 text-sm font-bold">
+              className='w-full btn-primary h-12 text-sm font-bold'>
               Generate Secure Key
             </Button>
           </Card>

@@ -211,6 +211,7 @@ export const ToolsGrid = () => {
           title='Browse other Ping World Tools'
           className='w-1/2 max-w-[350px] p-2 rounded-full text-center bg-pw-primary/10 bkblur border border-transparent hover:border-pw-primary/20 hover:scale-[1.05]'
           target='_self'
+          href='/tools'
           about='Tools'>
           Browse Tools
         </a>

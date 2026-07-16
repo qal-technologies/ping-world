@@ -103,6 +103,7 @@ export default function OfflineNotesPage() {
     const updated = [newNote, ...notes];
     saveToStorage(updated);
     selectNote(newNote);
+    document.getElementById('note-place')?.scrollIntoView();
     toast.success("New note stacked!");
   };
 
@@ -137,7 +138,7 @@ export default function OfflineNotesPage() {
 
   const handleCloudSync = () => {
     if (isPremium) {
-      toast.success("Cloud sync successfully executed! Your local stacks are secured in PingWorld cloud.");
+      toast.success("Cloud sync successfully executed! Your local notes are secured in PingWorld cloud.");
     } else {
       toast.error("Cloud backup is a Premium feature. Upgrade to enable auto cloud sync!");
     }
@@ -158,16 +159,16 @@ export default function OfflineNotesPage() {
         <div>
           <div className='badge mb-4'>
             <FileCode className='h-3.5 w-3.5' />
-            Workspace Suite
+            Workspace
           </div>
           <h1 className='text-4xl font-extrabold font-display leading-[1.1]'>
-            Offline <span className='gradient-text'>Notes.</span>
+            Text <span className='gradient-text'>Note.</span>
           </h1>
           <p className='mt-2 text-pw-muted'>
-            Stack local-first offline notes with custom categories. Premium users enjoy secure cloud syncing.
+            Save local-first integrated notes with custom categories and many more...
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Button
             variant='outline'
             onClick={handleCloudSync}
@@ -178,7 +179,7 @@ export default function OfflineNotesPage() {
           <Button
             onClick={createNote}
             className='btn-primary gap-2 h-11 px-6'>
-            <Plus className='h-4 w-4' /> Stack Note
+            <Plus className='h-5 w-5' /> Add Note
           </Button>
         </div>
       </div>
@@ -186,14 +187,14 @@ export default function OfflineNotesPage() {
       <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
         {/* Left column: List of Notes */}
         <div className='lg:col-span-4 flex flex-col gap-4'>
-          <Card className="p-2 card-glow bg-white/5 border-white/10">
+          <Card className="p-0 card-glow bg-white/5 border-white/10">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pw-muted" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search note content..."
-                className="pl-9 h-10 bg-transparent border-none focus-visible:ring-0 text-sm focus:border-pw-primary"
+                className="pl-9 h-11 bg-transparent border-none focus-visible:ring-0 text-sm focus:border-pw-primary"
               />
             </div>
           </Card>
@@ -219,7 +220,7 @@ export default function OfflineNotesPage() {
                 key={n.id}
                 onClick={() => selectNote(n)}
                 className={cn(
-                  "p-4 rounded-2xl border transition-all cursor-pointer relative group",
+                  "p-4 pb-2 rounded-2xl border transition-all cursor-pointer relative group",
                   selectedNoteId === n.id ? "border-pw-primary bg-pw-primary/5" : "border-white/5 bg-white/[0.02] hover:border-white/10"
                 )}>
                 <div className="flex justify-between items-start gap-2">
@@ -227,7 +228,7 @@ export default function OfflineNotesPage() {
                   <span className="text-[9px] bg-white/5 border border-white/5 px-2 py-0.5 rounded-full font-mono text-pw-muted shrink-0">{n.category}</span>
                 </div>
                 <p className="text-xs text-pw-muted mt-1.5 truncate leading-relaxed">{n.content || "Empty content..."}</p>
-                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/5">
+                <div className="flex items-center justify-between mt-3 pt-1 border-t border-white/5">
                   <span className="text-[10px] text-pw-muted font-mono flex items-center gap-1">
                     <Calendar className="h-3 w-3" /> {n.updatedAt}
                   </span>
@@ -248,21 +249,22 @@ export default function OfflineNotesPage() {
           </div>
         </div>
 
+        <div className='divider sm:hidden my-3'/>
         {/* Right column: Active Note Workspace editor */}
-        <div className='lg:col-span-8'>
+        <div className='lg:col-span-8' id='note-place'>
           {selectedNoteId ? (
-            <Card className="card-glow p-8 space-y-6">
-              <div className="flex flex-col md:flex-row gap-4 justify-between items-start">
-                <div className="flex-1 w-full space-y-2">
-                  <Input
+            <Card className="bg-transparent px-1 ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-4">
+              <div className="flex flex-row flex-wrap gap-4 justify-between items-start">
+                <div className="flex-1 space-y-2">
+                  <input
                     value={editTitle}
                     onChange={(e) => { setEditTitle(e.target.value); updateCurrentNote({ title: e.target.value }); }}
-                    className="bg-transparent border-none text-2xl font-bold p-0 focus-visible:ring-0 focus:border-pw-primary h-auto"
+                    className="bg-transparent border-none text-lg sm:text-xl font-bold p-0 focus-visible:ring-0 focus:border-pw-primary h-auto no-outline"
                     placeholder="Enter Note Title..."
                   />
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 mt-1">
                     <Tag className="h-3.5 w-3.5 text-pw-secondary shrink-0" />
-                    <Input
+                    <input
                       value={editCategory}
                       onChange={(e) => { setEditCategory(e.target.value); updateCurrentNote({ category: e.target.value }); }}
                       className="bg-white/5 border-white/5 h-7 text-[10px] max-w-[120px] font-bold uppercase tracking-wider rounded-lg px-2"
@@ -275,15 +277,17 @@ export default function OfflineNotesPage() {
                   onClick={() => deleteNote(selectedNoteId)}
                   variant="outline"
                   className="h-10 border-white/10 hover:bg-pw-danger/10 text-pw-muted hover:text-pw-danger gap-2 rounded-xl">
-                  <Trash2 className="h-4 w-4" /> Unstack Note
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
+              <div className='divider mt-[-4px] mb-3 min-w-full'/>
+
 
               <textarea
                 value={editContent}
                 onChange={(e) => { setEditContent(e.target.value); updateCurrentNote({ content: e.target.value }); }}
                 placeholder="Type anything here..."
-                className="w-full h-96 bg-transparent text-pw-text text-sm leading-relaxed placeholder:text-pw-muted/40 focus:outline-none resize-none border-none"
+                className="w-full h-96 bg-transparent text-pw-text text-sm leading-relaxed placeholder:text-pw-muted/40 focus:outline-none resize-none border-none no-outline"
               />
             </Card>
           ) : (

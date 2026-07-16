@@ -143,6 +143,8 @@
 }
 html {
   scroll-behavior: smooth;
+  scroll-snap-type: proximity;
+  scroll-padding-top: 150px;
   color-scheme: dark;
 }
 

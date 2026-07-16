@@ -28,7 +28,8 @@ export const tools = [
     tag: 'Powerful',
     id: 'quizzable',
     category: 'Engagement',
-    version: { v: '1.0', s: 'Stable' },
+    version: {v: '1.0', s: 'Stable'},
+    docs:{},
   },
   {
     icon: PenTool,
@@ -40,7 +41,8 @@ export const tools = [
     tag: 'Creative',
     category: 'Engagement',
     id: 'composer',
-    version: { v: '1.0', s: 'Stable' },
+    version: {v: '1.0', s: 'Stable'},
+    docs:{},
   },
   {
     icon: MessageCircle,
@@ -140,7 +142,7 @@ export const tools = [
   },
   {
     icon: Trophy,
-    title: 'Games Standings',
+    title: 'Tournament Table',
     description:
       'Interactive tournament or league standings table to track points, goals, wins, and draws automatically.',
     href: '/tools/games',
@@ -176,7 +178,7 @@ export const tools = [
   },
   {
     icon: FileCode,
-    title: 'Offline Notes',
+    title: 'Text Note',
     description:
       'Local-first secure offline text notes with custom categorizations, stacking, search capability, and sync option.',
     href: '/tools/notes',

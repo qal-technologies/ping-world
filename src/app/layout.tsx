@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   ],
   creator: 'Qal Technologies',
   description:
-    'Ping World is a free, all-in-one utility and creator platform. PDF tools, Image toolkit, Quiz builder,  Anonymous messaging, URL shortener, post composer, and more.',
+    'Ping World is a free, all-in-one utility and creator platform. PDF tools, Image toolkit, Quiz builder, Anonymous messaging, URL shortener, post composer, and more.',
   metadataBase: new URL('https://ping-world.website'),
   openGraph: {
     type: 'website',
