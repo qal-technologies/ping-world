@@ -159,9 +159,15 @@ export function CanvasBuilder() {
     if (selectedShapeId === id) setSelectedShapeId(null);
   };
 
-  // Dragging event handlers
-  const handleMouseDownText = (idx: number, e: React.MouseEvent) => {
+  // jules edit: Dragging event handlers supporting pointer events (unified touches and clicks)
+  const handlePointerDownText = (idx: number, e: React.PointerEvent) => {
     e.stopPropagation();
+    // Capture pointer to track dragging correctly outside of target element bounds
+    const target = e.currentTarget as HTMLDivElement;
+    try {
+      target.setPointerCapture(e.pointerId);
+    } catch {}
+
     setSelectedOverlayIdx(idx);
     setSelectedShapeId(null);
     setDraggingTextIdx(idx);
@@ -173,8 +179,13 @@ export function CanvasBuilder() {
     setDragOffset({ x: clickX - overlay.x, y: clickY - overlay.y });
   };
 
-  const handleMouseDownShape = (id: string, e: React.MouseEvent) => {
+  const handlePointerDownShape = (id: string, e: React.PointerEvent) => {
     e.stopPropagation();
+    const target = e.currentTarget as HTMLDivElement;
+    try {
+      target.setPointerCapture(e.pointerId);
+    } catch {}
+
     setSelectedShapeId(id);
     setSelectedOverlayIdx(null);
     setDraggingShapeId(id);
@@ -187,7 +198,7 @@ export function CanvasBuilder() {
     setDragOffset({ x: clickX - shape.x, y: clickY - shape.y });
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     const bounding = canvasRef.current?.getBoundingClientRect();
     if (!bounding) return;
     const mouseX = ((e.clientX - bounding.left) / bounding.width) * 100;
@@ -215,7 +226,11 @@ export function CanvasBuilder() {
     }
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const target = e.currentTarget as HTMLDivElement;
+    try {
+      target.releasePointerCapture(e.pointerId);
+    } catch {}
     setDraggingTextIdx(null);
     setDraggingShapeId(null);
   };
@@ -270,14 +285,13 @@ export function CanvasBuilder() {
       </div>
 
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-        {/* Canvas Area with mouse dragging listeners */}
+        {/* Canvas Area with unified pointer dragging listeners */}
         <div className='w-full relative flex flex-col items-center mb-2'>
           <div
             ref={canvasRef}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            className='relative w-full aspect-square rounded-2xl overflow-hidden flex items-center justify-center border border-white/5'
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            className='relative w-full aspect-square rounded-2xl overflow-hidden flex items-center justify-center border border-white/5 touch-none'
             style={{ background: state.canvasBackground }}>
             {state.canvasTextOverlays.length === 0 && shapes.length === 0 && (
               <p className='text-white/30 text-xs sm:text-sm font-semibold'>
@@ -289,7 +303,8 @@ export function CanvasBuilder() {
             {shapes.map((shape) => (
               <div
                 key={shape.id}
-                onMouseDown={(e) => handleMouseDownShape(shape.id, e)}
+                onPointerDown={(e) => handlePointerDownShape(shape.id, e)}
+                onPointerUp={handlePointerUp}
                 style={{
                   position: 'absolute',
                   top: `${shape.y}%`,
@@ -304,6 +319,7 @@ export function CanvasBuilder() {
                   opacity: shape.opacity,
                   borderRadius: shape.type === 'circle' ? '50%' : '8px',
                   cursor: 'move',
+                  touchAction: 'none'
                 }}
                 className={cn(
                   'transition-all duration-75',
@@ -317,9 +333,10 @@ export function CanvasBuilder() {
             {state.canvasTextOverlays.map((overlay, i) => (
               <div
                 key={i}
-                onMouseDown={(e) => handleMouseDownText(i, e)}
+                onPointerDown={(e) => handlePointerDownText(i, e)}
+                onPointerUp={handlePointerUp}
                 className={cn(
-                  'absolute cursor-move select-none transition-all duration-75',
+                  'absolute cursor-move select-none transition-all duration-75 touch-none',
                   selectedOverlayIdx === i &&
                     'ring-1 ring-white/50 rounded px-1 scale-105',
                 )}
@@ -336,6 +353,7 @@ export function CanvasBuilder() {
                   maxWidth: '90%',
                   textAlign: 'center',
                   wordBreak: 'break-word',
+                  touchAction: 'none'
                 }}>
                 {overlay.text}
               </div>

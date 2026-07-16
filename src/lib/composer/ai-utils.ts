@@ -231,6 +231,7 @@ export async function checkGrammar(text: string): Promise<GrammarIssue[]> {
         language: 'auto',
       }),
     });
+    if (!res.ok) throw new Error('API server issue');
     const data = await res.json();
     return data.matches.map((m: any) => ({
       message: m.message,
@@ -240,7 +241,7 @@ export async function checkGrammar(text: string): Promise<GrammarIssue[]> {
     }));
   } catch (e) {
     console.warn('Grammar check failed:', e);
-    return []; // Return empty on fail so we don't break the UI
+    throw e;
   }
 }
 
@@ -358,6 +359,7 @@ export async function translateText (
     const res = await fetch(
       `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLanguageCode}`,
     );
+    if (!res.ok) throw new Error('Translator network issue');
     const data = await res.json();
     if(data.responseData?.translatedText) {
       return {ok: true, data: data.responseData.translatedText};
@@ -384,6 +386,7 @@ async function callRealAiForHashtags(text: string): Promise<HashTag[]> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'hashtags', text }),
   });
+  if (!response.ok) throw new Error('Real AI failed to generate hashtags');
   const data = await response.json();
   return data.tags ?? [];
 }
@@ -398,6 +401,7 @@ async function callRealAiForRephrase(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'rephrase', text, style, context }),
   });
+  if (!response.ok) throw new Error('Real AI failed to rephrase text');
   const data = await response.json();
   return data.result ?? text;
 }
@@ -412,6 +416,7 @@ async function callRealAiForSuggestions(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'suggest', title, style, context }),
   });
+  if (!response.ok) throw new Error('Real AI failed to load suggestions');
   const data = await response.json();
   return data.suggestions ?? [];
 }
@@ -426,6 +431,7 @@ async function callRealAiForTranslation(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'translate', text, targetLanguageCode, targetLanguageName }),
   });
+  if (!response.ok) throw new Error('Real AI translation failed');
   const data = await response.json();
-  return {ok: data.translated, data: data.translated ?? text};
+  return {ok: data.translated ? true : false, data: data.translated ?? text};
 }
