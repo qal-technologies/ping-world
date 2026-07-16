@@ -221,6 +221,7 @@ export default function PdfToolStudioPage() {
                   ref={fileInputRef}
                   type='file'
                   accept='image/*'
+                  multiple
                   onChange={handleImageUpload}
                   className='hidden'
                 />
@@ -238,7 +239,6 @@ export default function PdfToolStudioPage() {
                 <div className='md:col-span-5 aspect-video rounded-xl overflow-hidden border border-white/10 relative'>
                   <img
                     src={imageSrc}
-                    multiple
                     alt='Preview'
                     className='w-full h-full object-cover'
                   />
