@@ -28,6 +28,7 @@ const footerSections = [
       { href: '/about', label: 'About' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/terms', label: 'Terms' },
+      { href: '/#recommendations', label: 'Share Feedback' },
     ],
   },
 ];
