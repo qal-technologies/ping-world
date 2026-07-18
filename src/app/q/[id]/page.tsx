@@ -1,4 +1,4 @@
-// jules edit: Created Server-side short-link page route wrapper to support dynamic SEO, Open Graph & Twitter Card metadata loading
+
 import PublicQuizTaker from '@/components/quiz/PublicQuizTaker';
 import { supabase } from '@/lib/supabase';
 import type { Metadata } from 'next';

@@ -47,6 +47,7 @@ import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
 import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
+import { usePageLayout } from '@/components/layout';
 
 
 export type QuestionType =
@@ -360,6 +361,14 @@ const Calculator = () => {
 export default function PublicQuizTaker() {
   const params = useParams();
   const { id: quizId } = params;
+
+  // jules edit: distract-free mode for taking quizzes, hide navbar/footer and set padding to pt-0
+  const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
+  useEffect(() => {
+    setHideNavbar(true);
+    setHideFooter(true);
+    setPaddingTop("pt-0");
+  }, [setHideNavbar, setHideFooter, setPaddingTop]);
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);

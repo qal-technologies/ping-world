@@ -28,6 +28,7 @@ const footerSections = [
       { href: '/about', label: 'About' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/terms', label: 'Terms' },
+      { href: '/#recommendations', label: 'Share Feedback' },
     ],
   },
 ];
@@ -143,7 +144,7 @@ export const Footer = () => {
               target='_blank'
               className='gradient-text underline cursor-pointer'
               style={{ letterSpacing: 1 }}>
-              Pascodez
+              Poshcodes
             </Link>
           </p>
         </div>
