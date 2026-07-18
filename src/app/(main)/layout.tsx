@@ -1,4 +1,22 @@
-import { Navbar, Footer } from "@/components/layout";
+// jules edit: Modified main layout to wrap with PageLayoutProvider and bind Navbar, Footer, and padding-top dynamically
+"use client";
+
+import { Navbar, Footer, PageLayoutProvider, usePageLayout } from "@/components/layout";
+import { cn } from "@/lib/utils";
+
+function LayoutContent({ children }: { children: React.ReactNode }) {
+  const { hideNavbar, hideFooter, paddingTop } = usePageLayout();
+
+  return (
+    <>
+      {!hideNavbar && <Navbar />}
+      <main className={cn("flex-1 transition-all duration-300", paddingTop)}>
+        {children}
+      </main>
+      {!hideFooter && <Footer />}
+    </>
+  );
+}
 
 export default function MainLayout({
   children,
@@ -6,10 +24,8 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
-      <Navbar />
-      <main className="flex-1 pt-16">{children}</main>
-      <Footer />
-    </>
+    <PageLayoutProvider>
+      <LayoutContent>{children}</LayoutContent>
+    </PageLayoutProvider>
   );
 }
