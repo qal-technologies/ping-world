@@ -1,6 +1,8 @@
+// jules edit: Import company data to keep domain unified
 import type { MetadataRoute } from "next";
+import { COMPANY } from "@/lib/config/company";
 
-const BASE_URL = "https://ping-world.website";
+const BASE_URL = COMPANY.domain;
 
 export default function robots(): MetadataRoute.Robots {
   return {

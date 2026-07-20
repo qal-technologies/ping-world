@@ -34,12 +34,16 @@ interface MessageRow {
   pre_reply?: string;
 }
 
+import { useAppContext } from '@/context/AppContext';
+
 export default function MessageLandingPage() {
+  const { premiumTier, isPremium, isOnline } = useAppContext();
   const [activeTab, setActiveTab] = useState<'inbox' | 'settings'>('inbox');
   const [username, setUsername] = useState('creator');
   const [linkId, setLinkId] = useState('');
   const [expiryDays, setExpiryDays] = useState<number>(7);
   const [isPublicInbox, setIsPublicInbox] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   // const [selectedReplies, setSelectedReplies] = useState<string[]>([
   //   '💜 I felt this deeply',
   //   '😭 Why did you wait this long?',
@@ -66,11 +70,29 @@ export default function MessageLandingPage() {
         let userId = '';
         if (user) {
           userId = user.id;
-          const name =
-            user.user_metadata.username ||
-            user.user_metadata.full_name ||
-            'creator';
-          setUsername(name);
+
+          // jules edit: Fetch configurations from the recipient's profiles row
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('username, display_name, is_public_inbox, custom_question, custom_link_id, message_expiry_days')
+            .eq('id', user.id)
+            .single();
+
+          if (profile) {
+            setUsername(profile.username || 'creator');
+            setIsPublicInbox(!!profile.is_public_inbox);
+            setMessageTitle(profile.custom_question || '');
+            setLinkId(profile.custom_link_id || '');
+            if (profile.message_expiry_days) {
+              setExpiryDays(profile.message_expiry_days);
+            }
+          } else {
+            const name =
+              user.user_metadata.username ||
+              user.user_metadata.full_name ||
+              'creator';
+            setUsername(name);
+          }
         }
 
         if (!userId) return;
@@ -118,22 +140,36 @@ export default function MessageLandingPage() {
     setTimeout(() => setCopiedLink(null), 2000);
   };
 
-  const generateMsg = () => {
-    if (!expiryDays) return;
+  // jules edit: Save custom configurations directly to user profiles row in Supabase
+  const saveInboxSettings = async () => {
     if (!username) {
-      toast.error('You must be logged in to use this tool');
+      toast.error('You must be logged in to configure your inbox.');
       return;
     }
-    if (!linkId) {
-      let id = Math.random().toString(36).substr(2, 9);
-      setLinkId(id);
+
+    setSavingSettings(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          custom_question: messageTitle.trim() || null,
+          custom_link_id: linkId.trim() || null,
+          message_expiry_days: expiryDays,
+          is_public_inbox: isPublicInbox,
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      toast.success('Inbox configurations saved successfully!');
+    } catch (err: any) {
+      console.error('Failed to save settings:', err);
+      toast.error('Failed to save configurations: ' + (err.message || err));
+    } finally {
+      setSavingSettings(false);
     }
-
-    const link = `/${username}/m/${linkId}`;
-
-    setMessageTitle('');
-    setLinkId('');
-    toast.success('Link created!');
   };
 
   const markAsRead = async (id: string) => {
@@ -163,10 +199,13 @@ export default function MessageLandingPage() {
   };
 
   const handleStaticTogglePremium = () => {
-    // Scaffold premium lock modal
-    toast.info(
-      '⭐ Premium Upgrade Required: Public boards are limited to pro subscriptions.',
-    );
+    // jules edit: Restrict public board toggles to premium subscribers (Flexible, Standard, Pro)
+    if (!isPremium) {
+      toast.info(
+        '⭐ Premium Upgrade Required: Public boards require a paid subscription (Flexible, Standard, or Pro).',
+      );
+      return;
+    }
 
     setIsPublicInbox((prev) => !prev);
   };
@@ -263,20 +302,19 @@ export default function MessageLandingPage() {
                         {/* Meta Row */}
                         <div className='flex items-center justify-between gap-4 text-[10px] text-pw-muted font-mono mb-4 border-b border-white/5 pb-3'>
                           <div className='flex flex-wrap items-center gap-3'>
-                            <span className='flex items-center gap-1 font-bold text-pw-primary border border-pw-primary/20 bg-pw-primary/10 rounded px-1.5 py-0.5'>
+                            {/* jules edit: Render high-fidelity flag images from flagcdn.com instead of raw un-supported system emojis */}
+                            <span className='flex items-center gap-1.5 font-bold text-pw-primary border border-pw-primary/20 bg-pw-primary/10 rounded px-2 py-1'>
                               {msg.sender_country &&
-                                msg.sender_country !== 'Unknown' && (
-                                  <span className='mr-1'>
-                                    {String.fromCodePoint(
-                                      ...msg.sender_country
-                                        .toUpperCase()
-                                        .split('')
-                                        .map(
-                                          (char) => 127397 + char.charCodeAt(0),
-                                        ),
-                                    )}
-                                  </span>
-                                )}
+                                msg.sender_country !== 'Unknown' ? (
+                                  <img
+                                    src={`https://flagcdn.com/w20/${msg.sender_country.toLowerCase()}.png`}
+                                    alt={msg.sender_country}
+                                    className="w-4 h-3 object-cover rounded-sm border border-white/10 shrink-0"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : null}
                               {msg.sender_country || 'Unknown'}
                             </span>
                             <span className='flex items-center gap-1'>
@@ -421,6 +459,7 @@ export default function MessageLandingPage() {
               className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
               {/* Main settings options */}
               <div className='lg:col-span-8 space-y-6'>
+                {/* jules edit: Restructure settings layout to allow fully saving all custom configuration options to the database user profiles */}
                 <Card className='bg-transparent ring-0 sm:ring-1 sm:glass p-1 sm:p-8 space-y-6'>
                   <div>
                     <h3 className='text-lg font-bold mb-1'>
@@ -442,7 +481,7 @@ export default function MessageLandingPage() {
                         key={item.v}
                         onClick={() => {
                           setExpiryDays(item.v);
-                          toast.success(`Expiry length saved to ${item.l}!`);
+                          toast.success(`Expiry length selection updated to ${item.l}!`);
                         }}
                         className={`h-11 px-3 text-xs font-bold rounded-lg border transition-all ${expiryDays === item.v ? 'bg-pw-primary/10 border-pw-primary text-pw-primary' : 'border-white/10 hover:bg-white/5 text-pw-muted'}`}>
                         {item.l}
@@ -455,23 +494,22 @@ export default function MessageLandingPage() {
                 <Card className='bg-card/20 ring-0 sm:ring-1 sm:bg-card/70 sm:bkblur sm:p-6 sm:p-8 space-y-6 mt-10 sm:mt-0'>
                   <div>
                     <h3 className='text-lg font-bold mb-1'>
-                      Interactive Response Anchors
+                      Inbox Personalization Configurations
                     </h3>
                     <p className='text-xs text-pw-muted'>
-                      Choose quick templates that senders can click to pre-reply
-                      or express feelings.
+                      Customize your anonymous inbox fields, custom questions, and customized URL structures.
                     </p>
                   </div>
 
                   <div className='flex flex-col gap-1'>
                     <label
                       className='min-w-full font-bold text-pw-text'
-                      htmlFor='title'>
+                      htmlFor='link-id'>
                       Add Link Id <span className='text-xs'>(optional)</span>
                     </label>
                     <div className='flex gap-2'>
                       <Input
-                        id='title'
+                        id='link-id'
                         value={linkId}
                         onChange={(e) =>
                           setLinkId(e.target.value.toLowerCase())
@@ -489,25 +527,36 @@ export default function MessageLandingPage() {
                   <div className='flex flex-col gap-1'>
                     <label
                       className='min-w-full font-bold text-pw-text'
-                      htmlFor='title'>
+                      htmlFor='message-title'>
                       Add custom Question{' '}
                       <span className='text-xs'>(optional)</span>
                     </label>
                     <div className='flex gap-2'>
                       <Input
-                        id='title'
+                        id='message-title'
                         value={messageTitle}
                         onChange={(e) => setMessageTitle(e.target.value)}
                         placeholder='Say something...'
                         className='bg-white/5 border-white/10 h-10 text-xs'
-                        onKeyDown={(e) => e.key === 'Enter' && generateMsg()}
+                        onKeyDown={(e) => e.key === 'Enter' && saveInboxSettings()}
                       />
-                      <Button
-                        onClick={generateMsg}
-                        className='btn-primary h-10 px-5 text-xs font-bold'>
-                        Ask
-                      </Button>
                     </div>
+                  </div>
+
+                  <div className="pt-4 flex justify-end">
+                    <Button
+                      onClick={saveInboxSettings}
+                      disabled={savingSettings}
+                      className="btn-primary h-11 px-8 text-xs font-bold gap-2">
+                      {savingSettings ? (
+                        <>
+                          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          Saving configurations...
+                        </>
+                      ) : (
+                        'Save Inbox Settings'
+                      )}
+                    </Button>
                   </div>
                 </Card>
               </div>

@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import PdfClient from "./PdfClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "PDF Tool Studio - Image to PDF, Merge & Text Extract | Ping World",
     description: "Convert images to PDF, compile text-to-pdf, split/merge PDF documents, and extract text streams pure client-side.",
-    url: "https://ping-world.website/tools/pdf",
+    url: `${COMPANY.domain}/tools/pdf`,
     siteName: "Ping World",
   },
   twitter: {

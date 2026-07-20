@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import NotesClient from "./NotesClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Secure Local Text Notes & Cloud Backup Sync | Ping World",
     description: "Keep local-first offline text notes categorized, searchable, and fully secured on your device. Backup to cloud seamlessly.",
-    url: "https://ping-world.website/tools/notes",
+    url: `${COMPANY.domain}/tools/notes`,
     siteName: "Ping World",
   },
   twitter: {

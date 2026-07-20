@@ -28,7 +28,7 @@ export const tools = [
     tag: 'Assessment',
     id: 'quizzable',
     category: 'Engagement',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
     docs: {},
   },
   {
@@ -41,7 +41,7 @@ export const tools = [
     tag: 'Social Post',
     category: 'Engagement',
     id: 'composer',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
     docs: {},
   },
   {
@@ -66,7 +66,7 @@ export const tools = [
     href: '/editor',
     color: '#f622fdff',
     tag: 'Rich Text',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: ImageIcon,
@@ -90,7 +90,7 @@ export const tools = [
     tag: 'Link Tool',
     id: 'shortener',
     category: 'Utility',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: QrCode,
@@ -102,7 +102,7 @@ export const tools = [
     tag: 'QR Code',
     category: 'Utility',
     id: 'qr-code',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: Palette,
@@ -114,7 +114,7 @@ export const tools = [
     tag: 'Color Tool',
     id: 'color-palette',
     category: 'Utility',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: Lock,
@@ -150,7 +150,7 @@ export const tools = [
     tag: 'Standings',
     id: 'games',
     category: 'Utility',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: Compass,
@@ -174,7 +174,7 @@ export const tools = [
     tag: 'Calculator',
     id: 'calculator',
     category: 'Utility',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: FileCode,
@@ -186,7 +186,7 @@ export const tools = [
     tag: 'Notes',
     id: 'notes',
     category: 'Utility',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: Lock,
@@ -198,7 +198,7 @@ export const tools = [
     tag: 'Encryption',
     id: 'encryption',
     category: 'Security',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
   {
     icon: PdfIcon,
@@ -210,7 +210,7 @@ export const tools = [
     tag: 'PDF',
     id: 'pdf-tools',
     category: 'Utility',
-    version: { v: '2.0', s: 'Stable' },
+    version: { v: '1.0', s: 'Stable' },
   },
 ];
 

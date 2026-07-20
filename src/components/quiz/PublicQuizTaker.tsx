@@ -383,6 +383,26 @@ export default function PublicQuizTaker() {
 
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [isOfflineUncached, setIsOfflineUncached] = useState(false);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Internet restored! Online syncing active.');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('Working Offline: Responses will be saved locally.');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const [started, setStart] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
@@ -412,7 +432,20 @@ export default function PublicQuizTaker() {
       const target = (data.find((q: any) => String(q.id) === String(quizId)) ||
         null) as Quiz | null;
 
+      if (!target && !navigator.onLine) {
+        setIsOfflineUncached(true);
+        setLoading(false);
+        return;
+      }
+
       if (target) {
+        // jules edit: Block expired quizzes from loading
+        if (target.expires_at && new Date(target.expires_at).getTime() < Date.now()) {
+          setQuiz(null);
+          setLoading(false);
+          return;
+        }
+
         // Auth check if enabled
         let session = null;
         try {
@@ -1125,6 +1158,26 @@ export default function PublicQuizTaker() {
     );
   }
 
+  // jules edit: Block loading of uncached quizzes offline
+  if (isOfflineUncached) {
+    return (
+      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
+        <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 animate-pulse' />
+        <h2 className='text-2xl md:text-3xl font-bold mb-1'>
+          Offline: Quiz Not Cached Yet
+        </h2>
+        <p className='text-sm text-white/80 max-w-md font-light leading-relaxed'>
+          This assessment is not available offline because it hasn&apos;t been cached on this device yet. Please connect to the internet to load this assessment.
+        </p>
+        <Link
+          href='/quiz'
+          className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2 hover:underline'>
+          <ArrowLeft className='h-4 w-4' /> Back
+        </Link>
+      </div>
+    );
+  }
+
   if (hasAlreadyCompleted && quiz) {
     return (
       <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
@@ -1152,11 +1205,10 @@ export default function PublicQuizTaker() {
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl md:text-3xl font-bold mb-1'>
-          Assessment Not Found
+          Assessment Not Found or Has Expired
         </h2>
         <p className='text-sm text-white/80 max-w-md font-light'>
-          This assessment may have been removed, ended or you used the wrong
-          link
+          This assessment may have been removed, reached its lifespan expiration, ended, or you used the wrong link.
         </p>
         <Link
           href='/quiz'
@@ -1527,6 +1579,14 @@ export default function PublicQuizTaker() {
               quizTheme === 'dark' ? 'text-white' : 'text-black',
             )}>
             <div className='mb-8 flex flex-col gap-2 w-full'>
+              {/* jules edit: Show offline warning notice if they are offline */}
+              {!isOnline && (
+                <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
+                  <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
+                  <span>Offline Mode: Your responses will be saved securely on this device and uploaded once you connect to the internet.</span>
+                </div>
+              )}
+
               {/* Header Row */}
               <div className='flex flex-wrap items-center justify-between gap-4 bg-white/2 p-2 rounded-full border border-white/4 bkblur'>
                 <div className='flex items-center gap-4 pl-3'>

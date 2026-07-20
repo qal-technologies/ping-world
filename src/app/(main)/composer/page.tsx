@@ -8,10 +8,7 @@ export const metadata = {
   keyword:['composer', 'pingworld', 'ping world', 'social media manager', 'social media', 'instagram poster', 'x composer', 'facebook composer', 'linkedin composer', 'qal tech', 'qal technologies', 'trending', 'trend']
 };
 
+// jules edit: Remove redundant ComposerProvider as it is now defined in MainLayout
 export default function ComposerPage() {
-  return (
-    <ComposerProvider>
-      <ComposerLayout />
-    </ComposerProvider>
-  );
+  return <ComposerLayout />;
 }

@@ -197,9 +197,18 @@ export default function PublicBoardClient({ profile, username }: Props) {
                 {/* Meta row */}
                 <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono mb-3.5 border-b border-white/5 pb-2.5'>
                   <div className='flex items-center gap-3'>
+                    {/* jules edit: Render high-fidelity country flag image */}
                     {msg.sender_country && (
-                      <span className='flex items-center gap-1 text-pw-primary border border-pw-primary/10 bg-pw-primary/5 rounded px-1.5 py-0.5 font-bold uppercase'>
-                        <Globe className='h-3 w-3' /> {msg.sender_country}
+                      <span className='flex items-center gap-1.5 text-pw-primary border border-pw-primary/10 bg-pw-primary/5 rounded px-2 py-1 font-bold uppercase'>
+                        <img
+                          src={`https://flagcdn.com/w20/${msg.sender_country.toLowerCase()}.png`}
+                          alt={msg.sender_country}
+                          className="w-4 h-3 object-cover rounded-sm border border-white/10 shrink-0"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        {msg.sender_country}
                       </span>
                     )}
                     <span className='flex items-center gap-1'>

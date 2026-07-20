@@ -25,6 +25,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
 import { PREMIUM_TIERS } from '@/lib/config/premium';
+import { SITE } from '@/lib/config/site';
 
 export default function GeneralDashboard() {
   const { premiumTier } = useAppContext();
@@ -228,19 +229,20 @@ export default function GeneralDashboard() {
             </div>
 
             <div className='space-y-4 mb-8'>
+              {/* jules edit: Import and use system canonical domain consistently */}
               <div className='p-3 bg-white/5 border border-white/10 rounded-xl'>
                 <label className='text-[10px] font-bold text-pw-muted uppercase mb-1 block'>
                   Public Inbox Link
                 </label>
                 <div className='flex items-center justify-between'>
                   <span className='text-xs truncate text-pw-primary font-medium'>
-                    pingworld.website/u/{username}
+                    {SITE.domain.replace('https://', '')}/u/{username}
                   </span>
                   <Copy
                     className='h-3 w-3 text-pw-muted hover:text-pw-primary cursor-pointer'
                     onClick={() => {
                       navigator.clipboard.writeText(
-                        `pingworld.website/u/${username}`,
+                        `${SITE.domain.replace('https://', '')}/u/${username}`,
                       );
                       toast.success('Link copied!');
                     }}
@@ -281,19 +283,25 @@ export default function GeneralDashboard() {
             </div>
           </div>
 
-          {premiumTier === 'free' && (
-            <Link href='/pricing'>
-              <Card className='p-6 bg-gradient-to-br from-pw-primary/10 to-pw-secondary/10 border-pw-primary/20 hover:border-pw-primary/40 transition-all cursor-pointer group'>
-                <h4 className='text-sm font-bold mb-1 group-hover:text-pw-primary transition-colors'>
-                  ⚡ Upgrade your plan
-                </h4>
-                <p className='text-[11px] text-pw-muted leading-relaxed'>
-                  Unlock more quizzes, longer expiry, public boards and pro
-                  tools.
-                </p>
-              </Card>
-            </Link>
-          )}
+          {/* jules edit: Prominent billing, payment pathways & premium tier routing card on dashboard */}
+          <Card className='p-6 bg-gradient-to-br from-pw-primary/10 via-pw-surface/50 to-pw-secondary/10 border border-pw-primary/20 hover:border-pw-primary/40 transition-all rounded-2xl relative overflow-hidden group shadow-xl'>
+            <div className='absolute -top-10 -right-10 w-28 h-28 bg-pw-primary/10 rounded-full blur-2xl group-hover:scale-110 transition-transform' />
+            <h4 className='text-sm font-bold mb-2 text-white flex items-center gap-2'>
+              <Layers className='h-4 w-4 text-pw-primary' /> Pricing & Payments
+            </h4>
+            <p className='text-[11px] text-pw-muted leading-relaxed mb-4'>
+              Current Plan: <span className='text-pw-primary font-bold uppercase tracking-wider'>{tierConfig.label}</span>
+              <br />
+              Unlock extended assessment lifespan up to 30 days, custom link routing, public message boards, and pro-level suite tools with flexible, standard or pro premium billing plans.
+            </p>
+            <div className="flex gap-2">
+              <Link href='/pricing' className="w-full">
+                <Button className='w-full btn-primary h-10 text-xs font-bold gap-1.5 cursor-pointer'>
+                  Upgrade Plan <ArrowUpRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+          </Card>
         </div>
       </div>
     </div>

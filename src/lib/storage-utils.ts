@@ -428,4 +428,33 @@ export const HybridStorage = {
   async syncLocalToRemote(type: StorageItem['type']) {
     return pushUnsyncedItems(type);
   },
+
+  /**
+   * jules edit: Clean up any expired quizzes or messages from local storage to align with database expirations.
+   */
+  async cleanupExpiredItems() {
+    if (typeof window === 'undefined') return;
+    try {
+      const types: ('quiz' | 'message')[] = ['quiz', 'message'];
+      for (const t of types) {
+        const key = `pingworld_${t === 'quiz' ? 'quizzes' : 'messages'}`;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const list = JSON.parse(raw);
+        if (!Array.isArray(list)) continue;
+
+        const filtered = list.filter((item: any) => {
+          const expiresAt = item.content?.expires_at || item.expires_at;
+          if (!expiresAt) return true;
+          return new Date(expiresAt).getTime() > Date.now();
+        });
+
+        if (filtered.length !== list.length) {
+          localStorage.setItem(key, JSON.stringify(filtered));
+        }
+      }
+    } catch (e) {
+      console.warn('[HybridStorage] Failed to cleanup expired local items:', e);
+    }
+  },
 };

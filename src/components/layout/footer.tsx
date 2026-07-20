@@ -1,11 +1,12 @@
 'use client';
 
+// jules edit: Refactored Footer with dynamic authentication-aware navigation and a "View More" tools dropdown
+import { useState } from 'react';
 import Link from 'next/link';
-import { Instagram, Linkedin, Mail, Twitter, Youtube, Zap } from 'lucide-react';
+import { Instagram, Linkedin, Mail, Twitter, Youtube, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { COMPANY } from '@/lib/config/company';
 import { tools } from '@/lib/general/data';
-
-const TOOL_FOOTER_LIMIT = 6;
+import { useAppContext } from '@/context/AppContext';
 
 const companyLinks = [
   { href: '/about', label: 'About' },
@@ -23,8 +24,24 @@ const SOCIALS = [
 ];
 
 export const Footer = () => {
-  const visibleTools = tools.slice(0, TOOL_FOOTER_LIMIT);
-  const hasMoreTools = tools.length > TOOL_FOOTER_LIMIT;
+  const { isLoggedIn } = useAppContext();
+  const [isOpen, setIsOpen] = useState(false);
+
+  const visibleTools = tools.slice(0, 9);
+  const dropdownTools = tools.slice(9);
+  const hasMoreTools = tools.length > 9;
+
+  const navLinks = [
+    { href: '/', label: 'Home' },
+    { href: '/tools', label: 'All Tools' },
+    { href: '/pricing', label: 'Pricing' },
+    ...(isLoggedIn
+      ? [{ href: '/dashboard', label: 'Dashboard' }]
+      : [
+          { href: '/login', label: 'Login' },
+          { href: '/register', label: 'Sign Up' },
+        ]),
+  ];
 
   return (
     <footer className='border-t border-pw-primary/10 bg-pw-bg/80 backdrop-blur-sm'>
@@ -63,48 +80,15 @@ export const Footer = () => {
               Navigate
             </h3>
             <ul className='space-y-2'>
-              <li>
-                <Link
-                  href='/'
-                  className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href='/tools'
-                  className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
-                  All Tools
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href='/quiz'
-                  className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
-                  Quiz Builder
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href='/message'
-                  className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
-                  Anonymous Inbox
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href='/pricing'
-                  className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
-                  Pricing
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href='/dashboard'
-                  className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
-                  Dashboard
-                </Link>
-              </li>
+              {navLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -122,12 +106,34 @@ export const Footer = () => {
                 </li>
               ))}
               {hasMoreTools && (
-                <li>
-                  <Link
-                    href='/tools'
-                    className='text-sm text-pw-primary hover:underline font-medium'>
-                    See all tools →
-                  </Link>
+                <li className="relative">
+                  <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className='text-sm text-pw-primary hover:text-pw-primary/80 transition-colors font-semibold flex items-center gap-1 cursor-pointer'>
+                    {isOpen ? (
+                      <>
+                        View Less <ChevronUp className="h-3.5 w-3.5" />
+                      </>
+                    ) : (
+                      <>
+                        View More... <ChevronDown className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </button>
+
+                  {isOpen && (
+                    <div className='absolute bottom-full left-0 mb-2 w-48 bg-[#12152E] border border-pw-primary/20 rounded-xl p-2 py-3 shadow-2xl z-50 flex flex-col gap-1.5 max-h-60 overflow-y-auto custom-scrollbar'>
+                      {dropdownTools.map((tool) => (
+                        <Link
+                          key={tool.href}
+                          href={tool.href}
+                          onClick={() => setIsOpen(false)}
+                          className='text-xs text-pw-muted hover:text-pw-primary transition-colors px-3 py-1 rounded hover:bg-white/5'>
+                          {tool.title}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </li>
               )}
             </ul>

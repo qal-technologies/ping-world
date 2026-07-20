@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import MessageClient from "./MessageClient";
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "AnonLink - Send and Receive Anonymous Messages | Ping World",
     description: "Hear the honest truth. Stay anonymous. Safe, secure, and end-to-end private messaging.",
-    url: "https://ping-world.website/message",
+    url: `${COMPANY.domain}/message`,
     siteName: "Ping World",
   },
   twitter: {
