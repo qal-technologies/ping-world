@@ -87,7 +87,7 @@ export default function ToolsHubPage() {
   ];
 
   return (
-    <div className='container mx-auto py-12 max-w-7xl min-h-screen'>
+    <div className='container mx-auto py-12 max-w-7xl px-4 min-h-screen'>
       <div className='w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-16'>
         <div className='max-w-2xl text-center md:text-left mb-2'>
           <div className='badge mb-4 inline-flex'>

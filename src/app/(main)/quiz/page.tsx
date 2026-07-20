@@ -181,7 +181,7 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
-  const { premiumTier, } = useAppContext();
+  const { premiumTier } = useAppContext();
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
