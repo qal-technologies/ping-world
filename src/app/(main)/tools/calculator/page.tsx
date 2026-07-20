@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import CalculatorClient from "./CalculatorClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Professional Multi Calculator & Currency Converter | Ping World",
     description: "Instantly compute basic math, complex pricing markups, interest finance, currency exchange with global rates, and fluid mass weights.",
-    url: "https://ping-world.website/tools/calculator",
+    url: `${COMPANY.domain}/tools/calculator`,
     siteName: "Ping World",
   },
   twitter: {

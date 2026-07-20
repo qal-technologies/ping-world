@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import GamesClient from './GamesClient';
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
     title: 'Tournament Bracket & Standings Game Table | Ping World',
     description:
       'Auto-calculate sports league ranks, tournament points, game statistics, wins, draws, and goals in real-time.',
-    url: 'https://ping-world.website/tools/games',
+    url: `${COMPANY.domain}/tools/games`,
     siteName: 'Ping World',
   },
   twitter: {

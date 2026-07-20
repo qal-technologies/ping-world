@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 // jules edit: Created Server-side page route wrapper to support dynamic SEO, Open Graph & Twitter Card metadata loading
 import type { Metadata } from "next";
 import DashboardClient from "./DashboardClient";
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Creator Dashboard | Ping World",
     description: "Manage your creative ecosystem and track your tool performance. Powered by Qal Technologies.",
-    url: "https://ping-world.website/dashboard",
+    url: `${COMPANY.domain}/dashboard`,
     siteName: "Ping World",
   },
   twitter: {

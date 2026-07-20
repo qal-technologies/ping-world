@@ -119,6 +119,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // jules edit: Clean up local expired quizzes and messages on load
+    HybridStorage.cleanupExpiredItems();
+
     loadSession();
     checkCache();
 

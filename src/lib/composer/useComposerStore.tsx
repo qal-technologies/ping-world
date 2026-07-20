@@ -351,9 +351,41 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// jules edit: Sync with useAppContext to make it the single source of truth for online & premium states
+import { useAppContext } from '@/context/AppContext';
+import { HybridStorage } from '@/lib/storage-utils';
+
 // ─── Hook ──────────────────────────────────────────────────
 export function useComposer() {
   const ctx = useContext(ComposerContext);
   if (!ctx) throw new Error('useComposer must be used inside ComposerProvider');
-  return ctx;
+
+  const appCtx = useAppContext();
+
+  // Override composer state properties to strictly delegate to the global single source of truth
+  const stateWithGlobal = {
+    ...ctx.state,
+    isOnline: appCtx.isOnline,
+    isPremium: appCtx.isPremium,
+  };
+
+  return {
+    ...ctx,
+    state: stateWithGlobal,
+    user: appCtx.user,
+    isLoggedIn: appCtx.isLoggedIn,
+    username: appCtx.username,
+    premiumTier: appCtx.premiumTier,
+    /**
+     * Page load offline cache checking utility.
+     * Returns true if online, otherwise checks if any cached data of `type` exists.
+     */
+    checkOfflineCache: async (type: 'quiz' | 'message'): Promise<boolean> => {
+      if (typeof window === 'undefined') return false;
+      if (appCtx.isOnline) return true;
+
+      const cache = await HybridStorage.getAll(type);
+      return Array.isArray(cache) && cache.length > 0;
+    },
+  };
 }

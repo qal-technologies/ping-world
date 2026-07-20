@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import UrlShortenerClient from "./UrlShortenerClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Advanced URL Shortener & QR Code Generator | Ping World",
     description: "Transform long URLs into clean links with embedded local analytics and automatic QR code generation.",
-    url: "https://ping-world.website/tools/url-shortener",
+    url: `${COMPANY.domain}/tools/url-shortener`,
     siteName: "Ping World",
   },
   twitter: {

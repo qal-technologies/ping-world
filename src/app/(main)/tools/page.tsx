@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import ToolsClient from "./ToolsClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Browse All Tools - Utility & Creator Suite | Ping World",
     description: "Explore our complete dynamic suite of tools categorized for social engagement, rich content text editing, cryptography security, fast media converters, and dynamic calculations. Powered by Qal Technologies.",
-    url: "https://ping-world.website/tools",
+    url: `${COMPANY.domain}/tools`,
     siteName: "Ping World",
   },
   twitter: {

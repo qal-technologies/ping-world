@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import ColorsClient from "./ColorsClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Chromatic Palette & Color Extraction Tool | Ping World",
     description: "Harmonize colors, extract palettes from images, generate analogous, triadic, and complementary shades instantly.",
-    url: "https://ping-world.website/tools/colors",
+    url: `${COMPANY.domain}/tools/colors`,
     siteName: "Ping World",
   },
   twitter: {

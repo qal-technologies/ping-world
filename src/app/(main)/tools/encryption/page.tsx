@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Secure Browser-only Encryption Decryption | Ping World",
     description: "Securely encrypt and decrypt messages entirely client-side using robust AES, TripleDES, and RC4 algorithms. Powered by Qal Technologies.",
-    url: "https://ping-world.website/tools/encryption",
+    url: `${COMPANY.domain}/tools/encryption`,
     siteName: "Ping World",
   },
   twitter: {

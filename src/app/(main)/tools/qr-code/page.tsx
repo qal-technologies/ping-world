@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import QrCodeClient from "./QrCodeClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Professional QR Code Matrix Generator | Ping World",
     description: "Design customizable, high-resolution QR codes for websites, WiFi networks, SMS, contact numbers, and custom templates.",
-    url: "https://ping-world.website/tools/qr-code",
+    url: `${COMPANY.domain}/tools/qr-code`,
     siteName: "Ping World",
   },
   twitter: {

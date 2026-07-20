@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import ChatEditorClient from "./ChatEditorClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Chat Mimic Simulator & Post Editor | Ping World",
     description: "Design and generate realistic chat screenshot visuals dynamically for stories, screenplay layouts, and social media posts.",
-    url: "https://ping-world.website/tools/chat-editor",
+    url: `${COMPANY.domain}/tools/chat-editor`,
     siteName: "Ping World",
   },
   twitter: {

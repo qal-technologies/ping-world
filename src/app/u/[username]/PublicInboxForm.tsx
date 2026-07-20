@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -24,6 +24,7 @@ interface Profile {
   display_name: string;
   avatar_url?: string;
   subscription_tier?: string;
+  custom_question?: string;
 }
 
 interface Props {
@@ -54,11 +55,37 @@ function getCountryFromLocale(): string {
   }
 }
 
+import { AlertTriangle } from 'lucide-react';
+
 export default function PublicInboxForm({ profile, username }: Props) {
   const [message, setMessage] = useState('');
   const [selectedPreReply, setSelectedPreReply] = useState<string>('');
   const [isSending, setIsSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  // jules edit: Offline detection and reactivity
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // jules edit: Safe query string lookup without Next.js build-time suspense bailouts
+  const getParam = (key: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get(key);
+  };
+
+  const customQuestionQuery = getParam('question');
+  const activePromptQuestion = customQuestionQuery || profile?.custom_question;
+  const activePromptText = activePromptQuestion ? `"${activePromptQuestion}"` : 'Your identity is completely hidden. Senders will only see your message, nothing else.';
 
   if (!profile) {
     return (
@@ -172,12 +199,20 @@ export default function PublicInboxForm({ profile, username }: Props) {
           <h1 className='text-3xl sm:text-4xl font-extrabold font-display mb-3'>
             Message <span className='gradient-text'>@{profile.username}</span>
           </h1>
-          <p className='text-sm text-pw-muted max-w-sm mx-auto'>
-            Your identity is completely hidden.{' '}
-            {profile.display_name || profile.username} will only see your
-            message, nothing else.
+          <p className='text-sm text-pw-muted max-w-sm mx-auto leading-relaxed'>
+            {activePromptText}
           </p>
         </div>
+
+        {/* jules edit: Show offline message and disable submission if offline */}
+        {!isOnline && (
+          <div className='p-4 bg-pw-danger/10 border border-pw-danger/25 rounded-2xl flex items-center gap-3 text-xs text-pw-danger mb-8'>
+            <AlertTriangle className='h-5 w-5 shrink-0 text-pw-danger animate-pulse' />
+            <p>
+              <strong>You are offline.</strong> Sending anonymous messages is temporarily disabled until your internet connection is restored.
+            </p>
+          </div>
+        )}
 
         {/* Privacy row */}
         <div className='flex flex-wrap items-center justify-center gap-4 text-[11px] text-pw-muted font-mono mb-8'>
@@ -203,10 +238,11 @@ export default function PublicInboxForm({ profile, username }: Props) {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder='Say what you always wanted to say...'
+              placeholder={activePromptQuestion ? 'Enter your response...' : 'Say what you always wanted to say...'}
               rows={5}
               maxLength={1000}
-              className='w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-pw-text placeholder:text-pw-muted resize-none focus:outline-none focus:border-pw-primary/50 transition-colors leading-relaxed'
+              disabled={!isOnline}
+              className='w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-pw-text placeholder:text-pw-muted resize-none focus:outline-none focus:border-pw-primary/50 transition-colors leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed'
             />
             <div className='flex justify-end mt-1'>
               <span
@@ -243,8 +279,8 @@ export default function PublicInboxForm({ profile, username }: Props) {
           {/* Send button */}
           <Button
             onClick={handleSend}
-            disabled={isSending || !message.trim()}
-            className='btn-primary w-full h-12 text-sm font-bold gap-2'>
+            disabled={isSending || !message.trim() || !isOnline}
+            className='btn-primary w-full h-12 text-sm font-bold gap-2 disabled:opacity-50 disabled:cursor-not-allowed'>
             {isSending ?
               <span className='flex items-center gap-2'>
                 <span className='h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin' />

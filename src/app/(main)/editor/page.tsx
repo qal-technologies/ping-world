@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import EditorClient from "./EditorClient";
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Professional Text Editor & Post Card Maker | Ping World",
     description: "Switch seamlessly between rich document editing and modern visual social media post card creation. Provided by Qal Technologies.",
-    url: "https://ping-world.website/editor",
+    url: `${COMPANY.domain}/editor`,
     siteName: "Ping World",
   },
   twitter: {

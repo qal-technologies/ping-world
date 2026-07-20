@@ -20,8 +20,11 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { tools } from '@/lib/general/data';
 import FeedbackWidget from '@/components/shared/FeedbackWidget';
+import { useAppContext } from '@/context/AppContext';
+import { toast } from 'sonner';
 
 export default function ToolsHubPage() {
+  const { premiumTier } = useAppContext();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [viewCat, setViewCat] = useState(false);
@@ -53,6 +56,14 @@ export default function ToolsHubPage() {
       window.removeEventListener('resize', checkSize);
     };
   }, []);
+
+  const handleToolClick = (e: React.MouseEvent, tool: any) => {
+    // jules edit: Enforce strict gatekeeping for Pro-only tools
+    if ((tool as any).proOnly && premiumTier !== 'pro') {
+      e.preventDefault();
+      toast.info(`⭐ PRO Tool: "${tool.title}" is exclusive to Pro subscribers. Upgrade your plan to gain access!`);
+    }
+  };
 
   const groupedTools: Record<string, typeof tools> = {};
   if (!search.trim()) {
@@ -156,7 +167,7 @@ export default function ToolsHubPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}>
-                    <Link href={tool.href}>
+                    <Link href={tool.href} onClick={(e) => handleToolClick(e, tool)}>
                       <Card className='card-glow bkblur h-full flex flex-col p-5 group hover:border-pw-primary/30 transition-all cursor-pointer'>
                         <div className='flex justify-between items-start mb-6'>
                           <div className='w-14 h-14 rounded-2xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-110 group-hover:shadow-pw-primary/5 transition-all duration-500'>
@@ -165,8 +176,15 @@ export default function ToolsHubPage() {
                               style={{ color: tool.color }}
                             />
                           </div>
-                          <div className='h-6 px-3 rounded-full bg-white/5 border border-white/5 text-[10px] font-bold uppercase tracking-widest flex items-center text-pw-muted'>
-                            {tool.category}
+                          <div className='flex items-center gap-1.5'>
+                            <div className='h-6 px-3 rounded-full bg-white/5 border border-white/5 text-[10px] font-bold uppercase tracking-widest flex items-center text-pw-muted'>
+                              {tool.category}
+                            </div>
+                            {(tool as any).proOnly && (
+                              <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
+                                PRO
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -253,7 +271,8 @@ export default function ToolsHubPage() {
                     {displayedTools.map((tool) => (
                       <Link
                         href={tool.href}
-                        key={tool.id}>
+                        key={tool.id}
+                        onClick={(e) => handleToolClick(e, tool)}>
                         <Card className='card-glow bkblur h-full flex flex-col p-5 group hover:border-pw-primary/30 transition-all cursor-pointer'>
                           <div className='flex justify-between items-start mb-6'>
                             <div className='w-14 h-14 rounded-2xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-110 group-hover:shadow-pw-primary/5 transition-all duration-500'>
@@ -262,9 +281,16 @@ export default function ToolsHubPage() {
                                 style={{ color: tool.color }}
                               />
                             </div>
-                            <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
-                              {tool.tag}
-                            </span>
+                            <div className='flex items-center gap-1.5'>
+                              <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
+                                {tool.tag}
+                              </span>
+                              {(tool as any).proOnly && (
+                                <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
+                                  PRO
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <h3 className='text-2xl font-bold font-display mb-3 flex items-center gap-2 group-hover:text-pw-primary transition-colors'>
@@ -370,7 +396,12 @@ export default function ToolsHubPage() {
                     <Link
                       href={tool.href}
                       key={tool.id}
-                      onClick={() => setModalCategory(null)}>
+                      onClick={(e) => {
+                        handleToolClick(e, tool);
+                        if (!(tool as any).proOnly || premiumTier === 'pro') {
+                          setModalCategory(null);
+                        }
+                      }}>
                       <Card className='card-glow p-5 flex flex-col h-full bg-white/[0.01] hover:border-pw-primary/25 cursor-pointer group'>
                         <div className='flex items-center gap-3 mb-4'>
                           <div className='w-10 h-10 rounded-xl flex items-center justify-center bg-pw-surface border border-white/5'>
@@ -379,9 +410,16 @@ export default function ToolsHubPage() {
                               style={{ color: tool.color }}
                             />
                           </div>
-                          <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
-                            {tool.tag}
-                          </span>
+                          <div className='flex items-center gap-1.5'>
+                            <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
+                              {tool.tag}
+                            </span>
+                            {(tool as any).proOnly && (
+                              <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
+                                PRO
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <h4 className='font-bold text-lg text-pw-text group-hover:text-pw-primary transition-colors'>
                           {tool.title}

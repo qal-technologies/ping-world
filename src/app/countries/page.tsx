@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import CountriesClient from "./CountriesClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Demographic Matrix & Global Country Registry | Ping World",
     description: "Explore worldwide statistics, capitals, currencies, major ethnicities, languages, and populations in-depth. Powered by Qal Technologies.",
-    url: "https://ping-world.website/countries",
+    url: `${COMPANY.domain}/countries`,
     siteName: "Ping World",
   },
   twitter: {

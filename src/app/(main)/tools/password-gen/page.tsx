@@ -1,3 +1,4 @@
+import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
 import PasswordGenClient from "./PasswordGenClient";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Secure Random Password Generator | Ping World",
     description: "Instantly generate cryptographically secure, randomized passwords locally inside your browser. No data ever leaves your device.",
-    url: "https://ping-world.website/tools/password-gen",
+    url: `${COMPANY.domain}/tools/password-gen`,
     siteName: "Ping World",
   },
   twitter: {
