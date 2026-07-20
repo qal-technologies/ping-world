@@ -767,7 +767,7 @@ pre {
     0 0 100px 20px rgba(92, 255, 241, 0.2),
     inset 0 0 100px 20px rgba(34, 85, 253, 0.2);
   filter: blur(60px);
-  animation: blackhole-spin 10s ease-in-out infinite;
+  animation: blackhole-spin 5s ease-in-out infinite;
   opacity: 0.6;
 }
 
@@ -787,7 +787,7 @@ pre {
     transform: rotate(0deg) scale(1);
   }
   50% {
-    transform: rotate(180deg) scale(1.1);
+    transform: rotate(180deg) scale(1.5);
   }
   to {
     transform: rotate(360deg) scale(1);

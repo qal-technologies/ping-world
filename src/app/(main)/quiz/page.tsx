@@ -181,7 +181,7 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
-  const { premiumTier, } = useAppContext();
+  const { premiumTier } = useAppContext();
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
@@ -829,72 +829,90 @@ const QuizBuilder = ({
                         <QuizSettingItem
                           label='Active Lifespan (Expiry)'
                           description={`Database limit duration before deletion. Max logic: Free=2d, Flexible=7d, Standard=14d, Pro=30d.`}>
-                          <div className='flex gap-2 items-center flex-wrap shrink-0'>
-                            {[2, 7, 14, 30].map((days) => {
-                              const isEligible =
-                                days === 2 ? true
-                                : days === 7 ?
-                                  tierAtLeast(premiumTier, 'flexible')
-                                : days === 14 ?
-                                  tierAtLeast(premiumTier, 'standard')
-                                : tierAtLeast(premiumTier, 'pro');
+                          <div className='flex flex-col gap-2 w-full items-end'>
+                            <div className='flex gap-2 items-center flex-wrap shrink-0'>
+                              {[2, 7, 14, 30].map((days) => {
+                                const isEligible =
+                                  days === 2 ? true
+                                  : days === 7 ?
+                                    tierAtLeast(premiumTier, 'flexible')
+                                  : days === 14 ?
+                                    tierAtLeast(premiumTier, 'standard')
+                                  : tierAtLeast(premiumTier, 'pro');
 
-                              // Map default expires_at to days from now
-                              let currentDays = 2; // Default
-                              if (editedQuiz.expires_at) {
-                                const diff =
-                                  new Date(editedQuiz.expires_at).getTime() -
-                                  Date.now();
-                                currentDays = Math.round(
-                                  diff / (1000 * 60 * 60 * 24),
+                                let currentDays = 2; // Default
+                                if (editedQuiz.expires_at) {
+                                  const diff =
+                                    new Date(editedQuiz.expires_at).getTime() -
+                                    Date.now();
+                                  currentDays = Math.round(
+                                    diff / (1000 * 60 * 60 * 24),
+                                  );
+                                }
+
+                                const closestSelected = [2, 7, 14, 30].reduce(
+                                  (prev, curr) =>
+                                    (
+                                      Math.abs(curr - currentDays) <
+                                      Math.abs(prev - currentDays)
+                                    ) ?
+                                      curr
+                                    : prev,
                                 );
-                              }
 
-                              // Ensure closest match rounding
-                              const closestSelected = [2, 7, 14, 30].reduce(
-                                (prev, curr) =>
-                                  (
-                                    Math.abs(curr - currentDays) <
-                                    Math.abs(prev - currentDays)
-                                  ) ?
-                                    curr
-                                  : prev,
-                              );
-
-                              return (
-                                <Button
-                                  key={`exp-${days}`}
-                                  variant='outline'
-                                  size='sm'
-                                  disabled={!isEligible}
-                                  onClick={() => {
-                                    if (isEligible) {
-                                      const newExpiry = computeExpiry(premiumTier,days);
-                                      setEditedQuiz({
-                                        ...editedQuiz,
-                                        expires_at: newExpiry.toISOString(),
-                                      });
-                                    } else {
-                                      toast.info(
-                                        `Unlock ${days} days expiry with a premium tier.`,
-                                      );
-                                    }
-                                  }}
-                                  className={cn(
-                                    'h-8 text-xs relative overflow-hidden',
-                                    closestSelected === days ?
-                                      'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                                    : 'bg-white/5 border-white/10 opacity-70 hover:opacity-100',
-                                    !isEligible &&
-                                      'opacity-40 hover:opacity-40 grayscale',
-                                  )}>
-                                  {days}d
-                                  {!isEligible && (
-                                    <Lock className='h-2.5 w-2.5 ml-1.5 opacity-50' />
-                                  )}
-                                </Button>
-                              );
-                            })}
+                                return (
+                                  <Button
+                                    key={`exp-${days}`}
+                                    variant='outline'
+                                    size='sm'
+                                    disabled={!isEligible}
+                                    onClick={() => {
+                                      if (isEligible) {
+                                        const newExpiry = computeExpiry(
+                                          premiumTier,
+                                          days,
+                                        );
+                                        setEditedQuiz({
+                                          ...editedQuiz,
+                                          expires_at: newExpiry.toISOString(),
+                                        });
+                                      } else {
+                                        toast.info(
+                                          `Unlock ${days} days expiry with a premium tier.`,
+                                        );
+                                      }
+                                    }}
+                                    className={cn(
+                                      'h-6 text-xs relative overflow-hidden',
+                                      closestSelected === days ?
+                                        'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                                      : 'bg-white/5 border-white/10 opacity-70 hover:opacity-100',
+                                      !isEligible &&
+                                        'opacity-40 hover:opacity-40 grayscale',
+                                    )}>
+                                    {days}d
+                                    {!isEligible && (
+                                      <Lock className='h-2.5 w-2.5 ml-1.5 opacity-50' />
+                                    )}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            {editedQuiz.expires_at && (
+                              <div
+                                className='text-xs text-pw-muted font-mono bg-white/5 border border-white/10 rounded-md p-1 px-2 flex items-center gap-1.5 mt-1'
+                                style={{ maxWidth: 'max-content' }}>
+                                <Clock className='h-3.5 w-3.5 text-pw-primary' />
+                                <span>
+                                  {(() => {
+                                    const { label } = quizExpiryCountdown(
+                                      editedQuiz.expires_at,
+                                    );
+                                    return label;
+                                  })()}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </QuizSettingItem>
                       </div>
