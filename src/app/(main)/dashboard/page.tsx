@@ -1,5 +1,4 @@
 import { COMPANY } from "@/lib/config/company";
-// jules edit: Created Server-side page route wrapper to support dynamic SEO, Open Graph & Twitter Card metadata loading
 import type { Metadata } from "next";
 import DashboardClient from "./DashboardClient";
 

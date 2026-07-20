@@ -1,4 +1,3 @@
-// jules edit: Import company data to keep domain unified
 import type { MetadataRoute } from "next";
 import { COMPANY } from "@/lib/config/company";
 

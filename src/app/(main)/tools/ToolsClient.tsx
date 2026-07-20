@@ -58,7 +58,6 @@ export default function ToolsHubPage() {
   }, []);
 
   const handleToolClick = (e: React.MouseEvent, tool: any) => {
-    // jules edit: Enforce strict gatekeeping for Pro-only tools
     if ((tool as any).proOnly && premiumTier !== 'pro') {
       e.preventDefault();
       toast.info(`⭐ PRO Tool: "${tool.title}" is exclusive to Pro subscribers. Upgrade your plan to gain access!`);
@@ -87,8 +86,8 @@ export default function ToolsHubPage() {
   ];
 
   return (
-    <div className='container mx-auto py-12 max-w-7xl px-4 min-h-screen'>
-      <div className='w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-16'>
+    <div className='container mx-auto py-12 max-w-7xl px-1 min-h-screen'>
+      <div className='w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-16 px-3'>
         <div className='max-w-2xl text-center md:text-left mb-2'>
           <div className='badge mb-4 inline-flex'>
             <Sparkles className='h-3.5 w-3.5' />
@@ -257,7 +256,7 @@ export default function ToolsHubPage() {
                       }}
                       title='Wrap this category'
                       className='text-xs text-pw-muted font-bold font-mono uppercase tracking-widest flex gap-1 cursor-pointer'>
-                      {categoryTools.length} Tools
+                      {categoryTools.length} {categoryTools.length > 1 ? 'Tools' : 'Tool'}
                       <ChevronDown
                         className={cn(
                           'w-4 h-4 sm:hidden',

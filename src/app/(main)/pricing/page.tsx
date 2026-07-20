@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import {
-  Check,
+  CheckCircle,
   X,
   Sparkles,
   Zap,
@@ -110,6 +110,7 @@ export default function PricingPage() {
             const tier = PREMIUM_TIERS[tierId];
             const isCurrent = premiumTier === tierId;
             const isPopular = tierId === 'standard';
+            const isPro = tierId === 'pro';
 
             return (
               <motion.div
@@ -119,10 +120,11 @@ export default function PricingPage() {
                 transition={{ delay: i * 0.08 }}>
                 <Card
                   className={cn(
-                    'relative p-6 flex flex-col h-full transition-all hover:scale-[1.02]',
-                    isPopular ?
-                      'border-pw-primary/40 bg-pw-primary/5 shadow-2xl shadow-pw-primary/10 ring-1 ring-pw-primary/20'
-                    : 'card-glow',
+                    'relative p-6 flex flex-col h-full transition-all hover:scale-[1.02] border bg-card/40 bkblur',
+                    isPopular &&
+                      'bg-pw-primary/5 shadow-2xl shadow-pw-primary/10 border-pw-primary',
+                    isPro &&
+                      'bg-pw-warning/5 shadow-2xl shadow-pw-warning/10 border-pw-warning',
                   )}>
                   {isPopular && (
                     <div
@@ -184,7 +186,7 @@ export default function PricingPage() {
                   {/* Feature highlights */}
                   <ul className='space-y-2.5 flex-1 mb-6'>
                     <li className='flex items-center gap-2 text-xs'>
-                      <Check className='h-3.5 w-3.5 text-pw-success shrink-0' />
+                      <CheckCircle className='h-3.5 w-3.5 text-pw-success shrink-0' />
                       <span>
                         {tier.maxQuizzes === Infinity ?
                           'Unlimited'
@@ -193,7 +195,7 @@ export default function PricingPage() {
                       </span>
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
-                      <Check className='h-3.5 w-3.5 text-pw-success shrink-0' />
+                      <CheckCircle className='h-3.5 w-3.5 text-pw-success shrink-0' />
                       <span>
                         {tier.maxMessages === Infinity ?
                           'Unlimited'
@@ -202,12 +204,12 @@ export default function PricingPage() {
                       </span>
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
-                      <Check className='h-3.5 w-3.5 text-pw-success shrink-0' />
+                      <CheckCircle className='h-3.5 w-3.5 text-pw-success shrink-0' />
                       <span>Up to {tier.maxExpiryDays} day expiry</span>
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
                       {tier.publicInbox ?
-                        <Check className='h-3.5 w-3.5 text-pw-success shrink-0' />
+                        <CheckCircle className='h-3.5 w-3.5 text-pw-success shrink-0' />
                       : <X className='h-3.5 w-3.5 text-pw-muted/40 shrink-0' />}
                       <span
                         className={!tier.publicInbox ? 'text-pw-muted/50' : ''}>
@@ -216,7 +218,7 @@ export default function PricingPage() {
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
                       {tier.proTools ?
-                        <Check className='h-3.5 w-3.5 text-pw-success shrink-0' />
+                        <CheckCircle className='h-3.5 w-3.5 text-pw-success shrink-0' />
                       : <X className='h-3.5 w-3.5 text-pw-muted/40 shrink-0' />}
                       <span
                         className={!tier.proTools ? 'text-pw-muted/50' : ''}>
@@ -229,16 +231,20 @@ export default function PricingPage() {
                   <Button
                     disabled={isCurrent}
                     className={cn(
-                      'w-full h-11 font-bold text-sm gap-2 transition-all',
+                      'w-full h-11 font-bold text-sm gap-2 transition-all relative',
                       isCurrent ?
                         'bg-white/10 text-pw-muted cursor-default border border-white/10'
                       : isPopular ? 'btn-primary shadow-xl shadow-pw-primary/20'
                       : 'bg-white/5 border border-white/10 hover:bg-white/10 text-pw-text',
+                      isPro && 'btn-premium',
                     )}>
                     {isCurrent ?
                       'Current Plan'
-                    : tierId === 'free' ?
-                      'Get Started'
+                    : tierId === 'pro' ?
+                      <>
+                        Become Pro
+                        <Rocket className='h-4 w-4' />
+                      </>
                     : <>
                         Upgrade <ArrowRight className='h-4 w-4' />
                       </>
@@ -292,7 +298,7 @@ export default function PricingPage() {
                             className='p-4 text-center'>
                             {typeof val === 'boolean' ?
                               val ?
-                                <Check className='h-4 w-4 text-pw-success mx-auto' />
+                                <CheckCircle className='h-4 w-4 text-pw-success mx-auto' />
                               : <X className='h-4 w-4 text-pw-muted/30 mx-auto' />
 
                             : <span className='text-xs font-mono font-bold text-pw-text'>

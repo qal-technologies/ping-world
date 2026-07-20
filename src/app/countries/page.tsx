@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     "Qal Technologies"
   ],
   openGraph: {
-    title: "Demographic Matrix & Global Country Registry | Ping World",
+    title: "Global Country Registry | Ping World",
     description: "Explore worldwide statistics, capitals, currencies, major ethnicities, languages, and populations in-depth. Powered by Qal Technologies.",
     url: `${COMPANY.domain}/countries`,
     siteName: "Ping World",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Demographic Matrix & Global Country Registry | Ping World",
+    title: "Global Country Registry | Ping World",
     description: "Explore worldwide statistics, capitals, currencies, major ethnicities, languages, and populations in-depth. Powered by Qal Technologies.",
   }
 };

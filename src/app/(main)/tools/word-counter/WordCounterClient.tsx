@@ -1,4 +1,3 @@
-// jules edit: Extracted client-side Word Counter implementation to support server-side SEO & metadata compilation
 "use client";
 
 import { useState } from "react";

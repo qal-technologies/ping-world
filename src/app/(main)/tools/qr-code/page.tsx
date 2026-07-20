@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import QrCodeClient from "./QrCodeClient";
 
 export const metadata: Metadata = {
-  title: "Professional QR Code Matrix Generator | Ping World",
+  title: "QR Code Generator",
   description:
     "Design customizable, high-resolution QR codes for websites, WiFi networks, SMS, contact numbers, and custom templates. Created by Qal Technologies and developer Poshcodes.",
   keywords: [
@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     "Qal Technologies"
   ],
   openGraph: {
-    title: "Professional QR Code Matrix Generator | Ping World",
+    title: "QR Code Generator | Ping World",
     description: "Design customizable, high-resolution QR codes for websites, WiFi networks, SMS, contact numbers, and custom templates.",
     url: `${COMPANY.domain}/tools/qr-code`,
     siteName: "Ping World",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Professional QR Code Matrix Generator | Ping World",
+    title: "QR Code Generator | Ping World",
     description: "Design customizable, high-resolution QR codes for websites, WiFi networks, SMS, contact numbers, and custom templates.",
   }
 };

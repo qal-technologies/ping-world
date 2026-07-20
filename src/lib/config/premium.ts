@@ -41,7 +41,7 @@ export const PREMIUM_TIERS: Record<PremiumTier, TierConfig> = {
   flexible: {
     label: 'Flexible',
     badge: 'FLEX',
-    color: '#3b82f6',
+    color: '#3bf654ff',
     maxExpiryDays: 7,
     minExpiryDays: 3,
     aiRequestsPerMinute: 15,

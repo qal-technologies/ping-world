@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import CalculatorClient from "./CalculatorClient";
 
 export const metadata: Metadata = {
-  title: "Professional Multi Calculator & Currency Converter | Ping World",
+  title: "Multi Calculator & Converter",
   description:
     "Instantly compute basic math, complex pricing markups, interest finance, currency exchange with global rates, and fluid mass weights. Created by Qal Technologies and developer Pascodez.",
   keywords: [
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     "Qal Technologies"
   ],
   openGraph: {
-    title: "Professional Multi Calculator & Currency Converter | Ping World",
+    title: "Multi Calculator & Converter | Ping World",
     description: "Instantly compute basic math, complex pricing markups, interest finance, currency exchange with global rates, and fluid mass weights.",
     url: `${COMPANY.domain}/tools/calculator`,
     siteName: "Ping World",

@@ -38,6 +38,7 @@ import { LivePreview } from './LivePreview';
 import { SavePreviewPanel } from './SavePreviewPanel';
 import { InstagramCanvasSettings } from './InstagramCanvasSettings';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 type ToolTab =
   | 'tags'
@@ -156,10 +157,10 @@ export function ComposerLayout() {
               </div>
 
               {/* DEV: premium toggle (remove in production, wire to Supabase) */}
-              <button
-                onClick={() =>
-                  dispatch({ type: 'SET_PREMIUM', payload: !state.isPremium })
-                }
+              <Link
+                href='/pricing'
+                target={'_blank'}
+                title={state.isPremium ? 'View Plan' : 'Upgrade Plan'}
                 className={cn(
                   'text-[10px] font-mono px-3 py-0.5 rounded-full border transition-all flex items-center gap-1',
                   state.isPremium ?
@@ -170,7 +171,7 @@ export function ComposerLayout() {
                   <Crown className='h-3 w-3' />
                 : <Star className='h-3 w-3' />}
                 {state.isPremium ? 'Premium' : 'Free Tier'}
-              </button>
+              </Link>
             </div>
           </div>
         </div>

@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import EncryptionClient from "./EncryptionClient";
 
 export const metadata: Metadata = {
-  title: "Secure Browser-only Encryption Decryption | Ping World",
+  title: "Encryption & Decryption",
   description:
     "Securely encrypt and decrypt messages entirely client-side using robust AES, TripleDES, and RC4 algorithms. Powering private communications with Qal Technologies & Poshcodes.",
   keywords: [
@@ -17,14 +17,14 @@ export const metadata: Metadata = {
     "Qal Technologies"
   ],
   openGraph: {
-    title: "Secure Browser-only Encryption Decryption | Ping World",
+    title: "Encryption & Decryption | Ping World",
     description: "Securely encrypt and decrypt messages entirely client-side using robust AES, TripleDES, and RC4 algorithms. Powered by Qal Technologies.",
     url: `${COMPANY.domain}/tools/encryption`,
     siteName: "Ping World",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Secure Browser-only Encryption Decryption | Ping World",
+    title: "Encryption & Decryption | Ping World",
     description: "Securely encrypt and decrypt messages entirely client-side using robust AES, TripleDES, and RC4 algorithms. Powered by Qal Technologies.",
   }
 };

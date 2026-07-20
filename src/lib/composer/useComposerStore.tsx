@@ -9,7 +9,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { ComposerState, ComposerAction, Platform } from './types';
-import { PINGWORLD_HASHTAG, PINGWORLD_ACCOUNTS } from './constants';
+import {PINGWORLD_HASHTAG, PINGWORLD_ACCOUNTS} from './constants';
+
+import { useAppContext } from '@/context/AppContext';
+import { HybridStorage } from '@/lib/storage-utils';
 
 // ─── Initial State ───────────────────────────────────────────
 const initialState: ComposerState = {
@@ -54,7 +57,6 @@ const initialState: ComposerState = {
   translationResult: null,
   isOnline: true,
 
-  // jules edit: Initialize default Instagram Canvas values for live preview
   instaCanvasThemeIdx: 0,
   instaCanvasFont: 'Syne',
 };
@@ -277,7 +279,6 @@ function composerReducer(
     case 'SET_ONLINE':
       return { ...state, isOnline: action.payload };
 
-    // jules edit: Reducer action to set Instagram auto text-to-canvas rendering style variables
     case 'SET_INSTA_CANVAS_SETTINGS':
       return {
         ...state,
@@ -298,6 +299,11 @@ interface ComposerContextValue {
   getContentForPlatform: (platform: Platform) => string;
 }
 
+
+
+
+
+//------------------------------------------___
 const ComposerContext = createContext<ComposerContextValue | null>(null);
 
 // ─── Provider ────────────────────────────────────────────────
@@ -351,9 +357,6 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// jules edit: Sync with useAppContext to make it the single source of truth for online & premium states
-import { useAppContext } from '@/context/AppContext';
-import { HybridStorage } from '@/lib/storage-utils';
 
 // ─── Hook ──────────────────────────────────────────────────
 export function useComposer() {

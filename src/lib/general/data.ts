@@ -29,7 +29,6 @@ export const tools = [
     id: 'quizzable',
     category: 'Engagement',
     version: { v: '1.0', s: 'Stable' },
-    docs: {},
   },
   {
     icon: PenTool,
@@ -42,7 +41,6 @@ export const tools = [
     category: 'Engagement',
     id: 'composer',
     version: { v: '1.0', s: 'Stable' },
-    docs: {},
   },
   {
     icon: MessageCircle,
@@ -215,7 +213,7 @@ export const tools = [
 ];
 
 export const companyData = {
-  webDomain: 'https://ping-world.website',
+  webDomain: 'https://ping-world.site',
   webEmail: 'pingworld.com@gmail.com',
   launchDate: 'August 1, 2026',
   parentBrandLink: 'https://qal-tech-website',

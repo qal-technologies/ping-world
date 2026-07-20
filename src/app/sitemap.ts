@@ -1,4 +1,3 @@
-// jules edit: Import company data to unify domain definitions
 import type { MetadataRoute } from 'next';
 import { tools } from '@/lib/general/data';
 import { COMPANY } from '@/lib/config/company';

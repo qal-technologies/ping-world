@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Wrap Layout in ComposerProvider to expose useComposer globally
 import {
   Navbar,
   Footer,
@@ -8,7 +7,6 @@ import {
   usePageLayout,
 } from '@/components/layout';
 import { AppProvider } from '@/context/AppContext';
-import { ComposerProvider } from '@/lib/composer/useComposerStore';
 import { cn } from '@/lib/utils';
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
@@ -31,8 +29,10 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <PageLayoutProvider>
-      <LayoutContent>{children}</LayoutContent>
-    </PageLayoutProvider>
+    <AppProvider>
+      <PageLayoutProvider>
+        <LayoutContent>{children}</LayoutContent>
+      </PageLayoutProvider>
+    </AppProvider>
   );
 }

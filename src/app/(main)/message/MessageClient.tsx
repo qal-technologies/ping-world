@@ -71,7 +71,6 @@ export default function MessageLandingPage() {
         if (user) {
           userId = user.id;
 
-          // jules edit: Fetch configurations from the recipient's profiles row
           const { data: profile } = await supabase
             .from('profiles')
             .select('username, display_name, is_public_inbox, custom_question, custom_link_id, message_expiry_days')
@@ -140,7 +139,6 @@ export default function MessageLandingPage() {
     setTimeout(() => setCopiedLink(null), 2000);
   };
 
-  // jules edit: Save custom configurations directly to user profiles row in Supabase
   const saveInboxSettings = async () => {
     if (!username) {
       toast.error('You must be logged in to configure your inbox.');
@@ -199,7 +197,6 @@ export default function MessageLandingPage() {
   };
 
   const handleStaticTogglePremium = () => {
-    // jules edit: Restrict public board toggles to premium subscribers (Flexible, Standard, Pro)
     if (!isPremium) {
       toast.info(
         '⭐ Premium Upgrade Required: Public boards require a paid subscription (Flexible, Standard, or Pro).',
@@ -302,7 +299,6 @@ export default function MessageLandingPage() {
                         {/* Meta Row */}
                         <div className='flex items-center justify-between gap-4 text-[10px] text-pw-muted font-mono mb-4 border-b border-white/5 pb-3'>
                           <div className='flex flex-wrap items-center gap-3'>
-                            {/* jules edit: Render high-fidelity flag images from flagcdn.com instead of raw un-supported system emojis */}
                             <span className='flex items-center gap-1.5 font-bold text-pw-primary border border-pw-primary/20 bg-pw-primary/10 rounded px-2 py-1'>
                               {msg.sender_country &&
                                 msg.sender_country !== 'Unknown' ? (
@@ -459,7 +455,6 @@ export default function MessageLandingPage() {
               className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
               {/* Main settings options */}
               <div className='lg:col-span-8 space-y-6'>
-                {/* jules edit: Restructure settings layout to allow fully saving all custom configuration options to the database user profiles */}
                 <Card className='bg-transparent ring-0 sm:ring-1 sm:glass p-1 sm:p-8 space-y-6'>
                   <div>
                     <h3 className='text-lg font-bold mb-1'>

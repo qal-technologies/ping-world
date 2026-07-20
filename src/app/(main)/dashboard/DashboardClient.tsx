@@ -1,4 +1,3 @@
-// jules edit: Extracted client-side dashboard implementation to support server-side SEO & metadata compilation
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -229,7 +228,6 @@ export default function GeneralDashboard() {
             </div>
 
             <div className='space-y-4 mb-8'>
-              {/* jules edit: Import and use system canonical domain consistently */}
               <div className='p-3 bg-white/5 border border-white/10 rounded-xl'>
                 <label className='text-[10px] font-bold text-pw-muted uppercase mb-1 block'>
                   Public Inbox Link
@@ -272,18 +270,6 @@ export default function GeneralDashboard() {
             </Button>
           </Card>
 
-          <div className='bg-pw-primary/5 border border-pw-primary/20 rounded-2xl p-6'>
-            <div className='flex items-center gap-2 mb-3'>
-              <Layers className='h-5 w-5 text-pw-primary' />
-              <h4 className='text-sm font-bold'>System Health</h4>
-            </div>
-            <div className='flex justify-between items-center text-xs'>
-              <span className='text-pw-muted'>Connected</span>
-              <span className='w-2 h-2 rounded-full bg-pw-success animate-pulse' />
-            </div>
-          </div>
-
-          {/* jules edit: Prominent billing, payment pathways & premium tier routing card on dashboard */}
           <Card className='p-6 bg-gradient-to-br from-pw-primary/10 via-pw-surface/50 to-pw-secondary/10 border border-pw-primary/20 hover:border-pw-primary/40 transition-all rounded-2xl relative overflow-hidden group shadow-xl'>
             <div className='absolute -top-10 -right-10 w-28 h-28 bg-pw-primary/10 rounded-full blur-2xl group-hover:scale-110 transition-transform' />
             <h4 className='text-sm font-bold mb-2 text-white flex items-center gap-2'>
@@ -292,7 +278,7 @@ export default function GeneralDashboard() {
             <p className='text-[11px] text-pw-muted leading-relaxed mb-4'>
               Current Plan: <span className='text-pw-primary font-bold uppercase tracking-wider'>{tierConfig.label}</span>
               <br />
-              Unlock extended assessment lifespan up to 30 days, custom link routing, public message boards, and pro-level suite tools with flexible, standard or pro premium billing plans.
+              Unlock extended assessment lifespan up to 30 days, custom link routing, public message boards, and pro-level tools with flexible, standard or pro premium billing plans.
             </p>
             <div className="flex gap-2">
               <Link href='/pricing' className="w-full">

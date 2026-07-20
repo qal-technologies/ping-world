@@ -4,10 +4,12 @@ import type { Metadata } from 'next';
 import GamesClient from './GamesClient';
 
 export const metadata: Metadata = {
-  title: 'Tournament Bracket & Standings Game Table | Ping World',
+  title: 'Tournament Table',
   description:
     'Auto-calculate sports league ranks, tournament points, game statistics, wins, draws, and goals in real-time. Built by Qal Technologies and developer Poshcodes.',
   keywords: [
+    'Tournament Table',
+    'Tournament',
     'Games Table',
     'Standings Calculator',
     'League Table Generator',
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
     'Qal Technologies',
   ],
   openGraph: {
-    title: 'Tournament Bracket & Standings Game Table | Ping World',
+    title: 'Tournament Table | Ping World',
     description:
       'Auto-calculate sports league ranks, tournament points, game statistics, wins, draws, and goals in real-time.',
     url: `${COMPANY.domain}/tools/games`,
@@ -24,7 +26,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Tournament Bracket & Standings Game Table | Ping World',
+    title: 'Tournament Table | Ping World',
     description:
       'Auto-calculate sports league ranks, tournament points, game statistics, wins, draws, and goals in real-time.',
   },

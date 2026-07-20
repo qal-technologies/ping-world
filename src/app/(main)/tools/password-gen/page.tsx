@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import PasswordGenClient from "./PasswordGenClient";
 
 export const metadata: Metadata = {
-  title: "Secure Random Password Generator | Ping World",
+  title: "Random Password Generator",
   description:
     "Instantly generate cryptographically secure, randomized passwords locally inside your browser. No data ever leaves your device. Designed by Qal Technologies and developer Poshcodes.",
   keywords: [
@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     "Qal Technologies"
   ],
   openGraph: {
-    title: "Secure Random Password Generator | Ping World",
+    title: "Random Password Generator | Ping World",
     description: "Instantly generate cryptographically secure, randomized passwords locally inside your browser. No data ever leaves your device.",
     url: `${COMPANY.domain}/tools/password-gen`,
     siteName: "Ping World",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Secure Random Password Generator | Ping World",
+    title: "Random Password Generator | Ping World",
     description: "Instantly generate cryptographically secure, randomized passwords locally inside your browser. No data ever leaves your device.",
   }
 };

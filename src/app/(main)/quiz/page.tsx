@@ -826,7 +826,6 @@ const QuizBuilder = ({
                           </div>
                         </QuizSettingItem>
 
-                        {/* jules edit: Custom styled dropdown selector for quiz lifespan / expiry */}
                         <QuizSettingItem
                           label='Active Lifespan (Expiry)'
                           description={`Select how long this assessment remains active. Free tier max is 2 days.`}>
@@ -2064,7 +2063,6 @@ const QuizBuilder = ({
 };
 
 export default function QuizPage() {
-  // jules edit: Destructure premiumTier for default expires_at assignment on save
   const { premiumTier } = useAppContext();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -2072,7 +2070,7 @@ export default function QuizPage() {
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
   const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
 
-  // jules edit: Safe Base64 decoding helper
+  
   const safeDecodeBase64 = (str: any): any => {
     if (typeof str !== 'string' || str.trim() === '') return str;
     // Check if string is structured as standard Base64 characters and padding
@@ -2090,7 +2088,7 @@ export default function QuizPage() {
     }
   };
 
-  // jules edit: Robust, airtight option text resolver
+  
   const resolveAnswerToText = (quiz: Quiz, questionId: string, val: any) => {
     const question = quiz.questions?.find((q) => q.id === questionId);
     if (!question) return String(val !== undefined && val !== null ? val : '');
@@ -2145,12 +2143,6 @@ export default function QuizPage() {
     return findText(val);
   };
 
-  const resolveQuestionText = (quiz: Quiz, questionId: string) => {
-    if (!quiz.questions) return;
-    const question = quiz.questions?.find((q) => q.id === questionId);
-    return question?.text;
-  };
-
   const resolveCorrectText = (quiz: Quiz, questionId: string) => {
     const question = quiz.questions?.find((q) => q.id === questionId);
     if (!question) return '';
@@ -2159,16 +2151,14 @@ export default function QuizPage() {
   };
 
   const exportResponsesAsCSV = (quiz: Quiz) => {
-    if (!quiz.responses || quiz.responses.length === 0) return;
-
-    // jules edit: Union all possible user metadata keys to construct stable, non-scattered columns
+    if(!quiz.responses || quiz.responses.length === 0) return;
+    
     const userKeys = Array.from(
       new Set(
         quiz.responses.flatMap((resp) => Object.keys(resp.userData || {})),
       ),
     );
 
-    // Create stable and clearly readable CSV headers
     const headers = [
       'Timestamp',
       'Score',
@@ -2289,7 +2279,6 @@ export default function QuizPage() {
       return { ...q, correctIndex: securedIndex };
     });
 
-    // jules edit: Enforce default 2 days expiry for new quizzes if expires_at is not defined
     let finalExpiry = quiz.expires_at;
     if (!finalExpiry) {
       finalExpiry = computeExpiry(premiumTier, 2).toISOString();

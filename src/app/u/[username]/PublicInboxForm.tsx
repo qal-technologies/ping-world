@@ -64,7 +64,7 @@ export default function PublicInboxForm({ profile, username }: Props) {
   const [sent, setSent] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
-  // jules edit: Offline detection and reactivity
+  
   useEffect(() => {
     setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
@@ -77,7 +77,6 @@ export default function PublicInboxForm({ profile, username }: Props) {
     };
   }, []);
 
-  // jules edit: Safe query string lookup without Next.js build-time suspense bailouts
   const getParam = (key: string): string | null => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get(key);
@@ -204,7 +203,6 @@ export default function PublicInboxForm({ profile, username }: Props) {
           </p>
         </div>
 
-        {/* jules edit: Show offline message and disable submission if offline */}
         {!isOnline && (
           <div className='p-4 bg-pw-danger/10 border border-pw-danger/25 rounded-2xl flex items-center gap-3 text-xs text-pw-danger mb-8'>
             <AlertTriangle className='h-5 w-5 shrink-0 text-pw-danger animate-pulse' />

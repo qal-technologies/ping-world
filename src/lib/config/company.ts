@@ -7,11 +7,11 @@ export const COMPANY = {
   name: 'Ping World',
   tagline: 'Your world of tools.',
   description:
-    'Free utilities and creator tools for everyone — built for the internet generation.',
+    'Open premium utilities and creator tools for everyone.',
   version: '1.0.0',
   launchDate: '2026-08-01',
 
-  domain: 'https://ping-world.website',
+  domain: 'https://ping-world.site',
   supportEmail: 'ping.world@gmail.com',
   contactEmail: 'ping.world@gmail.com',
 
@@ -24,6 +24,7 @@ export const COMPANY = {
   developer: {
     name: 'Poshcodes',
     contact: 'https://wa.me/2349016561308',
+    url:'https://pascodes-tech.netlify.app'
   },
 
   parent: {

@@ -41,7 +41,7 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
   const [adminId, setAdminId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(readOnly);
-  const [tournamentName, setTournamentName] = useState("Standings Tournament");
+  const [tournamentName, setTournamentName] = useState("Tournament 1");
 
   const [teams, setTeams] = useState<TeamRow[]>([
     { id: "1", name: "Apex Warriors", played: 5, won: 3, drawn: 1, lost: 1, gf: 12, ga: 6 },
@@ -83,7 +83,7 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
           if (found) {
             const dataObj = found.content || found;
             setTeams(dataObj.teams || []);
-            setTournamentName(dataObj.name || "Standings Tournament");
+            setTournamentName(dataObj.name || "Tournament 1");
           }
         }
 
@@ -241,7 +241,7 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
         <div className="space-y-3">
           <div className='badge border-pw-primary/20 bg-pw-primary/10 text-pw-primary'>
             <Trophy className='h-3.5 w-3.5' />
-            {isReadOnly ? "Viewer Standings Mode" : "Admin Standings Mode"}
+            {isReadOnly ? "Tournament table" : "Tournament - Admin"}
           </div>
           
           {isReadOnly ? (
@@ -286,7 +286,8 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
                     <Share2 className='h-4 w-4 text-pw-secondary' /> Copy Viewer Link
                   </Button>
                   <Button
-                    variant='outline'
+                      variant='outline'
+                      disabled={teams.length === 0}
                     onClick={resetTable}
                     className='bg-pw-danger/10 border-pw-danger/20 hover:bg-pw-danger/20 gap-2 h-11 px-5 text-xs font-bold text-pw-danger'>
                     <RefreshCw className='h-4 w-4' /> Reset Array
@@ -420,7 +421,7 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
                 {teams.length === 0 && (
                   <tr>
                     <td colSpan={isReadOnly ? 10 : 11} className="py-12 text-center text-pw-muted">
-                      No Competitors registered in standings yet.
+                      No Competitors registered in tournament yet.
                     </td>
                   </tr>
                 )}
@@ -432,7 +433,7 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
         {/* Competitor Registration (Only visible to Admin) */}
         {!isReadOnly && (
           <div className='lg:col-span-4 flex flex-col gap-6'>
-            <Card className='card-glow p-6 sm:p-8 space-y-6'>
+            <Card className='bg-transparent sm:glass ring-0 sm:ring-1 sm:p-8 space-y-6'>
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <PlusCircle className="h-5 w-5 text-pw-primary" /> Add Competitor
               </h3>
@@ -458,6 +459,11 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
               </div>
             </Card>
 
+            {/* All created tournament from the admin (free is 3, flexible 6, standard 15, pro 20 max at once and tournament should have expiry to when the tournament should max, here 7free, 14 flexible, 20 standard, a month pro) */}
+            <Card className='bg-transparent sm:glass ring-0 sm:ring-1 sm:p-8 space-y-6'>
+
+            </Card>
+            
             {/* Quick Stats Summary */}
             <Card className='card-glow p-6 space-y-4'>
               <h4 className="text-xs font-bold uppercase tracking-widest text-pw-muted flex items-center gap-2">
@@ -468,6 +474,7 @@ export default function GamesTablePage({ tournamentId, readOnly = false }: Games
               </p>
             </Card>
           </div>
+
         )}
       </div>
     </div>

@@ -430,7 +430,7 @@ export const HybridStorage = {
   },
 
   /**
-   * jules edit: Clean up any expired quizzes or messages from local storage to align with database expirations.
+   * Clean up any expired quizzes or messages from local storage to align with database expirations.
    */
   async cleanupExpiredItems() {
     if (typeof window === 'undefined') return;

@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Refactored Footer with dynamic authentication-aware navigation and a "View More" tools dropdown
 import { useState } from 'react';
 import Link from 'next/link';
 import { Instagram, Linkedin, Mail, Twitter, Youtube, Zap, ChevronDown, ChevronUp } from 'lucide-react';
@@ -46,7 +45,7 @@ export const Footer = () => {
   return (
     <footer className='border-t border-pw-primary/10 bg-pw-bg/80 backdrop-blur-sm'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-12'>
-        <div className='grid grid-cols-2 gap-8 sm:grid-cols-2 md:grid-cols-5'>
+        <div className='grid grid-cols-1 gap-8 md:grid-cols-2 sm:grid-cols-4'>
           {/* Brand column */}
           <div className='col-span-2 md:col-span-2'>
             <Link
@@ -55,7 +54,7 @@ export const Footer = () => {
               <div className='flex h-8 w-8 items-center justify-center rounded-lg gradient-brand'>
                 <Zap className='h-4 w-4 text-white' />
               </div>
-              <span className='text-base font-bold font-display text-pw-text'>
+              <span className='text-lg font-bold font-display text-pw-text'>
                 {COMPANY.name}
               </span>
             </Link>
@@ -70,15 +69,15 @@ export const Footer = () => {
                 className='font-bold text-pw-primary'>
                 {COMPANY.parent.name}
               </Link>{' '}
-              Company &nbsp;·&nbsp; v{COMPANY.version}
+              Company
             </p>
           </div>
 
           {/* Navigation */}
           <div>
-            <h3 className='text-sm font-semibold text-pw-text mb-3'>
+            <h2 className='text-sm font-semibold text-pw-text mb-3'>
               Navigate
-            </h3>
+            </h2>
             <ul className='space-y-2'>
               {navLinks.map((link) => (
                 <li key={link.href}>
@@ -94,7 +93,7 @@ export const Footer = () => {
 
           {/* Tools */}
           <div>
-            <h3 className='text-sm font-semibold text-pw-text mb-3'>Tools</h3>
+            <h2 className='text-sm font-semibold text-pw-text mb-3'>Tools</h2>
             <ul className='space-y-2'>
               {visibleTools.map((tool) => (
                 <li key={tool.href}>
@@ -141,7 +140,7 @@ export const Footer = () => {
 
           {/* Company */}
           <div>
-            <h3 className='text-sm font-semibold text-pw-text mb-3'>Company</h3>
+            <h2 className='text-sm font-semibold text-pw-text mb-3'>Company</h2>
             <ul className='space-y-2'>
               {companyLinks.map((link) => (
                 <li key={link.href}>
@@ -158,7 +157,7 @@ export const Footer = () => {
 
         <div className='divider my-8' />
 
-        <div className='flex flex-wrap items-center justify-center gap-5 mb-6'>
+        <div className='flex flex-wrap items-center justify-center gap-6 sm:gap-10 mb-6'>
           {SOCIALS.map((s) => (
             <Link
               key={s.name}

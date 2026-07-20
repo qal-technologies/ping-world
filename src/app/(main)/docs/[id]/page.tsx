@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: DocsParams): Promise<Metadata
   }
 
   return {
-    title: "Tool Documentation | Ping World",
+    title: "Tool Documentation",
     description: "Read step-by-step features guidelines and version histories for Ping World tools suite.",
   };
 }

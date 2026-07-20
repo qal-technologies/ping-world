@@ -1,8 +1,8 @@
-// jules edit: Embedded FeedbackWidget into the main homepage for seamless client recommendations
 import { HeroSection, ToolsGrid, CTASection } from "@/components/shared/landing-sections";
 import FeedbackWidget from "@/components/shared/FeedbackWidget";
+import type {Metadata} from "next";
 
-export const metadata = {
+export const metadata:Metadata = {
   title: "Ping World - Your world of tools.",
   description:
     "Ping World is a free, all-in-one utility and creator platform featuring Quiz Builder, AI Post Composer, Anonymous Messaging, rich text editors, image converters, and shorteners.",
