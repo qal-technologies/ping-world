@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import CountriesClient from "./CountriesClient";
 
 export const metadata: Metadata = {
-  title: "Demographic Matrix & Global Country Registry | Ping World",
+  title: "Global Country Registry",
   description:
     "Explore worldwide statistics, capitals, currencies, major ethnicities, languages, and populations in-depth. Powered by Qal Technologies and engineered by Poshcodes.",
   keywords: [

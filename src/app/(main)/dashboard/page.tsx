@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import DashboardClient from "./DashboardClient";
 
 export const metadata: Metadata = {
-  title: "Creator Dashboard | Ping World",
+  title: "Creator Dashboard",
   description:
     "Manage your creative ecosystem, track assessment and quiz metrics, inspect anonymous messages, and manage short links. Part of the Ping World suite powered by Qal Technologies.",
   keywords: [
