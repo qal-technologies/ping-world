@@ -15,6 +15,7 @@ import {
   User,
   Plus,
   ChevronRight,
+  BellDot,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -22,15 +23,19 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { HybridStorage } from '@/lib/storage-utils';
 import { supabase } from '@/lib/supabase';
+import { useAppContext } from '@/context/AppContext';
+import { PREMIUM_TIERS } from '@/lib/config/premium';
 
 export default function GeneralDashboard() {
+  const { premiumTier } = useAppContext();
+  const tierConfig = PREMIUM_TIERS[premiumTier];
   const [stats, setStats] = useState({
     quizzes: 0,
     messages: 0,
     links: 0,
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState('User');
 
   useEffect(() => {
     const loadStats = async () => {
@@ -62,10 +67,15 @@ export default function GeneralDashboard() {
 
   useEffect(() => {
     const getUsername = async () => {
-      const {data: {user}} = await supabase.auth.getUser();
-      const username = user?.user_metadata.username || user?.user_metadata.full_name || 'creator';
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const username =
+        user?.user_metadata.username ||
+        user?.user_metadata.full_name ||
+        'creator';
       setUsername(username);
-    }
+    };
     getUsername();
   }, []);
 
@@ -81,14 +91,16 @@ export default function GeneralDashboard() {
           </p>
         </div>
         <div className='flex gap-3'>
-          <Button
-            variant='outline'
-            className='border-white/10 hover:bg-white/5 h-11 px-6'>
-            <Settings2 className='h-4 w-4 mr-2' /> Settings
-          </Button>
+          <Link href='/settings'>
+            <Button
+              variant='outline'
+              className='border-white/10 hover:bg-white/5 h-11 px-6'>
+              <Settings2 className='h-4 w-4 mr-2' /> Settings
+            </Button>
+          </Link>
           <Link href='/tools'>
             <Button className='btn-primary h-11 px-8'>
-              <Plus className='h-4 w-4 mr-2' /> Launch New Tool
+              <Plus className='h-4 w-4 mr-2' /> Launch Tool
             </Button>
           </Link>
         </div>
@@ -108,7 +120,7 @@ export default function GeneralDashboard() {
             value: stats.messages,
             icon: MessageSquare,
             color: '#5C6FFF',
-            href: '/dashboard',
+            href: '/message',
           },
           {
             label: 'URL Shortener',
@@ -208,8 +220,10 @@ export default function GeneralDashboard() {
               <h4 className='text-xl font-bold font-display'>
                 Creator Profile
               </h4>
-              <p className='text-xs text-pw-muted mt-1 uppercase tracking-widest font-bold'>
-                Standard Tier
+              <p
+                className='text-xs text-pw-muted mt-1 uppercase tracking-widest font-bold'
+                style={{ color: tierConfig.color }}>
+                {tierConfig.badge} - {tierConfig.label}
               </p>
             </div>
 
@@ -220,19 +234,35 @@ export default function GeneralDashboard() {
                 </label>
                 <div className='flex items-center justify-between'>
                   <span className='text-xs truncate text-pw-primary font-medium'>
-                    pingworld.fun/u/{username}
+                    pingworld.website/u/{username}
                   </span>
                   <Copy
                     className='h-3 w-3 text-pw-muted hover:text-pw-primary cursor-pointer'
                     onClick={() => {
                       navigator.clipboard.writeText(
-                        `pingworld.fun/u/${username}`,
+                        `pingworld.website/u/${username}`,
                       );
                       toast.success('Link copied!');
                     }}
                   />
                 </div>
               </div>
+
+              {stats.messages > 0 && (
+                <Link href='/message'>
+                  <div className='p-3 bg-pw-primary/10 border border-pw-primary/20 rounded-xl flex items-center justify-between hover:bg-pw-primary/20 transition-colors cursor-pointer'>
+                    <div className='flex items-center gap-2'>
+                      <BellDot className='h-4 w-4 text-pw-primary' />
+                      <span className='text-xs font-bold text-pw-primary'>
+                        Unread Messages
+                      </span>
+                    </div>
+                    <span className='w-5 h-5 rounded-full bg-pw-primary text-white text-[10px] font-bold grid place-items-center'>
+                      {stats.messages}
+                    </span>
+                  </div>
+                </Link>
+              )}
             </div>
 
             <Button className='w-full btn-primary h-11 gap-2'>
@@ -250,6 +280,20 @@ export default function GeneralDashboard() {
               <span className='w-2 h-2 rounded-full bg-pw-success animate-pulse' />
             </div>
           </div>
+
+          {premiumTier === 'free' && (
+            <Link href='/pricing'>
+              <Card className='p-6 bg-gradient-to-br from-pw-primary/10 to-pw-secondary/10 border-pw-primary/20 hover:border-pw-primary/40 transition-all cursor-pointer group'>
+                <h4 className='text-sm font-bold mb-1 group-hover:text-pw-primary transition-colors'>
+                  ⚡ Upgrade your plan
+                </h4>
+                <p className='text-[11px] text-pw-muted leading-relaxed'>
+                  Unlock more quizzes, longer expiry, public boards and pro
+                  tools.
+                </p>
+              </Card>
+            </Link>
+          )}
         </div>
       </div>
     </div>

@@ -14,9 +14,7 @@ import {
   CheckCircle2,
   Settings2,
   Share2,
-  FileJson,
   X,
-  Pencil,
   ChevronDown,
   Check,
   Type,
@@ -27,12 +25,11 @@ import {
   MessageSquare,
   RefreshCw,
   Brain,
-  BadgeQuestionMark,
   Play,
   Star,
-  Grid,
   File,
   Folder,
+  Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -48,24 +45,12 @@ import {
 import { HybridStorage } from '@/lib/storage-utils';
 import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
-
-const metadata = {
-  title: 'Quiz Generator',
-  description:
-    'Create engaging quizzes with ease using the Quizzable platform.',
-  keywords: [
-    'Quiz Generator',
-    'Quiz',
-    'Generator',
-    'Ping World',
-    'pingworld',
-    'pingwrld',
-    'qal tech',
-    'qal technologies',
-    'trending',
-    'trend',
-  ],
-};
+import { useAppContext } from '@/context/AppContext';
+import {
+  PREMIUM_TIERS,
+  computeExpiry,
+  tierAtLeast,
+} from '@/lib/config/premium';
 
 // --- Types ---
 export type QuestionType =
@@ -159,6 +144,30 @@ export interface Quiz {
   createdAt: number;
   responses?: QuizTakerResponse[];
   allowEarlySubmit?: boolean;
+  expires_at?: string; // ISO date — max 3 days from creation, cleaned by cron
+}
+
+// Helper: compute a capped expiry date max 3 days out
+export function computeQuizExpiry(daysUntilExpiry: number): string {
+  const capped = Math.min(Math.max(daysUntilExpiry, 1), 3);
+  const d = new Date();
+  d.setDate(d.getDate() + capped);
+  return d.toISOString();
+}
+
+// Helper: human-readable countdown from now to expiry
+export function quizExpiryCountdown(expires_at: string): {
+  label: string;
+  urgent: boolean;
+} {
+  const diff = new Date(expires_at).getTime() - Date.now();
+  if (diff <= 0) return { label: 'Expired', urgent: true };
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  if (days >= 1)
+    return { label: `${days}d ${remHours}h left`, urgent: days === 0 };
+  return { label: `${hours}h left`, urgent: hours < 6 };
 }
 
 // --- Components ---
@@ -172,6 +181,8 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
+  const { premiumTier, } = useAppContext();
+
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
     let plainIndex = q.correctIndex;
@@ -812,6 +823,78 @@ const QuizBuilder = ({
                                 <X size={14} />
                               </Button>
                             )}
+                          </div>
+                        </QuizSettingItem>
+
+                        <QuizSettingItem
+                          label='Active Lifespan (Expiry)'
+                          description={`Database limit duration before deletion. Max logic: Free=2d, Flexible=7d, Standard=14d, Pro=30d.`}>
+                          <div className='flex gap-2 items-center flex-wrap shrink-0'>
+                            {[2, 7, 14, 30].map((days) => {
+                              const isEligible =
+                                days === 2 ? true
+                                : days === 7 ?
+                                  tierAtLeast(premiumTier, 'flexible')
+                                : days === 14 ?
+                                  tierAtLeast(premiumTier, 'standard')
+                                : tierAtLeast(premiumTier, 'pro');
+
+                              // Map default expires_at to days from now
+                              let currentDays = 2; // Default
+                              if (editedQuiz.expires_at) {
+                                const diff =
+                                  new Date(editedQuiz.expires_at).getTime() -
+                                  Date.now();
+                                currentDays = Math.round(
+                                  diff / (1000 * 60 * 60 * 24),
+                                );
+                              }
+
+                              // Ensure closest match rounding
+                              const closestSelected = [2, 7, 14, 30].reduce(
+                                (prev, curr) =>
+                                  (
+                                    Math.abs(curr - currentDays) <
+                                    Math.abs(prev - currentDays)
+                                  ) ?
+                                    curr
+                                  : prev,
+                              );
+
+                              return (
+                                <Button
+                                  key={`exp-${days}`}
+                                  variant='outline'
+                                  size='sm'
+                                  disabled={!isEligible}
+                                  onClick={() => {
+                                    if (isEligible) {
+                                      const newExpiry = computeExpiry(premiumTier,days);
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        expires_at: newExpiry.toISOString(),
+                                      });
+                                    } else {
+                                      toast.info(
+                                        `Unlock ${days} days expiry with a premium tier.`,
+                                      );
+                                    }
+                                  }}
+                                  className={cn(
+                                    'h-8 text-xs relative overflow-hidden',
+                                    closestSelected === days ?
+                                      'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                                    : 'bg-white/5 border-white/10 opacity-70 hover:opacity-100',
+                                    !isEligible &&
+                                      'opacity-40 hover:opacity-40 grayscale',
+                                  )}>
+                                  {days}d
+                                  {!isEligible && (
+                                    <Lock className='h-2.5 w-2.5 ml-1.5 opacity-50' />
+                                  )}
+                                </Button>
+                              );
+                            })}
                           </div>
                         </QuizSettingItem>
                       </div>
@@ -1984,20 +2067,21 @@ export default function QuizPage() {
     if (question.type === 'input') return String(val);
 
     const options = question.options || [];
-    const findText = (idOrIdx: any) => {
+    const findText = (id: any) => {
+      // Modern Object Option Format
       const found = options.find(
-        (o) => typeof o !== 'string' && o.id === String(idOrIdx),
+        (o) => typeof o !== 'string' && o.id === String(id),
       );
       if (found && typeof found !== 'string') return found.text;
 
-      // Fallback for legacy numeric indices
-      if (typeof idOrIdx === 'number' && typeof options[idOrIdx] === 'string') {
-        return options[idOrIdx];
+      // Legacy String Array Format Check (Indices)
+      const numIdx = parseInt(String(id), 10);
+      if (!isNaN(numIdx) && numIdx >= 0 && numIdx < options.length) {
+        const strOpt = options[numIdx];
+        if (typeof strOpt === 'string') return strOpt;
       }
-      if (typeof idOrIdx === 'number' && typeof options[idOrIdx] === 'object') {
-        return (options[idOrIdx] as any).text;
-      }
-      return String(idOrIdx);
+
+      return String(id);
     };
 
     if (Array.isArray(val)) {
@@ -2006,11 +2090,17 @@ export default function QuizPage() {
     return findText(val);
   };
 
+  const resolveQuestionText = (quiz: Quiz, questionId: string) => {
+    if (!quiz.questions) return;
+    const question = quiz.questions?.find((q) => q.id === questionId);
+    return question?.text;
+  };
+
   const resolveCorrectText = (quiz: Quiz, questionId: string) => {
     const question = quiz.questions?.find((q) => q.id === questionId);
     if (!question) return '';
     try {
-      let decodedStr = atob(String(question.correctIndex));
+      const decodedStr = atob(String(question.correctIndex));
       let decodedVal = decodedStr;
       try {
         decodedVal = JSON.parse(decodedStr);
@@ -2039,10 +2129,11 @@ export default function QuizPage() {
       resp.score,
       resp.totalQuestions,
       ...Object.values(resp.userData),
-      ...resp.answers.map(
-        (a) =>
-          `"${resolveAnswerToText(quiz, a.questionId, a.answer).replace(/"/g, '""')}"`,
-      ),
+      ...quiz.questions.map((q) => {
+        const a = resp.answers.find((ans: any) => ans.questionId === q.id);
+        if (!a) return '""';
+        return `"${resolveAnswerToText(quiz, q.id, a.answer).replace(/"/g, '""')}"`;
+      }),
     ]);
 
     const csvContent = [
@@ -2177,9 +2268,11 @@ export default function QuizPage() {
   };
 
   const deleteQuiz = async (id: string) => {
-    const check = confirm('Do you want to delete this assessment? This cannot be undone');
+    const check = confirm(
+      'Do you want to delete this assessment? This cannot be undone',
+    );
 
-    if(check) {
+    if (check) {
       await HybridStorage.delete(id, 'quiz');
       const newQuizzes = quizzes.filter((q) => q.id !== id);
       setQuizzes(newQuizzes);
@@ -2310,6 +2403,27 @@ export default function QuizPage() {
                               {(quiz as any).responses?.length || 0} Ans
                             </span>
                           )}
+                          {quiz?.expires_at &&
+                            (() => {
+                              const { label, urgent } = quizExpiryCountdown(
+                                quiz?.expires_at || '',
+                              );
+                              return (
+                                <span
+                                  title='Quiz expiry'
+                                  className={cn(
+                                    'inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md border',
+                                    label === 'Expired' ?
+                                      'text-red-400 border-red-400/30 bg-red-400/10'
+                                    : urgent ?
+                                      'text-amber-400 border-amber-400/30 bg-amber-400/10'
+                                    : 'text-pw-success border-pw-success/30 bg-pw-success/10',
+                                  )}>
+                                  <Clock className='h-2.5 w-2.5' />
+                                  {label}
+                                </span>
+                              );
+                            })()}
                         </div>
 
                         <div className='flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity'>

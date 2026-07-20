@@ -56,7 +56,7 @@ export default function OfflineNotesPage() {
         if (parsed.length > 0) {
           selectNote(parsed[0]);
         }
-      } catch (err) {
+      } catch {
         console.warn("Notes parsing failed");
       }
     } else {

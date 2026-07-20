@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 export type StorageItem = {
   id: string;
-  type: 'quiz' | 'message' | 'post' | 'link';
+  type: 'quiz' | 'message' | 'post' | 'link' | 'games';
   content: any;
   updated_at: string;
   is_synced: boolean;
@@ -72,7 +72,7 @@ function buildSupabasePayload(
   timestamp: string,
 ) {
   const baseId = content.id;
-  
+
   if (type === 'quiz') {
     return {
       id: baseId,
@@ -94,14 +94,14 @@ function buildSupabasePayload(
       enforceIdentity: content.enforceIdentity,
       askDetails: content.askDetails,
       endScreen: content.endScreen,
-      updated_at: timestamp
+      updated_at: timestamp,
     };
   } else if (type === 'link') {
     return {
       id: baseId,
       creator_id: userId, // Schema uses creator_id
       original_url: content.originalUrl || content.original_url,
-      clicks: content.clicks || 0
+      clicks: content.clicks || 0,
       // updated_at does not exist on short_links
     };
   } else if (type === 'message') {
@@ -109,13 +109,26 @@ function buildSupabasePayload(
       id: baseId,
       recipient_id: content.recipientId || content.recipient_id || userId,
       content: content.content,
-      is_seen: content.isSeen || content.is_seen || false
+      is_seen: content.isSeen || content.is_seen || false,
       // updated_at does not exist on messages
+    };
+  } else if (type === 'games') {
+    return {
+      id: baseId,
+      user_id: userId,
+      name: content.name || 'Tournament Standings',
+      teams: content.teams || [],
+      updated_at: timestamp,
     };
   }
 
   // Fallback for unexpected types (like 'post' if ever created)
-  const result = { ...content, id: baseId, user_id: userId, updated_at: timestamp };
+  const result = {
+    ...content,
+    id: baseId,
+    user_id: userId,
+    updated_at: timestamp,
+  };
   delete result.createdAt;
   delete result.updatedAt;
   return result;
@@ -135,15 +148,31 @@ async function syncFromRemote(
       data: { session },
     } = await supabase.auth.getSession();
 
-    // Public reads (quizzes) don't require a session
+    // Prevent anonymous full-table scans for private data
+    if (type !== 'quiz' && !session) return;
+
+    // Projection map: avoid fetching entire table width for list syncs
+    const projections: Record<StorageItem['type'], string> = {
+      quiz: 'id,user_id,title,description,type,updated_at',
+      message: 'id,recipient_id,content,is_seen,created_at,expires_at',
+      link: 'id,creator_id,original_url,clicks',
+      games: 'id,user_id,name,teams,updated_at',
+      post: 'id,updated_at', // Not currently used but satisfying type mapping
+    };
+
     let query = supabase
       .from(tableName(type))
-      .select('*')
-      .order('updated_at', { ascending: false });
+      .select(projections[type] || '*')
+      .order('updated_at', { ascending: false })
+      .limit(50); // Safety limit
 
     if (session) {
-      // Authenticated: fetch own data
-      query = query.eq('user_id', session.user.id) as any;
+      // Authenticated: fetch own data using correct column
+      const userCol =
+        type === 'link' ? 'creator_id'
+        : type === 'message' ? 'recipient_id'
+        : 'user_id';
+      query = query.eq(userCol, session.user.id) as any;
     }
 
     const { data, error } = await query;
@@ -215,7 +244,13 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
 // Listen for connectivity restoration → auto-sync all types
 // ---------------------------------------------------------------------------
 
-const ALL_TYPES: StorageItem['type'][] = ['quiz', 'message', 'post', 'link'];
+const ALL_TYPES: StorageItem['type'][] = [
+  'quiz',
+  'message',
+  'post',
+  'link',
+  'games',
+];
 
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {

@@ -26,12 +26,14 @@ export default function ToolsHubPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [viewCat, setViewCat] = useState(false);
   const [large, setLarge] = useState(false);
+  const [wrappedCategories, setWrappedCategories] = useState<
+    Record<string, boolean>
+  >({});
 
   const [modalCategory, setModalCategory] = useState<string | null>(null);
 
   const TOOLS = tools;
 
-  
   const matchesSearchText = (t: (typeof tools)[0], query: string) => {
     return (
       t.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -39,12 +41,10 @@ export default function ToolsHubPage() {
       t.tag.toLowerCase().includes(query.toLowerCase())
     );
   };
-  
+
   useEffect(() => {
     const checkSize = () => {
-      setLarge(
-        window.innerWidth >= 768
-      );
+      setLarge(window.innerWidth >= 768);
     };
     checkSize();
     window.addEventListener('resize', checkSize);
@@ -53,7 +53,7 @@ export default function ToolsHubPage() {
       window.removeEventListener('resize', checkSize);
     };
   }, []);
-  
+
   const groupedTools: Record<string, typeof tools> = {};
   if (!search.trim()) {
     TOOLS.forEach((t) => {
@@ -209,13 +209,19 @@ export default function ToolsHubPage() {
                 return null;
               const categoryTools = groupedTools[catName];
 
-              const [wrapped, setWrapped] = useState(false);
+              // Fix: use component-level Record state instead of useState inside map
+              const wrapped = wrappedCategories[catName] ?? false;
+              const toggleWrapped = () =>
+                setWrappedCategories((prev) => ({
+                  ...prev,
+                  [catName]: !prev[catName],
+                }));
 
-              let hasMore, displayedTools;
-
-              displayedTools =
-                (wrapped && !large) ? [categoryTools[0]] : categoryTools.slice(0, 4);
-              hasMore =
+              const displayedTools =
+                wrapped && !large ?
+                  [categoryTools[0]]
+                : categoryTools.slice(0, 4);
+              const hasMore =
                 (wrapped && !large && categoryTools.length > 1) ||
                 categoryTools.length > 4;
 
@@ -229,12 +235,10 @@ export default function ToolsHubPage() {
                     </h2>
                     <span
                       onClick={() => {
-                        if (!large) {
-                          setWrapped(!wrapped)
-                        }
+                        if (!large) toggleWrapped();
                       }}
                       title='Wrap this category'
-                      className='text-xs text-pw-muted font-bold font-mono uppercase tracking-widest flex gap-1  cursor-pointer'>
+                      className='text-xs text-pw-muted font-bold font-mono uppercase tracking-widest flex gap-1 cursor-pointer'>
                       {categoryTools.length} Tools
                       <ChevronDown
                         className={cn(

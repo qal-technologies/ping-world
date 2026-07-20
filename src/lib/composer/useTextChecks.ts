@@ -85,10 +85,10 @@ export function useTextChecks(text: string, delayMs = 1500): TextCheckResult {
         const viralWords = ['stop', 'agree', 'share this', 'massive', 'insane', '🔥', '🚀', '🚨'];
         const educationalWords = ['did you know', 'here\'s why', 'how to', 'learn', 'understand', 'concept', 'lessons'];
 
-        let profScore = professionalWords.filter(w => lower.includes(w)).length;
-        let casScore = casualWords.filter(w => lower.includes(w)).length;
-        let virScore = viralWords.filter(w => lower.includes(w)).length;
-        let eduScore = educationalWords.filter(w => lower.includes(w)).length;
+        const profScore = professionalWords.filter(w => lower.includes(w)).length;
+        const casScore = casualWords.filter(w => lower.includes(w)).length;
+        const virScore = viralWords.filter(w => lower.includes(w)).length;
+        const eduScore = educationalWords.filter(w => lower.includes(w)).length;
 
         const maxScore = Math.max(profScore, casScore, virScore, eduScore);
         if (maxScore === 0) {

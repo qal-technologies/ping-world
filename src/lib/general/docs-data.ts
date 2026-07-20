@@ -1,4 +1,4 @@
-// jules edit: Highly-expanded, non-technical, user-focused documentation database explaining exactly how to use every input, slider, tab, and control for every tool.
+// Highly-expanded, non-technical, user-focused documentation database explaining exactly how to use every input, slider, tab, and control for every tool.
 
 export interface DocFeature {
   title: string;
@@ -27,23 +27,48 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     summary: "Quizzable is an interactive, fully integrated assessment platform designed to help you construct custom quizzes in seconds, share them directly with your audience via unique short-links, or back them up to reusable file configurations.",
     audience: "Teachers, social media managers, event coordinators, trainers, and content creators",
     usageCount: "142,500+ quizzes created and graded worldwide",
-    versions: ["1.0"],
+    versions: ["1.0", "2.0"],
     features: [
       {
-        title: "How to Build Questions",
-        description: "Click the 'Add Question' button to insert a new slide. Type your question query into the title field, then use the Question Type dropdown to choose from 'Multiple Choice', 'True or False', 'Checkbox list', 'Rating scale', or 'Text input'. Provide the answer choices in the options boxes, and click the checkbox next to the correct choice to teach the system how to grade it automatically.",
+        title: "Adding a Question Slide (Add Question Button)",
+        description: "Click the cyan '+ Add Question' button on the left sidebar to insert a new slide. A fresh card will appear in the main workspace loaded with placeholder fields for your question's title and answers.",
         introduced: "basic"
       },
       {
-        title: "Setting Up Time Limits",
-        description: "Look for the 'Timer Limit' input field located at the top-right settings panel of each question. Type in a number (in seconds) to configure an automatic countdown timer. When your participants take the assessment, the system will start this countdown instantly, encouraging quick, top-of-mind responses.",
+        title: "Selecting Question Types (Dropdown Selector)",
+        description: "Click the 'Question Type' dropdown menu inside the question editor. Choose from 'Multiple Choice' (single correct answer), 'True/False' (boolean), 'Checkbox' (multiple correct answers), 'Text Input' (keyboard response), 'Range' (slider evaluation), or 'Rating Scale' (star icons).",
+        introduced: "basic"
+      },
+      {
+        title: "Configuring Answer Options (Option List & Checkbox Icons)",
+        description: "For Multiple Choice and Checkbox questions, type your answers into the option input fields details. Click the circular checkbox icon or radio button directly to the left of the option text to mark it as the correct answer. The selected correct option will highlight in green.",
+        introduced: "basic"
+      },
+      {
+        title: "Setting Up Time Limits (Time Limit Slider & Input)",
+        description: "Look for the clock icon labeled 'Question Timer' inside the question settings card. Drag the slider or type a value into the input box to assign a duration in seconds (e.g. 30). This countdown forces users to answer before automatically proceeding.",
         introduced: "1.0"
       },
       {
-        title: "JSON Backup Configurations",
-        description: "Protect your work by exporting your entire quiz structure to a portable JSON file. Find the 'Export Configuration' button at the top header, click it, and save the downloaded file to your local computer. To reload your quiz later, click 'Import Configuration' and upload your saved JSON file to instantly rebuild all questions, timers, and scoring rules.",
+        title: "Managing Security & Protections (Security Controls)",
+        description: "Locate the 'Anti-Cheat / Security Protocol' toggle in the right settings sidebar. Toggle it to 'ON' to lock the assessment down. When active, it monitors tab-switching, disables right-clicks (context menu), blocks text highlighting (selectstart), and stops copying/pasting.",
+        introduced: "2.0"
+      },
+      {
+        title: "Data Collection Headers (Participant Info Fields)",
+        description: "Toggle the 'Collect Participant Info' checkbox in the sidebar. Select which fields are required—such as Name, Email, or Employee ID. Participants will be forced to fill these in on a styled loading gate before the quiz begins.",
         introduced: "1.0"
       },
+      {
+        title: "Exporting and Importing Quizzes (JSON Backup Buttons)",
+        description: "Locate the two top utility buttons: 'Export JSON' and 'Import JSON'. Click 'Export' to download a clean, structured text profile containing your quiz. To load a previous quiz, click 'Import' and pick your saved file to rebuild the workspace.",
+        introduced: "1.0"
+      },
+      {
+        title: "Sharing Your Quiz (Share Icon & Link Dialog)",
+        description: "Click the blue 'Share Quiz' button in the toolbar. A dialog displays the shareable short URL (e.g. '/quiz/take/[id]'). Click the 'Copy Clip' button next to the link to copy it, then share it directly in chat rooms or email lists.",
+        introduced: "1.5"
+      }
     ],
     similarTools: ["editor", "games"]
   },
@@ -57,19 +82,44 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Platform Preview Selectors",
-        description: "Use the platform switcher tabs (Twitter/X, Instagram, LinkedIn, Facebook) at the top of the composer canvas. As you type your post content in the composition editor, the live preview card dynamically adjusts its aspect ratio, margins, line wrapping, and text limits to match the selected platform's exact design guidelines.",
+        title: "Platform Switcher Tabs (Network Selectors)",
+        description: "Click the platform icons at the top of the preview canvas (Twitter Bird, Instagram Camera, LinkedIn Square, Facebook Letter). This adjusts the preview frame layout to match character count limits, typography, and image margins of each network.",
         introduced: "basic"
       },
       {
-        title: "Formatting Text & Hashtags",
-        description: "Select any text inside the composing box to reveal formatting options. To add trending elements, click the 'AI Tags' button on the sidebar to analyze your written content and generate highly relevant, trending hashtags which you can insert with a single click.",
+        title: "Main Text Editor Area (Writing Box)",
+        description: "Type your raw content directly into the central text area. As you type, the character counter displays remaining space (e.g., /280 characters for Twitter) and warning highlights when you exceed length parameters.",
+        introduced: "basic"
+      },
+      {
+        title: "AI-Assisted Tone Adjuster (Sparkles Button)",
+        description: "Select your composed text and click the purple 'Sparkles / AI Adjust' button. A popover opens offering tones: Professional, Humorous, Bold, or Shorten. Click a tone to rewrite your text using local GPT-like rules.",
+        introduced: "2.0"
+      },
+      {
+        title: "Auto Grammar and Translation (Flags and Check Icons)",
+        description: "Look at the footer tools in the text box. Click the green 'Grammar Check' icon to flag typos. Click the 'Globe / Translate' icon, select your language (Spanish, French, German, or Portuguese), and click 'Translate' to convert the body text.",
+        introduced: "2.0"
+      },
+      {
+        title: "Text Formatter Bar (Bold, Italic, Monospace Toggles)",
+        description: "Highlight any portion of your post inside the writing box. Click the formatting popup buttons to bold (𝗕𝗼𝗹𝗱), italicize (𝘐𝘵𝘢𝘭𝘪𝘤), or apply typewriter font style (𝙼𝚘𝚗𝚘𝚜𝚙𝚊𝚌𝚎) to stand out on social timelines.",
         introduced: "1.0"
       },
       {
-        title: "Secure Custom Logo Uploads",
-        description: "To brand your post cards, locate the 'Logo Layer' configuration under the canvas layers. Click 'Upload Image' to import your custom brand logo. The system automatically reads and encodes your logo as a secure base64 data string inside your local browser. This protects the canvas rendering from security 'taint' errors, ensuring you can download your visual cards smoothly.",
+        title: "Visual Card Constructor (Post Card tab)",
+        description: "Click the 'Post Card' mode switch. Your text is rendered inside a large, customizable background square. Choose background palettes, gradients, or upload custom images to create graphic posters for Instagram feed posts.",
+        introduced: "1.0"
+      },
+      {
+        title: "Custom Brand Logo Uploader (Logo Control Panel)",
+        description: "Under the card settings panel, click the 'Brand Logo' toggle. Click 'Upload Logo Image' and select your PNG or JPEG logo file. The image is rendered as a draggable overlay on your post card, permitting custom placement.",
         introduced: "2.0"
+      },
+      {
+        title: "Exporting Social Images (Download PNG Button)",
+        description: "When satisfied with your card preview, click the blue 'Download Card Image' button. The system compiles the poster canvas locally and triggers an immediate download of a high-resolution PNG graphic.",
+        introduced: "1.5"
       }
     ],
     similarTools: ["editor", "image"]
@@ -81,17 +131,42 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     summary: "AnonLink allows you to receive secure, anonymous confessions, feedback, and questions from your friends or community followers. You generate a public profile link, share it on your social media bios, and collect letters securely inside a private inbox.",
     audience: "Individuals, social media users, curious creators, and community organizers",
     usageCount: "340,000+ anonymous submissions processed",
-    versions: ["1.0"],
+    versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Generating Your Public Bio Link",
-        description: "Create an account on Ping World. Navigate to the AnonLink page to find your customized public link (formatted as 'pingworld.fun/u/yourusername'). Click the copy icon to copy this link, then paste it directly into your Instagram bio, Twitter profile, or Snapchat stories to invite messages.",
+        title: "Generating Personal Link (Copy Button)",
+        description: "Navigate to the Anonymous Link feature. Log in to claim a username. The app displays 'Your Dedicated Link' formatted as a short URL. Click the blue 'Copy Link' button to copy it instantly.",
         introduced: "basic"
       },
       {
-        title: "Reading Your Anonymous Inbox",
-        description: "When someone visits your public link, they are presented with a clean, fully secure writing card where they can type their message. To read what they sent, log into your personal Ping World Creator Dashboard and select the 'Inbox' tab. Your messages are displayed in a clean feed, sorted chronologically, showing only the date and message content to guarantee complete sender anonymity.",
+        title: "Setting Link Expiry (Time Dropdown)",
+        description: "Before sharing your link, click the 'Expiration Time' dropdown menu. Choose when your inbox link should close: 24 Hours, 3 Days, 7 Days, or Never. Once expired, visitors will be blocked from sending messages.",
+        introduced: "2.0"
+      },
+      {
+        title: "Defining Page Metadata (SEO Title & Subtitle Inputs)",
+        description: "Customize the welcome card. Type an SEO-friendly Title (like 'Send honest feedback!') and a description. When you share this link on bio pages, standard social preview snippets are generated using your customized texts.",
+        introduced: "2.0"
+      },
+      {
+        title: "Pre-Reply Quick Presets (Interactive Tag Tokens)",
+        description: "Add quick tags that allow users to select pre-made headers like 'Confession', 'Question', or 'Advice'. Click '+ Add Preset Tag', type the tag name, and save. Visitors can click these pills to fast-format their messages.",
+        introduced: "2.0"
+      },
+      {
+        title: "Anonymous Inbox Reader (Message Cards)",
+        description: "Open the 'Inbox' tab to view submissions. Messages appear as styling note blocks with timestamps, sorted by newest first. Since it's fully anonymous, no IP or identity logs are displayed.",
         introduced: "1.0"
+      },
+      {
+        title: "Inbox Public Link (Premium Shared View)",
+        description: "Unlock the public reading panel by toggling 'Make Inbox Public'. This generates a public viewer URL (gated for billing accounts). Anyone clicking this URL can read messages you approved, without seeing raw sender details.",
+        introduced: "2.0"
+      },
+      {
+        title: "Exporting Message Logs (Download Spreadsheet Button)",
+        description: "Click 'Export to CSV' at the bottom of the inbox table to save all received letters locally in a spreadsheet format, facilitating categorization and printing.",
+        introduced: "1.5"
       }
     ],
     similarTools: ["quizzable", "notes"]
@@ -106,18 +181,33 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Writing with the Tiptap Toolbar",
-        description: "Use the floating formatting toolbar directly above your document text area. Highlight any phrase to apply bold, italics, underlines, or heading sizes (H1, H2, H3). You can insert structured lists, blockquotes, and code snippets, allowing you to organize complex documents with simple clicks.",
+        title: "Tiptap Markdown Formatting Palette",
+        description: "Use the floating toolbar located directly above the writing canvas. Highlight any phrase to apply formatting tags: Bold (B icon), Italic (I icon), Underline (U icon), Strikethrough, Code Blocks, and Headings (H1/H2).",
         introduced: "basic"
       },
       {
-        title: "Designing Graphic Post Cards",
-        description: "Switch from 'Document' mode to 'Post Card' mode using the top layout selector. Type your text, select a gradient background preset from the design palette, adjust the card layout alignments, and click 'Export Image' to download a clean, high-resolution PNG graphic of your text card.",
+        title: "Draft Auto-Recovery Engine (Local Memory)",
+        description: "No save button required. Every keystroke is saved directly to your local browser storage. The top header displays a green checkmark saying 'Auto-saved' to confirm your writing is backed up.",
+        introduced: "2.0"
+      },
+      {
+        title: "Markdown Import Actions",
+        description: "Click the 'Import MD' button in the toolbar. Pick a standard `.md` or `.txt` file off your computer. The system compiles the markdown syntax into rich paragraph text layout automatically.",
         introduced: "1.0"
       },
       {
-        title: "draft Auto-Recovery",
-        description: "Never worry about power outages or browser crashes. As you write in the editor workspace, the system silently auto-saves your draft to your browser's secure LocalStorage. The sidebar displays a real-time 'Storage Metric' indicating the size of your recovered draft, allowing you to resume writing immediately upon returning.",
+        title: "PDF Compile Panel (Download PDF Button)",
+        description: "Click 'Export PDF' in the file actions. Set margins (Normal or Narrow) and font sizes (11px, 12px, 14px), then click 'Download'. The draft is compiled locally and downloaded immediately as a document.",
+        introduced: "1.5"
+      },
+      {
+        title: "Graphic Card Layout Preset (Post Card tab)",
+        description: "Toggle from Document mode to 'Post Card' layout. Choose background colors, custom gradients, or adjust text padding and alignment tools. The layout wraps your text into a visual card ready for social sharing.",
+        introduced: "1.0"
+      },
+      {
+        title: "Typography Font Selector",
+        description: "Click the 'Typography' dropdown at the top settings panel. Switch between Inter (Sleek), Outfit (Modern), Lora (Journalist style), or Source Code Pro (Developer coding font) to customize formatting look.",
         introduced: "2.0"
       }
     ],
@@ -146,9 +236,24 @@ export const toolDocsDb: Record<string, ToolDoc> = {
         title: "Transformations and Downloads",
         description: "Use the transform action buttons at the top of the canvas to flip your image horizontally, flip it vertically, or rotate it clockwise by 90 degrees. Once you are satisfied with the edits, click the 'Download' button to download your processed image file instantly.",
         introduced: "1.0"
+      },
+      {
+        title: "Image Cropping Boundary (Crop Card)",
+        description: "Click the Crop tool. Drag the bounding corners over your image layout. You can select aspect ratios like 1:1 (Square), 16:9 (Widescreen), or 4:3 (Classic). Click 'Apply Crop' to slice the margins.",
+        introduced: "1.0"
+      },
+      {
+        title: "Premium BG Background Remover (AI key feature)",
+        description: "Select your image and click the purple 'Remove Background' button. Enter your Remove.bg API key in the popup interface. The system securely calls the database and returns a transparent background image block in seconds.",
+        introduced: "1.5"
+      },
+      {
+        title: "Resolution Compression Adjuster (Quality Slider)",
+        description: "Before downloading, locate the 'Quality Ratio' slider. Drag it between 1% and 100%. This compresses your file size by reducing density, perfect for web optimization and fast page loads.",
+        introduced: "1.0"
       }
     ],
-    similarTools: ["composer", "chat-editor"]
+    similarTools: ["composer", "color-palette"]
   },
   shortener: {
     id: "shortener",
@@ -160,13 +265,33 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Shortening Long Links",
-        description: "Paste your lengthy, cluttered link (beginning with http:// or https://) into the main input box. Click the scissor icon button next to it. In under a second, the system will output a clean, neat short URL (e.g. 'pingworld.fun/s/abc123') ready to copy and share.",
+        title: "Paste & Shorten Link Box (Input scissor)",
+        description: "Type or paste your long target link in the large input field. Select a custom suffix (optional) if you want a branded link (like '/s/sale'). Click the blue 'Shorten' button to trim it.",
         introduced: "basic"
       },
       {
-        title: "Local Analytics & QR Ready Card",
-        description: "After shortening, look at the result dashboard. It generates a high-fidelity QR code on the right panel. You can download this QR code as an image, share the short link directly, and review the on-device stats card showing the date of creation and the overall click frequencies.",
+        title: "QR Card Download Selector",
+        description: "Once created, look at the result dashboard card. Click 'Save QR Code' to download a custom QR code representation that redirects smartphone scans directly to the shortened target link.",
+        introduced: "1.0"
+      },
+      {
+        title: "On-Device Analytical logs (Clicks dashboard)",
+        description: "Scroll down to see the Link Table. Check the Click Counter index. It records every visit redirection locally, updating a bar chart by date so you can monitor traffic trends.",
+        introduced: "2.0"
+      },
+      {
+        title: "Link Expiration Lock (Expiry Calendar)",
+        description: "Click the key icon labeled 'Link Expiry'. Select a date and time from the popup calendar. Once this date passes, the short link redirects to a locked page saying 'This link has expired'.",
+        introduced: "2.0"
+      },
+      {
+        title: "URL Forwarding Redirect Customizer (Redirection Rules)",
+        description: "Toggle on 'Advanced Redirects'. You can configure destination locations by visitor device: redirect mobile users to app download links other than desktop users, maximizing conversions.",
+        introduced: "2.0"
+      },
+      {
+        title: "Delete and Edit controls (Bin button)",
+        description: "In the Link table, click the red trashcan icon to delete the redirection reference. Or, click the pencil icon to modify the destination target URL without altering the short suffix.",
         introduced: "1.0"
       }
     ],
@@ -182,19 +307,34 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "WiFi Auto-Connect Coding",
-        description: "Click on the 'WiFi' tab in the input selector. Enter your home or business network name (SSID) in the first input box, then type your password in the Password box (you can toggle the eye icon to verify spelling). Choose your encryption type WPA/WPA2 from the dropdown, check the 'Hidden Network' box if applicable, and click 'Download PNG'. When users scan this QR code, their devices will connect to your network automatically.",
+        title: "WiFi Auto-Access Configurator (Network Card)",
+        description: "Select the WiFi tab. Enter your SSID, password, and pick WPA/WPA2 or WEP encryption. Click 'Generate' to create a scan code that triggers network access on smartphones.",
         introduced: "basic"
       },
       {
-        title: "Pre-Formatted Emails & SMS",
-        description: "Select the 'Email' or 'SMS' tabs. For Emails, fill in the recipient address, subject header, and message body. For SMS, input the telephone number and short text. The system automatically formats the data into compliant schemas (like 'mailto:' or 'SMSTO:'). Scanning this QR code instantly opens your user's default messaging app pre-filled with your content.",
+        title: "Contact vCard Generator (vCard tab)",
+        description: "Click the vCard tab. Inputs appear for Full Name, Phone, Email, Company, and Website URL. The generator structures details into vCard coding so scanning saves contact info instantly.",
         introduced: "1.0"
       },
       {
-        title: "Color Contrast Customizations",
-        description: "Scroll down to the 'Appearance' card. Use the dynamic color picker inputs to select a Foreground Color and Background Color. The live preview updates immediately. Maintain high color contrast (like white on dark or dark on white) to ensure smartphones scan your custom QR code instantly.",
+        title: "Custom QR Code Stylings (Colors Palette)",
+        description: "Scroll down to the 'Styling Options' box. Click the color bubbles to customize the Foreground (modules) and Background colors. A dynamic selector updates card previews in real time.",
         introduced: "2.0"
+      },
+      {
+        title: "Logo Placement Overlay (Image center)",
+        description: "Click the 'Add Logo Image' button in the center styling row. Pick a logo from your computer files. The app places it at the center of the QR matrix, with a white protection zone to ensure scanning remains readable.",
+        introduced: "2.0"
+      },
+      {
+        title: "Dimension and Size Adjuster (Pixel Slider)",
+        description: "Use the 'Sizing Ratio' slider. Choose from 200px (small web assets) up to 1000px (high-fidelity vector sizing). Larger numbers ensure printing on banners does not blur the square modules.",
+        introduced: "1.5"
+      },
+      {
+        title: "Download PNG/SVG Buttons (Save asset)",
+        description: "Once satisfied with adjustments, click 'Download PNG' or 'Download SVG'. Use PNG for documents or social emails, and SVG vector format for resizing on large physical branding materials.",
+        introduced: "1.0"
       }
     ],
     similarTools: ["shortener", "pdf-tools"]
@@ -209,18 +349,33 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Interactive Color Picker & Copying",
-        description: "Click on the large color circle to open the browser color palette. Select your desired color, then use the format selector buttons (HEX, RGB, HSL) to choose your output. Click the copy icon next to the code box to copy the formatted string (e.g. 'rgb(92, 111, 255)') instantly.",
+        title: "HSL/RGB Interactive Wheel (Theme pick)",
+        description: "Click the central gradient wheel. Drag your cursor to adjust the color coordinates. The matching panels dynamically display hex indices (e.g. '#2563EB') and color codes immediately.",
         introduced: "basic"
       },
       {
-        title: "Extracting Colors from Images",
-        description: "Click the 'Pick Image' button on the header and select any photo. The system will render a preview of the photo and use a client-side grid algorithm to analyze and extract the five most dominant colors. It adds them directly to your 'Active Palette' on the right panel.",
+        title: "Complementary Contrast Schemes (Opposites tab)",
+        description: "Open the Harmony tab and click 'Complementary'. The app calculates and renders your color's exact opposite on the wheel, showing you a bold highlight pairing.",
         introduced: "1.0"
       },
       {
-        title: "Analogous & Complementary Suggestions",
-        description: "Whenever you select a color, scroll down to review the suggestions section. It displays perfect Shades (from light to dark), Analogous neighbors (adjacent on the color wheel), Complementary contrasts (opposites), and Triadic balances. Click on any suggested card to make it your active color.",
+        title: "Analogous Theme Presets (Neighbors tab)",
+        description: "Click 'Analogous Scheme'. The app displays three matching colors adjacent to your selection, allowing you to design eye-pleasing gradients for your website interface.",
+        introduced: "2.0"
+      },
+      {
+        title: "dominant Palette Extraction (Image Pick)",
+        description: "Click 'Extract from Image'. Select any jpeg or png photo. The canvas parses the image pixels locally and extracts five clean matching theme color blocks onto your palette panel.",
+        introduced: "1.0"
+      },
+      {
+        title: "Color Randomizer (Dice button)",
+        description: "Click the Shuffle/Dice icon in the header. The app randomizes a clean, trending color scheme and shows the HEX indexes. Keep clicking to quickly find color ideas.",
+        introduced: "1.5"
+      },
+      {
+        title: "CSS Styles Export (Copy CSS code)",
+        description: "Click 'Export CSS'. In the dialog box, you'll see pre-written CSS variables (like `--color-primary`, `--color-secondary`). Copy this direct stylesheet into your codebase.",
         introduced: "2.0"
       }
     ],
@@ -233,16 +388,36 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     summary: "The Password Generator builds customizable, secure passkeys to protect your online accounts. It processes everything inside your browser so your keys are never sent online.",
     audience: "Privacy-conscious individuals, systems managers, and corporate accounts",
     usageCount: "410,000+ strong keys created",
-    versions: ["1.0"],
+    versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Length & Complexity Settings",
-        description: "Locate the 'Length' slider in the configuration panel. Drag the slider to select a length between 8 and 64 characters. Use the checkboxes below to customize your password's complexity: toggle uppercase letters (A-Z), lowercase letters (a-z), numbers (0-9), or special symbols (like !@#$%). Click 'Generate Secure Key' to instantly randomize a new password.",
+        title: "Password Length Slider (Numeric length scale)",
+        description: "Locate the 'Length Size' slider control. Slide it between 8 characters (standard keys) up to 128 characters (maximum system password limits). The length number updates instantly.",
         introduced: "basic"
       },
       {
-        title: "Analyzing Password Strength",
-        description: "After your password is generated, look at the strength rating badge in the output panel. It evaluates length and character diversity in real-time, displaying a color-coded rating: 'Weak' (red) for basic keys, 'Medium' (yellow) for standard keys, or 'Strong' (green) for robust passwords. Click the copy button to copy the password when satisfied.",
+        title: "Complexity Checkboxes (Uppers, Lowers, Numbers, Symbols)",
+        description: "Select complexity toggles: 'A-Z' (captials), 'a-z' (lowers), '0-9' (numbers), and '@#$' (symbols). Keep all checked to secure your accounts against dictionary hacks.",
+        introduced: "basic"
+      },
+      {
+        title: "Strength Evaluator Indicator (Color scale)",
+        description: "Observe the color bar below the password display. It shifts from Red (Weak), to Yellow (Fair), to Green (Secure). It calculates overall cryptographic strength based on password length.",
+        introduced: "1.0"
+      },
+      {
+        title: "Exclude Similar Characters Toggle (Anti-Confusion)",
+        description: "Toggle 'Exclude Similar' on. The algorithm filters out confusion-prone characters (like 'I' and 'l', 'O' and '0'). This makes typing passwords card-by-card easy.",
+        introduced: "2.0"
+      },
+      {
+        title: "Crypto Random Generation (Generate Key button)",
+        description: "Click the green 'Generate Key' button. This runs a client-side crypto algorithm block (using web cryptography APIs) to produce a completely unpredictable string.",
+        introduced: "1.0"
+      },
+      {
+        title: "Quick-Copy Clipboard Action (Copy button)",
+        description: "Click the blue overlapping square files icon next to the result. This copies the generated text to your browser clipboard and clears it from memory after 60 seconds.",
         introduced: "1.0"
       }
     ],
@@ -255,16 +430,36 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     summary: "Word Counter is a typing tool that analyzes words, characters, sentences, paragraphs, and reading times in real-time as you compose your drafts.",
     audience: "Copywriters, authors, students, SEO specialists, and translation managers",
     usageCount: "185,000+ texts audited",
-    versions: ["1.0"],
+    versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Typing & Reading the Stats Board",
-        description: "Start typing or paste your content into the large central text box. The 'Analysis Stats' panel updates instantly with four metrics: 'Words', 'Characters' (including spaces), 'Sentences' (based on punctuation marks), and 'Paragraphs' (based on line breaks).",
+        title: "Interactive Typing Workspace (Count Input)",
+        description: "Type or paste your document. The workspace immediately renders results in the analysis dashboard columns without lag or processing delays.",
         introduced: "basic"
       },
       {
-        title: "Read-Time and Complexity Indicators",
-        description: "Look at the bottom of the stats card. It displays an estimated 'Read Time' in seconds (assuming a standard reading speed of 200 words per minute). It also analyzes the 'Readability' rating (Easy, Medium, or Complex) based on the character length of your words, letting you know how accessible your writing is to readers.",
+        title: "Word and Character Index Panels (Main counts)",
+        description: "The top row shows counts for Words and Characters (with and without space). It is compatible with multiple language sets, counting glyphs accurately.",
+        introduced: "basic"
+      },
+      {
+        title: "Readability and Difficulty Scores (Flesch Index)",
+        description: "Look at the Readability card. It lists complex metrics like Flesch Kincaid score, rating text readability from Grade 1 (Very Easy) to College level (Difficult).",
+        introduced: "2.0"
+      },
+      {
+        title: "Read & Speak Duration metrics (Seconds timers)",
+        description: "Review the 'Time estimation' blocks. It estimates both 'Silent Reading Time' and 'Speaking/Presentation Time' based on typical speech pacing.",
+        introduced: "1.0"
+      },
+      {
+        title: "Lexical Keyword Density map (Frequency table)",
+        description: "Scroll down to see 'Keyword Frequency'. It shows the most repeated words in a table, displaying percentages. Useful for checking and avoiding SEO keyword stuffing.",
+        introduced: "2.0"
+      },
+      {
+        title: "Clear and Clean Slate (Trash Button)",
+        description: "Click the trash bin icon. This clears all content from your editor workspace and resets the stats columns to zero immediately.",
         introduced: "1.0"
       }
     ],
@@ -280,19 +475,39 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "How to Add Competitors",
-        description: "Locate the 'Add Competitor' card on the sidebar. Type in the team or player name into the input field (e.g. 'Cyber Knights') and click 'Register Competitor'. The competitor will instantly appear as a row on your active scoreboard.",
+        title: "Competitor Onboarding inputs (Register Team)",
+        description: "Type team names into the 'Competitor Name' input in the sidebar card. Click the blue 'Register Competitor' button to insert them as a new scoreboard row.",
         introduced: "basic"
       },
       {
-        title: "Adjusting Live Game Stats",
-        description: "In your standings table, each competitor has interactive stat columns: W (Won), D (Drawn), L (Lost), GF (Goals For), and GA (Goals Against). Click the '+' or '-' buttons in any competitor cell to adjust their score. The 'PL' (Played) count automatically calculates based on their wins, draws, and losses.",
+        title: "Match Stats Multipliers (Wins, Draws, Losses buttons)",
+        description: "Each team row lists controls for Wins (W), Draws (D), and Losses (L). Click the plus (+) or minus (-) buttons inside each cell to update match results.",
         introduced: "1.0"
       },
       {
-        title: "Dynamic Rankings Sorting",
-        description: "As you modify stats, the scoreboard dynamically recalculates overall points (3 points per Win, 1 per Draw). The rows are sorted instantly: players with more points move to the top of the table. If points are tied, rankings are resolved by Goal Difference (GF minus GA), followed by Goals For.",
+        title: "Goal Difference Calculations (GF & GA inputs)",
+        description: "Click the '+' or '-' buttons in the Goals For (GF) and Goals Against (GA) columns. The app automatically calculates GD (GF minus GA) to resolve standing ties.",
+        introduced: "1.0"
+      },
+      {
+        title: "Auto-Sorting Standings Ledger (Automatic rank calculation)",
+        description: "As results are updated, teams auto-sort: 3 points per win, 1 per draw. Ties are automatically sorted by GD, and then by goals scored (GF).",
         introduced: "2.0"
+      },
+      {
+        title: "Making Tournaments Live (Create/Share button)",
+        description: "Click the blue 'Create Tournament' button in the sidebar. This generates a unique ID, saving details in local and cloud stores so you online participants can watch.",
+        introduced: "2.0"
+      },
+      {
+        title: "Viewer Mode Links (Admin vs Public Mode)",
+        description: "Admin panel uses link parameters (`/tools/games?admin=[id]`). Click 'Copy Share Link' to generate a public, view-only URL (`/tools/games/[id]`) for tournament viewers.",
+        introduced: "2.0"
+      },
+      {
+        title: "Scoreboard Reset Switch (Reset card)",
+        description: "Click 'Clear Table' at the top of the standings layout. This resets all matches, points, and goals to zero, allowing you to start a new season.",
+        introduced: "1.0"
       }
     ],
     similarTools: ["quizzable", "calculator"]
@@ -304,17 +519,37 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     summary: "This geolocator queries networks to trace physical locations, coordinating maps, active service provider properties, and postal data for any valid IP address.",
     audience: "Network administrators, cybersecurity agents, web developers, and tech managers",
     usageCount: "295,000+ coordinates geolocated",
-    versions: ["1.0"],
+    versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Searching for IP Coordinates",
-        description: "Type any IP address (e.g., '8.8.8.8') into the search box and click the magnifying glass button. The system will look up the location data across free locator APIs and populate the results panel with Country, Region, City, ZIP code, and coordinates.",
+        title: "IP Target Input Field (Lookup box)",
+        description: "Type an IPv4 or IPv6 address in the search box. Click 'Locate IP' to retrieve geophysical location coordinates, country details, ISP data, and postal indices.",
         introduced: "basic"
       },
       {
-        title: "Navigating the Interactive Map",
-        description: "When search details load, an interactive Google Map will render on the right panel, centered on the IP's coordinates. You can pinch, zoom, or drag the map to inspect the physical location of the IP host.",
+        title: "Interactive Google Maps Interface (Geographic map)",
+        description: "Once loaded, a map renders next to results. It places a red pin on coordinate points, with support for zooming, dragging, satellite view, and street adjustments.",
         introduced: "1.0"
+      },
+      {
+        title: "ISP & Network Organization cards",
+        description: "Review network details. Check ASN identification keys, autonomous system descriptions, internet service provider names, and domain ranges of the IP host.",
+        introduced: "1.0"
+      },
+      {
+        title: "Detecting VPN or Proxy (Anonymity audit)",
+        description: "Review the 'Security Metrics' block. The lookup checks proxy lists, detecting whether target IP ranges correspond to Tor nodes, private VPN services, or proxy servers.",
+        introduced: "2.0"
+      },
+      {
+        title: "Current User IP Detector (My IP button)",
+        description: "Unsure of your public IP? Click the blue 'Find My IP' button. The app queries public network logs to fetch your current public IP address and geolocations.",
+        introduced: "1.5"
+      },
+      {
+        title: "Report Exporter (Export PDF button)",
+        description: "Click the 'Export Report' button to compile geographical details, coordinates, and maps into a clean PDF document for network diagnostics.",
+        introduced: "2.0"
       }
     ],
     similarTools: ["password-gen", "shortener"]
@@ -329,23 +564,38 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Formulating Markup Pricing",
-        description: "Open the 'Pricing' tab. Type your product cost into the 'Product Cost $' field (the input formats with commas automatically as you type). Enter your desired profit margin in the 'Profit Percentage %' field (e.g., 30). The system will output the exact Target Selling Price and calculate your Net Gross Margin, showing you exactly how much money you will make per sale.",
+        title: "Dynamic Markup Calculator (Pricing Tab)",
+        description: "Open the Pricing tab. Key in Product Cost (numbers auto-format with commas) and Markup %. Get target selling price, profit, and gross margins instantly.",
         introduced: "basic"
       },
       {
-        title: "Converting Global Currencies",
-        description: "Select the 'Currency' tab. Enter the cash amount in the first field (auto-formats with commas). Choose your starting currency from the 'From Currency' dropdown, and select your destination currency from the 'To Currency' dropdown. The system automatically fetches exchange rates to display the converted result. If you are offline, it loads realistic fallbacks.",
+        title: "Live Currency Exchanger (Exchange rates tab)",
+        description: "Select Currency. Type original value and select 'From' and 'To' currency codes. The calculator connects to public exchange APIs to compute rates dynamically.",
         introduced: "1.0"
       },
       {
-        title: "Formatting Heavy Financial Inputs",
-        description: "As you enter cash amounts in the Principal, Amount, or Cost fields across the calculator tabs, the system formats your numbers with commas in real-time. This makes large values (like '$10,000,000') easy to read and prevents typing errors.",
+        title: "Metric & Imperial Volume Converter (Units Tab)",
+        description: "Select Units conversion tab. Select category (Weight/Mass, Temperature, or Volume). Type amount, click original unit, and choose destination unit for results.",
         introduced: "2.0"
       },
       {
-        title: "Weight and Volume Conversions",
-        description: "Open the 'Units' tab. Choose your Category from the dropdown (Weight/Mass or Volume/Fluid). Enter the numerical value, select your starting unit (e.g., Kilograms or Gallons), and choose your destination unit (e.g., Pounds or Liters). The system performs the conversion instantly, with precision up to four decimal places.",
+        title: "Personal BMI Evaluator (BMI Tab)",
+        description: "Open the BMI tab. Input your height (in cm or ft/in) and weight (in kg or lbs). Click 'Calculate BMI' to get your score and body weight classification.",
+        introduced: "2.0"
+      },
+      {
+        title: "EMI Loan Payments Planner (Loan Tab)",
+        description: "Open the Loan tab. Type Principal Loan Amount, Yearly Interest Rate %, and Loan Term (years). It outputs monthly payment, total interest, and total cost.",
+        introduced: "2.0"
+      },
+      {
+        title: "Date Age Calculator (Age Tab)",
+        description: "Open the Age tab. Select your birthday details. The system outputs age in years, months, days, showing days remaining until your next birthday.",
+        introduced: "2.0"
+      },
+      {
+        title: "Tip Divider Calculator (Tip Tab)",
+        description: "Open the Tip tab. Input Bill Amount, Tip %, and number of people sharing the cost. It displays tip per person and total bill per person.",
         introduced: "2.0"
       }
     ],
@@ -361,19 +611,34 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Drafting Your Notes",
-        description: "Click the 'Add Note' button on the header to create a new draft. Type your title into the title box and enter your thoughts in the text area below. The draft saves automatically as you type.",
+        title: "New Note Creation (Plus button)",
+        description: "Click '+ New Note' on the sidebar. A new text workspace opens, ready for you to input titles and note contents details.",
         introduced: "basic"
       },
       {
-        title: "Categorizing with Custom Tags",
-        description: "To categorize your notes, look at the Category tag input field below your note's title. Type a custom category name (e.g. 'Work', 'Recipe', 'Shopping') to tag the note. Use the category filter buttons at the top of your notes list to quickly display only notes with specific tags.",
+        title: "Categorizing Notes with custom tags",
+        description: "Find the Tag input field. Type category terms like 'Work' or 'Personal'. Pill tags appear on note items, allowing you to filter listings.",
         introduced: "1.0"
       },
       {
-        title: "Cloud Backup Sync Options",
-        description: "While notes save locally by default, you can click the 'Backup to Cloud' button on the header. If you have an account, the system will sync your note stacks to our cloud database. This secures your content and lets you access your notes across other devices.",
+        title: "Real-time query Search (Search bar)",
+        description: "Type search queries into the sidebar search bar. The card index updates instantly, matching keywords inside notes titles or contents.",
+        introduced: "1.0"
+      },
+      {
+        title: "Cloud Backup Synchronizer (Sync toggle)",
+        description: "Toggle cloud sync to backup local notes to the Supabase database, allowing you to recover notes seamlessly on other devices.",
         introduced: "2.0"
+      },
+      {
+        title: "Archive & Restore logs (Folder button)",
+        description: "Click the Folder icon to archive notes. Access the 'Archive' tab to review, restore notes to active view, or delete them permanently.",
+        introduced: "2.0"
+      },
+      {
+        title: "Format Text Export (Text file save)",
+        description: "Click 'Export Text File' inside the note workspace to download the note contents as a `.txt` file onto your computer.",
+        introduced: "1.5"
       }
     ],
     similarTools: ["editor", "word-counter"]
@@ -388,26 +653,41 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "How to Encrypt Private Text",
-        description: "Type your sensitive message into the 'Plain Text' textarea. In the 'Encryption Key' input field, type your secret passkey, or click 'Generate' to create a cryptographically secure randomized key. Select your algorithm from the dropdown—AES (highly recommended), TripleDES (legacy), or RC4 (fast)—and click 'Encrypt Data'. Copy the encrypted payload to share it.",
+        title: "Plain Text Encoding (Cipher Box)",
+        description: "Input sensitive text in the text panel. Add a strong password key in the 'Encryption Password' input field.",
         introduced: "basic"
       },
       {
-        title: "Copying Self-Decrypting Share Links",
-        description: "Once you successfully encrypt your data, the system generates an 'Obfuscated Decryption Share Link' in the output panel. Copy this link and send it to your recipient. When clicked, it automatically loads our decryption interface, pre-fills the encrypted text, decodes the passkey from the URL parameters, and decrypts your message instantly.",
+        title: "Cryptographic Algorithm Selectors",
+        description: "Select cryptography standards from the dropdown list. Choose AES (for high security), TripleDES, or RC4 algorithms.",
+        introduced: "1.0"
+      },
+      {
+        title: "Secret Key Generator (Key Maker icon)",
+        description: "Unsure of password strength? Click the key icon to generate a cryptographically secure string of random characters as a key.",
         introduced: "2.0"
       },
       {
-        title: "Mobile View Tab Navigation",
-        description: "On mobile phones, look at the pill selector at the top of the interface. Since screens are smaller, we place the 'Encryption' and 'Decryption' panels into simple, clear tabs. Tap 'Encrypt' to compose locked payloads, or tap 'Decrypt' to paste ciphers. On desktop screens, these panels display side-by-side automatically.",
+        title: "Self-Decrypting URL Creator (Share button)",
+        description: "Click 'Generate Secure Link'. This creates a URL containing the encrypted text payload, allowing you to share self-decrypting links.",
         introduced: "2.0"
+      },
+      {
+        title: "Mobile layout tabs (Screen selector)",
+        description: "On mobile layouts, use top page tabs ('Lock Content', 'Unlock Content') to easily input data across narrow screens.",
+        introduced: "2.0"
+      },
+      {
+        title: "Clipboard Quick Copier (Copy button)",
+        description: "Click the copy icon to copy encrypted ciphers. Decrypt payloads by pasting ciphers into the decryption receiver panel.",
+        introduced: "1.0"
       }
     ],
     similarTools: ["password-gen", "ip-locator"]
   },
   "pdf-tools": {
     id: "pdf-tools",
-    title: "PDF Tool",
+    title: "PDF Tool Studio",
     category: "Utility",
     summary: "PDF Tool Studio lets you perform common PDF tasks right in your browser. You can convert images to PDF, turn raw text into document downloads, extract text from PDFs, or merge multiple files.",
     audience: "Administrators, writers, students, designers, and office agents",
@@ -415,19 +695,34 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     versions: ["1.0", "2.0"],
     features: [
       {
-        title: "Converting Photos to PDF Documents",
-        description: "Open the 'Image To PDF' tab. Click the upload zone to choose an image (PNG, JPG, JPEG, or WEBP) from your computer. Once the preview image loads, click 'Convert to PDF'. The system compiles the photo into a standard A4 page layout and downloads it automatically.",
+        title: "Convert Image File to PDF layouts",
+        description: "Select the 'Image to PDF' tool. Drag JPEG, PNG, or WEBP photos into the upload box. Click 'Format PDF Layout' to compile and download.",
         introduced: "basic"
       },
       {
-        title: "Compiling Plain Text to PDF Files",
-        description: "Open the 'Text To PDF' tab. Type your document header into the 'Document Title' input, then write or paste your text into the content area. Click 'Format & Download PDF' to generate and download a clean PDF document with properly wrapped and structured text margins.",
+        title: "Text to PDF converter (Doc creator)",
+        description: "Select matching tabs and type content. Adjust margins/spacing sliders and click 'Compile PDF File' to download formatted documents.",
         introduced: "1.0"
       },
       {
-        title: "Merging Multiple PDF Files Together",
-        description: "Select the 'Merge PDFs' tab. Click 'Add Document' to choose PDF files and add them to your compilation list. You can add several files and review their estimated file sizes. To combine them, click 'Merge Files into Single PDF' to consolidate them into a single, cohesive document.",
+        title: "Combine multiple PDF files (PDF Merger)",
+        description: "Merge multiple documents: upload files under the 'Merge PDFs' tab, drag rows to reorder, and click 'Consolidate PDFs'.",
         introduced: "2.0"
+      },
+      {
+        title: "Split PDF pages (Splitter tool)",
+        description: "Split PDF files: upload the document, enter page ranges (e.g. '1-3, 5'), and click 'Split PDF Pages' to download separate files.",
+        introduced: "2.0"
+      },
+      {
+        title: "Extract text from PDF (Parsing log)",
+        description: "Upload a PDF document to extract text. The app runs a processing script locally and outputs characters into a copying workspace.",
+        introduced: "2.0"
+      },
+      {
+        title: "Download PDF documents (Publish save)",
+        description: "Click 'Save Document' to trigger high-speed compilation and download processed PDF files immediately.",
+        introduced: "1.0"
       }
     ],
     similarTools: ["qr-code", "calculator"]

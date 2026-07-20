@@ -49,7 +49,6 @@ import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
 
-
 export type QuestionType =
   | 'multiple_choice'
   | 'true_false'
@@ -359,16 +358,15 @@ const Calculator = () => {
 };
 
 export default function PublicQuizTaker() {
-  const params = useParams();
-  const { id: quizId } = params;
-
-  // jules edit: distract-free mode for taking quizzes, hide navbar/footer and set padding to pt-0
-  const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
-  useEffect(() => {
+  
+    const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
     setHideNavbar(true);
     setHideFooter(true);
-    setPaddingTop("pt-0");
-  }, [setHideNavbar, setHideFooter, setPaddingTop]);
+    setPaddingTop('pt-0');
+
+  
+  const params = useParams();
+  const { id: quizId } = params;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -381,8 +379,8 @@ export default function PublicQuizTaker() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [shuffledOptions, setShuffledOptions] = useState<
     Record<string, (string | QuizOption)[]>
-    >({});
-  
+  >({});
+
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
 
@@ -392,7 +390,6 @@ export default function PublicQuizTaker() {
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
-
 
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
@@ -404,6 +401,8 @@ export default function PublicQuizTaker() {
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const pendingUnloadCb = React.useRef<(() => void) | null>(null);
+  // Private ref containing correct answers to secure them from React DevTools inspection
+  const correctAnswersRef = React.useRef<Record<string, any>>({});
 
   // 1. Initial Load
   useEffect(() => {
@@ -436,14 +435,15 @@ export default function PublicQuizTaker() {
         }
 
         // Migration: Ensure options have IDs
+        const secureAnswers: Record<string, any> = {};
         const migratedQuestions = target.questions.map((q) => {
+          let newCorrectIndex = q.correctIndex;
           if (q.options.length > 0 && typeof q.options[0] === 'string') {
             const optionsWithIds = q.options.map((opt, idx) => ({
               id: `${q.id}-opt-${idx}`,
               text: opt as string,
             }));
 
-            let newCorrectIndex = q.correctIndex;
             if (typeof q.correctIndex === 'number' && target.type === 'quiz') {
               newCorrectIndex = optionsWithIds[q.correctIndex]?.id;
             } else if (
@@ -456,18 +456,32 @@ export default function PublicQuizTaker() {
               );
             }
 
+            secureAnswers[q.id] = newCorrectIndex;
             return {
               ...q,
               options: optionsWithIds,
-              correctIndex: newCorrectIndex,
+              correctIndex: null, // Strip correct index from React visible state
             };
           }
-          return q;
+          secureAnswers[q.id] = q.correctIndex;
+          return {
+            ...q,
+            correctIndex: null, // Strip correct index from React visible state
+          };
         });
 
-        const finalQuiz = { ...target, questions: migratedQuestions };
+        correctAnswersRef.current = secureAnswers;
+
+        const finalQuiz = {
+          ...target,
+          questions: migratedQuestions.map((q) => ({
+            ...q,
+            correctIndex: null,
+          })),
+        };
         setQuiz(finalQuiz);
-        if (finalQuiz) document.title = `${capFirst(finalQuiz.title)} | Ping World`;
+        if (finalQuiz)
+          document.title = `${capFirst(finalQuiz.title)} | Ping World`;
 
         // Completion check
         const completionMarker = localStorage.getItem(
@@ -654,6 +668,44 @@ export default function PublicQuizTaker() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [started, isFinished]);
 
+  // 5. Security: Block copy/paste/right-click/select/drag when enforceSecurity is ON
+  useEffect(() => {
+    if (!started || !quiz?.enforceSecurity || isFinished) return;
+
+    const preventDefault = (e: Event) => {
+      e.preventDefault();
+      // Only show toast once per session category to avoid spam
+      const key = `_pw_sec_warn_${e.type}`;
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1');
+        toast.warning(
+          'Security mode is ON — this action is disabled during the assessment.',
+          { duration: 3000 },
+        );
+      }
+    };
+
+    const blockedEvents = [
+      'copy',
+      'cut',
+      'paste',
+      'contextmenu',
+      'selectstart',
+      'drag',
+      'dragstart',
+    ] as const;
+
+    blockedEvents.forEach((evt) =>
+      document.addEventListener(evt, preventDefault, true),
+    );
+
+    return () => {
+      blockedEvents.forEach((evt) =>
+        document.removeEventListener(evt, preventDefault, true),
+      );
+    };
+  }, [started, quiz?.enforceSecurity, isFinished]);
+
   // --- Performance: Memoized Current Question Data ---
   const q = useMemo(() => {
     if (!activeQuestions || activeQuestions.length === 0) return null;
@@ -794,10 +846,11 @@ export default function PublicQuizTaker() {
 
     let correct = false;
     if (quiz?.type === 'quiz' && q) {
-      let decodedCorrect: any = q.correctIndex;
+      const secureAnswer = correctAnswersRef.current[q.id];
+      let decodedCorrect: any = secureAnswer;
       try {
-        if (typeof q.correctIndex === 'string' && q.correctIndex.length > 5) {
-          const decoded = atob(q.correctIndex);
+        if (typeof secureAnswer === 'string' && secureAnswer.length > 5) {
+          const decoded = atob(secureAnswer);
           try {
             decodedCorrect = JSON.parse(decoded);
           } catch {
@@ -805,7 +858,7 @@ export default function PublicQuizTaker() {
           }
         }
       } catch (e) {
-        decodedCorrect = q.correctIndex;
+        decodedCorrect = secureAnswer;
       }
 
       if (q.type === 'checkbox') {
@@ -891,6 +944,27 @@ export default function PublicQuizTaker() {
       proceedToNext(updatedAnswers);
     }
   };
+
+  
+  const finalizeQuiz = async (finalAnswers: any[]) => {
+    setIsFinished(true);
+    if (quiz) {
+      localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+      try {
+        const finalScore = finalAnswers.filter((a) => a.correct).length;
+        await HybridStorage.saveResponse(quiz.id, {
+          userData,
+          answers: finalAnswers,
+          score: finalScore,
+          totalQuestions: activeQuestions.length,
+          answeredQuestions: finalAnswers.length,
+        });
+      } catch (e) {
+        console.error('Failed to save response:', e);
+      }
+    }
+  };
+
 
   const proceedToNext = (latestAnswers?: any[]) => {
     setShowFeedback(false);
@@ -1023,25 +1097,6 @@ export default function PublicQuizTaker() {
       setContent('');
     } else {
       finalizeQuiz(answersToSave);
-    }
-  };
-
-  const finalizeQuiz = async (finalAnswers: any[]) => {
-    setIsFinished(true);
-    if (quiz) {
-      localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
-      try {
-        const finalScore = finalAnswers.filter((a) => a.correct).length;
-        await HybridStorage.saveResponse(quiz.id, {
-          userData,
-          answers: finalAnswers,
-          score: finalScore,
-          totalQuestions: activeQuestions.length,
-          answeredQuestions: finalAnswers.length,
-        });
-      } catch (e) {
-        console.error('Failed to save response:', e);
-      }
     }
   };
 
@@ -1257,7 +1312,9 @@ export default function PublicQuizTaker() {
           <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
             {quiz.title.toUpperCase()}
           </h1>
-          <p className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4' style={{lineHeight:'20px'}}>
+          <p
+            className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
+            style={{ lineHeight: '20px' }}>
             {quiz.description}
           </p>
 
@@ -1534,17 +1591,17 @@ export default function PublicQuizTaker() {
 
               <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
                 {/* Top Progress Bar */}
-                {quiz.type === 'quiz' &&
+                {quiz.type === 'quiz' && (
                   <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                     <motion.div
-                      initial={{width: 0}}
+                      initial={{ width: 0 }}
                       animate={{
                         width: `${(answeredCount / activeQuestions.length) * 100}%`,
                       }}
                       className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
                     />
                   </div>
-                }
+                )}
 
                 {quiz?.allowEarlySubmit && (
                   <Button

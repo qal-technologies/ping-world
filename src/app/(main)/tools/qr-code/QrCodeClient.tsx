@@ -146,7 +146,7 @@ export default function QrCodeGeneratorPage() {
           url: window.location.href,
         });
         toast.success('Shared successfully!');
-      } catch (err) {
+      } catch {
         toast.error('Sharing cancelled or failed');
       }
     } else {

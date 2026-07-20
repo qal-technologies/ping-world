@@ -61,7 +61,7 @@ export default function PdfToolStudioPage() {
       doc.save(`pingworld-compiled-${Date.now()}.pdf`);
       toast.dismiss();
       toast.success("PDF Compiled and Downloaded!");
-    } catch (err) {
+    } catch {
       toast.dismiss();
       toast.error("Compilation failed. Falling back...");
     }
@@ -87,7 +87,7 @@ export default function PdfToolStudioPage() {
       doc.save(`pingworld-text-${Date.now()}.pdf`);
       toast.dismiss();
       toast.success("Formatted PDF Downloaded!");
-    } catch (err) {
+    } catch  {
       toast.dismiss();
       toast.error("Text compilation failed");
     }
@@ -146,7 +146,7 @@ export default function PdfToolStudioPage() {
       doc.save(`pingworld-merged-${Date.now()}.pdf`);
       toast.dismiss();
       toast.success("Merged PDF consolidated and downloaded!");
-    } catch (err) {
+    } catch {
       toast.dismiss();
       toast.error("Merging process failed");
     }

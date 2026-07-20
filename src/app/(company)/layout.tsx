@@ -9,7 +9,7 @@ export default function CompanyLayout({
 }) {
   return (
     <PageLayoutProvider>
-      <main className="flex-1 pt-24 min-h-[70vh]">
+      <main className="flex-1 min-h-[70vh]">
         {children}
       </main>
       <Footer />

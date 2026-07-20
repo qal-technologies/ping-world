@@ -21,13 +21,12 @@ import {
   ChevronRight,
   TrendingUp,
   Users,
-  CheckCircle,
   Eye,
-  Sliders,
   Sparkles,
   HelpCircle,
 } from 'lucide-react';
 import { toolDocsDb, DocFeature } from '@/lib/general/docs-data';
+import { tools } from '@/lib/general/data';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -115,8 +114,16 @@ export default function DocsClient({ id }: { id: string }) {
     isCompatible(f, selectedVersion),
   );
 
+  const matchedTool = tools.find(
+    (t) =>
+      t.id === doc.id ||
+      t.href === '/' + doc.id ||
+      t.href === '/tools/' + doc.id,
+  );
+  const launchHref = matchedTool?.href || `/tools/${doc.id}`;
+
   return (
-    <div className='container mx-auto px-4 sm:px-6 py-12 max-w-5xl min-h-screen pb-32'>
+    <div className='container mx-auto px-4 sm:px-6 py-12 max-w-7xl min-h-screen pb-32'>
       {/* Screen Reader Header skip instruction */}
       <span className='sr-only'>
         You are viewing documentation for {doc.title}
@@ -240,34 +247,43 @@ export default function DocsClient({ id }: { id: string }) {
             <h2 className='text-2xl font-bold font-display text-pw-text'>
               Gradual Feature Breakdown
             </h2>
-            <div className='space-y-4'>
+            <div className='space-y-6'>
               {activeFeatures.map((f, i) => {
-                let version = f.introduced;
+                const version = f.introduced;
                 return (
-                  <div
+                  <Card
                     key={i}
-                    className='p-1 flex items-start gap-4 transition-all'>
-                    <div className='mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-pw-primary/10 text-pw-primary shrink-0 font-bold text-xs'>
-                      {i + 1}
-                    </div>
-                    <div className='space-y-1'>
-                      <div className='flex items-center gap-2 flex-wrap'>
-                        <h3 className='font-bold text-base text-pw-text'>
-                          {f.title}
-                        </h3>
-                        {version !== '1.0' && version !== 'basic' && (
-                          <span
-                            className='text-[9px] font-mono px-2 py-0.5 rounded-xl bg-white/5 border border-white/5 text-pw-muted uppercase font-bold'
-                            title='Introduction version'>
-                            v-{f.introduced}
-                          </span>
-                        )}
+                    id={`feature-${i}`}
+                    style={{ borderLeftColor: toolColor }}
+                    className='p-4 bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-white/[0.01] sm:border sm:border-white/5 sm:border-l-2 transition-all sm:hover:bg-white/[0.02]/30'>
+                    <div className='flex items-start gap-4'>
+                      <div
+                        style={{
+                          backgroundColor: `${toolColor}15`,
+                          color: toolColor,
+                        }}
+                        className='mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg shrink-0 font-bold text-xs font-monoSync'>
+                        {i + 1}
                       </div>
-                      <p className='text-xs text-pw-muted leading-relaxed'>
-                        {f.description}
-                      </p>
+                      <div className='space-y-2 flex-1'>
+                        <div className='flex items-center gap-2 flex-wrap'>
+                          <h3 className='font-bold text-base text-pw-text leading-snug'>
+                            {f.title}
+                          </h3>
+                          {version !== '1.0' && version !== 'basic' && (
+                            <span
+                              className='text-[9px] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/5 text-pw-muted uppercase font-bold'
+                              title='Introduction version'>
+                              v-{f.introduced}
+                            </span>
+                          )}
+                        </div>
+                        <p className='text-xs text-pw-muted leading-relaxed select-text'>
+                          {f.description}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
 
@@ -281,7 +297,7 @@ export default function DocsClient({ id }: { id: string }) {
         </div>
 
         {/* Sidebar link navigation / related tools */}
-        <div className='lg:col-span-4 space-y-8'>
+        <div className='lg:col-span-4 space-y-8 lg:sticky lg:top-24 self-start'>
           <Card className='glass p-5 space-y-2'>
             <h3 className='text-sm font-bold uppercase tracking-widest text-pw-muted flex items-center gap-2'>
               <Eye className='h-4 w-4 text-pw-secondary' /> Navigation
@@ -290,20 +306,33 @@ export default function DocsClient({ id }: { id: string }) {
               Ready to take this tool for a spin? Launch the browser application
               instantly below:
             </p>
-            <Link
-              href={
-                doc.id === 'quizzable' ? '/quiz'
-                : doc.id === 'composer' ?
-                  '/composer'
-                : doc.id === 'editor' ?
-                  '/editor'
-                : `/tools/${doc.id}`
-              }>
+            <Link href={launchHref}>
               <Button className='w-full btn-primary h-11 gap-2 text-xs font-bold mt-2'>
                 Use Tool <ArrowRight className='h-4 w-4' />
               </Button>
             </Link>
           </Card>
+
+          {/* Table of Contents sidebar for active features */}
+          {activeFeatures.length > 0 && (
+            <Card className='p-5 bg-white/[0.01] border-white/5 space-y-4 hidden md:block'>
+              <h3 className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                Table of Contents
+              </h3>
+              <ul className='space-y-2.5 text-xs'>
+                {activeFeatures.map((f, i) => (
+                  <li key={i}>
+                    <a
+                      href={`#feature-${i}`}
+                      className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-2 font-medium'>
+                      <span className='font-mono opacity-50'>{i + 1}.</span>
+                      <span className='truncate'>{f.title}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <div className='divider my-15' />
 

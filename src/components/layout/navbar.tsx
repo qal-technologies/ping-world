@@ -89,7 +89,7 @@ export const Navbar = () => {
   }, []);
 
   return (
-    <header className='fixed top-0 left-0 right-0 z-50 border-b border-white/5 h-[10vh] glass'>
+    <header className='fixed top-0 left-0 right-0 z-50 nav-glass border-b border-cyan/5 h-[10vh]'>
       <nav className='mx-auto w-[100%] flex items-center justify-between px-6 py-4'>
         {/* Logo */}
         <Link

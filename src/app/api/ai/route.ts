@@ -1,17 +1,49 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 
 /**
  * jules edit: Server-side API handler for Gemini 2.5 Flash
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { action, text, title, style, context, targetLanguageCode, targetLanguageName } = await req.json();
+    const ip = getClientIp(req);
+    // Limit to 15 AI requests per minute (60000ms window) per client IP
+    const { limited, remaining, reset } = isRateLimited(
+      ip,
+      'api:ai',
+      15,
+      60 * 1000,
+    );
+
+    if (limited) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '15',
+            'X-RateLimit-Remaining': String(remaining),
+            'X-RateLimit-Reset': String(reset),
+          },
+        },
+      );
+    }
+
+    const {
+      action,
+      text,
+      title,
+      style,
+      context,
+      targetLanguageCode,
+      targetLanguageName,
+    } = await req.json();
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
         { error: 'Gemini API key not configured on the server.' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -40,15 +72,21 @@ Text: "${text}"`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            responseMimeType: (action === 'hashtags' || action === 'suggest') ? 'application/json' : 'text/plain',
+            responseMimeType:
+              action === 'hashtags' || action === 'suggest' ?
+                'application/json'
+              : 'text/plain',
           },
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const errText = await response.text();
-      return NextResponse.json({ error: `Gemini API error: ${errText}` }, { status: 502 });
+      return NextResponse.json(
+        { error: `Gemini API error: ${errText}` },
+        { status: 502 },
+      );
     }
 
     const data = await response.json();
@@ -58,7 +96,13 @@ Text: "${text}"`;
       try {
         const parsed = JSON.parse(resultText.trim());
         const tags = Array.isArray(parsed) ? parsed : [];
-        return NextResponse.json({ tags: tags.map((t: string) => ({ tag: t.startsWith('#') ? t : `#${t}`, isPingWorld: false, source: 'ai' })) });
+        return NextResponse.json({
+          tags: tags.map((t: string) => ({
+            tag: t.startsWith('#') ? t : `#${t}`,
+            isPingWorld: false,
+            source: 'ai',
+          })),
+        });
       } catch {
         return NextResponse.json({ tags: [] });
       }

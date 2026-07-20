@@ -9,8 +9,13 @@ export const metadata: Metadata = {
     template: '%s | Ping World',
   },
   applicationName: 'Ping World',
-  category: '',
-  classification: '',
+  category: 'Productivity & Utilities',
+  classification: 'Web Application',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
   authors: [
     { name: 'Qal Technologies', url: 'https://qal-tech.website' },
     { name: 'Ping World', url: 'https://ping-world.website' },
@@ -57,7 +62,10 @@ export const metadata: Metadata = {
     'ping platform',
     'ping',
   ],
-  manifest:''
+  manifest: '/manifest.json',
+  alternates: {
+    canonical: '/',
+  },
 };
 
 export const viewport: Viewport = {

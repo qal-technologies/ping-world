@@ -62,7 +62,7 @@ export default function EncryptionDecryptionPage() {
   // Unified cipher calculation
   const runCipher = (rawString: string, secret: string, mode: "encrypt" | "decrypt", algorithm: "AES" | "TripleDES" | "RC4") => {
     if (mode === "encrypt") {
-      let cipherBytes = [];
+      const cipherBytes = [];
       for (let i = 0; i < rawString.length; i++) {
         const charCode = rawString.charCodeAt(i);
         const keyCode = secret.charCodeAt(i % secret.length);

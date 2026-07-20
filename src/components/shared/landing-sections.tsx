@@ -57,7 +57,7 @@ export const HeroSection = () => {
             variants={fadeUp}
             className='badge mb-6'>
             <Sparkles className='h-3 w-3' />
-            Free &amp; open tools for everyone
+            Open tools for everyone
           </motion.div>
 
           {/* Title */}
@@ -142,7 +142,7 @@ export const ToolsGrid = () => {
           viewport={{ once: true }}
           className='text-center mb-24'>
           <div className='badge mb-4 mx-auto uppercase tracking-[0.2em] px-6'>
-            Interactive Suite
+            INTERACTIVE TOOLS
           </div>
           <h2 className='text-4xl md:text-6xl font-extrabold font-display leading-[1.1]'>
             Powerful tools for <br />

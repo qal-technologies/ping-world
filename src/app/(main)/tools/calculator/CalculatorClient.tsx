@@ -8,6 +8,9 @@ import {
   DollarSign,
   Delete,
   Undo,
+  Heart,
+  Calendar,
+  Coins,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,6 +68,41 @@ export default function CalculatorPage() {
   const [markup, setMarkup] = useState<number>(30); // in percent
   const [sellingPrice, setSellingPrice] = useState<number | null>(null);
   const [profitMargin, setProfitMargin] = useState<number | null>(null);
+
+  // BMI Calculator States
+  const [bmiWeight, setBmiWeight] = useState('70');
+  const [bmiWeightUnit, setBmiWeightUnit] = useState<'kg' | 'lbs'>('kg');
+  const [bmiHeight, setBmiHeight] = useState('175');
+  const [bmiHeightUnit, setBmiHeightUnit] = useState<'cm' | 'ft'>('cm');
+  const [bmiFt, setBmiFt] = useState('5');
+  const [bmiIn, setBmiIn] = useState('8');
+  const [bmiValue, setBmiValue] = useState<number | null>(null);
+  const [bmiCategory, setBmiCategory] = useState<string>('');
+
+  // Loan/EMI Calculator States
+  const [loanPrincipal, setLoanPrincipal] = useState('10,000');
+  const [loanRate, setLoanRate] = useState('5.5');
+  const [loanTerm, setLoanTerm] = useState('5'); // in years
+  const [monthlyPayment, setMonthlyPayment] = useState<number | null>(null);
+  const [totalLoanInterest, setTotalLoanInterest] = useState<number | null>(
+    null,
+  );
+  const [totalLoanCost, setTotalLoanCost] = useState<number | null>(null);
+
+  // Age Calculator States
+  const [birthDate, setBirthDate] = useState('2000-01-01');
+  const [ageYears, setAgeYears] = useState<number | null>(null);
+  const [ageMonths, setAgeMonths] = useState<number | null>(null);
+  const [ageDays, setAgeDays] = useState<number | null>(null);
+  const [daysToBirthday, setDaysToBirthday] = useState<number | null>(null);
+
+  // Tip Calculator States
+  const [tipBill, setTipBill] = useState('50');
+  const [tipPercent, setTipPercent] = useState('15');
+  const [tipPeople, setTipPeople] = useState('2');
+  const [tipPerPerson, setTipPerPerson] = useState<number | null>(null);
+  const [totalPerPerson, setTotalPerPerson] = useState<number | null>(null);
+
   const [ONLINE, ISONLINE] = useState(false);
 
   // Online/offline detection
@@ -194,6 +232,133 @@ export default function CalculatorPage() {
     setProfitMargin(Number(calculatedMargin.toFixed(1)));
   }, [cost, markup]);
 
+  // -- BMI calculations --
+  useEffect(() => {
+    let weightKg = parseFloat(bmiWeight) || 0;
+    if (bmiWeightUnit === 'lbs') {
+      weightKg = weightKg * 0.45359237;
+    }
+
+    let heightM = 0;
+    if (bmiHeightUnit === 'cm') {
+      heightM = (parseFloat(bmiHeight) || 0) / 100;
+    } else {
+      const feet = parseFloat(bmiFt) || 0;
+      const inches = parseFloat(bmiIn) || 0;
+      const totalInches = feet * 12 + inches;
+      heightM = totalInches * 0.0254;
+    }
+
+    if (heightM > 0 && weightKg > 0) {
+      const bmi = weightKg / (heightM * heightM);
+      setBmiValue(Number(bmi.toFixed(1)));
+
+      if (bmi < 18.5) {
+        setBmiCategory('Underweight');
+      } else if (bmi >= 18.5 && bmi < 25) {
+        setBmiCategory('Normal weight');
+      } else if (bmi >= 25 && bmi < 30) {
+        setBmiCategory('Overweight');
+      } else {
+        setBmiCategory('Obese');
+      }
+    } else {
+      setBmiValue(null);
+      setBmiCategory('');
+    }
+  }, [bmiWeight, bmiWeightUnit, bmiHeight, bmiHeightUnit, bmiFt, bmiIn]);
+
+  // -- Loan/EMI calculations --
+  useEffect(() => {
+    const P = parseFormattedFloat(loanPrincipal);
+    const r = (parseFloat(loanRate) || 0) / 12 / 100;
+    const n = (parseFloat(loanTerm) || 0) * 12;
+
+    if (P > 0 && n > 0) {
+      if (r === 0) {
+        const emi = P / n;
+        setMonthlyPayment(Number(emi.toFixed(2)));
+        setTotalLoanInterest(0);
+        setTotalLoanCost(P);
+      } else {
+        const emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+        const totalCost = emi * n;
+        const totalInterest = totalCost - P;
+        setMonthlyPayment(Number(emi.toFixed(2)));
+        setTotalLoanInterest(Number(totalInterest.toFixed(2)));
+        setTotalLoanCost(Number(totalCost.toFixed(2)));
+      }
+    } else {
+      setMonthlyPayment(null);
+      setTotalLoanInterest(null);
+      setTotalLoanCost(null);
+    }
+  }, [loanPrincipal, loanRate, loanTerm]);
+
+  // -- Age calculations --
+  useEffect(() => {
+    if (!birthDate) return;
+    const birth = new Date(birthDate);
+    const now = new Date();
+
+    if (isNaN(birth.getTime()) || birth > now) {
+      setAgeYears(null);
+      setAgeMonths(null);
+      setAgeDays(null);
+      setDaysToBirthday(null);
+      return;
+    }
+
+    let yearsDiff = now.getFullYear() - birth.getFullYear();
+    let monthsDiff = now.getMonth() - birth.getMonth();
+    let daysDiff = now.getDate() - birth.getDate();
+
+    if (daysDiff < 0) {
+      monthsDiff--;
+      const lastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      daysDiff += lastMonth.getDate();
+    }
+
+    if (monthsDiff < 0) {
+      yearsDiff--;
+      monthsDiff += 12;
+    }
+
+    setAgeYears(yearsDiff);
+    setAgeMonths(monthsDiff);
+    setAgeDays(daysDiff);
+
+    // Days to next birthday calculation
+    const nextBdate = new Date(
+      now.getFullYear(),
+      birth.getMonth(),
+      birth.getDate(),
+    );
+    if (nextBdate < now) {
+      nextBdate.setFullYear(now.getFullYear() + 1);
+    }
+    const diffTime = Math.abs(nextBdate.getTime() - now.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    setDaysToBirthday(diffDays === 365 || diffDays === 366 ? 0 : diffDays);
+  }, [birthDate]);
+
+  // -- Tip calculations --
+  useEffect(() => {
+    const bill = parseFormattedFloat(tipBill);
+    const pct = parseFloat(tipPercent) || 0;
+    const people = parseInt(tipPeople) || 1;
+
+    if (bill > 0 && people > 0) {
+      const tipAmount = bill * (pct / 100);
+      const totalAmount = bill + tipAmount;
+      setTipPerPerson(Number((tipAmount / people).toFixed(2)));
+      setTotalPerPerson(Number((totalAmount / people).toFixed(2)));
+    } else {
+      setTipPerPerson(null);
+      setTotalPerPerson(null);
+    }
+  }, [tipBill, tipPercent, tipPeople]);
+
   const currencies: { value: string; name: string }[] = [
     { value: 'USD', name: 'US Dollar' },
     { value: 'EUR', name: 'Euro' },
@@ -242,7 +407,6 @@ export default function CalculatorPage() {
       maximumFractionDigits: 2,
     });
   };
-
 
   return (
     <div className='container mx-auto px-6 py-12 max-w-5xl min-h-[calc(100vh-64px)] pb-20'>
@@ -298,6 +462,26 @@ export default function CalculatorPage() {
               value='pricing'
               className='gap-2 h-8 text-xs rounded-full px-4'>
               <DollarSign className='h-4 w-4' /> Pricing
+            </TabsTrigger>
+            <TabsTrigger
+              value='bmi'
+              className='gap-2 h-8 text-xs rounded-full px-4'>
+              <Heart className='h-4 w-4' /> BMI
+            </TabsTrigger>
+            <TabsTrigger
+              value='loan'
+              className='gap-2 h-8 text-xs rounded-full px-4'>
+              <DollarSign className='h-4 w-4' /> Loan/EMI
+            </TabsTrigger>
+            <TabsTrigger
+              value='age'
+              className='gap-2 h-8 text-xs rounded-full px-4'>
+              <Calendar className='h-4 w-4' /> Age
+            </TabsTrigger>
+            <TabsTrigger
+              value='tip'
+              className='gap-2 h-8 text-xs rounded-full px-4'>
+              <Coins className='h-4 w-4' /> Tip
             </TabsTrigger>
           </TabsList>
 
@@ -439,7 +623,7 @@ export default function CalculatorPage() {
                   value={fromCurrency}
                   onChange={(e) => setFromCurrency(e.target.value)}
                   className='w-full h-10 bg-white/5 border border-white/10 rounded-lg px-3 focus:border-pw-primary focus:outline-none cursor-pointer'>
-                  {fromCurrencies.map((cur, idx) => {
+                  {fromCurrencies.map((cur ) => {
                     return (
                       <option
                         value={cur.value}
@@ -738,6 +922,339 @@ export default function CalculatorPage() {
                 </span>
                 <p className='text-[10px] text-pw-muted mt-1'>
                   Percentage of pricing that constitutes direct gross profit.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* BMI CALCULATOR TAB */}
+          <TabsContent
+            value='bmi'
+            className='m-0 space-y-6'>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+              <div className='space-y-4'>
+                <div className='flex gap-4 items-end'>
+                  <div className='flex-1'>
+                    <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                      Weight
+                    </label>
+                    <Input
+                      type='number'
+                      value={bmiWeight}
+                      onChange={(e) => setBmiWeight(e.target.value)}
+                      className='bg-white/5 border-white/10 h-10'
+                    />
+                  </div>
+                  <select
+                    value={bmiWeightUnit}
+                    onChange={(e) =>
+                      setBmiWeightUnit(e.target.value as 'kg' | 'lbs')
+                    }
+                    className='h-10 bg-white/5 border border-white/10 rounded-lg px-3 focus:outline-none cursor-pointer'>
+                    <option
+                      value='kg'
+                      className='bg-pw-surface text-pw-text'>
+                      kg
+                    </option>
+                    <option
+                      value='lbs'
+                      className='bg-pw-surface text-pw-text'>
+                      lbs
+                    </option>
+                  </select>
+                </div>
+
+                <div className='space-y-2'>
+                  <label className='text-xs font-bold text-pw-muted uppercase block'>
+                    Height Unit
+                  </label>
+                  <div className='flex gap-2'>
+                    {['cm', 'ft'].map((unit) => (
+                      <button
+                        key={unit}
+                        type='button'
+                        onClick={() => setBmiHeightUnit(unit as 'cm' | 'ft')}
+                        className={cn(
+                          'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                          bmiHeightUnit === unit ?
+                            'bg-pw-primary text-white'
+                          : 'bg-white/5 text-pw-muted',
+                        )}>
+                        {unit === 'cm' ?
+                          'Centimeters (cm)'
+                        : 'Feet & Inches (ft/in)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {bmiHeightUnit === 'cm' ?
+                  <div>
+                    <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                      Height (cm)
+                    </label>
+                    <Input
+                      type='number'
+                      value={bmiHeight}
+                      onChange={(e) => setBmiHeight(e.target.value)}
+                      className='bg-white/5 border-white/10 h-10'
+                    />
+                  </div>
+                : <div className='grid grid-cols-2 gap-4'>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Feet (ft)
+                      </label>
+                      <Input
+                        type='number'
+                        value={bmiFt}
+                        onChange={(e) => setBmiFt(e.target.value)}
+                        className='bg-white/5 border-white/10 h-10'
+                      />
+                    </div>
+                    <div>
+                      <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                        Inches (in)
+                      </label>
+                      <Input
+                        type='number'
+                        value={bmiIn}
+                        onChange={(e) => setBmiIn(e.target.value)}
+                        className='bg-white/5 border-white/10 h-10'
+                      />
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <div className='p-6 rounded-2xl border border-white/5 bg-white/[0.02] flex flex-col justify-center space-y-4'>
+                <div>
+                  <p className='text-xs text-pw-muted font-bold uppercase'>
+                    Your BMI Index
+                  </p>
+                  <span className='text-4xl font-extrabold font-display text-pw-primary mt-1 block'>
+                    {bmiValue !== null ? bmiValue : '--.-'}
+                  </span>
+                </div>
+
+                <div>
+                  <p className='text-xs text-pw-muted font-bold uppercase'>
+                    Weight Status
+                  </p>
+                  <span
+                    className={cn(
+                      'text-xl font-bold mt-1 block',
+                      bmiCategory === 'Normal weight' ? 'text-pw-success'
+                      : bmiCategory === 'Underweight' ? 'text-pw-secondary'
+                      : 'text-pw-danger',
+                    )}>
+                    {bmiCategory || 'Enter measurements'}
+                  </span>
+                </div>
+
+                <div className='text-xs text-pw-muted pt-2 border-t border-white/5 leading-relaxed'>
+                  BMI Categories:
+                  <br />
+                  • Underweight: &lt; 18.5
+                  <br />
+                  • Normal weight: 18.5 – 24.9
+                  <br />
+                  • Overweight: 25.0 – 29.9
+                  <br />• Obese: 30.0 or greater
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* LOAN / EMI CALCULATOR TAB */}
+          <TabsContent
+            value='loan'
+            className='m-0 space-y-6'>
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Loan Principal Amount ($)
+                </label>
+                <Input
+                  type='text'
+                  value={loanPrincipal}
+                  onChange={(e) =>
+                    setLoanPrincipal(formatAsUserTypes(e.target.value))
+                  }
+                  className='bg-white/5 border-white/10 h-10'
+                />
+              </div>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Interest Rate (% p.a.)
+                </label>
+                <Input
+                  type='number'
+                  step='0.1'
+                  value={loanRate}
+                  onChange={(e) => setLoanRate(e.target.value)}
+                  className='bg-white/5 border-white/10 h-10'
+                />
+              </div>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Loan Term (Years)
+                </label>
+                <Input
+                  type='number'
+                  value={loanTerm}
+                  onChange={(e) => setLoanTerm(e.target.value)}
+                  className='bg-white/5 border-white/10 h-10'
+                />
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+              <div className='p-5 rounded-2xl border border-white/5 bg-white/[0.02]'>
+                <p className='text-xs text-pw-muted font-bold uppercase'>
+                  Monthly Payment (EMI)
+                </p>
+                <span className='text-3xl font-bold font-display text-pw-primary mt-1 block'>
+                  ${formatOutput(monthlyPayment)}
+                </span>
+                <p className='text-[10px] text-pw-muted mt-1'>
+                  Installment calculated per month.
+                </p>
+              </div>
+
+              <div className='p-5 rounded-2xl border border-white/5 bg-white/[0.02]'>
+                <p className='text-xs text-pw-muted font-bold uppercase'>
+                  Total Interest Payed
+                </p>
+                <span className='text-3xl font-bold font-display text-pw-secondary mt-1 block'>
+                  ${formatOutput(totalLoanInterest)}
+                </span>
+                <p className='text-[10px] text-pw-muted mt-1'>
+                  Accumulated interest cost over term.
+                </p>
+              </div>
+
+              <div className='p-5 rounded-2xl border border-white/5 bg-white/[0.02]'>
+                <p className='text-xs text-pw-muted font-bold uppercase'>
+                  Total Payments Cost
+                </p>
+                <span className='text-3xl font-bold font-display text-pw-success mt-1 block'>
+                  ${formatOutput(totalLoanCost)}
+                </span>
+                <p className='text-[10px] text-pw-muted mt-1'>
+                  Principal + Interest combined.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* AGE CALCULATOR TAB */}
+          <TabsContent
+            value='age'
+            className='m-0 space-y-6'>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Date of Birth
+                </label>
+                <Input
+                  type='date'
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className='bg-white/5 border-white/10 h-10 text-pw-text cursor-pointer'
+                />
+              </div>
+
+              <div className='p-6 rounded-2xl border border-white/5 bg-white/[0.02] space-y-4'>
+                <div>
+                  <p className='text-xs text-pw-muted font-bold uppercase'>
+                    Calculated Age
+                  </p>
+                  <span className='text-xl sm:text-2xl font-extrabold font-display text-pw-primary mt-1 block'>
+                    {ageYears !== null ?
+                      `${ageYears} Years, ${ageMonths} Months, ${ageDays} Days`
+                    : 'Enter birthdate'}
+                  </span>
+                </div>
+
+                <div>
+                  <p className='text-xs text-pw-muted font-bold uppercase'>
+                    Next Birthday In
+                  </p>
+                  <span className='text-lg font-bold text-pw-success mt-1 block'>
+                    {daysToBirthday !== null ?
+                      `${daysToBirthday} Days`
+                    : '-- days'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* TIP CALCULATOR TAB */}
+          <TabsContent
+            value='tip'
+            className='m-0 space-y-6'>
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Bill Amount ($)
+                </label>
+                <Input
+                  type='text'
+                  value={tipBill}
+                  onChange={(e) =>
+                    setTipBill(formatAsUserTypes(e.target.value))
+                  }
+                  className='bg-white/5 border-white/10 h-10'
+                />
+              </div>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Tip Percentage (%)
+                </label>
+                <Input
+                  type='number'
+                  value={tipPercent}
+                  onChange={(e) => setTipPercent(e.target.value)}
+                  className='bg-white/5 border-white/10 h-10'
+                />
+              </div>
+              <div>
+                <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
+                  Number of People
+                </label>
+                <Input
+                  type='number'
+                  value={tipPeople}
+                  onChange={(e) => setTipPeople(e.target.value)}
+                  className='bg-white/5 border-white/10 h-10'
+                />
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+              <div className='p-6 rounded-2xl border border-white/5 bg-white/[0.02]'>
+                <p className='text-xs text-pw-muted font-bold uppercase'>
+                  Tip Per Person
+                </p>
+                <span className='text-3xl font-bold font-display text-pw-primary mt-1 block'>
+                  ${formatOutput(tipPerPerson)}
+                </span>
+                <p className='text-[10px] text-pw-muted mt-1'>
+                  Tip portion divided equally.
+                </p>
+              </div>
+
+              <div className='p-6 rounded-2xl border border-white/5 bg-white/[0.02]'>
+                <p className='text-xs text-pw-muted font-bold uppercase'>
+                  Total Per Person
+                </p>
+                <span className='text-3xl font-bold font-display text-pw-success mt-1 block'>
+                  ${formatOutput(totalPerPerson)}
+                </span>
+                <p className='text-[10px] text-pw-muted mt-1'>
+                  Total bill + tip divided equally.
                 </p>
               </div>
             </div>
