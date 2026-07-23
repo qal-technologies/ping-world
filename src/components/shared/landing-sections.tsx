@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { tools } from '@/lib/general/data';
+import Image from 'next/image';
 const stagger: Variants = {
   hidden: {},
   visible: {
@@ -86,6 +87,8 @@ export const HeroSection = () => {
             Quiz builder, Anonymous messaging, Image toolkit, URL shortener,
             creator hub - all free, all in one place.
           </motion.p>
+        
+          
 
           {/* CTA Buttons */}
           <motion.div

@@ -2,10 +2,20 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Instagram, Linkedin, Mail, Twitter, Youtube, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Instagram,
+  Linkedin,
+  Mail,
+  Twitter,
+  Youtube,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { COMPANY } from '@/lib/config/company';
 import { tools } from '@/lib/general/data';
 import { useAppContext } from '@/context/AppContext';
+import Image from 'next/image';
 
 const companyLinks = [
   { href: '/about', label: 'About' },
@@ -34,12 +44,12 @@ export const Footer = () => {
     { href: '/', label: 'Home' },
     { href: '/tools', label: 'All Tools' },
     { href: '/pricing', label: 'Pricing' },
-    ...(isLoggedIn
-      ? [{ href: '/dashboard', label: 'Dashboard' }]
-      : [
-          { href: '/login', label: 'Login' },
-          { href: '/register', label: 'Sign Up' },
-        ]),
+    ...(isLoggedIn ?
+      [{ href: '/dashboard', label: 'Dashboard' }]
+    : [
+        { href: '/login', label: 'Login' },
+        { href: '/register', label: 'Sign Up' },
+      ]),
   ];
 
   return (
@@ -51,9 +61,14 @@ export const Footer = () => {
             <Link
               href='/'
               className='flex items-center gap-2 mb-4'>
-              <div className='flex h-8 w-8 items-center justify-center rounded-lg gradient-brand'>
-                <Zap className='h-4 w-4 text-white' />
-              </div>
+            
+                        <Image
+                          width={40}
+                          height={40}
+                          src='/images/logo.png'
+                          alt='Ping World Logo'
+                          className='h-15 w-15 object-fit'
+                        />
               <span className='text-lg font-bold font-display text-pw-text'>
                 {COMPANY.name}
               </span>
@@ -105,19 +120,18 @@ export const Footer = () => {
                 </li>
               ))}
               {hasMoreTools && (
-                <li className="relative">
+                <li className='relative'>
                   <button
                     onClick={() => setIsOpen(!isOpen)}
                     className='text-sm text-pw-primary hover:text-pw-primary/80 transition-colors font-semibold flex items-center gap-1 cursor-pointer'>
-                    {isOpen ? (
+                    {isOpen ?
                       <>
-                        View Less <ChevronUp className="h-3.5 w-3.5" />
+                        View Less <ChevronUp className='h-3.5 w-3.5' />
                       </>
-                    ) : (
-                      <>
-                        View More... <ChevronDown className="h-3.5 w-3.5" />
+                    : <>
+                        View More... <ChevronDown className='h-3.5 w-3.5' />
                       </>
-                    )}
+                    }
                   </button>
 
                   {isOpen && (

@@ -142,7 +142,7 @@ export default function FeedbackWidget() {
                 added to our live feedback.
               </p>
             </Card>
-          : <Card className='bg-transparent sm:bg-card ring-0 sm:ring-1 sm:card-glow sm:p-4 sm:bg-white/[0.01]'>
+          : <Card className='bg-transparent sm:bg-card ring-0 sm:ring-1 pb-15 sm:pb-0 sm:card-glow sm:p-4 sm:bg-white/[0.01]'>
               <form
                 onSubmit={handleSubmit}
                 className='space-y-5 px-1 sm:px-0'>
@@ -223,7 +223,8 @@ export default function FeedbackWidget() {
 
                 <Button
                   type='submit'
-                  className='w-full btn-primary h-11 max-w-[400px] gap-2 font-bold text-xs uppercase tracking-wider'>
+                  style={{placeSelf:'center'}}
+                  className='w-full btn-primary h-11 max-w-[400px] flex gap-2 font-bold text-xs uppercase tracking-wider'>
                   <Send className='h-4 w-4' /> Share
                 </Button>
               </form>

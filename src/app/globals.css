@@ -217,16 +217,38 @@ pre {
 
 /* ─── Glass Morphism ────────────────────────────────────────── */
 .glass {
-  background: rgba(13, 15, 35, 0.6);
+  background: rgba(13, 15, 35, 0.4);
   -webkit-backdrop-filter: blur(20px) brightness(40%);
   backdrop-filter: blur(20px) brightness(40%);
   border: 1px solid rgba(92, 111, 255, 0.15);
 }
 
 .nav-glass {
-  background: rgba(13, 15, 35, 0.6);
-  -webkit-backdrop-filter: blur(20px) brightness(40%);
-  backdrop-filter: blur(20px) brightness(40%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: isnset 0px 0px 18px rgb(58, 58, 58, 0.2);
+}
+
+/* ───  Liquid Glass Morphism ────────────────────────────────────────── */
+
+.li-glass {
+  -webkit-backdrop-filter: blur(15px) brightness(150%);
+  backdrop-filter: blur(15px) brightness(150%) !important;
+  box-shadow: inset 0px 2px 18px rgb(58, 58, 58, 0.2);
+  border: 0.5px solid rgba(58, 58, 58, 0.06);
+  border-left: 0.5px solid rgba(71, 71, 71, 0.02);
+  box-shadow: 4px 1px 5px rgba(0, 0, 0, 0.25);
+  transition: all ease-in-out 600ms;
+  text-shadow: 0px 0.2px 1px black;
+}
+
+.li-glass:hover,
+.li-glass:active,
+.li-glass:focus,
+.li-glass:focus-within,
+.li-glass:focus-visible {
+  border-radius: 100px;
+  padding-inline: calc(1px + 2.5%);
 }
 
 .bkblur {
@@ -340,7 +362,6 @@ pre {
   box-shadow: 0 0 16px rgba(92, 111, 255, 0.3);
 }
 
-
 .btn-premium {
   position: relative;
   overflow: hidden;
@@ -403,7 +424,6 @@ pre {
     background 0.3s ease,
     box-shadow 0.3s ease;
   text-shadow: 0.6px 0px 1px black;
-
 }
 
 .btn-ghost:hover {
@@ -820,7 +840,7 @@ pre {
     0 0 100px 20px rgba(92, 255, 241, 0.292),
     inset 0 0 100px 20px rgba(235, 34, 253, 0.06);
   filter: blur(60px);
-  animation: blackhole-spin 10s ease-in-out infinite;
+  animation: blackhole-spin 8s ease-in-out infinite;
   opacity: 0.6;
 }
 

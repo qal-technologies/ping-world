@@ -1,4 +1,4 @@
-import { COMPANY } from "@/lib/config/company";
+import { COMPANY } from '@/lib/config/company';
 import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 import { fontDisplay, fontBody, fontMono } from '@/lib/fonts';
@@ -38,6 +38,7 @@ export const metadata: Metadata = {
     description:
       'Free tools for everyone: PDF tool, Image editing tools, social post canvas, Quizzes, URL shortener, and a full creator hub.',
     url: COMPANY.domain,
+    images: '/images/logo.png',
   },
   twitter: {
     card: 'summary_large_image',
@@ -45,7 +46,7 @@ export const metadata: Metadata = {
     description: 'Free tools for everyone. Build, create, share.',
     site: COMPANY.domain,
   },
-  icons: { icon: '/favicon.ico', apple: '/favicon.ico' },
+  icons: { icon: '/images/logo.png', apple: '/images/logo.png' },
   keywords: [
     'ping world',
     'ping wrld',
@@ -85,9 +86,7 @@ export default function RootLayout({
       className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}>
       <body className='min-h-dvh flex flex-col antialiased'>
         <AppProvider>
-          <ComposerProvider>
-            {children}
-          </ComposerProvider>
+          <ComposerProvider>{children}</ComposerProvider>
         </AppProvider>
         <Toaster
           position='bottom-right'
