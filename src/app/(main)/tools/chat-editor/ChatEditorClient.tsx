@@ -61,8 +61,11 @@ export default function ChatEditorPage() {
   const exportAsImage = async () => {
     if (!chatRef.current) return;
     try {
+      // jules edit: Add CORS and allowTaint to prevent canvas taint issues
       const canvas = await html2canvas(chatRef.current, {
         backgroundColor: "#F1F5F9", // Light slate for "device" background
+        useCORS: true,
+        allowTaint: true
       });
       const link = document.createElement("a");
       link.download = `pingworld-chat-${editingName.toLowerCase()}.png`;

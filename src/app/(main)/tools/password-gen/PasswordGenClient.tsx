@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import SimilarTools from '@/components/shared/SimilarTools';
 import {
   Lock,
   Key,
@@ -243,6 +244,9 @@ export default function PasswordGeneratorPage() {
           </Card>
         </div>
       </div>
+
+      {/* jules edit: Suggest similar tools at the bottom */}
+      <SimilarTools currentToolId="password-gen" />
     </div>
   );
 }

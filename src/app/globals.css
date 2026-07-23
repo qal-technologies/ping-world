@@ -229,17 +229,20 @@ pre {
   box-shadow: isnset 0px 0px 18px rgb(58, 58, 58, 0.2);
 }
 
-/* ───  Liquid Glass Morphism ────────────────────────────────────────── */
-
+/* jules edit: Realistic Liquid Glass Morphism with modern highlights and saturated backdrop blur */
 .li-glass {
-  -webkit-backdrop-filter: blur(15px) brightness(150%);
-  backdrop-filter: blur(15px) brightness(150%) !important;
-  box-shadow: inset 0px 2px 18px rgb(58, 58, 58, 0.2);
-  border: 0.5px solid rgba(58, 58, 58, 0.06);
-  border-left: 0.5px solid rgba(71, 71, 71, 0.02);
-  box-shadow: 4px 1px 5px rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(25px) saturate(180%) brightness(115%);
+  backdrop-filter: blur(25px) saturate(180%) brightness(115%) !important;
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  border-right-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.3),
+    inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.2),
+    0 10px 30px rgba(0, 0, 0, 0.3);
   transition: all ease-in-out 600ms;
-  text-shadow: 0px 0.2px 1px black;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .li-glass:hover,
@@ -249,6 +252,11 @@ pre {
 .li-glass:focus-visible {
   border-radius: 100px;
   padding-inline: calc(1px + 2.5%);
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.4),
+    inset 0 -2px 2px rgba(0, 0, 0, 0.25),
+    0 12px 35px rgba(92, 111, 255, 0.2);
 }
 
 .bkblur {
@@ -314,7 +322,7 @@ pre {
   background: linear-gradient(145deg, #12152e 0%, #1a1f40 100%);
 }
 
-/* ─── Primary Button + Shimmer ──────────────────────────────── */
+/* jules edit: Primary Button with shimmer and text-shadow removed */
 .btn-primary {
   position: relative;
   overflow: hidden;
@@ -333,7 +341,6 @@ pre {
     transform 0.2s ease,
     border-radius 0.35s ease;
   box-shadow: 0 0 20px rgba(92, 111, 255, 0.3);
-  text-shadow: 0.6px 0px 1px black;
 }
 
 .btn-primary::after {
@@ -362,6 +369,7 @@ pre {
   box-shadow: 0 0 16px rgba(92, 111, 255, 0.3);
 }
 
+/* jules edit: Premium Button with text-shadow removed */
 .btn-premium {
   position: relative;
   overflow: hidden;
@@ -380,7 +388,6 @@ pre {
     transform 0.2s ease,
     border-radius 0.35s ease;
   box-shadow: 0 0 20px rgba(92, 111, 255, 0.3);
-  text-shadow: 0.6px 0px 1px black;
 }
 
 .btn-premium::after {
@@ -409,6 +416,7 @@ pre {
   box-shadow: 0 0 16px rgba(247, 92, 255, 0.3);
 }
 
+/* jules edit: Ghost Button with text-shadow removed */
 .btn-ghost {
   background: transparent;
   color: var(--pw-text);
@@ -423,7 +431,6 @@ pre {
     border-color 0.3s ease,
     background 0.3s ease,
     box-shadow 0.3s ease;
-  text-shadow: 0.6px 0px 1px black;
 }
 
 .btn-ghost:hover {

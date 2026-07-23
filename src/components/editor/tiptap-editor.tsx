@@ -86,6 +86,14 @@ export default function TiptapEditor({
     },
   });
 
+  // jules edit: Update editor content when the active note/document content changes
+  const { useEffect } = require("react");
+  useEffect(() => {
+    if (editor && content !== editor.getHTML()) {
+      editor.commands.setContent(content);
+    }
+  }, [content, editor]);
+
   if (!editor) return null;
 
   const setLink = () => {

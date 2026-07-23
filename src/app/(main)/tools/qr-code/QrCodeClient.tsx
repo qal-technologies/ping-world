@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import SimilarTools from '@/components/shared/SimilarTools';
 import {
   QrCode,
   Download,
@@ -558,6 +559,9 @@ export default function QrCodeGeneratorPage() {
           </div>
         </div>
       </div>
+
+      {/* jules edit: Suggest similar tools at the bottom */}
+      <SimilarTools currentToolId="qr-code" />
     </div>
   );
 }

@@ -235,6 +235,7 @@ export function CanvasBuilder() {
     setDraggingShapeId(null);
   };
 
+  // jules edit: Fix asynchronous state check and enable CORS and taint configurations for perfect html2canvas captures
   const handleDownload = async () => {
     if (!canvasRef.current) return;
     setDownloading(true);
@@ -242,8 +243,10 @@ export function CanvasBuilder() {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(canvasRef.current, {
         scale: 1.5,
-        backgroundColor: 'transparent',
+        backgroundColor: null, // transparent
         logging: false,
+        useCORS: true,
+        allowTaint: true
       });
 
       // Add PingWorld watermark
@@ -254,18 +257,16 @@ export function CanvasBuilder() {
         ctx.fillText('pingwrld.com', canvas.width - 120, canvas.height - 12);
       }
 
-      setCanvasPreview(canvas.toDataURL('image/png'));
+      const dataUrl = canvas.toDataURL('image/png');
+      setCanvasPreview(dataUrl);
 
-      if (!canvasPreview) {
-        toast.error("Couldn't generate canvas preview");
-      } else {
-        const link = document.createElement('a');
-        link.href = canvasPreview;
-        link.download = 'pingworld-instagram-canvas.png';
-        link.click();
-        toast.success('Canvas downloaded!');
-      }
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `pingworld-instagram-canvas-${Date.now()}.png`;
+      link.click();
+      toast.success('Canvas downloaded!');
     } catch (err) {
+      console.error(err);
       toast.error('Download failed — try again');
     } finally {
       setDownloading(false);

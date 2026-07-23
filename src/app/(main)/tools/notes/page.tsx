@@ -28,6 +28,9 @@ export const metadata: Metadata = {
   }
 };
 
+import { redirect } from "next/navigation";
+
 export default function NotesPage() {
-  return <NotesClient />;
+  // jules edit: Redirect text notes tool to the centralized Rich Notes & Editor
+  redirect("/editor");
 }
