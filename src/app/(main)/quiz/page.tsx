@@ -37,6 +37,14 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -2063,6 +2071,30 @@ const QuizBuilder = ({
 };
 
 export default function QuizPage() {
+  // jules edit: State variables for Custom Filename modal
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
+  const [filenameInput, setFilenameInput] = useState("");
+  const [filenameExtension, setFilenameExtension] = useState("");
+  const [onConfirmFilename, setOnConfirmFilename] = useState<((cleanName: string) => void) | null>(null);
+
+  const triggerExport = (defaultName: string, ext: string, callback: (cleanName: string) => void) => {
+    setFilenameInput(defaultName.replace(/\.[^/.]+$/, "")); // Strip any extension initially
+    setFilenameExtension(ext);
+    setOnConfirmFilename(() => callback);
+    setIsNameModalOpen(true);
+  };
+
+  const handleConfirmFilename = () => {
+    let clean = filenameInput.trim();
+    if (!clean) clean = "untitled";
+    // Screen/strip common extensions to avoid double extension bugs
+    clean = clean.replace(/\.(txt|pdf|png|doc|docx|json|csv)$/i, '');
+    if (onConfirmFilename) {
+      onConfirmFilename(clean);
+    }
+    setIsNameModalOpen(false);
+  };
+
   const { premiumTier } = useAppContext();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -2185,16 +2217,19 @@ export default function QuizPage() {
       headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','),
       ...rows.map((row) => row.join(',')),
     ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${quiz.title.replace(/\s+/g, '_')}_responses.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Responses exported to CSV!');
+
+    triggerExport(`${quiz.title.replace(/\s+/g, '_')}_responses`, "csv", (filename) => {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${filename}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Responses exported to CSV!');
+    });
   };
 
   const clearResponses = async (quizId: string) => {
@@ -2335,18 +2370,18 @@ export default function QuizPage() {
   };
 
   const exportQuiz = (quiz: Quiz) => {
-    const dataStr =
-      'data:text/json;charset=utf-8,' +
-      encodeURIComponent(JSON.stringify(quiz));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute('href', dataStr);
-    downloadAnchorNode.setAttribute(
-      'download',
-      `${quiz.title.replace(/\s+/g, '-').toLowerCase()}.json`,
-    );
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    triggerExport(quiz.title.replace(/\s+/g, '-').toLowerCase(), "json", (filename) => {
+      const dataStr =
+        'data:text/json;charset=utf-8,' +
+        encodeURIComponent(JSON.stringify(quiz));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute('href', dataStr);
+      downloadAnchorNode.setAttribute('download', `${filename}.json`);
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+      toast.success('Quiz exported to JSON!');
+    });
   };
 
   const importQuiz = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2830,6 +2865,47 @@ export default function QuizPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* jules edit: Custom-themed filename entry overlay/modal */}
+      <Dialog open={isNameModalOpen} onOpenChange={setIsNameModalOpen}>
+        <DialogContent className="max-w-md w-full p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl text-pw-text z-50 animate-fade-in">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-extrabold font-display">
+              Export Name Customization
+            </DialogTitle>
+            <DialogDescription className="text-pw-muted text-xs">
+              Specify the filename you want to save. Do not include extensions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="relative">
+              <Input
+                value={filenameInput}
+                onChange={(e) => setFilenameInput(e.target.value)}
+                placeholder="Enter filename..."
+                className="card-glow bg-transparent h-11 text-sm border-white/5 focus-visible:ring-0 w-full"
+              />
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-pw-primary font-mono uppercase">
+                .{filenameExtension}
+              </span>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => setIsNameModalOpen(false)}
+              className="flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all">
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmFilename}
+              className="flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all">
+              Confirm &amp; Export
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

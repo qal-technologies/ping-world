@@ -1,0 +1,17 @@
+
+> pingworld@1.0.0 dev
+> next dev --turbopack
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+✓ Ready in 583ms
+
+○ Compiling /pricing ...
+ GET /pricing 200 in 12.7s (next.js: 11.0s, application-code: 1719ms)
+○ Compiling /editor ...
+ GET /editor 200 in 7.5s (next.js: 7.2s, application-code: 330ms)
+[browser] Next.js detected. `immediatelyRender` defaults to false to avoid hydration mismatches. Pass `immediatelyRender: true` explicitly if you are rendering the editor only on the client. (src/components/editor/tiptap-editor.tsx:64:27)
+[browser] Next.js detected. `immediatelyRender` defaults to false to avoid hydration mismatches. Pass `immediatelyRender: true` explicitly if you are rendering the editor only on the client. (src/components/editor/tiptap-editor.tsx:64:27)
+[browser] [tiptap warn]: Duplicate extension names found: ['link', 'underline']. This can lead to issues.
+ GET /tools/pdf 200 in 3.2s (next.js: 3.0s, application-code: 226ms)

@@ -15,9 +15,23 @@ import {
   Calculator,
   FileCode,
   FileText as PdfIcon,
+  Globe,
 } from 'lucide-react';
 
 export const tools = [
+  // jules edit: Highly modular Country Directory tool card with custom icon and Sky Blue theme
+  {
+    icon: Globe,
+    title: 'Country Directory',
+    description:
+      'Explore high-fidelity country flags, ISO codes, calling info, languages, currencies, and geographic data with instant modular search.',
+    href: '/countries',
+    color: '#0ea5e9',
+    tag: 'Countries',
+    id: 'countries',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  },
   {
     icon: Brain,
     title: 'Quizzable',
@@ -56,14 +70,14 @@ export const tools = [
   },
   {
     icon: Type,
-    title: 'Text Editor',
+    title: 'Rich Notes & Editor',
     category: 'Content',
     id: 'editor',
     description:
-      'Top notch all-in-one text editor with post card generation and export options.',
+      'The ultimate offline-first rich text document workspace & note-stacking dashboard with postcard creation and exports.',
     href: '/editor',
     color: '#f622fdff',
-    tag: 'Rich Text',
+    tag: 'Notes & Editor',
     version: { v: '1.0', s: 'Stable' },
   },
   {
@@ -171,18 +185,6 @@ export const tools = [
     color: '#1d9bf0',
     tag: 'Calculator',
     id: 'calculator',
-    category: 'Utility',
-    version: { v: '1.0', s: 'Stable' },
-  },
-  {
-    icon: FileCode,
-    title: 'Text Note',
-    description:
-      'Local-first secure offline text notes with custom categorizations, stacking, search capability, and sync option.',
-    href: '/tools/notes',
-    color: '#22c985',
-    tag: 'Notes',
-    id: 'notes',
     category: 'Utility',
     version: { v: '1.0', s: 'Stable' },
   },

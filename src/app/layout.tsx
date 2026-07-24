@@ -80,10 +80,46 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // jules edit: Professional SEO Structured Data (JSON-LD WebSite & SoftwareApplication Schemas)
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Ping World",
+    "url": COMPANY.domain,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${COMPANY.domain}/tools?q={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
+  };
+
+  const softwareSchema = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Ping World",
+    "operatingSystem": "All",
+    "applicationCategory": "BusinessApplication, Utilities",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  };
+
   return (
     <html
       lang='en'
       className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
+        />
+      </head>
       <body className='min-h-dvh flex flex-col antialiased'>
         <AppProvider>
           <ComposerProvider>{children}</ComposerProvider>
