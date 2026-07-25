@@ -3,6 +3,23 @@
  * All tier checks, limits, and feature gates should reference this file.
  */
 
+// jules edit: Define flexible plan features & pricing configuration
+export interface FlexibleFeature {
+  id: string;
+  label: string;
+  monthly: number;
+  yearly: number;
+}
+
+// jules edit: Modular and easily tweakable individual pricing rules for the flexible plan
+export const FLEXIBLE_FEATURES: FlexibleFeature[] = [
+  { id: 'all', label: 'All-In-One Access', monthly: 4.99, yearly: 49.99 },
+  { id: 'quiz', label: 'Quizzable (Quiz Builder)', monthly: 1.99, yearly: 19.99 },
+  { id: 'anonlink', label: 'AnonLink (Anonymous Inbox)', monthly: 1.49, yearly: 14.99 },
+  { id: 'composer', label: 'Creator Hub (Composer)', monthly: 2.49, yearly: 24.99 },
+  { id: 'games', label: 'Tournament Table', monthly: 0.99, yearly: 9.99 },
+];
+
 export type PremiumTier = 'free' | 'flexible' | 'standard' | 'pro';
 
 export interface TierConfig {

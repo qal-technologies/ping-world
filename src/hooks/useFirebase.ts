@@ -1,6 +1,19 @@
+// jules edit: Complete Firebase SDK Firestore CRUD algorithms for high-frequency updates
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  query,
+  where,
+  limit as firestoreLimit,
+  onSnapshot,
+} from 'firebase/firestore';
 import { toast } from 'sonner';
 
 // Replicate matching database schema structures
@@ -28,6 +41,13 @@ export interface FirebaseTables {
     sender_name?: string;
     created_at: string;
   };
+  tournaments: {
+    id: string;
+    user_id: string;
+    name: string;
+    teams: unknown[];
+    updated_at?: string;
+  };
 }
 
 interface FirebaseGetOptions<T extends keyof FirebaseTables> {
@@ -35,27 +55,14 @@ interface FirebaseGetOptions<T extends keyof FirebaseTables> {
   limit?: number;
 }
 
-/**
- * useFirebase Hook Skeleton
- *
- * Implements a matching interface to useSupabase but routes requests to Firebase firestore/realtime DB
- * for high-frequency low-latency updates (e.g., live message replies, game leaderboards).
- *
- * TODO: Integrate Firebase SDK. Set up Firebase Project in console.firebase.google.com and define:
- * NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_PROJECT_ID, NEXT_PUBLIC_FIREBASE_DATABASE_URL etc.
- */
 export function useFirebase() {
-  // Firebase Firestore instance — typed as unknown until SDK specific import is available
-  const [db, setDb] = useState<unknown>(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Scaffold initial Firebase connection here once environment keys are established
-    // e.g.:
-    // import { initializeApp } from "firebase/app";
-    // import { getFirestore } from "firebase/firestore";
-    // const app = initializeApp(firebaseConfig);
-    // setDb(getFirestore(app));
-    console.info('[useFirebase] Firebase initialized in standby mode.');
+    if (db) {
+      setInitialized(true);
+      console.info('[useFirebase] Firebase Firestore connection initialized.');
+    }
   }, []);
 
   const get = useCallback(
@@ -63,12 +70,34 @@ export function useFirebase() {
       table: T,
       options?: FirebaseGetOptions<T>,
     ): Promise<FirebaseTables[T][] | null> => {
-      // TODO: Implement Firestore get queries with limit/where conditions
-      console.info(
-        `[useFirebase] Stub: fetching from Firestore table: ${table}`,
-        options,
-      );
-      return [];
+      try {
+        const colRef = collection(db, table);
+        let q = query(colRef);
+
+        if (options?.eq) {
+          Object.entries(options.eq).forEach(([key, val]) => {
+            if (val !== undefined && val !== null) {
+              q = query(q, where(key, '==', val));
+            }
+          });
+        }
+
+        if (options?.limit) {
+          q = query(q, firestoreLimit(options.limit));
+        }
+
+        const querySnapshot = await getDocs(q);
+        const results: FirebaseTables[T][] = [];
+        querySnapshot.forEach((docSnap) => {
+          results.push(docSnap.data() as FirebaseTables[T]);
+        });
+
+        return results;
+      } catch (err: any) {
+        console.error(`[useFirebase] Firestore GET error on table ${table}:`, err);
+        toast.error(`Firebase read failed: ${err.message || err}`);
+        return null;
+      }
     },
     [],
   );
@@ -78,13 +107,23 @@ export function useFirebase() {
       table: T,
       payload: Partial<FirebaseTables[T]>,
     ): Promise<boolean> => {
-      // TODO: Implement Firestore doc set/add
-      console.info(
-        `[useFirebase] Stub: saving to Firestore table: ${table}`,
-        payload,
-      );
-      toast.success(`[Firebase Standby] Saved entry in ${table}`);
-      return true;
+      try {
+        const id = payload.id || Math.random().toString(36).substring(2, 11);
+        const docRef = doc(db, table, id);
+
+        const dataToSave = {
+          ...payload,
+          id,
+          updated_at: new Date().toISOString(),
+        };
+
+        await setDoc(docRef, dataToSave, { merge: true });
+        return true;
+      } catch (err: any) {
+        console.error(`[useFirebase] Firestore SAVE error on table ${table}:`, err);
+        toast.error(`Firebase save failed: ${err.message || err}`);
+        return false;
+      }
     },
     [],
   );
@@ -94,11 +133,15 @@ export function useFirebase() {
       table: T,
       id: string,
     ): Promise<boolean> => {
-      // TODO: Implement Firestore doc delete
-      console.info(
-        `[useFirebase] Stub: deleting doc ${id} from table ${table}`,
-      );
-      return true;
+      try {
+        const docRef = doc(db, table, id);
+        await deleteDoc(docRef);
+        return true;
+      } catch (err: any) {
+        console.error(`[useFirebase] Firestore DELETE error on table ${table}:`, err);
+        toast.error(`Firebase delete failed: ${err.message || err}`);
+        return false;
+      }
     },
     [],
   );
@@ -106,25 +149,37 @@ export function useFirebase() {
   const listen = useCallback(
     <T extends keyof FirebaseTables>(
       table: T,
-      onUpdate: (payload: Record<string, unknown>) => void,
+      onUpdate: (payload: Record<string, unknown> | any) => void,
       eq?: { column: string; value: string | number },
     ) => {
-      // TODO: Implement Firestore onSnapshot subscription or Realtime Database listening
-      console.info(
-        `[useFirebase] Stub: listening to edits on table: ${table} keyed to ${eq?.column}=${eq?.value}`,
+      const colRef = collection(db, table);
+      let q = query(colRef);
+
+      if (eq) {
+        q = query(q, where(eq.column, '==', eq.value));
+      }
+
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const docs: any[] = [];
+          snapshot.forEach((docSnap) => {
+            docs.push(docSnap.data());
+          });
+          onUpdate({ docs, size: snapshot.size });
+        },
+        (err) => {
+          console.error(`[useFirebase] Realtime listener error on ${table}:`, err);
+        }
       );
 
-      // Return unsubscribe mock
-      return () => {
-        console.info(
-          `[useFirebase] Stub: unregistered socket listener on ${table}`,
-        );
-      };
+      return unsubscribe;
     },
     [],
   );
 
   return {
+    initialized,
     get,
     save,
     remove,

@@ -96,13 +96,18 @@ export function SavePreviewPanel() {
     }
   };
 
-  const downloadPreview = () => {
+  // jules edit: Safe cross-platform file saving using file-saver with a true binary Blob
+  const downloadPreview = async () => {
     if (!previewBlob) return;
-    const link = document.createElement('a');
-    link.href = previewBlob;
-    link.download = `pingworld-post-preview-${Date.now()}.png`;
-    link.click();
-    toast.success('Preview saved!');
+    try {
+      const res = await fetch(previewBlob);
+      const blob = await res.blob();
+      const { saveAs } = await import('file-saver');
+      saveAs(blob, `pingworld-post-preview-${Date.now()}.png`);
+      toast.success('Preview saved!');
+    } catch {
+      toast.error('Failed to save preview blob.');
+    }
   };
 
   const copyToClipboard = async () => {

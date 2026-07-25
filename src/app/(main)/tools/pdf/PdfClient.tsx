@@ -320,12 +320,13 @@ export default function PdfToolStudioPage() {
       id: `${Date.now()}-${Math.random()}`,
       name: f.name,
       size: `${(f.size / 1024).toFixed(1)} KB`,
-      file: f
+      file: f,
     }));
     setMergeFiles([...mergeFiles, ...newFiles]);
     toast.success('Document added to compilation list!');
   };
 
+  // jules edit: True page-by-page PDF compiler using pdf-lib
   const executeMerge = async () => {
     if (mergeFiles.length < 2) {
       toast.error('Please add at least 2 files to merge!');

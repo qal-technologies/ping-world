@@ -102,6 +102,7 @@ CREATE POLICY "Users can update their own profile"
 -- ==========================================
 -- 2. QUIZZES TABLE (Quizzable tool data)
 -- ==========================================
+-- jules edit: Extended the quizzes table schema with all the missing camelCase and snake_case configuration columns
 CREATE TABLE IF NOT EXISTS public.quizzes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE,
@@ -126,6 +127,23 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- jules edit: Safe migration instructions to guarantee existing databases are auto-patched with the new columns
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'trivia';
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS responses JSONB DEFAULT '[]'::jsonb NOT NULL;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "canGoBack" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "showScore" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "hasTimer" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "correctOption" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "correctOptionDes" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "randomizeOptions" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "randomizeQuestions" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "allowRetry" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "enforceSecurity" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "enforceIdentity" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "askDetails" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "endScreen" JSONB DEFAULT '{}'::jsonb NOT NULL;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
 
 -- Enable RLS on Quizzes
 ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
@@ -201,49 +219,46 @@ CREATE POLICY "Recipients can delete their own messages"
   ON public.messages FOR DELETE USING (auth.uid() = recipient_id);
 
 -- ==========================================
--- 5. SHORT_LINKS TABLE (URL shortener metadata)
+-- 5. TOURNAMENTS TABLE (Games standings tool data)
 -- ==========================================
-CREATE TABLE IF NOT EXISTS public.short_links (
-  id TEXT PRIMARY KEY,
-  creator_id UUID REFERENCES auth.users ON DELETE CASCADE,
-  original_url TEXT NOT NULL,
-  clicks INTEGER DEFAULT 0 NOT NULL,
-  expires_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.short_links ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Short links are viewable/resolvable by everyone"
-  ON public.short_links FOR SELECT USING (true);
-
-CREATE POLICY "Users can create short links"
-  ON public.short_links FOR INSERT WITH CHECK (auth.uid() = creator_id);
-
-CREATE POLICY "Users can delete their own short links"
-  ON public.short_links FOR DELETE USING (auth.uid() = creator_id);
-
--- ==========================================
--- 6. TOURNAMENTS TABLE (Games & standings tracker)
--- ==========================================
+-- jules edit: Created tournaments table for competitive games tracking
 CREATE TABLE IF NOT EXISTS public.tournaments (
-  id TEXT PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE,
   name TEXT NOT NULL,
   teams JSONB DEFAULT '[]'::jsonb NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Enable RLS on Tournaments
 ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Tournaments stand tables are publicly viewable"
+CREATE POLICY "Tournaments are viewable by everyone"
   ON public.tournaments FOR SELECT USING (true);
 
-CREATE POLICY "Users can insert/update their own tournament table"
-  ON public.tournaments FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Authenticated users can manage their own tournaments"
+  ON public.tournaments FOR ALL USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own tournament table"
-  ON public.tournaments FOR UPDATE USING (auth.uid() = user_id);
+-- ==========================================
+-- 6. SHORT LINKS TABLE (URL Shortener tool data)
+-- ==========================================
+-- jules edit: Created short links table for redirects
+CREATE TABLE IF NOT EXISTS public.short_links (
+  id TEXT PRIMARY KEY,
+  creator_id UUID REFERENCES auth.users ON DELETE CASCADE,
+  original_url TEXT NOT NULL,
+  clicks INTEGER DEFAULT 0 NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Enable RLS on Short Links
+ALTER TABLE public.short_links ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Short links are viewable by everyone"
+  ON public.short_links FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can manage their own short links"
+  ON public.short_links FOR ALL USING (auth.uid() = creator_id);
 
 -- ==========================================
 -- 7. PERFORMANCE INDEXES
@@ -253,6 +268,8 @@ CREATE INDEX IF NOT EXISTS idx_quizzes_expires_at ON public.quizzes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_messages_recipient_id ON public.messages(recipient_id);
 CREATE INDEX IF NOT EXISTS idx_messages_expires_at ON public.messages(expires_at);
 CREATE INDEX IF NOT EXISTS idx_quiz_responses_quiz_id ON public.quiz_responses(quiz_id);
+CREATE INDEX IF NOT EXISTS idx_tournaments_user_id ON public.tournaments(user_id);
+CREATE INDEX IF NOT EXISTS idx_short_links_creator_id ON public.short_links(creator_id);
 
 -- ==========================================
 -- 8. AUTOMATIC USER PROFILE TRIGGER

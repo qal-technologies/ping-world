@@ -62,6 +62,21 @@ function flattenItems(items: StorageItem[]): any[] {
   return items.map((i) => i.content || i);
 }
 
+// jules edit: Safe utility to get active user ID from either Firebase Auth or Supabase Auth
+async function getActiveUserId(): Promise<string | null> {
+  try {
+    const { auth } = await import('@/lib/firebase');
+    if (auth.currentUser?.uid) return auth.currentUser.uid;
+  } catch {}
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) return session.user.id;
+  } catch {}
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 
 // Safely construct payloads mapping local state directly to DB schema columns
@@ -94,6 +109,7 @@ function buildSupabasePayload(
       enforceIdentity: content.enforceIdentity,
       askDetails: content.askDetails,
       endScreen: content.endScreen,
+      expires_at: content.expires_at, // jules edit: Map missing expires_at field
       updated_at: timestamp,
     };
   } else if (type === 'link') {
@@ -144,6 +160,33 @@ async function syncFromRemote(
   if (!isOnline()) return;
 
   try {
+    // jules edit: Route 'games' (Tournament Standings) directly to Firebase Firestore collections
+    if (type === 'games') {
+      const userId = await getActiveUserId();
+      if (!userId) return;
+
+      const { db } = await import('@/lib/firebase');
+      const { collection, getDocs, query, where, limit } = await import('firebase/firestore');
+
+      const q = query(
+        collection(db, 'tournaments'),
+        where('user_id', '==', userId),
+        limit(50)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const rows: any[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        rows.push(docSnapshot.data());
+      });
+
+      if (rows.length > 0) {
+        const merged = mergeIntoLocal(type, rows);
+        onUpdate?.(flattenItems(merged));
+      }
+      return;
+    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -152,8 +195,9 @@ async function syncFromRemote(
     if (type !== 'quiz' && !session) return;
 
     // Projection map: avoid fetching entire table width for list syncs
+    // jules edit: Selected correct columns for quizzes table to avoid bad requests
     const projections: Record<StorageItem['type'], string> = {
-      quiz: 'id,user_id,title,description,type,updated_at',
+      quiz: 'id,user_id,title,description,type,updated_at,expires_at',
       message: 'id,recipient_id,content,is_seen,created_at,expires_at',
       link: 'id,creator_id,original_url,clicks',
       games: 'id,user_id,name,teams,updated_at',
@@ -194,10 +238,8 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
   if (!isOnline()) return;
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
+    const userId = await getActiveUserId();
+    if (!userId) return;
 
     const local = readLocal(type);
     const unsynced = local.filter((i) => !i.is_synced);
@@ -205,29 +247,45 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
 
     for (const item of unsynced) {
       try {
-        const payload = buildSupabasePayload(
-          type,
-          item.content,
-          session.user.id,
-          new Date().toISOString(),
-        );
+        // jules edit: Route 'games' (Tournament Standings) push to Firebase Firestore collections
+        if (type === 'games') {
+          const { db } = await import('@/lib/firebase');
+          const { doc, setDoc } = await import('firebase/firestore');
 
-        let { error } = await supabase.from(tableName(type)).upsert(payload);
-
-        // Auto-heal missing profile if trigger failed
-        if (error?.code === '23503' && error.message.includes('profiles')) {
-          await supabase.from('profiles').upsert({
-            id: session.user.id,
-            username: 'user_' + session.user.id.substring(0, 8),
-            display_name: session.user.email?.split('@')[0] || 'User',
+          await setDoc(doc(db, 'tournaments', item.id), {
+            id: item.id,
+            user_id: userId,
+            name: item.content.name || 'Tournament Standings',
+            teams: item.content.teams || [],
+            updated_at: new Date().toISOString(),
           });
-          // Retry original upsert
-          const retry = await supabase.from(tableName(type)).upsert(payload);
-          error = retry.error;
-        }
 
-        if (!error) {
           item.is_synced = true;
+        } else {
+          const payload = buildSupabasePayload(
+            type,
+            item.content,
+            userId,
+            new Date().toISOString(),
+          );
+
+          let { error } = await supabase.from(tableName(type)).upsert(payload);
+
+          // Auto-heal missing profile if trigger failed
+          if (error?.code === '23503' && error.message.includes('profiles')) {
+            await supabase.from('profiles').upsert({
+              id: userId,
+              username: 'user_' + userId.substring(0, 8),
+              display_name: 'User',
+            });
+            // Retry original upsert
+            const retry = await supabase.from(tableName(type)).upsert(payload);
+            error = retry.error;
+          }
+
+          if (!error) {
+            item.is_synced = true;
+          }
         }
       } catch (e) {
         console.error(`[HybridStorage] Failed to push item ${item.id}:`, e);
@@ -293,38 +351,56 @@ export const HybridStorage = {
     if (isOnline()) {
       (async () => {
         try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (!session) return;
+          const userId = await getActiveUserId();
+          if (!userId) return;
 
-          const payload = buildSupabasePayload(
-            type,
-            content,
-            session.user.id,
-            timestamp,
-          );
+          // jules edit: Route 'games' (Tournament Standings) background save to Firebase Firestore
+          if (type === 'games') {
+            const { db } = await import('@/lib/firebase');
+            const { doc, setDoc } = await import('firebase/firestore');
 
-          let { error } = await supabase.from(tableName(type)).upsert(payload);
-
-          // Auto-heal missing profile if trigger failed
-          if (error?.code === '23503' && error.message.includes('profiles')) {
-            await supabase.from('profiles').upsert({
-              id: session.user.id,
-              username: 'user_' + session.user.id.substring(0, 8),
-              display_name: session.user.email?.split('@')[0] || 'User',
+            await setDoc(doc(db, 'tournaments', item.id), {
+              id: item.id,
+              user_id: userId,
+              name: content.name || 'Tournament Standings',
+              teams: content.teams || [],
+              updated_at: timestamp,
             });
-            // Retry original upsert
-            const retry = await supabase.from(tableName(type)).upsert(payload);
-            error = retry.error;
-          }
 
-          if (!error) {
             // Mark as synced locally
             const refreshed = readLocal(type);
             const i = refreshed.findIndex((r) => r.id === item.id);
             if (i >= 0) refreshed[i].is_synced = true;
             writeLocal(type, refreshed);
+          } else {
+            const payload = buildSupabasePayload(
+              type,
+              content,
+              userId,
+              timestamp,
+            );
+
+            let { error } = await supabase.from(tableName(type)).upsert(payload);
+
+            // Auto-heal missing profile if trigger failed
+            if (error?.code === '23503' && error.message.includes('profiles')) {
+              await supabase.from('profiles').upsert({
+                id: userId,
+                username: 'user_' + userId.substring(0, 8),
+                display_name: 'User',
+              });
+              // Retry original upsert
+              const retry = await supabase.from(tableName(type)).upsert(payload);
+              error = retry.error;
+            }
+
+            if (!error) {
+              // Mark as synced locally
+              const refreshed = readLocal(type);
+              const i = refreshed.findIndex((r) => r.id === item.id);
+              if (i >= 0) refreshed[i].is_synced = true;
+              writeLocal(type, refreshed);
+            }
           }
         } catch (e) {
           console.warn('[HybridStorage] Background push failed:', e);
@@ -407,11 +483,18 @@ export const HybridStorage = {
     if (isOnline()) {
       (async () => {
         try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (!session) return;
-          await supabase.from(tableName(type)).delete().eq('id', id);
+          // jules edit: Route 'games' (Tournament Standings) remote delete to Firebase Firestore
+          if (type === 'games') {
+            const { db } = await import('@/lib/firebase');
+            const { doc, deleteDoc } = await import('firebase/firestore');
+            await deleteDoc(doc(db, 'tournaments', id));
+          } else {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (!session) return;
+            await supabase.from(tableName(type)).delete().eq('id', id);
+          }
         } catch (e) {
           console.error('[HybridStorage] Remote delete failed:', e);
         }
