@@ -20,7 +20,6 @@ export interface ToolDoc {
 }
 
 export const toolDocsDb: Record<string, ToolDoc> = {
-  // jules edit: Add documentation for the Country Directory tool
   countries: {
     id: "countries",
     title: "Country Directory",

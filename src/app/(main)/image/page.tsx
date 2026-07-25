@@ -353,7 +353,7 @@ export default function ImageToolkitPage() {
           </p>
         </div>
         {image && (
-          <div className='flex gap-3'>
+          <div className='flex flex-wrap gap-3'>
             <Button
               variant='outline'
               onClick={() => {
@@ -394,7 +394,7 @@ export default function ImageToolkitPage() {
             <h3 className='text-2xl font-bold font-display mb-2'>
               Upload an Image
             </h3>
-            <p className='text-pw-muted max-w-sm'>
+            <p className='text-pw-muted text-sm max-w-sm'>
               Drag and drop or click to pick an image. All processing happens in
               your browser for 100% privacy.
             </p>
@@ -403,7 +403,7 @@ export default function ImageToolkitPage() {
       : <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
           {/* Main Editor Canvas Area */}
           <div className='lg:col-span-7 flex flex-col gap-6'>
-            <Card className='card-glow overflow-hidden bg-pw-surface/50 border-white/5 min-h-[500px] flex items-center justify-center p-6 relative'>
+            <Card className='card-glow overflow-hidden bg-pw-surface/50 border-white/5 min-h-[500px] flex items-center justify-center p-2 relative'>
               <div className='relative max-w-full max-h-full flex items-center justify-center'>
                 <img
                   ref={imgRef}

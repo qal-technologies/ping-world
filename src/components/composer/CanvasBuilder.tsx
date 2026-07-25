@@ -159,10 +159,8 @@ export function CanvasBuilder() {
     if (selectedShapeId === id) setSelectedShapeId(null);
   };
 
-  // jules edit: Dragging event handlers supporting pointer events (unified touches and clicks)
   const handlePointerDownText = (idx: number, e: React.PointerEvent) => {
     e.stopPropagation();
-    // Capture pointer to track dragging correctly outside of target element bounds
     const target = e.currentTarget as HTMLDivElement;
     try {
       target.setPointerCapture(e.pointerId);
@@ -235,7 +233,6 @@ export function CanvasBuilder() {
     setDraggingShapeId(null);
   };
 
-  // jules edit: Fix asynchronous state check and enable CORS and taint configurations for perfect html2canvas captures
   const handleDownload = async () => {
     if (!canvasRef.current) return;
     setDownloading(true);
@@ -243,7 +240,7 @@ export function CanvasBuilder() {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(canvasRef.current, {
         scale: 1.5,
-        backgroundColor: null, // transparent
+        backgroundColor: null, 
         logging: false,
         useCORS: true,
         allowTaint: true

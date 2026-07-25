@@ -218,13 +218,23 @@ export default function AboutPage() {
               className='btn-primary h-12 px-10 inline-flex items-center text-sm font-bold rounded-xl'>
               Browser All Tools
             </Link>
-            {/* <Link
-              href={parentBrandLink}
-              target='_blank'
-              className='h-12.5 px-8 inline-flex items-center text-sm font-bold rounded-xl border border-white/10 hover:bg-white/5 transition-colors gap-2'>
-              Visit {parentName} <ExternalLink className='h-4 w-4' />
-            </Link> */}
           </div>
+        </div>
+
+        <div
+          className='mt-6 border-t pt-5 border-white/5 items-center text-center leading-relaxed track-wide flex flex-wrap gap-1 justify-evenly w-full max-w-5xl'
+          style={{ placeSelf: 'center' }}>
+          <Link
+            href={'/terms'}
+            className='text-xs hover:text-pw-primary hover:underline uppercase'>
+            Terms
+          </Link>{' '}
+          ●
+          <Link
+            href={'/privacy'}
+            className='text-xs hover:text-pw-primary hover:underline uppercase'>
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </div>

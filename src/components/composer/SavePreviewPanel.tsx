@@ -180,7 +180,6 @@ export function SavePreviewPanel() {
         <div
           ref={previewRef}
           className='py-4 sm:p-4 bg-[#02040f] w-full max-w-[420px] items-center'>
-          {/* jules edit: Uncommented LivePreview with safe rendering configurations */}
           <LivePreview
             forExport
             dark={darkMode}
@@ -202,7 +201,7 @@ export function SavePreviewPanel() {
                 </div>
 
                 <span className='text-[8px] min-w-full text-center opacity-25 tracking-wider pb-1'>
-                  www.ping-world.website
+                  www.ping-world.site
                 </span>
               </div>
             </div>

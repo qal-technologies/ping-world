@@ -24,6 +24,8 @@ import {
   Eye,
   Sparkles,
   HelpCircle,
+  Settings2,
+  Globe,
 } from 'lucide-react';
 import { toolDocsDb, DocFeature } from '@/lib/general/docs-data';
 import { tools } from '@/lib/general/data';
@@ -48,6 +50,7 @@ const iconMap: Record<string, any> = {
   notes: FileCode,
   encryption: Lock,
   'pdf-tools': FileText,
+  countries: Globe,
 };
 
 const colorMap: Record<string, string> = {
@@ -67,6 +70,7 @@ const colorMap: Record<string, string> = {
   notes: '#22c985',
   encryption: '#985cff',
   'pdf-tools': '#ff3b30',
+  countries: '#00fffb',
 };
 
 function isCompatible(feature: DocFeature, selectedVersion: string): boolean {
@@ -106,7 +110,7 @@ export default function DocsClient({ id }: { id: string }) {
   const defaultVersion = doc.versions[doc.versions.length - 1] || '1.0';
   const [selectedVersion, setSelectedVersion] = useState(defaultVersion);
 
-  const ToolIcon = iconMap[doc.id] || Brain;
+  const ToolIcon = iconMap[doc.id] || Settings2;
   const toolColor = colorMap[doc.id] || '#1d9bf0';
 
   // Filter features based on timeframe
@@ -243,7 +247,7 @@ export default function DocsClient({ id }: { id: string }) {
           {/* Feature Breakdown */}
           <section
             aria-label='Feature Breakdown'
-            className='space-y-6'>
+            className='space-y-4'>
             <h2 className='text-2xl font-bold font-display text-pw-text'>
               Gradual Feature Breakdown
             </h2>
@@ -255,7 +259,7 @@ export default function DocsClient({ id }: { id: string }) {
                     key={i}
                     id={`feature-${i}`}
                     style={{ borderLeftColor: toolColor }}
-                    className='p-4 bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-white/[0.01] sm:border sm:border-white/5 sm:border-l-2 transition-all sm:hover:bg-white/[0.02]/30'>
+                    className=' bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-white/[0.01] sm:border sm:border-white/5 sm:border-l-2 transition-all sm:hover:bg-white/[0.02]/30'>
                     <div className='flex items-start gap-4'>
                       <div
                         style={{

@@ -2071,7 +2071,6 @@ const QuizBuilder = ({
 };
 
 export default function QuizPage() {
-  // jules edit: State variables for Custom Filename modal
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [filenameInput, setFilenameInput] = useState("");
   const [filenameExtension, setFilenameExtension] = useState("");
@@ -2866,10 +2865,10 @@ export default function QuizPage() {
         )}
       </AnimatePresence>
 
-      {/* jules edit: Custom-themed filename entry overlay/modal */}
+      
       <Dialog open={isNameModalOpen} onOpenChange={setIsNameModalOpen}>
-        <DialogContent className="max-w-md w-full p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl text-pw-text z-50 animate-fade-in">
-          <DialogHeader>
+        <DialogContent className="max-w-md w-full pt-5 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl text-pw-text z-50 animate-fade-in">
+          <DialogHeader className='p-2'>
             <DialogTitle className="text-xl font-extrabold font-display">
               Export Name Customization
             </DialogTitle>
@@ -2878,7 +2877,7 @@ export default function QuizPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
+          <div className="space-y-4">
             <div className="relative">
               <Input
                 value={filenameInput}

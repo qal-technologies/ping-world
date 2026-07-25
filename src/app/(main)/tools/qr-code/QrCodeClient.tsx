@@ -560,7 +560,6 @@ export default function QrCodeGeneratorPage() {
         </div>
       </div>
 
-      {/* jules edit: Suggest similar tools at the bottom */}
       <SimilarTools currentToolId="qr-code" />
     </div>
   );

@@ -13,13 +13,11 @@ import {
   Trophy,
   Compass,
   Calculator,
-  FileCode,
   FileText as PdfIcon,
   Globe,
 } from 'lucide-react';
 
 export const tools = [
-  // jules edit: Highly modular Country Directory tool card with custom icon and Sky Blue theme
   {
     icon: Globe,
     title: 'Country Directory',
@@ -70,7 +68,7 @@ export const tools = [
   },
   {
     icon: Type,
-    title: 'Rich Notes & Editor',
+    title: 'Text Editor',
     category: 'Content',
     id: 'editor',
     description:
