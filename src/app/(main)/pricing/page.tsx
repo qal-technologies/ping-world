@@ -90,8 +90,19 @@ const FEATURES: {
 
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 
+// jules edit: Individual paid features pricing list for the Flexible plan
+const FLEXIBLE_FEATURES = [
+  { id: 'all', label: 'Full Access Bundle', monthly: 4.99, yearly: 49.99 },
+  { id: 'composer', label: 'Creator Hub', monthly: 2.99, yearly: 29.99 },
+  { id: 'quizzable', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
+  { id: 'pdf-studio', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99 },
+  { id: 'editor', label: 'Rich Notes & Editor Pro', monthly: 0.99, yearly: 9.99 },
+  { id: 'ip-locator', label: 'IP Locator Pro', monthly: 1.99, yearly: 19.99 },
+  { id: 'encryption', label: 'Secure Encryption Pro', monthly: 1.99, yearly: 19.99 },
+];
+
 export default function PricingPage() {
-  const { premiumTier, refresh, user } = useAppContext();
+  const { premiumTier, refresh, user, updatePremiumTierLocally } = useAppContext();
 
   // jules edit: State variables for Checkout Payment Modal & Simulation Engine
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,8 +110,15 @@ export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paymentGateway, setPaymentGateway] = useState<'stripe' | 'paystack' | 'flutterwave'>('stripe');
   const [isSimulating, setIsSimulating] = useState(false);
+  const [selectedFlexibleFeature, setSelectedFlexibleFeature] = useState<string>('all');
 
   const selectedTier = selectedTierId ? PREMIUM_TIERS[selectedTierId] : null;
+
+  // jules edit: Dynamic Pricing and Feature adjustments based on user choice
+  const activeFlexFeature = FLEXIBLE_FEATURES.find(f => f.id === selectedFlexibleFeature) || FLEXIBLE_FEATURES[0];
+  const displayMonthlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.monthly : (selectedTier?.price.monthly || 0);
+  const displayYearlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.yearly : (selectedTier?.price.yearly || 0);
+  const savings = Math.round(displayMonthlyPrice * 12 - displayYearlyPrice);
 
   // Handle Simulated Payment Engine
   const handleCheckout = async () => {
@@ -112,6 +130,9 @@ export default function PricingPage() {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     try {
+      // jules edit: update state locally immediately upon successful payment
+      updatePremiumTierLocally(selectedTierId);
+
       if (user) {
         // Upgrade on Supabase Auth User Metadata (Database source of truth)
         const { error } = await supabase.auth.updateUser({
@@ -120,8 +141,6 @@ export default function PricingPage() {
         if (error) throw error;
         await refresh();
       } else {
-        // Upgrade locally for sandbox/unauthenticated visitors
-        localStorage.setItem("pingworld_premium_local_tier", selectedTierId);
         toast.info("Upgraded locally in sandbox mode! (Log in to secure your tier on the cloud database)");
       }
 
@@ -431,8 +450,27 @@ export default function PricingPage() {
                 </div>
               </DialogHeader>
 
+              {/* jules edit: Flexible feature selector dropdown */}
+              {selectedTierId === 'flexible' && (
+                <div className='space-y-2'>
+                  <label className='text-[10px] font-black uppercase tracking-widest text-pw-muted block'>
+                    Select Paid Feature / Tool to Unlock
+                  </label>
+                  <select
+                    value={selectedFlexibleFeature}
+                    onChange={(e) => setSelectedFlexibleFeature(e.target.value)}
+                    className='w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-pw-text focus:outline-none cursor-pointer'>
+                    {FLEXIBLE_FEATURES.map((feat) => (
+                      <option key={feat.id} value={feat.id} className='bg-pw-surface'>
+                        {feat.label} (${feat.monthly}/mo or ${feat.yearly}/yr)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Billing Cycle Selector */}
-              {selectedTier.price.yearly && (
+              {(selectedTierId === 'flexible' || selectedTier.price.yearly) && (
                 <div className='p-1 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between'>
                   <button
                     onClick={() => setBillingCycle('monthly')}
@@ -454,7 +492,7 @@ export default function PricingPage() {
                     )}>
                     Yearly
                     <span className='px-1.5 py-0.5 rounded bg-pw-success text-[8px] font-black uppercase tracking-wider text-black'>
-                      Save 16%
+                      Save {selectedTierId === 'flexible' ? Math.round((1 - displayYearlyPrice / (displayMonthlyPrice * 12)) * 100) : 16}%
                     </span>
                   </button>
                 </div>
@@ -468,18 +506,18 @@ export default function PricingPage() {
                   </span>
                   <span className='text-3xl font-black font-display text-white mt-1 block'>
                     {billingCycle === 'monthly' ?
-                      `$${selectedTier.price.monthly}/mo`
-                    : `$${selectedTier.price.yearly}/yr`
+                      `$${displayMonthlyPrice}/mo`
+                    : `$${displayYearlyPrice}/yr`
                     }
                   </span>
                 </div>
-                {billingCycle === 'yearly' && selectedTier.price.monthly && selectedTier.price.yearly && (
+                {billingCycle === 'yearly' && displayMonthlyPrice && displayYearlyPrice && (
                   <div className='text-right'>
                     <span className='text-[10px] text-pw-success font-black uppercase tracking-wider block'>
                       Discount Applied
                     </span>
                     <span className='text-xs text-pw-muted block mt-0.5'>
-                      Save ${Math.round(selectedTier.price.monthly * 12 - selectedTier.price.yearly)} compared to monthly
+                      Save ${savings} compared to monthly
                     </span>
                   </div>
                 )}

@@ -257,18 +257,28 @@ export function CanvasBuilder() {
         ctx.fillText('pingwrld.com', canvas.width - 120, canvas.height - 12);
       }
 
-      const dataUrl = canvas.toDataURL('image/png');
-      setCanvasPreview(dataUrl);
+      // jules edit: Native HTML5 canvas toBlob download is robust and never truncated by browser sandboxes
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error("Download failed — could not capture canvas blob");
+          setDownloading(false);
+          return;
+        }
+        const downloadUrl = URL.createObjectURL(blob);
+        setCanvasPreview(downloadUrl);
 
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `pingworld-instagram-canvas-${Date.now()}.png`;
-      link.click();
-      toast.success('Canvas downloaded!');
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `pingworld-instagram-canvas-${Date.now()}.png`;
+        link.click();
+
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+        toast.success('Canvas downloaded!');
+        setDownloading(false);
+      }, 'image/png');
     } catch (err) {
       console.error(err);
       toast.error('Download failed — try again');
-    } finally {
       setDownloading(false);
     }
   };

@@ -65,7 +65,7 @@ export default function PdfToolStudioPage() {
   const [extractedFileName, setExtractedFileName] = useState("");
 
   // Merge simulation states
-  const [mergeFiles, setMergeFiles] = useState<{ id: string; name: string; size: string }[]>([]);
+  const [mergeFiles, setMergeFiles] = useState<{ id: string; name: string; size: string; file?: File }[]>([]);
 
   // jules edit: Custom-themed filename modal states
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
@@ -290,14 +290,15 @@ export default function PdfToolStudioPage() {
     reader.readAsText(file);
   };
 
-  // Merge Simulator
+  // jules edit: Real PDF page-by-page client merger using pdf-lib
   const handleAddMergeFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
     const newFiles = Array.from(files).map(f => ({
       id: `${Date.now()}-${Math.random()}`,
       name: f.name,
-      size: `${(f.size / 1024).toFixed(1)} KB`
+      size: `${(f.size / 1024).toFixed(1)} KB`,
+      file: f
     }));
     setMergeFiles([...mergeFiles, ...newFiles]);
     toast.success("Document added to compilation list!");
@@ -310,26 +311,38 @@ export default function PdfToolStudioPage() {
     }
 
     triggerExport("consolidated-merged", "pdf", async (filename) => {
-      toast.loading("Consolidating documents...");
+      toast.loading("Merging PDF documents...");
       try {
-        const { jsPDF } = await import("jspdf");
-        const doc = new jsPDF();
-        doc.setFontSize(22);
-        doc.setFont("helvetica", "bold");
-        doc.text("PingWorld Merged Compiled File", 15, 20);
+        const { PDFDocument } = await import("pdf-lib");
+        const mergedPdf = await PDFDocument.create();
 
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "normal");
-        mergeFiles.forEach((file, idx) => {
-          doc.text(`${idx + 1}. Source Document: ${file.name} (${file.size})`, 15, 35 + idx * 10);
-        });
+        for (const item of mergeFiles) {
+          if (!item.file) continue;
+          const arrayBuffer = await item.file.arrayBuffer();
+          const srcDoc = await PDFDocument.load(arrayBuffer);
+          const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        }
 
-        doc.save(`${filename}.pdf`);
+        const mergedPdfBytes = await mergedPdf.save();
+
+        // Use standard non-blocking browser blob creation & downloads
+        const blob = new Blob([mergedPdfBytes] as any, { type: "application/pdf" });
+        const downloadUrl = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${filename}.pdf`;
+        link.click();
+
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+
         toast.dismiss();
-        toast.success("Merged PDF consolidated and downloaded!");
-      } catch {
+        toast.success("PDFs merged successfully!");
+      } catch (err: any) {
         toast.dismiss();
-        toast.error("Merging process failed");
+        console.error("PDF merge error:", err);
+        toast.error(`Merge failed: ${err.message || err}`);
       }
     });
   };

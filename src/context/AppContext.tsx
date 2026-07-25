@@ -34,6 +34,8 @@ export interface AppContextValue {
   hasCache: boolean;
   /** Reload user session (call after login/logout) */
   refresh: () => Promise<void>;
+  /** Immediate local premium tier updates (e.g. after payment) */
+  updatePremiumTierLocally: (tier: PremiumTier) => void;
 }
 
 // ─── Context ────────────────────────────────────────────────────
@@ -96,20 +98,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // jules edit: function to change premium state locally immediately upon payment
+  const updatePremiumTierLocally = useCallback((tier: PremiumTier) => {
+    setPremiumTier(tier);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("pingworld_premium_local_tier", tier);
+    }
+  }, []);
+
   // ── Session loader
   const loadSession = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
+      const localTier = typeof window !== 'undefined' ? localStorage.getItem("pingworld_premium_local_tier") : null;
       if (authUser) {
         setUser(authUser);
         const meta = authUser.user_metadata ?? {};
         setUsername(meta.username || meta.full_name || 'user');
-        setPremiumTier(resolveTier(meta.tier));
+        setPremiumTier(resolveTier(meta.tier || localTier));
       } else {
         setUser(null);
         setUsername('');
-        setPremiumTier('free');
+        setPremiumTier(resolveTier(localTier));
       }
     } catch {
       setUser(null);
@@ -140,6 +151,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isLoading,
     hasCache,
     refresh: loadSession,
+    updatePremiumTierLocally,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

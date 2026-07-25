@@ -67,11 +67,21 @@ export default function ChatEditorPage() {
         useCORS: true,
         allowTaint: true
       });
-      const link = document.createElement("a");
-      link.download = `pingworld-chat-${editingName.toLowerCase()}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-      toast.success("Chat exported as image!");
+      // jules edit: Native HTML5 toBlob saving prevents download truncation on large screens
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error("Export failed. Could not generate chat preview blob.");
+          return;
+        }
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `pingworld-chat-${editingName.toLowerCase()}.png`;
+        link.href = downloadUrl;
+        link.click();
+
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+        toast.success("Chat exported as image!");
+      }, "image/png");
     } catch (err) {
       toast.error("Export failed. Please try again.");
     }
