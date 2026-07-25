@@ -104,11 +104,9 @@ const FLEXIBLE_FEATURES = [
 export default function PricingPage() {
   const { premiumTier, refresh, user, updatePremiumTierLocally } = useAppContext();
 
-  // jules edit: State variables for Checkout Payment Modal & Simulation Engine
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTierId, setSelectedTierId] = useState<PremiumTier | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
-  const [paymentGateway, setPaymentGateway] = useState<'stripe' | 'paystack' | 'flutterwave'>('stripe');
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedFlexibleFeature, setSelectedFlexibleFeature] = useState<string>('all');
 
@@ -124,7 +122,7 @@ export default function PricingPage() {
   const handleCheckout = async () => {
     if (!selectedTierId || !selectedTier) return;
     setIsSimulating(true);
-    toast.loading(`Connecting to ${paymentGateway.toUpperCase()} secure checkout...`);
+    toast.loading(`Connecting to Stripe secure checkout...`);
 
     // Simulate Payment Redirection & Verification Delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -138,6 +136,7 @@ export default function PricingPage() {
         const { error } = await supabase.auth.updateUser({
           data: { tier: selectedTierId },
         });
+
         if (error) throw error;
         await refresh();
       } else {
@@ -257,7 +256,6 @@ export default function PricingPage() {
                   </div>
 
                   {/* Feature highlights */}
-                  {/* jules edit: Theme standard and pro checkcircles on the plan card with the plan color */}
                   <ul className='space-y-2.5 flex-1 mb-6'>
                     <li className='flex items-center gap-2 text-xs'>
                       <CheckCircle
@@ -317,7 +315,6 @@ export default function PricingPage() {
                   </ul>
 
                   {/* CTA */}
-                  {/* jules edit: Add onClick to trigger Checkout Modal */}
                   <Button
                     disabled={isCurrent}
                     onClick={() => {
@@ -423,13 +420,12 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* jules edit: Checkout Modal & Low-Cost Payment Gateway Setup Panel */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className='max-w-xl w-full p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar text-pw-text'>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen} >
+        <DialogContent className='w-[90%] bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar text-pw-text pt-1'>
           {selectedTier && (
             <div className='space-y-6'>
               <DialogHeader>
-                <div className='flex items-center gap-3'>
+                <div className='flex items-center gap-3 pt-6'>
                   <div
                     className='h-12 w-12 rounded-xl flex items-center justify-center border'
                     style={{
@@ -471,13 +467,13 @@ export default function PricingPage() {
 
               {/* Billing Cycle Selector */}
               {(selectedTierId === 'flexible' || selectedTier.price.yearly) && (
-                <div className='p-1 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between'>
+                <div className='bg-white/5 nav-glass rounded-full flex items-center justify-between h-9'>
                   <button
                     onClick={() => setBillingCycle('monthly')}
                     className={cn(
-                      'flex-1 py-2 text-center text-xs font-semibold rounded-lg transition-all',
+                      'flex-1 py-2 text-center text-xs font-semibold rounded-full transition-all h-10 text-base',
                       billingCycle === 'monthly' ?
-                        'bg-pw-primary text-white shadow-md'
+                        'bg-pw-primary text-white shadow-xl'
                       : 'text-pw-muted hover:text-pw-text',
                     )}>
                     Monthly
@@ -485,9 +481,9 @@ export default function PricingPage() {
                   <button
                     onClick={() => setBillingCycle('yearly')}
                     className={cn(
-                      'flex-1 py-2 text-center text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5',
+                      'flex-1 py-2 text-center text-base font-semibold rounded-full transition-all flex items-center h-10 justify-center gap-1.5',
                       billingCycle === 'yearly' ?
-                        'bg-pw-primary text-white shadow-md'
+                        'bg-pw-primary text-white shadow-xl'
                       : 'text-pw-muted hover:text-pw-text',
                     )}>
                     Yearly
@@ -499,12 +495,12 @@ export default function PricingPage() {
               )}
 
               {/* Price Calculation Card */}
-              <div className='p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between'>
-                <div>
+              <div className='p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between flex-col'>
+                <div className='text-center'>
                   <span className='text-xs text-pw-muted uppercase font-bold tracking-widest block'>
                     Total Checkout Price
                   </span>
-                  <span className='text-3xl font-black font-display text-white mt-1 block'>
+                  <span className='text-3xl font-extrabold font-display text-white block'>
                     {billingCycle === 'monthly' ?
                       `$${displayMonthlyPrice}/mo`
                     : `$${displayYearlyPrice}/yr`
@@ -523,75 +519,8 @@ export default function PricingPage() {
                 )}
               </div>
 
-              {/* Gateway Integrations Selector */}
-              <div className='space-y-2'>
-                <label className='text-[10px] font-black uppercase tracking-widest text-pw-muted block'>
-                  Select Low-Fee Payment Gateway
-                </label>
-                <div className='grid grid-cols-3 gap-2'>
-                  {[
-                    { id: 'stripe', label: 'Stripe', sub: 'Global' },
-                    { id: 'paystack', label: 'Paystack', sub: 'Low fee' },
-                    { id: 'flutterwave', label: 'Flutterwave', sub: 'Emerging' },
-                  ].map((gw) => (
-                    <button
-                      key={gw.id}
-                      onClick={() => setPaymentGateway(gw.id as any)}
-                      className={cn(
-                        'p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentGateway === gw.id ?
-                          'border-pw-primary bg-pw-primary/10 text-white shadow-md'
-                        : 'border-white/5 bg-white/[0.02] hover:bg-white/5 text-pw-muted hover:text-pw-text',
-                      )}>
-                      <span className='text-xs font-bold block'>{gw.label}</span>
-                      <span className='text-[8px] text-pw-muted block mt-0.5'>{gw.sub}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Interactive Gateway Instruction Guide */}
-              <div className='p-3.5 rounded-xl bg-pw-primary/5 border border-pw-primary/10 text-[11px] leading-relaxed space-y-2 text-pw-muted'>
-                <p className='font-bold text-pw-text flex items-center gap-1.5'>
-                  💡 Developer Note & Setup Guide
-                </p>
-                {paymentGateway === 'paystack' && (
-                  <>
-                    <p>
-                      <strong>Paystack</strong> is highly recommended for startups in emerging markets like Africa, offering transactions as low as 1.5%.
-                    </p>
-                    <ul className='list-disc list-inside space-y-1 pl-1 text-[10px]'>
-                      <li>Required public key: <code>NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY</code></li>
-                      <li>Required secret key: <code>PAYSTACK_SECRET_KEY</code></li>
-                      <li>Listen to server webhook events on <code>/api/webhooks/paystack</code></li>
-                    </ul>
-                  </>
-                )}
-                {paymentGateway === 'flutterwave' && (
-                  <>
-                    <p>
-                      <strong>Flutterwave</strong> provides excellent multi-currency support across 30+ countries.
-                    </p>
-                    <ul className='list-disc list-inside space-y-1 pl-1 text-[10px]'>
-                      <li>Required public key: <code>NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY</code></li>
-                      <li>Required secret key: <code>FLUTTERWAVE_SECRET_KEY</code></li>
-                      <li>Listen to server webhook events on <code>/api/webhooks/flutterwave</code></li>
-                    </ul>
-                  </>
-                )}
-                {paymentGateway === 'stripe' && (
-                  <>
-                    <p>
-                      <strong>Stripe</strong> is the standard for global credit card processing.
-                    </p>
-                    <ul className='list-disc list-inside space-y-1 pl-1 text-[10px]'>
-                      <li>Required public key: <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code></li>
-                      <li>Required secret key: <code>STRIPE_SECRET_KEY</code></li>
-                      <li>Listen to server webhook events on <code>/api/webhooks/stripe</code></li>
-                    </ul>
-                  </>
-                )}
-              </div>
+              {/* plan instructions or a paid featuers dropdown for only flexible plan to select the actual tool being paid for and handle the price cange depending on the tool selected.  */}
+              <div></div>
 
               {/* Checkout Controls */}
               <DialogFooter className='pt-2 flex flex-col sm:flex-row gap-2'>
@@ -605,7 +534,7 @@ export default function PricingPage() {
                   onClick={handleCheckout}
                   disabled={isSimulating}
                   className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5'>
-                  {isSimulating ? 'Processing payment...' : `Proceed Checkout via ${paymentGateway.toUpperCase()}`}
+                  {isSimulating ? 'Processing payment...' : `Subscribe`}
                 </button>
               </DialogFooter>
             </div>

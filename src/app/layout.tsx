@@ -14,16 +14,17 @@ export const metadata: Metadata = {
   applicationName: 'Ping World',
   category: 'Productivity & Utilities',
   classification: 'Web Application',
+  publisher: 'Paschal Ngaoka',
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
   },
   authors: [
-    { name: 'Qal Technologies', url: 'https://qal-tech.website' },
+    { name: 'Qal Technologies', url: 'https://qal-tech.site' },
     { name: 'Ping World', url: COMPANY.domain },
-    { name: 'Pascodez', url: 'https://pascodez.website' },
-    { name: 'Paschal Ngaoka', url: 'https://pasqal-dev.website' },
+    { name: 'Pascodez', url: 'https://pascodez.site' },
+    { name: 'Paschal Ngaoka', url: 'https://pasqal-dev.site' },
   ],
   creator: 'Qal Technologies',
   description:
@@ -46,17 +47,21 @@ export const metadata: Metadata = {
     description: 'Free tools for everyone. Build, create, share.',
     site: COMPANY.domain,
   },
-  icons: { icon: '/images/logo.png', apple: '/images/logo.png' },
+  appleWebApp: true,
+  icons: { icon: '/logo.png', apple: '/logo.png' },
   keywords: [
     'ping world',
     'ping wrld',
+    'ping world tools',
+    'ping world api',
     'free tools',
-    'pdf tool',
-    'url shortener',
-    'anonymous messaging',
-    'image editing tool',
-    'image toolkit',
     'quiz builder',
+    'pdf tool',
+    'image editing tool',
+    'url shortener',
+    'qr code',
+    'anonymous messaging',
+    'image toolkit',
     'quiz',
     'quiz taker',
     'social media platform',
@@ -68,7 +73,7 @@ export const metadata: Metadata = {
   ],
   manifest: '/manifest.json',
   alternates: {
-    canonical: '/',
+    canonical: COMPANY.domain,
   },
 };
 
@@ -80,30 +85,29 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  // jules edit: Professional SEO Structured Data (JSON-LD WebSite & SoftwareApplication Schemas)
   const websiteSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "Ping World",
-    "url": COMPANY.domain,
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": `${COMPANY.domain}/tools?q={search_term_string}`,
-      "query-input": "required name=search_term_string"
-    }
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Ping World',
+    url: COMPANY.domain,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${COMPANY.domain}/tools?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
   };
 
   const softwareSchema = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Ping World",
-    "operatingSystem": "All",
-    "applicationCategory": "BusinessApplication, Utilities",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    }
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Ping World',
+    operatingSystem: 'All',
+    applicationCategory: 'BusinessApplication, Utilities',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
   };
 
   return (
@@ -112,11 +116,11 @@ export default function RootLayout({
       className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}>
       <head>
         <script
-          type="application/ld+json"
+          type='application/ld+json'
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
         />
         <script
-          type="application/ld+json"
+          type='application/ld+json'
           dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
         />
       </head>

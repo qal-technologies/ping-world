@@ -49,8 +49,8 @@ export default function CanvasEditor() {
     if (!canvasRef.current) return;
 
     const fabricCanvas = new fabric.Canvas(canvasRef.current, {
-      width: 600,
-      height: 600,
+      width: 500,
+      height: 500,
       backgroundColor: "#12152E",
     });
 
@@ -58,11 +58,11 @@ export default function CanvasEditor() {
 
     // Initial text
     const text = new fabric.IText("Double click to edit text", {
-      left: 300,
-      top: 300,
+      left: 250,
+      top: 250,
       fontFamily: "Space Grotesk",
       fill: "#F8F9FF",
-      fontSize: 32,
+      fontSize: 24,
       originX: "center",
       originY: "center",
       textAlign: "center",
@@ -126,9 +126,9 @@ export default function CanvasEditor() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col lg:flex-row gap-6 min-w-[70vw]">
       {/* Canvas Toolbars */}
-      <div className="flex flex-col gap-4 w-full lg:w-72 order-2 lg:order-1">
+      <div className="flex flex-col gap-4 w-full lg:min-w-80 order-2 lg:order-1">
         <Card className="card-glow p-4 bg-pw-surface/50 border-white/5">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Layout className="h-4 w-4 text-pw-primary" /> Elements
@@ -201,9 +201,9 @@ export default function CanvasEditor() {
       {/* Canvas Area */}
       <div 
         ref={containerRef}
-        className="flex-1 flex items-center justify-center bg-pw-bg rounded-2xl border border-white/5 p-8 min-h-[500px] order-1 lg:order-2"
+        className="flex-1 grid items-center justify-center bg-pw-bg rounded-2xl border border-white/5 p-2 min-h-[80vh] order-1 lg:order-2 w-full aspect-video"
       >
-        <div className="relative shadow-2xl rounded-lg overflow-hidden border border-white/10">
+        <div className="relative shadow-2xl rounded-lg overflow-hidden items-center border border-white/10 w-full" style={{placeSelf:'center'}}>
           <canvas ref={canvasRef} />
         </div>
       </div>

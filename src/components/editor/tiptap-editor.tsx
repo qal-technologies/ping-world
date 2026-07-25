@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
-// import TextStyle from "@tiptap/extension-text-style";
+import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import { 
@@ -65,7 +65,7 @@ export default function TiptapEditor({
     extensions: [
       StarterKit,
       Underline,
-    //   TextStyle,
+      TextStyle,
       Color,
       Highlight.configure({ multicolor: true }),
       Link.configure({
@@ -81,12 +81,11 @@ export default function TiptapEditor({
     },
     editorProps: {
       attributes: {
-        class: "prose prose-invert max-w-none focus:outline-none min-h-[400px] p-8 text-pw-text/90",
+        class: "prose prose-invert max-w-none focus:outline-none no-outline min-h-[400px] p-5 sm:p-8 text-pw-text/90",
       },
     },
   });
 
-  // jules edit: Update editor content when the active note/document content changes
   const { useEffect } = require("react");
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
@@ -104,9 +103,9 @@ export default function TiptapEditor({
   };
 
   return (
-    <Card className="card-glow overflow-hidden bg-pw-surface/50 border-white/5">
+    <Card className="glass  overflow-hidden bg-pw-surface/50 border-white/5 max-h-[85vh] pt-0 overflow-y-auto relative ">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1 p-2 border-b border-white/5 bg-white/5">
+      <div className="flex flex-wrap items-center gap-1 p-2 pt-4 border-b border-white/5 bg-black/90 nav-glass z-10 sticky top-0 pb-3">
         <div className="flex items-center gap-1 pr-2 border-r border-white/5">
           <MenuButton 
             onClick={() => editor.chain().focus().toggleBold().run()} 

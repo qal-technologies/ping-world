@@ -212,7 +212,6 @@ export function ComposerLayout() {
                   </button>
                 </div>
 
-                {/* jules edit: Added Instagram Canvas configuration trigger for auto text-to-canvas rendering */}
                 <InstagramCanvasSettings />
               </AnimatePresence>
 

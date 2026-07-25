@@ -55,7 +55,6 @@ export const Footer = () => {
   return (
     <footer className='border-t border-pw-primary/10 bg-pw-bg/80 backdrop-blur-sm'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-12'>
-        {/* jules edit: Standard, clean column scaling (1 col on mobile, 2 on tablet, 4 on desktop) */}
         <div className='grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4'>
           {/* Brand column */}
           <div className='sm:col-span-2 md:col-span-1'>

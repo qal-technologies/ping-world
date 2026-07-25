@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import PdfClient from "./PdfClient";
 
 export const metadata: Metadata = {
-  title: "PDF Tool Studio - Image to PDF, Merge & Text Extract",
+  title: "PDF Tool - Image to PDF, Merge & Text Extract",
   description:
     "Convert images to PDF, compile text-to-pdf, split/merge PDF documents, and extract text streams pure client-side. Built by Qal Technologies and developer Poshcodes.",
   keywords: [

@@ -20,7 +20,10 @@ export default function PrivacyPage() {
           Privacy <span className='gradient-text'>Policy.</span>
         </h1>
         <p className='text-pw-muted text-sm font-semibold uppercase tracking-wider'>
-          Effective Date: <span className='text-pw-text'>{launchDate}</span>
+          Effective Date:{' '}
+          <span className='text-pw-text'>
+            {new Date(launchDate).toDateString()}
+          </span>
         </p>
       </div>
 
@@ -95,6 +98,22 @@ export default function PrivacyPage() {
             </Link>
             .
           </p>
+
+          <div
+            className='mt-6 border-t pt-5 border-white/5 items-center text-center leading-relaxed track-wide flex flex-wrap gap-1 justify-evenly w-full max-w-5xl'
+            style={{ placeSelf: 'center' }}>
+            <Link
+              href={'/about'}
+              className='text-xs hover:text-pw-primary hover:underline uppercase'>
+              About
+            </Link>{' '}
+            ●
+            <Link
+              href={'/terms'}
+              className='text-xs hover:text-pw-primary hover:underline uppercase'>
+              Terms
+            </Link>
+          </div>
         </section>
       </Card>
     </div>
