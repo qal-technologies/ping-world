@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     site: COMPANY.domain,
   },
   appleWebApp: true,
-  icons: { icon: '/logo.png', apple: '/logo.png' },
+  icons: { icon: '/images/logo.png', apple: '/images/logo.png' },
   keywords: [
     'ping world',
     'ping wrld',
