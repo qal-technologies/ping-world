@@ -13,7 +13,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-// jules edit: Import FLEXIBLE_FEATURES list for modular select
 import { PREMIUM_TIERS, type PremiumTier, FLEXIBLE_FEATURES } from '@/lib/config/premium';
 import { useAppContext } from '@/context/AppContext';
 import { COMPANY } from '@/lib/config/company';
@@ -91,31 +90,21 @@ const FEATURES: {
 
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 
-// jules edit: Individual paid features pricing list for the Flexible plan
-const FLEXIBLE_FEATURES = [
-  { id: 'all', label: 'Full Access Bundle', monthly: 4.99, yearly: 49.99 },
-  { id: 'composer', label: 'Creator Hub', monthly: 2.99, yearly: 29.99 },
-  { id: 'quizzable', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
-  { id: 'pdf-studio', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99 },
-  { id: 'editor', label: 'Rich Notes & Editor Pro', monthly: 0.99, yearly: 9.99 },
-  { id: 'ip-locator', label: 'IP Locator Pro', monthly: 1.99, yearly: 19.99 },
-  { id: 'encryption', label: 'Secure Encryption Pro', monthly: 1.99, yearly: 19.99 },
-];
 
 export default function PricingPage() {
-  const { premiumTier, refresh, user, updatePremiumTierLocally } = useAppContext();
+  const { premiumTier, refresh, user } = useAppContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTierId, setSelectedTierId] = useState<PremiumTier | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [isSimulating, setIsSimulating] = useState(false);
-  // jules edit: Manage selected flexible tool/feature state
+
   const [selectedFlexibleToolId, setSelectedFlexibleToolId] = useState<string>('all');
 
   const selectedTier = selectedTierId ? PREMIUM_TIERS[selectedTierId] : null;
-  const selectedFlexTool = FLEXIBLE_FEATURES.find(f => f.id === selectedFlexibleToolId);
+  const selectedFlexTool = FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId);
 
-  // jules edit: Tweak the display prices dynamically based on plan and tool selection
+  
   const displayMonthly = selectedTierId === 'flexible' && selectedFlexTool
     ? selectedFlexTool.monthly
     : selectedTier?.price.monthly;
@@ -124,13 +113,12 @@ export default function PricingPage() {
     ? selectedFlexTool.yearly
     : selectedTier?.price.yearly;
 
-  const activeFlexFeature = FLEXIBLE_FEATURES.find(f => f.id === selectedFlexibleFeature) || FLEXIBLE_FEATURES[0];
+  const activeFlexFeature = FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId) || FLEXIBLE_FEATURES[0];
   const displayMonthlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.monthly : (selectedTier?.price.monthly || 0);
   const displayYearlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.yearly : (selectedTier?.price.yearly || 0);
   const savings = Math.round(displayMonthlyPrice * 12 - displayYearlyPrice);
 
   // Handle Simulated Payment Engine
-  // jules edit: Require authentication, proceed database update first, and sync state immediately
   const handleCheckout = async () => {
     if (!selectedTierId || !selectedTier) return;
 
@@ -142,11 +130,9 @@ export default function PricingPage() {
     setIsSimulating(true);
     toast.loading(`Processing Stripe checkout for ${selectedTier.label} plan...`);
 
-    // Simulate Payment Redirection & Verification Delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     try {
-      // Upgrade on Supabase Auth User Metadata (Database source of truth)
       const { error } = await supabase.auth.updateUser({
         data: {
           tier: selectedTierId,
@@ -469,10 +455,10 @@ export default function PricingPage() {
                     Select Paid Feature / Tool to Unlock
                   </label>
                   <select
-                    value={selectedFlexibleFeature}
-                    onChange={(e) => setSelectedFlexibleFeature(e.target.value)}
+                    value={selectedFlexibleToolId}
+                    onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
                     className='w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-pw-text focus:outline-none cursor-pointer'>
-                    {FLEXIBLE_FEATURES.map((feat) => (
+                    {FLEXIBLE_FEATURES.map((feat: any) => (
                       <option key={feat.id} value={feat.id} className='bg-pw-surface'>
                         {feat.label} (${feat.monthly}/mo or ${feat.yearly}/yr)
                       </option>
@@ -548,7 +534,7 @@ export default function PricingPage() {
                     onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
                     className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
                   >
-                    {FLEXIBLE_FEATURES.map((feat) => (
+                    {FLEXIBLE_FEATURES.map((feat: any) => (
                       <option key={feat.id} value={feat.id} className='bg-[#0c0d1c] py-2'>
                         {feat.label} (Monthly: ${feat.monthly}/mo | Yearly: ${feat.yearly}/yr)
                       </option>

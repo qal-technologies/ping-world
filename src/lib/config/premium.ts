@@ -13,11 +13,12 @@ export interface FlexibleFeature {
 
 // jules edit: Modular and easily tweakable individual pricing rules for the flexible plan
 export const FLEXIBLE_FEATURES: FlexibleFeature[] = [
-  { id: 'all', label: 'All-In-One Access', monthly: 4.99, yearly: 49.99 },
-  { id: 'quiz', label: 'Quizzable (Quiz Builder)', monthly: 1.99, yearly: 19.99 },
-  { id: 'anonlink', label: 'AnonLink (Anonymous Inbox)', monthly: 1.49, yearly: 14.99 },
-  { id: 'composer', label: 'Creator Hub (Composer)', monthly: 2.49, yearly: 24.99 },
-  { id: 'games', label: 'Tournament Table', monthly: 0.99, yearly: 9.99 },
+  { id: 'all', label: 'Full Access Bundle', monthly: 4.99, yearly: 49.99 },
+  { id: 'composer', label: 'Creator Hub', monthly: 2.99, yearly: 29.99 },
+  { id: 'quizzable', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
+  {id: 'pdf-studio', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99},
+  {id: 'anonlink', label: 'AnonLink Pro', monthly: 0.99, yearly: 9.99},
+  { id: 'editor', label: 'Rich Notes & Editor Pro', monthly: 0.99, yearly: 9.99 },
 ];
 
 export type PremiumTier = 'free' | 'flexible' | 'standard' | 'pro';
