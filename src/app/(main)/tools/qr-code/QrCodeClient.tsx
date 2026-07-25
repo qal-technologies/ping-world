@@ -113,11 +113,21 @@ export default function QrCodeGeneratorPage() {
         ctx.fillStyle = bgColor === 'transparent' ? '#ffffff00' : bgColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 20, 20);
-        const pngFile = canvas.toDataURL('image/png');
-        const downloadLink = document.createElement('a');
-        downloadLink.download = 'pingworld-qr-code.png';
-        downloadLink.href = pngFile;
-        downloadLink.click();
+
+        // jules edit: Native HTML5 toBlob saving prevents download truncation on modern browsers
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            toast.error("Failed to generate QR Code blob.");
+            return;
+          }
+          const downloadUrl = URL.createObjectURL(blob);
+          const downloadLink = document.createElement('a');
+          downloadLink.download = 'pingworld-qr-code.png';
+          downloadLink.href = downloadUrl;
+          downloadLink.click();
+
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+        }, 'image/png');
       }
     };
 

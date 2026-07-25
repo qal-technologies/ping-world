@@ -78,11 +78,20 @@ export function SavePreviewPanel() {
         ctx.fillText('pingwrld.com', canvas.width - 118, canvas.height - 12);
       }
 
-      setPreviewBlob(canvas.toDataURL('image/png'));
-      toast.success('Preview captured!');
+      // jules edit: Native HTML5 canvas toBlob is extremely robust and does not suffer from data URL lengths
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error('Failed to capture preview blob.');
+          setIsCapturing(false);
+          return;
+        }
+        const downloadUrl = URL.createObjectURL(blob);
+        setPreviewBlob(downloadUrl);
+        toast.success('Preview captured!');
+        setIsCapturing(false);
+      }, 'image/png');
     } catch {
       toast.error('Failed to capture preview.');
-    } finally {
       setIsCapturing(false);
     }
   };
