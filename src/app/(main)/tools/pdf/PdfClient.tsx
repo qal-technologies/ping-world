@@ -65,8 +65,9 @@ export default function PdfToolStudioPage() {
   const [extractedFileName, setExtractedFileName] = useState('');
 
   // Merge simulation states
+  // jules edit: State now stores actual file handles for complete page-by-page rendering
   const [mergeFiles, setMergeFiles] = useState<
-    { id: string; name: string; size: string }[]
+    { id: string; name: string; size: string; file: File }[]
   >([]);
 
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
@@ -316,6 +317,7 @@ export default function PdfToolStudioPage() {
   };
 
   // Merge Simulator
+  // jules edit: Safe image/pdf files handler capturing actual handle references
   const handleAddMergeFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -323,11 +325,13 @@ export default function PdfToolStudioPage() {
       id: `${Date.now()}-${Math.random()}`,
       name: f.name,
       size: `${(f.size / 1024).toFixed(1)} KB`,
+      file: f,
     }));
     setMergeFiles([...mergeFiles, ...newFiles]);
     toast.success('Document added to compilation list!');
   };
 
+  // jules edit: True page-by-page PDF compiler using pdf-lib
   const executeMerge = async () => {
     if (mergeFiles.length < 2) {
       toast.error('Please add at least 2 files to merge!');
@@ -335,30 +339,29 @@ export default function PdfToolStudioPage() {
     }
 
     triggerExport('consolidated-merged', 'pdf', async (filename) => {
-      toast.loading('Consolidating documents...');
+      toast.loading('Consolidating PDF pages...');
       try {
-        const { jsPDF } = await import('jspdf');
-        const doc = new jsPDF();
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.text('PingWorld Merged Compiled File', 15, 20);
+        const { PDFDocument } = await import('pdf-lib');
+        const mergedPdf = await PDFDocument.create();
 
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'normal');
-        mergeFiles.forEach((file, idx) => {
-          doc.text(
-            `${idx + 1}. Source Document: ${file.name} (${file.size})`,
-            15,
-            35 + idx * 10,
-          );
-        });
+        for (const fileObj of mergeFiles) {
+          const arrayBuffer = await fileObj.file.arrayBuffer();
+          const srcPdf = await PDFDocument.load(arrayBuffer);
+          const copiedPages = await mergedPdf.copyPages(srcPdf, srcPdf.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        }
 
-        doc.save(`${filename}.pdf`);
+        const mergedPdfBytes = await mergedPdf.save();
+        const blob = new Blob([mergedPdfBytes as any], { type: 'application/pdf' });
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${filename}.pdf`);
+
         toast.dismiss();
-        toast.success('Merged PDF consolidated and downloaded!');
-      } catch {
+        toast.success('All PDF documents merged page-by-page successfully!');
+      } catch (err: any) {
         toast.dismiss();
-        toast.error('Merging process failed');
+        console.error('[PDF Merge Error]', err);
+        toast.error('Merging process failed. Please ensure files are valid uncorrupted PDFs.');
       }
     });
   };

@@ -257,11 +257,16 @@ export function CanvasBuilder() {
       const dataUrl = canvas.toDataURL('image/png');
       setCanvasPreview(dataUrl);
 
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `pingworld-instagram-canvas-${Date.now()}.png`;
-      link.click();
-      toast.success('Canvas downloaded!');
+      // jules edit: Render high-fidelity canvas to a true binary Blob for reliable cross-browser download
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          const { saveAs } = await import('file-saver');
+          saveAs(blob, `pingworld-instagram-canvas-${Date.now()}.png`);
+          toast.success('Canvas downloaded!');
+        } else {
+          toast.error('Failed to compile canvas to download blob.');
+        }
+      }, 'image/png');
     } catch (err) {
       console.error(err);
       toast.error('Download failed — try again');

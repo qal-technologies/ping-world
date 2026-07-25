@@ -13,7 +13,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { PREMIUM_TIERS, type PremiumTier } from '@/lib/config/premium';
+// jules edit: Import FLEXIBLE_FEATURES list for modular select
+import { PREMIUM_TIERS, type PremiumTier, FLEXIBLE_FEATURES } from '@/lib/config/premium';
 import { useAppContext } from '@/context/AppContext';
 import { COMPANY } from '@/lib/config/company';
 import { useState } from 'react';
@@ -97,32 +98,50 @@ export default function PricingPage() {
   const [selectedTierId, setSelectedTierId] = useState<PremiumTier | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [isSimulating, setIsSimulating] = useState(false);
+  // jules edit: Manage selected flexible tool/feature state
+  const [selectedFlexibleToolId, setSelectedFlexibleToolId] = useState<string>('all');
 
   const selectedTier = selectedTierId ? PREMIUM_TIERS[selectedTierId] : null;
+  const selectedFlexTool = FLEXIBLE_FEATURES.find(f => f.id === selectedFlexibleToolId);
+
+  // jules edit: Tweak the display prices dynamically based on plan and tool selection
+  const displayMonthly = selectedTierId === 'flexible' && selectedFlexTool
+    ? selectedFlexTool.monthly
+    : selectedTier?.price.monthly;
+
+  const displayYearly = selectedTierId === 'flexible' && selectedFlexTool
+    ? selectedFlexTool.yearly
+    : selectedTier?.price.yearly;
 
   // Handle Simulated Payment Engine
+  // jules edit: Require authentication, proceed database update first, and sync state immediately
   const handleCheckout = async () => {
     if (!selectedTierId || !selectedTier) return;
+
+    if (!user) {
+      toast.error('Authentication Required: Please register or log in first to purchase a premium plan!');
+      return;
+    }
+
     setIsSimulating(true);
-    toast.loading(`Connecting to Stripe secure checkout...`);
+    toast.loading(`Processing Stripe checkout for ${selectedTier.label} plan...`);
 
     // Simulate Payment Redirection & Verification Delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     try {
-      if (user) {
-        // Upgrade on Supabase Auth User Metadata (Database source of truth)
-        const { error } = await supabase.auth.updateUser({
-          data: { tier: selectedTierId },
-        });
+      // Upgrade on Supabase Auth User Metadata (Database source of truth)
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          tier: selectedTierId,
+          purchased_tools: selectedTierId === 'flexible' ? [selectedFlexibleToolId] : ['all']
+        },
+      });
 
-        if (error) throw error;
-        await refresh();
-      } else {
-        // Upgrade locally for sandbox/unauthenticated visitors
-        localStorage.setItem("pingworld_premium_local_tier", selectedTierId);
-        toast.info("Upgraded locally in sandbox mode! (Log in to secure your tier on the cloud database)");
-      }
+      if (error) throw error;
+
+      // Force instant refresh of the global app context auth state
+      await refresh();
 
       toast.dismiss();
       toast.success(`🎉 Congratulations! Your plan was upgraded to ${selectedTier.label} successfully!`);
@@ -457,6 +476,7 @@ export default function PricingPage() {
               )}
 
               {/* Price Calculation Card */}
+              {/* jules edit: Tweak the display price based on selected tool and billing cycle */}
               <div className='p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between flex-col'>
                 <div className='text-center'>
                   <span className='text-xs text-pw-muted uppercase font-bold tracking-widest block'>
@@ -464,25 +484,46 @@ export default function PricingPage() {
                   </span>
                   <span className='text-3xl font-extrabold font-display text-white block'>
                     {billingCycle === 'monthly' ?
-                      `$${selectedTier.price.monthly}/mo`
-                    : `$${selectedTier.price.yearly}/yr`
+                      `$${displayMonthly}/mo`
+                    : `$${displayYearly}/yr`
                     }
                   </span>
                 </div>
-                {billingCycle === 'yearly' && selectedTier.price.monthly && selectedTier.price.yearly && (
+                {billingCycle === 'yearly' && displayMonthly && displayYearly && (
                   <div className='text-center mt-3'>
                     <span className='text-[10px] text-pw-success font-black uppercase tracking-wider block'>
                       Discount Applied
                     </span>
                     <span className='text-xs text-pw-muted block'>
-                      Save ${Math.round(selectedTier.price.monthly * 12 - selectedTier.price.yearly)} compared to monthly
+                      Save ${Math.round(displayMonthly * 12 - displayYearly)} compared to monthly
                     </span>
                   </div>
                 )}
               </div>
 
               {/* plan instructions or a paid featuers dropdown for only flexible plan to select the actual tool being paid for and handle the price cange depending on the tool selected.  */}
-              <div></div>
+              {/* jules edit: Add dropdown for flexible plan feature purchase selection */}
+              {selectedTierId === 'flexible' && (
+                <div className='space-y-2 p-4 rounded-xl bg-white/[0.02] border border-white/5'>
+                  <label className='text-xs font-bold text-pw-muted uppercase block'>
+                    Select Paid Tool / Feature
+                  </label>
+                  <select
+                    value={selectedFlexibleToolId}
+                    onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
+                    className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
+                  >
+                    {FLEXIBLE_FEATURES.map((feat) => (
+                      <option key={feat.id} value={feat.id} className='bg-[#0c0d1c] py-2'>
+                        {feat.label} (Monthly: ${feat.monthly}/mo | Yearly: ${feat.yearly}/yr)
+                      </option>
+                    ))}
+                  </select>
+                  <p className='text-[10px] text-pw-muted leading-relaxed mt-1'>
+                    The flexible plan allows you to pay only for the tools you use. Select your desired feature from the dropdown to adjust your subscription price.
+                  </p>
+                </div>
+              )}
 
               {/* Checkout Controls */}
               <DialogFooter className='pt-2 flex flex-col sm:flex-row gap-2'>

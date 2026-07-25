@@ -78,8 +78,16 @@ export function SavePreviewPanel() {
         ctx.fillText('pingwrld.com', canvas.width - 118, canvas.height - 12);
       }
 
-      setPreviewBlob(canvas.toDataURL('image/png'));
-      toast.success('Preview captured!');
+      // jules edit: Save high-fidelity captured preview to a robust local Blob URL
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          setPreviewBlob(url);
+          toast.success('Preview captured!');
+        } else {
+          toast.error('Failed to generate image preview blob.');
+        }
+      }, 'image/png');
     } catch {
       toast.error('Failed to capture preview.');
     } finally {
@@ -87,13 +95,18 @@ export function SavePreviewPanel() {
     }
   };
 
-  const downloadPreview = () => {
+  // jules edit: Safe cross-platform file saving using file-saver with a true binary Blob
+  const downloadPreview = async () => {
     if (!previewBlob) return;
-    const link = document.createElement('a');
-    link.href = previewBlob;
-    link.download = `pingworld-post-preview-${Date.now()}.png`;
-    link.click();
-    toast.success('Preview saved!');
+    try {
+      const res = await fetch(previewBlob);
+      const blob = await res.blob();
+      const { saveAs } = await import('file-saver');
+      saveAs(blob, `pingworld-post-preview-${Date.now()}.png`);
+      toast.success('Preview saved!');
+    } catch {
+      toast.error('Failed to save preview blob.');
+    }
   };
 
   const copyToClipboard = async () => {
