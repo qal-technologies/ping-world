@@ -9,8 +9,6 @@ import {
   Download,
   RefreshCw,
   Trash2,
-  Maximize,
-  Minimize,
   Palette,
   Check,
   Scaling,
@@ -285,11 +283,22 @@ export default function ImageToolkitPage() {
     ctx.restore();
 
     const formatLabel = exportFormat.split('/')[1] || 'png';
-    const link = document.createElement('a');
-    link.download = `pingworld-edited-${fileName.split('.')[0] || 'img'}.${formatLabel}`;
-    link.href = canvas.toDataURL(exportFormat);
-    link.click();
-    toast.success(`Image exported as ${formatLabel.toUpperCase()} successfully!`);
+
+    // jules edit: Native HTML5 toBlob saving prevents download truncation on large images
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        toast.error("Export failed. Could not generate image blob.");
+        return;
+      }
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `pingworld-edited-${fileName.split('.')[0] || 'img'}.${formatLabel}`;
+      link.href = downloadUrl;
+      link.click();
+
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+      toast.success(`Image exported as ${formatLabel.toUpperCase()} successfully!`);
+    }, exportFormat);
   };
 
   const filterString = `
