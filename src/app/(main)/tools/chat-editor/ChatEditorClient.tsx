@@ -61,17 +61,25 @@ export default function ChatEditorPage() {
   const exportAsImage = async () => {
     if (!chatRef.current) return;
     try {
-      // jules edit: Add CORS and allowTaint to prevent canvas taint issues
       const canvas = await html2canvas(chatRef.current, {
-        backgroundColor: "#F1F5F9", // Light slate for "device" background
+        backgroundColor: "#F1F5F9",
         useCORS: true,
         allowTaint: true
       });
-      const link = document.createElement("a");
-      link.download = `pingworld-chat-${editingName.toLowerCase()}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-      toast.success("Chat exported as image!");
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error("Export failed. Could not generate chat preview blob.");
+          return;
+        }
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `pingworld-chat-${editingName.toLowerCase()}.png`;
+        link.href = downloadUrl;
+        link.click();
+
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+        toast.success("Chat exported as image!");
+      }, "image/png");
     } catch (err) {
       toast.error("Export failed. Please try again.");
     }

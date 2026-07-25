@@ -103,6 +103,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // jules edit: function to change premium state locally immediately upon payment
+  const updatePremiumTierLocally = useCallback((tier: PremiumTier) => {
+    setPremiumTier(tier);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("pingworld_premium_local_tier", tier);
+    }
+  }, []);
+
   // ── Session loader
   // jules edit: Extended loadSession to bridge authenticated users to Firebase using Custom Tokens and load purchased tools
   const loadSession = useCallback(async () => {

@@ -16,6 +16,7 @@ import {
   Home,
   Pencil,
   Brain,
+  Code,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -70,6 +71,7 @@ const toolLinks = [
 const navLinks = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/tools', label: 'Browse Tools', icon: Wrench },
+  { href: '/api', label: 'Developer APIs', icon: Code },
   { href: '/quiz', label: 'Quiz', icon: Brain },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ];

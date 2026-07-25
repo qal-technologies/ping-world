@@ -4,9 +4,72 @@ This guide provides the complete database schemas, table creation statements, ro
 
 ---
 
-## 🔵 1. Supabase (PostgreSQL Schema & RLS Policies)
+## ⚡ 1. QUICK HEAL: SQL Database Healing Migration (Supabase SQL Editor)
+If you have already executed a previous SQL schema script and are seeing `400 (Bad Request)` errors in your browser console when navigating quizzes or messages, it means your existing tables are missing the correct column structure.
 
-Paste the following SQL script directly into the **SQL Editor** in your Supabase Dashboard (`https://supabase.com/dashboard/project/_/sql`) and click **Run**. This will create the necessary tables, configure RLS, and establish performance indexes.
+Paste this **Healing Migration block** directly into your **Supabase SQL Editor** and click **Run**. This will gracefully add all missing columns to existing tables without erasing any of your current data:
+
+```sql
+-- jules edit: Safe PostgreSQL database column healing migration script
+
+-- 1. UPGRADE PUBLIC.QUIZZES TABLE with camelCase and JSON columns
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'multiple-choice';
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS responses JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "canGoBack" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "showScore" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "hasTimer" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "correctOption" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "correctOptionDes" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "randomizeOptions" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "randomizeQuestions" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "allowRetry" BOOLEAN DEFAULT true;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "enforceSecurity" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "enforceIdentity" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "askDetails" BOOLEAN DEFAULT false;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS "endScreen" JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
+
+-- 2. UPGRADE PUBLIC.MESSAGES TABLE with content and seen tracking
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS content TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_seen BOOLEAN DEFAULT false;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
+
+-- 3. UPGRADE PUBLIC.PROFILES TABLE
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+
+-- 4. ENSURE SHORT_LINKS TABLE EXISTS
+CREATE TABLE IF NOT EXISTS public.short_links (
+  id TEXT PRIMARY KEY,
+  creator_id UUID REFERENCES auth.users ON DELETE CASCADE,
+  original_url TEXT NOT NULL,
+  clicks INTEGER DEFAULT 0 NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.short_links ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES auth.users ON DELETE CASCADE;
+ALTER TABLE public.short_links ADD COLUMN IF NOT EXISTS original_url TEXT;
+ALTER TABLE public.short_links ADD COLUMN IF NOT EXISTS clicks INTEGER DEFAULT 0;
+ALTER TABLE public.short_links ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;
+
+-- 5. ENSURE TOURNAMENTS TABLE EXISTS
+CREATE TABLE IF NOT EXISTS public.tournaments (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  teams JSONB DEFAULT '[]'::jsonb NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users ON DELETE CASCADE;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS teams JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
+```
+
+---
+
+## 🔵 2. Supabase (Fresh Table Creation, Indexes, & RLS Policies)
+
+If you are setting up a fresh database, run the following complete schema query. It creates all tables with the exact columns and configurations needed by the application out-of-the-box:
 
 ```sql
 -- jules edit: Supabase Table Creation, Indexes, and Row-Level Security (RLS) Policies
@@ -17,7 +80,7 @@ Paste the following SQL script directly into the **SQL Editor** in your Supabase
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   username TEXT UNIQUE,
-  full_name TEXT,
+  display_name TEXT,
   tier TEXT DEFAULT 'free',
   avatar_url TEXT,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -45,15 +108,9 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
+  type TEXT DEFAULT 'multiple-choice',
   questions JSONB DEFAULT '[]'::jsonb NOT NULL,
-  collect_info BOOLEAN DEFAULT false,
-  required_fields TEXT[] DEFAULT '{}'::text[],
-  security_enabled BOOLEAN DEFAULT false,
-  expires_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  -- Extended columns
-  type TEXT DEFAULT 'trivia',
-  responses JSONB DEFAULT '[]'::jsonb NOT NULL,
+  responses JSONB DEFAULT '[]'::jsonb,
   "canGoBack" BOOLEAN DEFAULT true,
   "showScore" BOOLEAN DEFAULT true,
   "hasTimer" BOOLEAN DEFAULT false,
@@ -65,7 +122,9 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
   "enforceSecurity" BOOLEAN DEFAULT false,
   "enforceIdentity" BOOLEAN DEFAULT false,
   "askDetails" BOOLEAN DEFAULT false,
-  "endScreen" JSONB DEFAULT '{}'::jsonb NOT NULL,
+  "endScreen" JSONB DEFAULT '{}'::jsonb,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -137,11 +196,10 @@ CREATE POLICY "Quiz owners can view responses"
 CREATE TABLE IF NOT EXISTS public.messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   recipient_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  sender_tag TEXT,
-  text TEXT NOT NULL,
-  is_approved BOOLEAN DEFAULT false,
+  content TEXT NOT NULL,
+  is_seen BOOLEAN DEFAULT false,
   expires_at TIMESTAMP WITH TIME ZONE,
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- Enable RLS on Messages
@@ -154,7 +212,7 @@ CREATE POLICY "Anyone can send anonymous messages"
 CREATE POLICY "Recipients can view their own messages"
   ON public.messages FOR SELECT USING (auth.uid() = recipient_id);
 
-CREATE POLICY "Recipients can toggle message approval"
+CREATE POLICY "Recipients can toggle message seen status"
   ON public.messages FOR UPDATE USING (auth.uid() = recipient_id);
 
 CREATE POLICY "Recipients can delete their own messages"
@@ -214,17 +272,17 @@ CREATE INDEX IF NOT EXISTS idx_tournaments_user_id ON public.tournaments(user_id
 CREATE INDEX IF NOT EXISTS idx_short_links_creator_id ON public.short_links(creator_id);
 
 -- ==========================================
--- 6. AUTOMATIC USER PROFILE TRIGGER
+-- 8. AUTOMATIC USER PROFILE TRIGGER
 -- ==========================================
 -- Automatically creates a profile row in public.profiles when a user signs up via Supabase Auth.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, username, full_name, tier, avatar_url)
+  INSERT INTO public.profiles (id, username, display_name, tier, avatar_url)
   VALUES (
     new.id,
     COALESCE(new.raw_user_meta_data->>'username', 'user_' || substr(new.id::text, 1, 8)),
-    new.raw_user_meta_data->>'full_name',
+    COALESCE(new.raw_user_meta_data->>'display_name', new.email?.split('@')[0] || 'User'),
     COALESCE(new.raw_user_meta_data->>'tier', 'free'),
     new.raw_user_meta_data->>'avatar_url'
   );
@@ -239,7 +297,7 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 
 ---
 
-## 🔥 2. Firebase Firestore (Schema Structs & Security Rules)
+## 🔥 3. Firebase Firestore (Schema Structs & Security Rules)
 
 If you are using Firebase Firestore alongside or in place of Supabase, copy the configuration rules below into the **Firestore Database Rules** tab of your Firebase Console.
 
@@ -298,7 +356,7 @@ service cloud.firestore {
 2. Open your project.
 3. Click on the **SQL Editor** tab in the left-hand navigation bar (represented by a `SQL` icon).
 4. Click on **New Query** to create a blank editor workspace.
-5. Paste the entire script from **Section 1** above into the editor.
+5. Paste the entire script from **Section 1** (or **Section 2** if installing from scratch) above into the editor.
 6. Click **Run** on the bottom right. You should see `Success. No rows returned.`
 
 ### For Firebase Console:
@@ -306,5 +364,5 @@ service cloud.firestore {
 2. Open your project.
 3. Click on **Firestore Database** in the Build menu.
 4. Go to the **Rules** tab at the top.
-5. Replace everything in the editor box with the rules from **Section 2** above.
+5. Replace everything in the editor box with the rules from **Section 3** above.
 6. Click **Publish**.
