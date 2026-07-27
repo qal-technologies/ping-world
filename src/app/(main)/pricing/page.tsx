@@ -261,8 +261,17 @@ export default function PricingPage() {
                   <ul className='space-y-2.5 flex-1 mb-6'>
                     <li className='flex items-center gap-2 text-xs'>
                       <CheckCircle
-                        className={cn('h-3.5 w-3.5 shrink-0', (tierId === 'standard' || tierId === 'pro') ? '' : 'text-pw-success')}
-                        style={(tierId === 'standard' || tierId === 'pro') ? { color: tier.color } : {}}
+                        className={cn(
+                          'h-3.5 w-3.5 shrink-0',
+                          tierId === 'standard' || tierId === 'pro' ?
+                            ''
+                          : 'text-pw-success',
+                        )}
+                        style={
+                          tierId === 'standard' || tierId === 'pro' ?
+                            { color: tier.color }
+                          : {}
+                        }
                       />
                       <span>
                         {tier.maxMessages === Infinity ?
@@ -273,8 +282,17 @@ export default function PricingPage() {
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
                       <CheckCircle
-                        className={cn('h-3.5 w-3.5 shrink-0', (tierId === 'standard' || tierId === 'pro') ? '' : 'text-pw-success')}
-                        style={(tierId === 'standard' || tierId === 'pro') ? { color: tier.color } : {}}
+                        className={cn(
+                          'h-3.5 w-3.5 shrink-0',
+                          tierId === 'standard' || tierId === 'pro' ?
+                            ''
+                          : 'text-pw-success',
+                        )}
+                        style={
+                          tierId === 'standard' || tierId === 'pro' ?
+                            { color: tier.color }
+                          : {}
+                        }
                       />
                       <span>
                         {tier.maxQuizzes === Infinity ?
@@ -285,16 +303,34 @@ export default function PricingPage() {
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
                       <CheckCircle
-                        className={cn('h-3.5 w-3.5 shrink-0', (tierId === 'standard' || tierId === 'pro') ? '' : 'text-pw-success')}
-                        style={(tierId === 'standard' || tierId === 'pro') ? { color: tier.color } : {}}
+                        className={cn(
+                          'h-3.5 w-3.5 shrink-0',
+                          tierId === 'standard' || tierId === 'pro' ?
+                            ''
+                          : 'text-pw-success',
+                        )}
+                        style={
+                          tierId === 'standard' || tierId === 'pro' ?
+                            { color: tier.color }
+                          : {}
+                        }
                       />
                       <span>Up to {tier.maxExpiryDays} day expiry</span>
                     </li>
                     <li className='flex items-center gap-2 text-xs'>
                       {tier.publicInbox ?
                         <CheckCircle
-                          className={cn('h-3.5 w-3.5 shrink-0', (tierId === 'standard' || tierId === 'pro') ? '' : 'text-pw-success')}
-                          style={(tierId === 'standard' || tierId === 'pro') ? { color: tier.color } : {}}
+                          className={cn(
+                            'h-3.5 w-3.5 shrink-0',
+                            tierId === 'standard' || tierId === 'pro' ?
+                              ''
+                            : 'text-pw-success',
+                          )}
+                          style={
+                            tierId === 'standard' || tierId === 'pro' ?
+                              { color: tier.color }
+                            : {}
+                          }
                         />
                       : <X className='h-3.5 w-3.5 text-pw-muted/40 shrink-0' />}
                       <span
@@ -305,8 +341,17 @@ export default function PricingPage() {
                     <li className='flex items-center gap-2 text-xs'>
                       {tier.proTools ?
                         <CheckCircle
-                          className={cn('h-3.5 w-3.5 shrink-0', (tierId === 'standard' || tierId === 'pro') ? '' : 'text-pw-success')}
-                          style={(tierId === 'standard' || tierId === 'pro') ? { color: tier.color } : {}}
+                          className={cn(
+                            'h-3.5 w-3.5 shrink-0',
+                            tierId === 'standard' || tierId === 'pro' ?
+                              ''
+                            : 'text-pw-success',
+                          )}
+                          style={
+                            tierId === 'standard' || tierId === 'pro' ?
+                              { color: tier.color }
+                            : {}
+                          }
                         />
                       : <X className='h-3.5 w-3.5 text-pw-muted/40 shrink-0' />}
                       <span
@@ -422,7 +467,9 @@ export default function PricingPage() {
         </div>
       </div>
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen} >
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}>
         <DialogContent className='w-[90%] bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar text-pw-text pt-1'>
           {selectedTier && (
             <div className='space-y-6'>
@@ -448,25 +495,6 @@ export default function PricingPage() {
                 </div>
               </DialogHeader>
 
-              {/* jules edit: Flexible feature selector dropdown */}
-              {selectedTierId === 'flexible' && (
-                <div className='space-y-2'>
-                  <label className='text-[10px] font-black uppercase tracking-widest text-pw-muted block'>
-                    Select Paid Feature / Tool to Unlock
-                  </label>
-                  <select
-                    value={selectedFlexibleToolId}
-                    onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
-                    className='w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-pw-text focus:outline-none cursor-pointer'>
-                    {FLEXIBLE_FEATURES.map((feat: any) => (
-                      <option key={feat.id} value={feat.id} className='bg-pw-surface'>
-                        {feat.label} (${feat.monthly}/mo or ${feat.yearly}/yr)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               {/* Billing Cycle Selector */}
               {(selectedTierId === 'flexible' || selectedTier.price.yearly) && (
                 <div className='bg-white/5 nav-glass rounded-full flex items-center justify-between h-9'>
@@ -474,10 +502,13 @@ export default function PricingPage() {
                     onClick={() => setBillingCycle('monthly')}
                     className={cn(
                       'flex-1 py-2 text-center text-xs font-semibold rounded-full transition-all h-10 text-base',
-                      billingCycle === 'monthly' ?
-                        'bg-pw-primary text-white shadow-xl'
-                      : 'text-pw-muted hover:text-pw-text',
-                    )}>
+                      billingCycle === 'monthly' ? `text-black shadow-xl` : (
+                        'text-pw-muted hover:text-pw-text'
+                      ),
+                    )}
+                    style={{
+                      backgroundColor: `${billingCycle === 'monthly' ? selectedTier.color : ''}`,
+                    }}>
                     Monthly
                   </button>
                   <button
@@ -485,12 +516,23 @@ export default function PricingPage() {
                     className={cn(
                       'flex-1 py-2 text-center text-base font-semibold rounded-full transition-all flex items-center h-10 justify-center gap-1.5',
                       billingCycle === 'yearly' ?
-                        'bg-pw-primary text-white shadow-xl'
+                        `text-black shadow-xl`
                       : 'text-pw-muted hover:text-pw-text',
-                    )}>
+                    )}
+                    style={{
+                      backgroundColor: `${billingCycle === 'yearly' ? selectedTier.color : ''}`,
+                    }}>
                     Yearly
                     <span className='px-1.5 py-0.5 rounded bg-pw-success text-[8px] font-black uppercase tracking-wider text-black'>
-                      Save {selectedTierId === 'flexible' ? Math.round((1 - displayYearlyPrice / (displayMonthlyPrice * 12)) * 100) : 16}%
+                      Save{' '}
+                      {selectedTierId === 'flexible' ?
+                        Math.round(
+                          (1 -
+                            displayYearlyPrice / (displayMonthlyPrice * 12)) *
+                            100,
+                        )
+                      : 16}
+                      %
                     </span>
                   </button>
                 </div>
@@ -506,48 +548,57 @@ export default function PricingPage() {
                   <span className='text-3xl font-extrabold font-display text-white block'>
                     {billingCycle === 'monthly' ?
                       `$${displayMonthlyPrice}/mo`
-                    : `$${displayYearlyPrice}/yr`
-                    }
+                    : `$${displayYearlyPrice}/yr`}
                   </span>
                 </div>
-                {billingCycle === 'yearly' && displayMonthlyPrice && displayYearlyPrice && (
-                  <div className='text-right'>
-                    <span className='text-[10px] text-pw-success font-black uppercase tracking-wider block'>
-                      Discount Applied
-                    </span>
-                    <span className='text-xs text-pw-muted block mt-0.5'>
-                      Save ${savings} compared to monthly
-                    </span>
-                  </div>
-                )}
+                {billingCycle === 'yearly' &&
+                  displayMonthlyPrice &&
+                  displayYearlyPrice && (
+                    <div className='text-center mt-1'>
+                      <span className='text-[10px] text-pw-success font-black uppercase tracking-wider block'>
+                        Discount Applied
+                      </span>
+                      <span className='text-xs text-pw-muted block'>
+                        Save ${savings} compared to monthly
+                      </span>
+                    </div>
+                  )}
               </div>
 
-              {/* plan instructions or a paid featuers dropdown for only flexible plan to select the actual tool being paid for and handle the price cange depending on the tool selected.  */}
-              {/* jules edit: Add dropdown for flexible plan feature purchase selection */}
               {selectedTierId === 'flexible' && (
                 <div className='space-y-2 p-4 rounded-xl bg-white/[0.02] border border-white/5'>
                   <label className='text-xs font-bold text-pw-muted uppercase block'>
-                    Select Paid Tool / Feature
+                    Select Tool
                   </label>
                   <select
                     value={selectedFlexibleToolId}
                     onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
-                    className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
-                  >
+                    className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
                     {FLEXIBLE_FEATURES.map((feat: any) => (
-                      <option key={feat.id} value={feat.id} className='bg-[#0c0d1c] py-2'>
-                        {feat.label} (Monthly: ${feat.monthly}/mo | Yearly: ${feat.yearly}/yr)
+                      <option
+                        key={feat.id}
+                        value={feat.id}
+                        className='bg-[#0c0d1c] py-2'>
+                        {feat.label}
                       </option>
                     ))}
                   </select>
                   <p className='text-[10px] text-pw-muted leading-relaxed mt-1'>
-                    The flexible plan allows you to pay only for the tools you use. Select your desired feature from the dropdown to adjust your subscription price.
+                    The flexible plan allows you to pay only for the tools you
+                    use. Select your desired feature from the dropdown to adjust
+                    your subscription price.
                   </p>
                 </div>
               )}
 
+              {selectedTierId !== 'flexible' && (
+                <p className='text-[10px] text-pw-muted leading-relaxed mt-1'>
+                  {selectedTier.description}
+                </p>
+              )}
+
               {/* Checkout Controls */}
-              <DialogFooter className='pt-2 flex flex-col sm:flex-row gap-2'>
+              <DialogFooter className='pt-4 flex flex-col sm:flex-row gap-2'>
                 <button
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSimulating}

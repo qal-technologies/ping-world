@@ -3,26 +3,21 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import {
-  Terminal,
   Play,
   Copy,
   Check,
   ArrowLeft,
   Code,
   Zap,
-  Sparkles,
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
-  FileText,
-  Layers,
   BookOpen,
-  HelpCircle,
   Sliders,
+  Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 import AudioVisualizer from '@/components/dev-engines/AudioVisualizer';
@@ -490,19 +485,19 @@ export default function ApiDocsPlaygroundPage({
         href='/api'
         className='inline-flex items-center gap-2 text-pw-muted hover:text-pw-primary transition-colors text-sm mb-6 font-mono'>
         <ArrowLeft className='h-4 w-4' />
-        Back to Developer APIs Hub
+        Back to Dev Tools
       </Link>
 
       {/* Header */}
       <div className='mb-10'>
         <div className='inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-mono mb-3'>
-          <Zap className='h-3.5 w-3.5' />
+          <Link2 className='h-3.5 w-3.5' />
           Endpoint: /api/call/{apiId}
         </div>
         <h1 className='text-3xl md:text-5xl font-extrabold font-display mb-3'>
           {meta.name}
         </h1>
-        <p className='text-pw-muted text-base max-w-3xl leading-relaxed'>
+        <p className='text-pw-muted max-w-3xl leading-relaxed'>
           {meta.description}
         </p>
       </div>
@@ -519,15 +514,12 @@ export default function ApiDocsPlaygroundPage({
 
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-8'>
         {/* Left: Interactive Runner */}
-        <Card className='card-glow bkblur p-6 flex flex-col gap-6'>
+        <Card className='bg-transparent ring-0 sm:ring-1 sm:bg-pw-glass sm:glass sm:bkblur p-2 sm:p-6 flex flex-col gap-6'>
           <div className='flex justify-between items-center border-b border-white/5 pb-4'>
             <h3 className='text-lg font-bold font-display flex items-center gap-2'>
               <Play className='h-4 w-4 text-pw-primary' />
-              Interactive Method Playground
+              Interactive Method Sandbox
             </h3>
-            <span className='text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-bold'>
-              Edge Serverless Ready
-            </span>
           </div>
 
           <div>
@@ -598,7 +590,7 @@ export default function ApiDocsPlaygroundPage({
             {loading ?
               <RefreshCw className='h-4 w-4 animate-spin' />
             : <Play className='h-4 w-4 fill-current' />}
-            Execute {selectedMethodName}() Method
+            Run {selectedMethodName}()
           </Button>
 
           {/* Response Console */}
@@ -646,19 +638,21 @@ export default function ApiDocsPlaygroundPage({
           )}
         </Card>
 
+        <div className='divider my-5 sm:hidden' />
+        
         {/* Right: Detailed Blog-Style Documentation */}
         <div className='flex flex-col gap-6'>
-          <Card className='card-glow bkblur p-6'>
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:bg-pw-glass sm:glass sm:bkblur p-2 sm:p-6'>
             <h3 className='text-lg font-bold font-display flex items-center gap-2 mb-4 border-b border-white/5 pb-3'>
               <BookOpen className='h-5 w-5 text-pw-primary' />
-              Detailed Developer Guide & API Reference
+              Dev Guide & API Reference
             </h3>
             <div className='space-y-6 max-h-[520px] overflow-y-auto pr-2'>
               {meta.methods.map((m) => (
                 <div
                   key={m.name}
                   onClick={() => handleMethodChange(m.name)}
-                  className={`p-5 rounded-2xl border transition-all cursor-pointer ${
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                     selectedMethodName === m.name ?
                       'bg-pw-primary/10 border-pw-primary/50 shadow-lg'
                     : 'bg-white/[0.02] border-white/10 hover:border-white/20'
@@ -693,8 +687,10 @@ export default function ApiDocsPlaygroundPage({
               ))}
             </div>
           </Card>
-
-          <Card className='card-glow bkblur p-6'>
+          
+          <div className='divider my-5 sm:hidden' />
+          
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:bg-pw-glass  sm:glass sm:bkblur p-2 sm:p-6'>
             <div className='flex justify-between items-center mb-4'>
               <h3 className='text-sm font-bold font-display flex items-center gap-2'>
                 <Code className='h-4 w-4 text-pw-primary' />

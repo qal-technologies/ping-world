@@ -36,9 +36,9 @@ export const Footer = () => {
   const { isLoggedIn } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
 
-  const visibleTools = tools.slice(0, 9);
-  const dropdownTools = tools.slice(9);
-  const hasMoreTools = tools.length > 9;
+  const visibleTools = tools.slice(0, 6);
+  const dropdownTools = tools.slice(6);
+  const hasMoreTools = tools.length > 6;
 
   const navLinks = [
     { href: '/', label: 'Home' },

@@ -19,18 +19,6 @@ import {
 
 export const tools = [
   {
-    icon: Globe,
-    title: 'Country Directory',
-    description:
-      'Explore high-fidelity country flags, ISO codes, calling info, languages, currencies, and geographic data with instant modular search.',
-    href: '/countries',
-    color: '#0ea5e9',
-    tag: 'Countries',
-    id: 'countries',
-    category: 'Utility',
-    version: { v: '1.0', s: 'Stable' },
-  },
-  {
     icon: Brain,
     title: 'Quizzable',
     description:
@@ -88,6 +76,18 @@ export const tools = [
     color: '#FFB347',
     tag: 'Image Edit',
     id: 'image',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Globe,
+    title: 'Country Directory',
+    description:
+      'Explore high-fidelity country flags, ISO codes, calling info, languages, currencies, and geographic data with instant modular search.',
+    href: '/countries',
+    color: '#0ea5e9',
+    tag: 'Countries',
+    id: 'countries',
+    category: 'Utility',
     version: { v: '1.0', s: 'Stable' },
   },
   {

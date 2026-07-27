@@ -11,8 +11,8 @@
   /* === Ping World Brand === */
   --pw-primary: #985cff;
   --pw-secondary: #2255fd;
-  --pw-bg: #02040f;
-  --pw-surface: #02040c;
+  --pw-bg: #02030c;
+  --pw-surface: #030612;
   --pw-muted: #8b92b8;
   --pw-success: #22c985;
   --pw-warning: #ffb347;
@@ -67,7 +67,7 @@
 
 /* ─── Tailwind Theme Extension ──────────────────────────────── */
 @theme inline {
-  /* Brand utilities (e.g. bg-pw-primary, text-pw-muted) */
+  /* Brand utilities */
   --color-pw-primary: var(--pw-primary);
   --color-pw-secondary: var(--pw-secondary);
   --color-pw-bg: var(--pw-bg);
@@ -78,6 +78,7 @@
   --color-pw-danger: var(--pw-danger);
   --color-pw-text: var(--pw-text);
   --color-pw-cyan: var(--pw-cyan);
+  --color-pw-glass:rgba(13, 15, 35, 0.2);
 
   /* Font families */
   --font-display: var(--font-display);
@@ -217,6 +218,14 @@ pre {
 
 /* ─── Glass Morphism ────────────────────────────────────────── */
 .glass {
+  background: rgba(13, 15, 35, 0.4);
+  -webkit-backdrop-filter: blur(20px) brightness(40%);
+  backdrop-filter: blur(20px) brightness(40%);
+  border: 1px solid rgba(92, 111, 255, 0.15);
+}
+
+.bg-glass{
+  
   background: rgba(13, 15, 35, 0.4);
   -webkit-backdrop-filter: blur(20px) brightness(40%);
   backdrop-filter: blur(20px) brightness(40%);

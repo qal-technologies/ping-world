@@ -13,7 +13,7 @@ export class AudioEditingEngine {
 
   public generateTone(
     frequencyHz: number,
-    durationSec = 1.0,
+    durationSec = 1.5,
     waveType: 'sine' | 'square' | 'sawtooth' | 'triangle' = 'sine',
     volume = 0.5,
   ): ToneResult {
