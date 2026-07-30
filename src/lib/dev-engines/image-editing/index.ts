@@ -1,3 +1,5 @@
+// jules edit: Image Editing Engine with color filters, blue tone, saturation, highlights, black & white, and background removal pixel algorithms.
+
 export interface RawImageData {
   width: number;
   height: number;
@@ -6,9 +8,12 @@ export interface RawImageData {
 
 export interface ColorFilterConfig {
   hueShift?: number; // -180 to 180
-  saturation?: number; // -100 to 100
+  saturation?: number; // 0 to 300
   brightness?: number; // -100 to 100
   contrast?: number; // -100 to 100
+  blueTone?: boolean;
+  blackAndWhite?: boolean;
+  highlight?: number; // -100 to 100
 }
 
 export class ImageEditingEngine {
@@ -29,7 +34,7 @@ export class ImageEditingEngine {
         );
 
         if (diff <= tolerance) {
-          data[i + 3] = 0; // set alpha to 0
+          data[i + 3] = 0; // set alpha to 0 (transparent)
         }
       }
 
@@ -41,13 +46,12 @@ export class ImageEditingEngine {
 
   public removeBackground(image: RawImageData, sensitivity = 35): RawImageData {
     try {
-      // Automatic background removal: samples corner pixels as background reference
       const data = new Uint8ClampedArray(image.data);
       const corners = [
-        0, // top-left
-        (image.width - 1) * 4, // top-right
-        (image.height - 1) * image.width * 4, // bottom-left
-        (image.height * image.width - 1) * 4, // bottom-right
+        0,
+        (image.width - 1) * 4,
+        (image.height - 1) * image.width * 4,
+        (image.height * image.width - 1) * 4,
       ];
 
       let bgR = 0, bgG = 0, bgB = 0;
@@ -102,17 +106,46 @@ export class ImageEditingEngine {
     }
   }
 
+  // Expanded with blue tone, highlights, black/white, contrast and light editing parameters
   public applyFilters(image: RawImageData, config: ColorFilterConfig): RawImageData {
     try {
       const data = new Uint8ClampedArray(image.data);
       const hueShift = config.hueShift || 0;
       const brightness = config.brightness || 0;
+      const saturationFactor = config.saturation !== undefined ? config.saturation / 100 : 1;
+      const highlightFactor = config.highlight || 0;
+
+      // Contrast factor calculation: maps -100..100 to 0.1..3.0
+      const contrast = config.contrast || 0;
+      const contrastFactor = Math.pow((contrast + 100) / 100, 2);
 
       for (let i = 0; i < data.length; i += 4) {
-        let r = data[i] + brightness;
-        let g = data[i + 1] + brightness;
-        let b = data[i + 2] + brightness;
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+        const a = data[i + 3];
 
+        if (a === 0) continue;
+
+        // Brightness
+        r += brightness;
+        g += brightness;
+        b += brightness;
+
+        // Highlights (affects brighter pixels more than dark ones)
+        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if (luminance > 128) {
+          r += highlightFactor * 0.5;
+          g += highlightFactor * 0.5;
+          b += highlightFactor * 0.5;
+        }
+
+        // Contrast
+        r = (r - 128) * contrastFactor + 128;
+        g = (g - 128) * contrastFactor + 128;
+        b = (b - 128) * contrastFactor + 128;
+
+        // Hue Shift using local HSL
         if (hueShift !== 0) {
           const hsl = this.rgbToHsl(r, g, b);
           hsl.h = (hsl.h + hueShift + 360) % 360;
@@ -120,9 +153,30 @@ export class ImageEditingEngine {
           r = rgb.r; g = rgb.g; b = rgb.b;
         }
 
-        data[i] = Math.min(255, Math.max(0, r));
-        data[i + 1] = Math.min(255, Math.max(0, g));
-        data[i + 2] = Math.min(255, Math.max(0, b));
+        // Saturation factor
+        if (saturationFactor !== 1) {
+          const avg = (r + g + b) / 3;
+          r = avg + (r - avg) * saturationFactor;
+          g = avg + (g - avg) * saturationFactor;
+          b = avg + (b - avg) * saturationFactor;
+        }
+
+        // Blue Tone filter effect
+        if (config.blueTone) {
+          r = r * 0.8;
+          g = g * 0.9;
+          b = Math.min(255, b * 1.3);
+        }
+
+        // Black and White filter effect
+        if (config.blackAndWhite) {
+          const bw = 0.299 * r + 0.587 * g + 0.114 * b;
+          r = bw; g = bw; b = bw;
+        }
+
+        data[i] = Math.min(255, Math.max(0, Math.round(r)));
+        data[i + 1] = Math.min(255, Math.max(0, Math.round(g)));
+        data[i + 2] = Math.min(255, Math.max(0, Math.round(b)));
       }
 
       return { width: image.width, height: image.height, data };

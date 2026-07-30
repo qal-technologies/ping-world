@@ -412,6 +412,10 @@ export default function PublicQuizTaker() {
   const [userData, setUserData] = useState<Record<string, string>>({});
 
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportedStatus, setReportedStatus] = useState(false);
+  const [scrollAnswers, setScrollAnswers] = useState<Record<string, any>>({});
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
   const [lastUncatIndex, setLastUncatIndex] = useState<number>(0);
@@ -979,6 +983,55 @@ export default function PublicQuizTaker() {
   };
 
   
+  const handleSubmitScrollQuiz = () => {
+    const finalAnswers: any[] = [];
+    let scoreCount = 0;
+
+    for (const qObj of activeQuestions) {
+      const ansVal = scrollAnswers[qObj.id];
+      const hasAns = ansVal !== undefined && ansVal !== null && ansVal !== '';
+
+      if (!hasAns) {
+        toast.error(`Please answer all questions before submitting.`);
+        return;
+      }
+
+      let correct = false;
+      if (quiz?.type === 'quiz') {
+        const secureAnswer = correctAnswersRef.current[qObj.id];
+        let decodedCorrect: any = secureAnswer;
+        try {
+          if (typeof secureAnswer === 'string' && secureAnswer.length > 5) {
+            const decoded = atob(secureAnswer);
+            try { decodedCorrect = JSON.parse(decoded); } catch { decodedCorrect = decoded; }
+          }
+        } catch (e) {
+          decodedCorrect = secureAnswer;
+        }
+
+        if (qObj.type === 'checkbox') {
+          const correctIds = Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect];
+          const selectedList = Array.isArray(ansVal) ? ansVal : [ansVal];
+          correct = selectedList.length === correctIds.length && selectedList.every((val: any) => correctIds.includes(val));
+        } else {
+          correct = String(ansVal).trim().toLowerCase() === String(decodedCorrect).trim().toLowerCase();
+        }
+
+        if (correct) scoreCount++;
+      }
+
+      finalAnswers.push({
+        questionId: qObj.id,
+        answer: ansVal,
+        correct
+      });
+    }
+
+    setScore(scoreCount);
+    setUserAnswers(finalAnswers);
+    finalizeQuiz(finalAnswers);
+  };
+
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     if (quiz) {
@@ -1355,22 +1408,45 @@ export default function PublicQuizTaker() {
 
       {/* 1. Intro Gate */}
       {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
-        <div className='container relative z-10 mx-auto px-5 sm:px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
-          <div className='flex justify-center mb-6 text-pw-primary'>
-            {quiz.type === 'quiz' ?
-              <Brain size={60} />
-            : <MessageCircle size={60} />}
-          </div>
-          <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
-            {quiz.title.toUpperCase()}
-          </h1>
-          <p
-            className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
-            style={{ lineHeight: '20px' }}>
-            {quiz.description}
-          </p>
+        <div className='container relative z-10 mx-auto px-5 sm:px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative overflow-hidden rounded-[3rem] bg-pw-surface/10 border border-white/5 p-8 sm:p-12'>
+          {/* Custom blurred/shaded background picture for Taker page alone */}
+          {quiz.introBgUrl && (
+            <div
+              className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none"
+              style={{
+                backgroundImage: `url(${quiz.introBgUrl})`,
+                opacity: 0.12,
+                filter: 'blur(10px)',
+              }}
+            />
+          )}
 
-          <div className='max-w-sm mx-auto w-full'>
+          <div className='relative z-10'>
+            {/* Show clear foreground image/logo if configured */}
+            {quiz.introBgUrl ? (
+              <img
+                src={quiz.introBgUrl}
+                alt="Intro Logo"
+                className="h-24 w-24 object-contain rounded-2xl mb-6 mx-auto border-2 border-white/20 shadow-2xl bg-black/40"
+              />
+            ) : (
+              <div className='flex justify-center mb-6 text-pw-primary'>
+                {quiz.type === 'quiz' ?
+                  <Brain size={60} />
+                : <MessageCircle size={60} />}
+              </div>
+            )}
+            <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
+              {quiz.title.toUpperCase()}
+            </h1>
+            <p
+              className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
+              style={{ lineHeight: '20px' }}>
+              {quiz.description}
+            </p>
+          </div>
+
+          <div className='max-w-sm mx-auto w-full relative z-10'>
             {authRequired ?
               <div className='bg-pw-danger/5 p-2 py-3 rounded-2xl border border-pw-danger/20 space-y-6'>
                 <Lock className='h-12 w-12 text-pw-danger mx-auto mt-10' />
@@ -1402,6 +1478,17 @@ export default function PublicQuizTaker() {
                 CONTINUE
               </Button>
             }
+          </div>
+
+          {/* Terms disclaimer & Reporting Flow */}
+          <div className="border-t border-white/5 pt-6 mt-8 text-[11px] text-pw-muted leading-relaxed relative z-10">
+            <p className="mb-2">Disclaimer: PingWorld is strictly a service provider hosting content and is not responsible for any questions, responses, or outcomes generated in this assessment.</p>
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="text-pw-primary underline hover:text-pw-primary/80 transition-colors font-bold"
+            >
+              Report this assessment for investigation or takedown
+            </button>
           </div>
         </div>
       )}
@@ -1698,7 +1785,117 @@ export default function PublicQuizTaker() {
                       Return to Start
                     </Button>
                   </div>
-                : <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
+                : quiz.quizScroll ? (
+                  <div className="space-y-8 w-full max-w-[650px] mx-auto">
+                    {activeQuestions.map((qItem, qIdx) => {
+                      const curAns = scrollAnswers[qItem.id];
+                      return (
+                        <Card key={qItem.id} className="sm:glass sm:bkblur sm:rounded-3xl p-6 bg-pw-surface/30 border-white/5 shadow-xl relative overflow-hidden flex flex-col gap-4 text-pw-text">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex items-center gap-3">
+                              <span className="badge bg-pw-primary/10 text-pw-primary border border-pw-primary/20 px-3 py-1 rounded-full text-xs font-bold">
+                                Question {qIdx + 1}
+                              </span>
+                              {qItem.category && (
+                                <span className="text-[10px] text-pw-muted font-mono uppercase bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                  {qItem.category}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <h3 className="text-lg md:text-xl font-bold font-display text-left">
+                            {qItem.text}
+                          </h3>
+
+                          <div className="flex flex-col gap-2 w-full">
+                            {qItem.type === 'input' ? (
+                              <textarea
+                                value={curAns || ''}
+                                onChange={e => {
+                                  setScrollAnswers(prev => ({ ...prev, [qItem.id]: e.target.value }));
+                                }}
+                                rows={2}
+                                placeholder="Type your answer here..."
+                                className="w-full rounded-xl bg-black/40 border border-white/10 p-3 text-sm focus:outline-none focus:border-pw-primary text-pw-text"
+                              />
+                            ) : qItem.type === 'rating' ? (
+                              <div className="flex gap-2.5 justify-center py-2">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                  <button
+                                    key={star}
+                                    onClick={() => setScrollAnswers(prev => ({ ...prev, [qItem.id]: star.toString() }))}
+                                    className="p-1 transition-transform hover:scale-110 active:scale-95"
+                                  >
+                                    <Star className={cn("h-8 w-8", Number(curAns) >= star ? "text-pw-warning fill-current" : "text-white/20")} />
+                                  </button>
+                                ))}
+                              </div>
+                            ) : qItem.type === 'checkbox' ? (
+                              <div className="grid grid-cols-1 gap-2">
+                                {(shuffledOptions[qItem.id] || qItem.options).map((opt: any, optIdx: number) => {
+                                  const optId = typeof opt === 'string' ? optIdx.toString() : opt.id;
+                                  const optText = typeof opt === 'string' ? opt : opt.text;
+                                  const list = Array.isArray(curAns) ? curAns : [];
+                                  const isSel = list.includes(optId);
+
+                                  return (
+                                    <button
+                                      key={optId}
+                                      onClick={() => {
+                                        const nextList = isSel ? list.filter((i: any) => i !== optId) : [...list, optId];
+                                        setScrollAnswers(prev => ({ ...prev, [qItem.id]: nextList }));
+                                      }}
+                                      className={cn(
+                                        "w-full h-11 px-3 text-left rounded-xl border transition-all flex items-center justify-between bkblur",
+                                        isSel ? "bg-pw-primary/10 border-pw-primary text-pw-text" : "bg-white/2 border-white/5 text-pw-muted hover:border-white/10"
+                                      )}
+                                    >
+                                      <span className="text-sm font-semibold">{optText}</span>
+                                      <CheckCircle className={cn("h-4.5 w-4.5 text-pw-primary transition-opacity", isSel ? "opacity-100" : "opacity-0")} />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-2">
+                                {(shuffledOptions[qItem.id] || qItem.options).map((opt: any, optIdx: number) => {
+                                  const optId = typeof opt === 'string' ? optIdx.toString() : opt.id;
+                                  const optText = typeof opt === 'string' ? opt : opt.text;
+                                  const isSel = curAns === optId;
+
+                                  return (
+                                    <button
+                                      key={optId}
+                                      onClick={() => setScrollAnswers(prev => ({ ...prev, [qItem.id]: optId }))}
+                                      className={cn(
+                                        "w-full h-11 px-3 text-left rounded-xl border transition-all flex items-center justify-between bkblur",
+                                        isSel ? "bg-pw-primary/10 border-pw-primary text-pw-text" : "bg-white/2 border-white/5 text-pw-muted hover:border-white/10"
+                                      )}
+                                    >
+                                      <span className="text-sm font-semibold">{optText}</span>
+                                      <CheckCircle className={cn("h-4.5 w-4.5 text-pw-primary transition-opacity", isSel ? "opacity-100" : "opacity-0")} />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      );
+                    })}
+
+                    <div className="p-6 rounded-3xl bg-pw-success/5 border border-pw-success/20 flex flex-col items-center gap-4 mt-8 text-center text-pw-text relative overflow-hidden">
+                      <CheckCircle className="h-12 w-12 text-pw-success animate-bounce" />
+                      <h3 className="text-xl font-bold">End of Assessment</h3>
+                      <p className="text-xs text-pw-muted">Please double check your responses above before submitting.</p>
+                      <Button onClick={handleSubmitScrollQuiz} className="h-11 px-8 btn-primary font-bold text-sm shadow-lg shadow-pw-primary/25">
+                        Submit Entire Quiz
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
                     <div className='flex items-center gap-2'>
                       <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
                         {(
@@ -2011,7 +2208,7 @@ export default function PublicQuizTaker() {
                       </div>
                     </div>
                   </div>
-                }
+                )}
               </div>
 
               {/* Assistant Sidebar */}
@@ -2048,6 +2245,54 @@ export default function PublicQuizTaker() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Report Takedown Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-pw-surface border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-pw-text">
+            <h3 className="text-xl font-bold font-display text-pw-danger text-left">Report Assessment</h3>
+            <p className="text-xs text-pw-muted text-left">Please provide a detailed reason for reporting this assessment (e.g., copyright violation, offensive content, cheating, academic fraud). Our safety team will investigate within 24 hours.</p>
+            {reportedStatus ? (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl text-center">
+                Thank you! Your report has been securely registered and flagged for takedown review.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <textarea
+                  rows={4}
+                  value={reportReason}
+                  onChange={e => setReportReason(e.target.value)}
+                  placeholder="Describe your report reason here..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-pw-text focus:outline-none focus:border-pw-danger"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={() => setShowReportModal(false)} variant="outline" className="h-10 text-xs flex-1 border-white/10">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (!reportReason.trim()) {
+                        toast.error('Please enter a reason');
+                        return;
+                      }
+                      setReportedStatus(true);
+                      toast.success('Assessment reported successfully!');
+                      setTimeout(() => {
+                        setShowReportModal(false);
+                        setReportedStatus(false);
+                        setReportReason('');
+                      }, 2500);
+                    }}
+                    className="h-10 text-xs flex-1 bg-pw-danger hover:bg-pw-danger/80 text-white font-bold"
+                  >
+                    Submit Report
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Palette, Copy, Check, Eye, Sun, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Palette, Copy, Check, Eye, Sun, Sparkles, MessageSquare, Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ColorSuggestionEngine } from '@/lib/dev-engines/color-suggestion';
@@ -12,10 +12,43 @@ export default function ColorDevTool() {
   const [compareInput, setCompareInput] = useState('#111625');
   const [copied, setCopied] = useState(false);
 
+  // Mentions text extractor states
+  const [mentionsText, setMentionsText] = useState('We designed the background with navy and highlights in coral under the lightyellow sun.');
+  const [extractedColors, setExtractedColors] = useState<{ name: string; hex: string }[]>([]);
+
   const engine = new ColorSuggestionEngine();
   const details = engine.detect(colorInput);
   const comparison = engine.compare(colorInput, compareInput);
   const shades = engine.suggestShades(colorInput, 6);
+
+  useEffect(() => {
+    // Scan text for standard CSS named colors or hex values
+    const words = mentionsText.toLowerCase().split(/[\s,.:;!?]+/);
+    const found: { name: string; hex: string }[] = [];
+
+    // Helper to detect hex pattern
+    const hexPattern = /#(?:[0-9a-f]{3}){1,2}\b/gi;
+    const matches = mentionsText.match(hexPattern) || [];
+    matches.forEach(m => {
+      found.push({ name: m, hex: m });
+    });
+
+    const CSS_COLORS_LIST = [
+      'black', 'white', 'red', 'lime', 'blue', 'yellow', 'cyan', 'magenta', 'silver', 'gray', 'maroon', 'olive', 'green', 'purple', 'teal', 'navy', 'orange', 'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'blanchedalmond', 'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgreen', 'darkkhaki', 'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon', 'darkseagreen', 'darkslateblack', 'darkslateblue', 'darkslategray', 'darkturquoise', 'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dodgerblue', 'firebrick', 'floralwhite', 'forestgreen', 'fuchsia', 'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'greenyellow', 'honeydew', 'hotpink', 'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan', 'lightgoldenrodyellow', 'lightgray', 'lightgreen', 'lightpink', 'lightsalmon', 'lightseagreen', 'lightskyblue', 'lightslategray', 'lightsteelblue', 'lightyellow', 'limegreen', 'linen', 'mediumaquamarine', 'mediumblue', 'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue', 'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream', 'mistyrose', 'moccasin', 'navajowhite', 'oldlace', 'olivedrab', 'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue', 'rosypink', 'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna', 'skyblue', 'slateblack', 'slateblue', 'slategray', 'snow', 'springgreen', 'steelblue', 'tan', 'thistle', 'tomato', 'turquoise', 'violet', 'wheat', 'yellowgreen'
+    ];
+
+    words.forEach(w => {
+      if (CSS_COLORS_LIST.includes(w)) {
+        // Resolve hex code
+        const d = engine.detect(w);
+        if (d && !found.some(f => f.name === w)) {
+          found.push({ name: w, hex: d.hex });
+        }
+      }
+    });
+
+    setExtractedColors(found);
+  }, [mentionsText]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -29,7 +62,7 @@ export default function ColorDevTool() {
       <div className='flex justify-between items-center border-b border-white/5 pb-4'>
         <h3 className='text-lg font-bold font-display flex items-center gap-2'>
           <Palette className='h-5 w-5 text-pw-primary' />
-          Color Tool
+          Color Mentions & Palette Suggestion Engine
         </h3>
       </div>
 
@@ -70,7 +103,7 @@ export default function ColorDevTool() {
           <div className='grid grid-cols-3 gap-2 text-center font-mono text-xs pt-2 '>
             <div
               onClick={() => handleCopy(details.hex)}
-              className='p-3 rounded-xl bg-blue/20 bkblur border border-blue/5 cursor-pointer hover:border-pw-primary transition-colors'>
+              className='p-3 rounded-xl bg-pw-surface/20 border border-white/5 cursor-pointer hover:border-pw-primary transition-colors'>
               <span className='text-[10px] text-pw-muted block mb-1'>HEX</span>
               <span className='font-bold text-pw-primary'>{details.hex}</span>
             </div>
@@ -81,7 +114,7 @@ export default function ColorDevTool() {
                   `rgb(${details.rgb.r}, ${details.rgb.g}, ${details.rgb.b})`,
                 )
               }
-              className='p-3 rounded-xl bg-blue/20 bkblur border border-blue/5 cursor-pointer hover:border-pw-primary transition-colors'>
+              className='p-3 rounded-xl bg-pw-surface/20 border border-white/5 cursor-pointer hover:border-pw-primary transition-colors'>
               <span className='text-[10px] text-pw-muted block mb-1'>RGB</span>
               <span className='font-bold text-pw-text'>
                 {details.rgb.r},{details.rgb.g},{details.rgb.b}
@@ -94,7 +127,7 @@ export default function ColorDevTool() {
                   `hsl(${details.hsl.h}, ${details.hsl.s}%, ${details.hsl.l}%)`,
                 )
               }
-              className='p-3 rounded-xl bg-blue/20 bkblur border border-blue/5 cursor-pointer hover:border-pw-primary transition-colors'>
+              className='p-3 rounded-xl bg-pw-surface/20 border border-white/5 cursor-pointer hover:border-pw-primary transition-colors'>
               <span className='text-[10px] text-pw-muted block mb-1'>HSL</span>
               <span className='font-bold text-pw-text'>
                 {details.hsl.h}°,{details.hsl.s}%,{details.hsl.l}%
@@ -158,6 +191,41 @@ export default function ColorDevTool() {
           ))}
         </div>
       </div>
+
+      {/* NEW: Extracted Mentions Extractor Box */}
+      <div className="border-t border-white/5 pt-4">
+        <label className='text-xs font-bold uppercase tracking-wider text-pw-muted mb-2 block flex items-center gap-1'>
+          <MessageSquare className="h-4 w-4 text-pw-primary" />
+          Color Mentions Live Extractor (Type names of colors and watch them render below)
+        </label>
+        <textarea
+          rows={2}
+          value={mentionsText}
+          onChange={e => setMentionsText(e.target.value)}
+          placeholder="e.g. forestgreen, crimson, deepskyblue, #ff00ea..."
+          className="w-full rounded-xl bg-pw-surface/30 border border-white/10 p-3 text-xs text-pw-text focus:outline-none focus:border-pw-primary mb-3"
+        />
+
+        {extractedColors.length > 0 && (
+          <div className="flex flex-wrap gap-2.5">
+            {extractedColors.map((color, index) => (
+              <div
+                key={index}
+                onClick={() => setColorInput(color.hex)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+              >
+                <div
+                  className="w-5 h-5 rounded-md border border-white/10"
+                  style={{ backgroundColor: color.hex }}
+                />
+                <span className="text-xs font-mono font-bold text-pw-text capitalize">{color.name}</span>
+                <span className="text-[10px] font-mono text-pw-muted">{color.hex}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className='divider my-5 sm:hidden' />
     </Card>
   );
