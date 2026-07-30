@@ -135,6 +135,7 @@ const DEV_TOOLS = [
     description:
       'Prebaked HTML email templates (OTP, professional, marketing, social) for Gmail/Outlook.',
     method: 'generateTemplate',
+    color: '#ff2d55',
   },
   {
     id: 'alerting-toast',
@@ -144,6 +145,7 @@ const DEV_TOOLS = [
     description:
       'Audio-visual alert system with audio chime, haptic vibration API, screen flash, and accessibility.',
     method: 'trigger',
+    color: '#ff9500',
   },
   {
     id: 'styling-engine',
@@ -153,6 +155,7 @@ const DEV_TOOLS = [
     description:
       'Auto CSS decorator engine for liquid glass, glassmorphism, buttons, paddings, and script injection.',
     method: 'generateCSS',
+    color: '#34c759',
   },
   {
     id: 'secure-state',
@@ -162,6 +165,7 @@ const DEV_TOOLS = [
     description:
       'Key-segregated encrypted state store, category isolation, one-time read/write for React/RN.',
     method: 'setSecretState',
+    color: '#af52de',
   },
   {
     id: 'recaller',
@@ -171,6 +175,7 @@ const DEV_TOOLS = [
     description:
       'High performance data fetcher with TTL cache, exponential retry, and request de-duplication.',
     method: 'fetchData',
+    color: '#5ac8fa',
   },
   {
     id: 'location-engine',
@@ -180,6 +185,7 @@ const DEV_TOOLS = [
     description:
       'Browser geolocation wrapper, lat/lng country mapping, Haversine distance, and accuracy check.',
     method: 'getCurrentLocation',
+    color: '#ff3b30',
   },
   {
     id: 'password-utility',
@@ -189,6 +195,7 @@ const DEV_TOOLS = [
     description:
       'Strength score (0-100), entropy bit evaluation, policy check, salted hash, and generator.',
     method: 'evaluate',
+    color: '#32ade6',
   },
   {
     id: 'session-engine',
@@ -198,6 +205,7 @@ const DEV_TOOLS = [
     description:
       'JWT-like HMAC session token creation, expiration verification, rotation, and comparison.',
     method: 'createSessionToken',
+    color: '#007aff',
   },
   {
     id: 'db-validation',
@@ -207,6 +215,7 @@ const DEV_TOOLS = [
     description:
       'Type-safe schema validator, optional missing key null fallbacks, and required field enforcer.',
     method: 'validateAndSanitize',
+    color: '#a2845e',
   },
 ];
 

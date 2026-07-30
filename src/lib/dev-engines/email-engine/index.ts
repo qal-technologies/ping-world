@@ -1,142 +1,346 @@
-export type EmailTemplateType = 
+// ============================================================
+// Email Template Engine — Modular responsive HTML emails
+// Modular: header + body (with ordered buttons) + footer
+// Templates: professional, otp, marketing, social, information
+// Component-level color overrides the global primaryColor
+// ============================================================
+
+export type EmailTemplateType =
   | 'professional'
+  | 'otp'
   | 'marketing'
   | 'social'
-  | 'information'
-  | 'otp'
-  | 'newsletter'
-  | 'welcome';
+  | 'information';
+
+export type ButtonOrder = 'before-text' | 'after-text' | number;
+export type ButtonPosition = 'left' | 'center' | 'right';
+export type FontWeight = 'normal' | 'bold' | '600' | '700';
+
+export interface ButtonConfig {
+  title: string;
+  url: string;
+  order?: ButtonOrder; // 'before-text', 'after-text', or numeric index
+  position?: ButtonPosition;
+  color?: string; // Text color
+  bgColor?: string; // Background color (overrides primaryColor for this button)
+  style?: {
+    underline?: boolean;
+    weight?: FontWeight;
+    borderRadius?: string;
+  };
+}
+
+export interface HeaderConfig {
+  title?: string;
+  description?: string;
+  color?: string; // Header text color (overrides primaryColor)
+  bgColor?: string; // Header background color
+  logoUrl?: string;
+  logoAlt?: string;
+}
+
+export interface BodyConfig {
+  text?: string;
+  buttons?: ButtonConfig[];
+}
+
+export interface FooterConfig {
+  text?: string;
+  downlinks?: Array<{ text: string; url: string }>;
+  bgColor?: string;
+  color?: string;
+}
 
 export interface EmailTemplateParams {
-  title: string;
-  body: string;
-  recipientName?: string;
-  primaryColor?: string;
-  secondaryColor?: string;
-  logoUrl?: string;
+  // Modular structural approach
+  header?: HeaderConfig;
+  body?: BodyConfig;
+  footer?: FooterConfig;
+
+  // Legacy flat-param shorthand (for quick usage)
+  title?: string;
+  preheader?: string;
+  bodyText?: string;
   ctaText?: string;
   ctaUrl?: string;
-  otpCode?: string;
-  footerText?: string;
+  otp?: string;
+  primaryColor?: string; // Global accent color (can be overridden per component)
   companyName?: string;
+  year?: number;
+  unsubscribeUrl?: string;
+}
+
+export interface EmailResult {
+  html: string;
+  plainText: string;
+  subject: string;
+  type: EmailTemplateType;
 }
 
 export class EmailEngine {
-  public generateTemplate(type: EmailTemplateType, params: EmailTemplateParams): string {
+  private readonly defaultColors: Record<EmailTemplateType, string> = {
+    professional: '#1a73e8',
+    otp: '#ff6b35',
+    marketing: '#7c3aed',
+    social: '#0ea5e9',
+    information: '#059669',
+  };
+
+  /** Generate a complete responsive HTML email */
+  public generateTemplate(
+    type: EmailTemplateType,
+    params: EmailTemplateParams = {},
+  ): EmailResult {
     try {
-      const primary = params.primaryColor || '#00f0ff';
-      const secondary = params.secondaryColor || '#0f172a';
-      const company = params.companyName || 'PingWorld';
-      const logo = params.logoUrl || 'https://pingworld.app/images/logo.png';
-      const footer = params.footerText || `© ${new Date().getFullYear()} ${company}. All rights reserved.`;
+      const primary = params.primaryColor ?? this.defaultColors[type];
+      const company = params.companyName ?? 'PingWorld';
+      const year = params.year ?? new Date().getFullYear();
 
-      switch (type) {
-        case 'otp':
-          return this.wrapEmail(primary, secondary, `
-            <div style="text-align: center; padding: 20px 0;">
-              <img src="${logo}" alt="${company}" style="height: 48px; margin-bottom: 20px;" />
-              <h1 style="color: ${secondary}; font-size: 24px; margin-bottom: 10px;">Verification Code</h1>
-              <p style="color: #64748b; font-size: 14px; margin-bottom: 25px;">Use the following 6-digit one-time password to complete your authentication:</p>
-              <div style="background: #f1f5f9; border: 2px dashed ${primary}; border-radius: 12px; padding: 20px; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: ${primary}; display: inline-block; margin-bottom: 25px;">
-                ${params.otpCode || '123456'}
-              </div>
-              <p style="color: #94a3b8; font-size: 12px;">This code will expire in 10 minutes. If you did not request this code, please ignore this email.</p>
-            </div>
-          `, footer);
+      // Resolve modular or flat params
+      const header = this._resolveHeader(type, params, primary);
+      const body = this._resolveBody(type, params, primary);
+      const footer = this._resolveFooter(params, primary, company, year);
 
-        case 'professional':
-          return this.wrapEmail(primary, secondary, `
-            <div>
-              <div style="border-bottom: 2px solid ${primary}; padding-bottom: 15px; margin-bottom: 25px;">
-                <img src="${logo}" alt="${company}" style="height: 36px; float: left;" />
-                <div style="clear: both;"></div>
-              </div>
-              <h2 style="color: ${secondary}; font-size: 20px; margin-bottom: 15px;">${params.title}</h2>
-              <p style="color: #334155; font-size: 15px; line-height: 1.6;">Dear ${params.recipientName || 'Valued User'},</p>
-              <div style="color: #334155; font-size: 15px; line-height: 1.6; margin-bottom: 25px;">
-                ${params.body.replace(/\n/g, '<br/>')}
-              </div>
-              ${params.ctaUrl ? `
-                <div style="margin-top: 30px;">
-                  <a href="${params.ctaUrl}" style="background-color: ${primary}; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
-                    ${params.ctaText || 'View Details'}
-                  </a>
-                </div>
-              ` : ''}
-            </div>
-          `, footer);
+      const html = this._buildHTML(header, body, footer, primary);
+      const plainText = this._buildPlainText(header, body, footer);
+      const subject = header.title ?? `Message from ${company}`;
 
-        case 'marketing':
-          return this.wrapEmail(primary, secondary, `
-            <div style="text-align: center; background: linear-gradient(135deg, ${secondary} 0%, #1e293b 100%); color: #ffffff; padding: 40px 20px; border-radius: 16px; margin-bottom: 30px;">
-              <img src="${logo}" alt="${company}" style="height: 48px; margin-bottom: 20px;" />
-              <h1 style="color: ${primary}; font-size: 28px; margin-bottom: 15px;">${params.title}</h1>
-              <p style="color: #cbd5e1; font-size: 16px; line-height: 1.6; max-width: 500px; margin: 0 auto 30px;">
-                ${params.body}
-              </p>
-              ${params.ctaUrl ? `
-                <a href="${params.ctaUrl}" style="background: ${primary}; color: #000000; padding: 14px 32px; text-decoration: none; border-radius: 50px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px rgba(0,240,255,0.4);">
-                  ${params.ctaText || 'Claim Offer Now'}
-                </a>
-              ` : ''}
-            </div>
-          `, footer);
-
-        case 'social':
-          return this.wrapEmail(primary, secondary, `
-            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px;">
-              <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                <img src="${logo}" alt="${company}" style="height: 32px; margin-right: 12px;" />
-                <span style="font-weight: bold; color: ${secondary}; font-size: 16px;">${company} Activity</span>
-              </div>
-              <h3 style="color: ${secondary}; font-size: 18px; margin-bottom: 10px;">${params.title}</h3>
-              <p style="color: #475569; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">${params.body}</p>
-              ${params.ctaUrl ? `
-                <a href="${params.ctaUrl}" style="color: ${primary}; text-decoration: none; font-weight: bold; font-size: 14px;">
-                  ${params.ctaText || 'View Notification →'}
-                </a>
-              ` : ''}
-            </div>
-          `, footer);
-
-        case 'information':
-        default:
-          return this.wrapEmail(primary, secondary, `
-            <div>
-              <h2 style="color: ${secondary}; font-size: 20px; margin-bottom: 15px;">${params.title}</h2>
-              <div style="color: #475569; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
-                ${params.body.replace(/\n/g, '<br/>')}
-              </div>
-            </div>
-          `, footer);
-      }
+      return { html, plainText, subject, type };
     } catch (e) {
-      return `<p>${params.body}</p>`;
+      return {
+        html: '<p>Failed to generate email template.</p>',
+        plainText: 'Email generation failed.',
+        subject: 'Email',
+        type,
+      };
     }
   }
 
-  private wrapEmail(primaryColor: string, secondaryColor: string, contentHtml: string, footerText: string): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
-          .container { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); }
-          .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #94a3b8; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          ${contentHtml}
-          <div class="footer">
-            <p>${footerText}</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+  /** Generate preview-ready HTML (same as generateTemplate but returns only HTML) */
+  public preview(
+    type: EmailTemplateType,
+    params: EmailTemplateParams = {},
+  ): string {
+    return this.generateTemplate(type, params).html;
+  }
+
+  /** Generate just a plaintext version */
+  public toPlainText(
+    type: EmailTemplateType,
+    params: EmailTemplateParams = {},
+  ): string {
+    return this.generateTemplate(type, params).plainText;
+  }
+
+  /** List all available template types */
+  public getTemplateTypes(): EmailTemplateType[] {
+    return ['professional', 'otp', 'marketing', 'social', 'information'];
+  }
+
+  // ---- Resolvers ----
+
+  private _resolveHeader(
+    type: EmailTemplateType,
+    params: EmailTemplateParams,
+    primary: string,
+  ): Required<HeaderConfig> {
+    const flat = params.header;
+    const defaults: Record<EmailTemplateType, Partial<HeaderConfig>> = {
+      professional: {
+        title: params.title ?? 'Important Update',
+        description: params.preheader ?? '',
+      },
+      otp: {
+        title: 'Your Verification Code',
+        description: 'Use this code to complete your login.',
+      },
+      marketing: {
+        title: params.title ?? 'Exclusive Offer Just for You',
+        description: params.preheader ?? "Don't miss out.",
+      },
+      social: {
+        title: params.title ?? 'Activity Update',
+        description: params.preheader ?? '',
+      },
+      information: {
+        title: params.title ?? 'Information',
+        description: params.preheader ?? '',
+      },
+    };
+    const base = defaults[type];
+    return {
+      title: flat?.title ?? base.title ?? '',
+      description: flat?.description ?? base.description ?? '',
+      color: flat?.color ?? '#ffffff',
+      bgColor: flat?.bgColor ?? primary,
+      logoUrl: flat?.logoUrl ?? '',
+      logoAlt: flat?.logoAlt ?? '',
+    };
+  }
+
+  private _resolveBody(
+    type: EmailTemplateType,
+    params: EmailTemplateParams,
+    primary: string,
+  ): BodyConfig {
+    if (params.body) return params.body;
+
+    const buttons: ButtonConfig[] = [];
+
+    if (type === 'otp') {
+      return {
+        text: `Your one-time password is below. It expires in 10 minutes. Do not share this code with anyone.`,
+      };
+    }
+
+    if (params.ctaText && params.ctaUrl) {
+      buttons.push({
+        title: params.ctaText,
+        url: params.ctaUrl,
+        bgColor: primary,
+        color: '#ffffff',
+        position: 'center',
+        order: 'after-text',
+      });
+    }
+
+    return {
+      text: params.bodyText ?? 'Thank you for using our services.',
+      buttons,
+    };
+  }
+
+  private _resolveFooter(
+    params: EmailTemplateParams,
+    primary: string,
+    company: string,
+    year: number,
+  ): Required<FooterConfig> {
+    const flat = params.footer;
+    const downlinks: Array<{ text: string; url: string }> =
+      flat?.downlinks ?? [];
+    if (params.unsubscribeUrl) {
+      downlinks.push({ text: 'Unsubscribe', url: params.unsubscribeUrl });
+    }
+    return {
+      text: flat?.text ?? `© ${year} ${company}. All rights reserved.`,
+      downlinks,
+      bgColor: flat?.bgColor ?? '#f8f8f8',
+      color: flat?.color ?? '#888888',
+    };
+  }
+
+  // ---- HTML Builder ----
+
+  private _buildHTML(
+    header: Required<HeaderConfig>,
+    body: BodyConfig,
+    footer: Required<FooterConfig>,
+    primary: string,
+  ): string {
+    const beforeTextButtons = (body.buttons ?? []).filter(
+      (b) =>
+        b.order === 'before-text' ||
+        (typeof b.order === 'number' && b.order < 0),
+    );
+    const afterTextButtons = (body.buttons ?? [])
+      .filter(
+        (b) =>
+          b.order === 'after-text' ||
+          b.order === undefined ||
+          (typeof b.order === 'number' && b.order >= 0),
+      )
+      .sort((a, b) => {
+        const aOrder = typeof a.order === 'number' ? a.order : 999;
+        const bOrder = typeof b.order === 'number' ? b.order : 999;
+        return aOrder - bOrder;
+      });
+
+    const buttonHtml = (btn: ButtonConfig) => {
+      const bg = btn.bgColor ?? primary;
+      const color = btn.color ?? '#ffffff';
+      const align = btn.position ?? 'center';
+      const br = btn.style?.borderRadius ?? '6px';
+      const underline =
+        btn.style?.underline ?
+          'text-decoration: underline;'
+        : 'text-decoration: none;';
+      const weight = btn.style?.weight ?? '600';
+      return `<tr><td style="padding: 12px 0; text-align: ${align};">
+        <a href="${btn.url}" style="display: inline-block; background-color: ${bg}; color: ${color}; font-weight: ${weight}; padding: 14px 32px; border-radius: ${br}; ${underline} font-family: Arial, sans-serif; font-size: 15px;">${btn.title}</a>
+      </td></tr>`;
+    };
+
+    const logoBlock =
+      header.logoUrl ?
+        `<img src="${header.logoUrl}" alt="${header.logoAlt}" style="max-height: 48px; max-width: 200px; margin-bottom: 12px;">`
+      : '';
+
+    const footerLinks = (footer.downlinks ?? [])
+      .map(
+        (l) =>
+          `<a href="${l.url}" style="color: ${footer.color}; font-size: 11px; margin: 0 8px; text-decoration: none;">${l.text}</a>`,
+      )
+      .join(' &bull; ');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${header.title}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f0f0;font-family:Arial,Helvetica,sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f0f0f0;padding:30px 0;">
+    <tr><td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+        <!-- HEADER -->
+        <tr>
+          <td style="background-color:${header.bgColor};padding:36px 40px;text-align:center;">
+            ${logoBlock}
+            <h1 style="margin:0;font-size:26px;font-weight:700;color:${header.color};line-height:1.3;">${header.title}</h1>
+            ${header.description ? `<p style="margin:10px 0 0;font-size:14px;color:${header.color};opacity:0.85;">${header.description}</p>` : ''}
+          </td>
+        </tr>
+
+        <!-- BODY -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              ${beforeTextButtons.map(buttonHtml).join('')}
+              ${body.text ? `<tr><td style="font-size:15px;color:#333333;line-height:1.7;padding-bottom:20px;">${body.text.replace(/\n/g, '<br>')}</td></tr>` : ''}
+              ${afterTextButtons.map(buttonHtml).join('')}
+            </table>
+          </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td style="background-color:${footer.bgColor};padding:24px 40px;text-align:center;border-top:1px solid #e5e5e5;">
+            <p style="margin:0 0 8px;font-size:12px;color:${footer.color};">${footer.text}</p>
+            ${footerLinks ? `<p style="margin:0;">${footerLinks}</p>` : ''}
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private _buildPlainText(
+    header: Required<HeaderConfig>,
+    body: BodyConfig,
+    footer: Required<FooterConfig>,
+  ): string {
+    const lines: string[] = [];
+    lines.push(header.title, header.description, '', body.text ?? '');
+    (body.buttons ?? []).forEach((b) => lines.push(`\n→ ${b.title}: ${b.url}`));
+    lines.push('', footer.text);
+    (footer.downlinks ?? []).forEach((l) => lines.push(`${l.text}: ${l.url}`));
+    return lines.filter((l) => typeof l === 'string' && l.trim()).join('\n');
   }
 }

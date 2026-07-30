@@ -1,3 +1,9 @@
+// ============================================================
+// Secure State Manager — Encrypted key-value store
+// Cross-environment (Web / React Native / Node)
+// One-time read features, namespaced categories, TTL
+// ============================================================
+
 export interface StateOptions {
   category?: string;
   oneTimeRead?: boolean;
@@ -23,26 +29,28 @@ export class SecureStateManager {
     return SecureStateManager.instance;
   }
 
+  /** Store encrypted state with one-time read capability */
   public setSecretState(
     key: string,
     data: any,
     secretKey: string,
-    options: StateOptions = {}
+    options: StateOptions = {},
   ): boolean {
     try {
       if (!key || !secretKey) return false;
       const textData = JSON.stringify(data);
-      const salt = this.generateSalt(8);
+      const salt = this._generateSalt(12);
       const saltedSecret = secretKey + salt;
 
-      // Encrypt payload
       let encrypted = '';
       for (let i = 0; i < textData.length; i++) {
-        const charCode = textData.charCodeAt(i) ^ saltedSecret.charCodeAt(i % saltedSecret.length);
-        encrypted += String.fromCharCode(charCode);
+        encrypted += String.fromCharCode(
+          textData.charCodeAt(i) ^
+            saltedSecret.charCodeAt(i % saltedSecret.length),
+        );
       }
-      const b64 = typeof btoa !== 'undefined' ? btoa(encodeURIComponent(encrypted)) : Buffer.from(encrypted).toString('base64');
 
+      const b64 = this._btoa(encrypted);
       const expiresAt = options.ttlMs ? Date.now() + options.ttlMs : null;
 
       this.store.set(key, {
@@ -54,46 +62,52 @@ export class SecureStateManager {
       });
 
       return true;
-    } catch (e) {
+    } catch {
       return false;
     }
   }
 
+  /** Retrieve and decrypt state. Destroys record if oneTimeRead is true. */
   public getSecretState<T = any>(key: string, secretKey: string): T | null {
     try {
       const record = this.store.get(key);
       if (!record) return null;
 
-      // Check TTL
+      // Check TTL expiry
       if (record.expiresAt && Date.now() > record.expiresAt) {
         this.store.delete(key);
         return null;
       }
 
       const saltedSecret = secretKey + record.salt;
-      const raw = typeof atob !== 'undefined' 
-        ? decodeURIComponent(atob(record.encryptedPayload)) 
-        : Buffer.from(record.encryptedPayload, 'base64').toString('utf-8');
+      const raw = this._atob(record.encryptedPayload);
 
       let decrypted = '';
       for (let i = 0; i < raw.length; i++) {
-        const charCode = raw.charCodeAt(i) ^ saltedSecret.charCodeAt(i % saltedSecret.length);
-        decrypted += String.fromCharCode(charCode);
+        decrypted += String.fromCharCode(
+          raw.charCodeAt(i) ^ saltedSecret.charCodeAt(i % saltedSecret.length),
+        );
       }
 
       const data = JSON.parse(decrypted);
 
+      // Enforce one-time read
       if (record.oneTimeRead) {
         this.store.delete(key);
       }
 
       return data as T;
-    } catch (e) {
-      // Key mismatch or corrupted payload
+    } catch {
       return null;
     }
   }
 
+  /** Remove specific key manually */
+  public remove(key: string): boolean {
+    return this.store.delete(key);
+  }
+
+  /** Clear all keys within a category namespace */
   public clearCategory(category: string): number {
     let count = 0;
     for (const [key, record] of this.store.entries()) {
@@ -105,6 +119,7 @@ export class SecureStateManager {
     return count;
   }
 
+  /** Verify existence without decrypting */
   public hasKey(key: string): boolean {
     const record = this.store.get(key);
     if (!record) return false;
@@ -115,10 +130,28 @@ export class SecureStateManager {
     return true;
   }
 
-  private generateSalt(len: number): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  // ---- Polyfills strictly for RN / Node.js ----
+
+  private _btoa(str: string): string {
+    if (typeof btoa !== 'undefined') return btoa(encodeURIComponent(str));
+    if (typeof Buffer !== 'undefined')
+      return Buffer.from(str).toString('base64');
+    return str; // fallback for strange environments
+  }
+
+  private _atob(str: string): string {
+    if (typeof atob !== 'undefined') return decodeURIComponent(atob(str));
+    if (typeof Buffer !== 'undefined')
+      return Buffer.from(str, 'base64').toString('utf-8');
+    return str;
+  }
+
+  private _generateSalt(len: number): string {
+    const chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let salt = '';
-    for (let i = 0; i < len; i++) salt += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < len; i++)
+      salt += chars.charAt(Math.floor(Math.random() * chars.length));
     return salt;
   }
 }

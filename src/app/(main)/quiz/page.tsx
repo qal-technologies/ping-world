@@ -30,6 +30,8 @@ import {
   File,
   Folder,
   Lock,
+  Image,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -153,6 +155,15 @@ export interface Quiz {
   responses?: QuizTakerResponse[];
   allowEarlySubmit?: boolean;
   expires_at?: string; // ISO date — max 3 days from creation, cleaned by cron
+  quizScroll?: boolean;
+  branding?: {
+    image?: string;
+    opacity?: number;
+    shadeColor?: string;
+    blur?: number;
+    icon?: string;
+  };
+  disclaimer?: string;
 }
 
 // Helper: compute a capped expiry date max 3 days out
@@ -847,11 +858,26 @@ const QuizBuilder = ({
                                     {(() => {
                                       let currentDays = 2; // Default
                                       if (editedQuiz.expires_at) {
-                                        const diff = new Date(editedQuiz.expires_at).getTime() - Date.now();
-                                        currentDays = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+                                        const diff =
+                                          new Date(
+                                            editedQuiz.expires_at,
+                                          ).getTime() - Date.now();
+                                        currentDays = Math.max(
+                                          1,
+                                          Math.round(
+                                            diff / (1000 * 60 * 60 * 24),
+                                          ),
+                                        );
                                       }
-                                      const closestSelected = [1, 2, 3, 5, 7, 14, 30].reduce(
-                                        (prev, curr) => (Math.abs(curr - currentDays) < Math.abs(prev - currentDays) ? curr : prev)
+                                      const closestSelected = [
+                                        1, 2, 3, 5, 7, 14, 30,
+                                      ].reduce((prev, curr) =>
+                                        (
+                                          Math.abs(curr - currentDays) <
+                                          Math.abs(prev - currentDays)
+                                        ) ?
+                                          curr
+                                        : prev,
                                       );
                                       return `${closestSelected} ${closestSelected === 1 ? 'Day' : 'Days'} ${closestSelected <= 2 ? ' (Free)' : ''}`;
                                     })()}
@@ -869,48 +895,61 @@ const QuizBuilder = ({
                                   { days: 14, tier: 'standard' },
                                   { days: 30, tier: 'pro' },
                                 ].map(({ days, tier }) => {
-                                  const isEligible = tierAtLeast(premiumTier, tier as any);
+                                  const isEligible = tierAtLeast(
+                                    premiumTier,
+                                    tier as any,
+                                  );
                                   return (
                                     <DropdownMenuItem
                                       key={`exp-select-${days}`}
                                       disabled={!isEligible}
                                       onClick={() => {
                                         if (isEligible) {
-                                          const newExpiry = computeExpiry(premiumTier, days);
+                                          const newExpiry = computeExpiry(
+                                            premiumTier,
+                                            days,
+                                          );
                                           setEditedQuiz({
                                             ...editedQuiz,
                                             expires_at: newExpiry.toISOString(),
                                           });
-                                          toast.success(`Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`);
+                                          toast.success(
+                                            `Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`,
+                                          );
                                         } else {
-                                          toast.info(`Unlock ${days} days expiry with the ${tier} tier.`);
+                                          toast.info(
+                                            `Unlock ${days} days expiry with the ${tier} tier.`,
+                                          );
                                         }
                                       }}
                                       className={cn(
                                         'h-10 text-xs rounded-xl flex items-center justify-between cursor-pointer px-4',
-                                        !isEligible && 'opacity-40 grayscale pointer-events-none'
+                                        !isEligible &&
+                                          'opacity-40 grayscale pointer-events-none',
                                       )}>
                                       <span>
                                         {days} {days === 1 ? 'Day' : 'Days'}
                                       </span>
-                                      {!isEligible && <Lock className='h-3.5 w-3.5 opacity-60 text-pw-warning' />}
+                                      {!isEligible && (
+                                        <Lock className='h-3.5 w-3.5 opacity-60 text-pw-warning' />
+                                      )}
                                     </DropdownMenuItem>
                                   );
                                 })}
                               </DropdownMenuContent>
                             </DropdownMenu>
 
-                            <p className="text-[10px] text-pw-muted pl-1">
-                              {editedQuiz.expires_at ? (
+                            <p className='text-[10px] text-pw-muted pl-1'>
+                              {editedQuiz.expires_at ?
                                 <>
                                   Currently expires on:{' '}
-                                  <span className="text-pw-primary font-bold">
-                                    {new Date(editedQuiz.expires_at).toLocaleDateString()}
+                                  <span className='text-pw-primary font-bold'>
+                                    {new Date(
+                                      editedQuiz.expires_at,
+                                    ).toLocaleDateString()}
                                   </span>
                                 </>
-                              ) : (
-                                <>Default lifespan is 2 days (Free tier)</>
-                              )}
+                              : <>Default lifespan is 2 days (Free tier)</>}
                             </p>
                           </div>
                         </QuizSettingItem>
@@ -1078,6 +1117,187 @@ const QuizBuilder = ({
                               className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-3 text-xs'
                             />
                           </div>
+                        </div>
+                      </div>
+                    </Wrapper>
+
+                    <Wrapper
+                      title='Branding & Layout'
+                      description='Customize background image, logo, and scrolling layout'
+                      icon={<Image className='h-4 w-4 text-pw-primary' />}
+                      color='primary'>
+                      <div className='flex flex-col gap-2 pt-2'>
+                        <QuizSettingItem
+                          label='Continuous Vertical Scroll'
+                          description='Render all questions in a vertical list, appending next questions dynamically.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                quizScroll: !editedQuiz.quizScroll,
+                              })
+                            }
+                            className={cn(
+                              'h-6 min-w-[100px]',
+                              editedQuiz.quizScroll ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary font-bold'
+                              : 'bg-white/5 border-white/10 text-pw-muted',
+                            )}>
+                            {editedQuiz.quizScroll ? 'SCROLL' : 'PAGE-BY-PAGE'}
+                          </Button>
+                        </QuizSettingItem>
+
+                        <div className='space-y-4 mt-4 border-t border-white/5 pt-4'>
+                          <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
+                            Institutional Branding
+                          </h4>
+
+                          <div className='space-y-2'>
+                            <label
+                              className='text-[10px] font-bold text-pw-muted uppercase cursor-help'
+                              title='Provide clean Cloudinary images or other hosted assets'>
+                              Background Image URL (Cloudinary asset
+                              recommended)
+                            </label>
+                            <Input
+                              value={editedQuiz.branding?.image || ''}
+                              onChange={(e) =>
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  branding: {
+                                    ...(editedQuiz.branding || {}),
+                                    image: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder='e.g., https://res.cloudinary.com/demo/image/upload/sample.jpg'
+                              className='bg-white/5 border-white/10 h-10'
+                            />
+                          </div>
+
+                          <div className='grid grid-cols-2 gap-4'>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Image Opacity (0.0 - 1.0)
+                              </label>
+                              <Input
+                                type='number'
+                                step='0.1'
+                                min='0'
+                                max='1'
+                                value={
+                                  editedQuiz.branding?.opacity !== undefined ?
+                                    editedQuiz.branding.opacity
+                                  : 1
+                                }
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      opacity: parseFloat(e.target.value) || 0,
+                                    },
+                                  })
+                                }
+                                className='bg-white/5 border-white/10 h-10'
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Blur Amount (px)
+                              </label>
+                              <Input
+                                type='number'
+                                min='0'
+                                max='50'
+                                value={
+                                  editedQuiz.branding?.blur !== undefined ?
+                                    editedQuiz.branding.blur
+                                  : 0
+                                }
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      blur: parseInt(e.target.value) || 0,
+                                    },
+                                  })
+                                }
+                                className='bg-white/5 border-white/10 h-10'
+                              />
+                            </div>
+                          </div>
+
+                          <div className='grid grid-cols-2 gap-4'>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Shade Overlay Color (Hex)
+                              </label>
+                              <Input
+                                value={editedQuiz.branding?.shadeColor || ''}
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      shadeColor: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder='#000000'
+                                className='bg-white/5 border-white/10 h-10'
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Brand Icon / Logo URL
+                              </label>
+                              <Input
+                                value={editedQuiz.branding?.icon || ''}
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      icon: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder='Logo URL'
+                                className='bg-white/5 border-white/10 h-10'
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Wrapper>
+
+                    <Wrapper
+                      title='Legal & Reporting'
+                      description='Specify legal disclaimers and guidelines'
+                      icon={
+                        <AlertTriangle className='h-4 w-4 text-pw-warning' />
+                      }
+                      color='warning'>
+                      <div className='flex flex-col gap-4 pt-2'>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Taker Disclaimer Banner Text
+                          </label>
+                          <textarea
+                            value={editedQuiz.disclaimer || ''}
+                            onChange={(e) =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                disclaimer: e.target.value,
+                              })
+                            }
+                            placeholder='e.g., This assessment is structured for general educational purposes...'
+                            className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none'
+                          />
                         </div>
                       </div>
                     </Wrapper>

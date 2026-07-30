@@ -28,8 +28,9 @@ import {
   EyeOff,
   Lock,
   LogOut,
-  BadgeQuestionMark,
+  HelpCircle,
   Folder,
+  Flag,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -358,13 +359,11 @@ const Calculator = () => {
 };
 
 export default function PublicQuizTaker() {
-  
-    const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
-    setHideNavbar(true);
-    setHideFooter(true);
-    setPaddingTop('pt-0');
+  const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
+  setHideNavbar(true);
+  setHideFooter(true);
+  setPaddingTop('pt-0');
 
-  
   const params = useParams();
   const { id: quizId } = params;
 
@@ -376,10 +375,20 @@ export default function PublicQuizTaker() {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [content, setContent] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
+  const [started, setStart] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [shuffledOptions, setShuffledOptions] = useState<
     Record<string, (string | QuizOption)[]>
   >({});
+
+  const bottomRef = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (quiz?.quizScroll && started) {
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [currentQuestion, started, quiz?.quizScroll]);
 
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
@@ -404,7 +413,6 @@ export default function PublicQuizTaker() {
     };
   }, []);
 
-  const [started, setStart] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
   const [isLoading, setLoading] = useState(true);
@@ -424,6 +432,11 @@ export default function PublicQuizTaker() {
   // Private ref containing correct answers to secure them from React DevTools inspection
   const correctAnswersRef = React.useRef<Record<string, any>>({});
 
+  // Custom states for reporting quizzes
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportCategory, setReportCategory] = useState('Spam');
+  const [reportNotes, setReportNotes] = useState('');
+
   // 1. Initial Load
   useEffect(() => {
     const loadQuiz = async () => {
@@ -440,7 +453,10 @@ export default function PublicQuizTaker() {
 
       if (target) {
         // jules edit: Block expired quizzes from loading
-        if (target.expires_at && new Date(target.expires_at).getTime() < Date.now()) {
+        if (
+          target.expires_at &&
+          new Date(target.expires_at).getTime() < Date.now()
+        ) {
           setQuiz(null);
           setLoading(false);
           return;
@@ -978,7 +994,6 @@ export default function PublicQuizTaker() {
     }
   };
 
-  
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     if (quiz) {
@@ -997,7 +1012,6 @@ export default function PublicQuizTaker() {
       }
     }
   };
-
 
   const proceedToNext = (latestAnswers?: any[]) => {
     setShowFeedback(false);
@@ -1147,6 +1161,301 @@ export default function PublicQuizTaker() {
     }
   };
 
+  const renderQuestionCard = (quest: Question, index: number) => {
+    const isActive = index === currentQuestion;
+
+    // Retrieve answered value if not active
+    let ansObj = userAnswers.find(
+      (a) => a.questionId === quest.id || a.qId === quest.id,
+    );
+    let ansVal = ansObj ? ansObj.answer : null;
+    let isAnsCorrect = ansObj ? ansObj.correct : undefined;
+
+    // Options to render
+    const currentOptions = shuffledOptions[quest.id] || quest.options;
+
+    // Decide feedback state
+    const isQuestionFeedbackVisible =
+      isActive ?
+        quiz?.type === 'quiz' && quiz.correctOption && showFeedback
+      : quiz?.type === 'quiz' && quiz.correctOption && ansObj !== undefined;
+    const isQuestionExplanationVisible =
+      isActive ?
+        quiz?.type === 'quiz' && quiz.correctOptionDes && showFeedback
+      : quiz?.type === 'quiz' && quiz.correctOptionDes && ansObj !== undefined;
+    const isQuestionCorrect = isActive ? isCorrect : isAnsCorrect;
+
+    return (
+      <Card
+        key={quest.id}
+        className={cn(
+          'sm:glass sm:bkblur sm:rounded-4xl bg-transparent sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 relative overflow-hidden group flex flex-col w-full max-w-[600px] mb-8 transition-opacity duration-300',
+          !isActive && 'opacity-60 shadow-none',
+        )}>
+        <div className='flex-1 w-full flex flex-col'>
+          <div className='flex flex-col gap-6 mb-5'>
+            <div className='flex justify-between items-start gap-4'>
+              <div className='flex items-center gap-4 flex-1'>
+                <div
+                  className={cn(
+                    'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
+                    quiz?.type === 'quiz' ?
+                      'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+                    : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+                  )}>
+                  {quiz?.type === 'quiz' ?
+                    <Brain
+                      className='text-pw-primary'
+                      size={24}
+                    />
+                  : <HelpCircle
+                      className='text-pw-cyan'
+                      size={24}
+                    />
+                  }
+                </div>
+
+                <div className='flex flex-col'>
+                  <span className='text-[10px] font-black text-pw-muted uppercase tracking-widest leading-none mb-1'>
+                    Question {index + 1}
+                  </span>
+                  <h2 className='text-lg font-medium leading-tight text-balance'>
+                    {quest.text}
+                  </h2>
+                </div>
+              </div>
+
+              {isQuestionFeedbackVisible && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
+                    isQuestionCorrect ?
+                      'bg-pw-success/10 border-pw-success text-pw-success'
+                    : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                  )}>
+                  {isQuestionCorrect ? 'Correct' : 'Incorrect'}
+                </motion.div>
+              )}
+            </div>
+
+            {isQuestionExplanationVisible && quest?.correctExplanation && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
+                <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
+                  <Brain size={14} /> Explanation
+                </div>
+                {quest.correctExplanation}
+              </motion.div>
+            )}
+          </div>
+
+          <div className='space-y-4 px-1'>
+            {quest.type === 'dropdown' ?
+              <div className='flex justify-center py-4'>
+                <DropdownMenu>
+                  <DropdownMenuTrigger disabled={!isActive}>
+                    <Button
+                      variant='outline'
+                      className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
+                      {isActive ?
+                        selectedOption ?
+                          (
+                            currentOptions.find(
+                              (o) =>
+                                (typeof o === 'string' ? o : o.id) ===
+                                selectedOption,
+                            ) as any
+                          )?.text || selectedOption
+                        : 'Choose your answer...'
+                      : (
+                          currentOptions.find(
+                            (o) =>
+                              (typeof o === 'string' ? o : o.id) === ansVal,
+                          ) as any
+                        )?.text ||
+                        ansVal ||
+                        'Answered'
+                      }
+                      <ChevronDown
+                        size={20}
+                        className='text-pw-primary'
+                      />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
+                    {currentOptions.map((opt, idx) => {
+                      const optId =
+                        typeof opt === 'string' ? idx.toString() : opt.id;
+                      const optText = typeof opt === 'string' ? opt : opt.text;
+                      return (
+                        <DropdownMenuItem
+                          key={optId + idx + 'dropdown-option'}
+                          onClick={() => isActive && setSelectedOption(optId)}
+                          className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
+                          {optText}
+                          {(isActive ?
+                            selectedOption === optId
+                          : ansVal === optId) && (
+                            <Check
+                              size={18}
+                              className='text-pw-primary'
+                            />
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            : quest.type === 'input' ?
+              <textarea
+                value={isActive ? content : ansVal || ''}
+                onChange={(e) => isActive && setContent(e.target.value)}
+                disabled={!isActive}
+                placeholder='Type your answer here...'
+                className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
+              />
+            : quest.type === 'range' ?
+              <div className='flex flex-col items-center gap-10 py-8'>
+                <div className='w-full max-w-md space-y-6'>
+                  <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
+                    <span>{quest.min || 0}</span>
+                    <span>
+                      {isActive ?
+                        selectedOption || quest.min || 0
+                      : ansVal || quest.min || 0}
+                    </span>
+                    <span>{quest.max || 10}</span>
+                  </div>
+                  <input
+                    type='range'
+                    min={quest.min || 0}
+                    max={quest.max || 10}
+                    step={quest.step || 1}
+                    value={
+                      isActive ?
+                        selectedOption || quest.min || 0
+                      : ansVal || quest.min || 0
+                    }
+                    disabled={!isActive}
+                    onChange={(e) =>
+                      isActive && setSelectedOption(e.target.value)
+                    }
+                    className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
+                  />
+                  <div className='flex justify-center'>
+                    <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
+                      {isActive ?
+                        selectedOption || quest.min || 0
+                      : ansVal || quest.min || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            : quest.type === 'rating' ?
+              <div className='flex flex-col items-center gap-10 py-8'>
+                <div className='flex gap-4'>
+                  {[1, 2, 3, 4, 5].map((i) => {
+                    const checkValue = isActive ? selectedOption : ansVal;
+                    return (
+                      <button
+                        key={i}
+                        disabled={!isActive}
+                        onClick={() =>
+                          isActive && setSelectedOption(i.toString())
+                        }
+                        className={cn(
+                          'transition-all transform hover:scale-125 active:scale-95',
+                          Number(checkValue) >= i ?
+                            'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
+                          : 'text-white/10 hover:text-white/20',
+                        )}>
+                        <Star
+                          size={56}
+                          fill={
+                            Number(checkValue) >= i ? 'currentColor' : 'none'
+                          }
+                          strokeWidth={1.5}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
+                  {(
+                    isActive ? selectedOption : ansVal
+                  ) ?
+                    `Rating: ${isActive ? selectedOption : ansVal} / 5`
+                  : 'Select a Rating'}
+                </p>
+              </div>
+            : <div
+                className={cn(
+                  'grid gap-4',
+                  quest.type === 'multiple_choice' ?
+                    'grid-cols-1'
+                  : 'grid-cols-1 md:grid-cols-2',
+                )}>
+                {currentOptions.map((opt, idx) => {
+                  const optId =
+                    typeof opt === 'string' ? idx.toString() : opt.id;
+                  const optText = typeof opt === 'string' ? opt : opt.text;
+
+                  const isSelected =
+                    isActive ?
+                      quest.type === 'checkbox' ?
+                        selectedOptions.includes(optId)
+                      : selectedOption === optId
+                    : quest.type === 'checkbox' ?
+                      Array.isArray(ansVal) && ansVal.includes(optId)
+                    : ansVal === optId;
+
+                  return (
+                    <button
+                      key={optId + idx + 'assessment-option'}
+                      disabled={!isActive}
+                      onClick={() =>
+                        isActive &&
+                        (quest.type === 'checkbox' ?
+                          setSelectedOptions((p) =>
+                            p.includes(optId) ?
+                              p.filter((i) => i !== optId)
+                            : [...p, optId],
+                          )
+                        : setSelectedOption(optId))
+                      }
+                      className={cn(
+                        'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
+                        isSelected ?
+                          'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
+                        : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                      )}>
+                      <span className='font-bold text-base md:text-lg'>
+                        {optText}
+                      </span>
+                      <CheckCircle
+                        className={cn(
+                          'h-5 w-5 transition-all text-pw-primary',
+                          isSelected ?
+                            'opacity-100 scale-110'
+                          : 'opacity-0 scale-50',
+                        )}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            }
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
   // Rendering
   if (isLoading) {
     return (
@@ -1167,7 +1476,9 @@ export default function PublicQuizTaker() {
           Offline: Quiz Not Cached Yet
         </h2>
         <p className='text-sm text-white/80 max-w-md font-light leading-relaxed'>
-          This assessment is not available offline because it hasn&apos;t been cached on this device yet. Please connect to the internet to load this assessment.
+          This assessment is not available offline because it hasn&apos;t been
+          cached on this device yet. Please connect to the internet to load this
+          assessment.
         </p>
         <Link
           href='/quiz'
@@ -1208,7 +1519,8 @@ export default function PublicQuizTaker() {
           Assessment Not Found or Has Expired
         </h2>
         <p className='text-sm text-white/80 max-w-md font-light'>
-          This assessment may have been removed, reached its lifespan expiration, ended, or you used the wrong link.
+          This assessment may have been removed, reached its lifespan
+          expiration, ended, or you used the wrong link.
         </p>
         <Link
           href='/quiz'
@@ -1317,6 +1629,13 @@ export default function PublicQuizTaker() {
     );
   }
 
+  const branding = quiz.branding || {};
+  const bgImg = branding.image || '';
+  const bgOpacity = branding.opacity !== undefined ? branding.opacity : 1;
+  const bgBlur = branding.blur !== undefined ? branding.blur : 0;
+  const shadeColor = branding.shadeColor || '';
+  const brandIcon = branding.icon || '';
+
   return (
     <div
       onContextMenu={(e) => quiz.enforceSecurity && e.preventDefault()}
@@ -1325,8 +1644,31 @@ export default function PublicQuizTaker() {
         quizTheme === 'dark' ? 'bg-pw-bg text-white' : 'bg-slate-50 text-black',
         quiz.enforceSecurity && 'select-none',
       )}>
+      {/* Branding background overlay */}
+      {bgImg && (
+        <div
+          className='fixed inset-0 pointer-events-none z-0'
+          style={{
+            backgroundImage: `url(${bgImg})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: bgOpacity,
+            filter: bgBlur > 0 ? `blur(${bgBlur}px)` : 'none',
+          }}
+        />
+      )}
+      {shadeColor && (
+        <div
+          className='fixed inset-0 pointer-events-none z-0'
+          style={{
+            backgroundColor: shadeColor,
+            opacity: 0.3,
+          }}
+        />
+      )}
+
       {/* Dynamic Background */}
-      {quizTheme === 'dark' && (
+      {quizTheme === 'dark' && !bgImg && (
         <>
           <div className='globe-div fixed inset-0'>
             <div
@@ -1583,7 +1925,32 @@ export default function PublicQuizTaker() {
               {!isOnline && (
                 <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
                   <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
-                  <span>Offline Mode: Your responses will be saved securely on this device and uploaded once you connect to the internet.</span>
+                  <span>
+                    Offline Mode: Your responses will be saved securely on this
+                    device and uploaded once you connect to the internet.
+                  </span>
+                </div>
+              )}
+
+              {/* Brand Icon */}
+              {brandIcon && (
+                <div className='flex justify-center mb-4'>
+                  <img
+                    src={brandIcon}
+                    alt='Brand Logo'
+                    className='h-14 w-auto rounded-xl object-contain drop-shadow-lg'
+                  />
+                </div>
+              )}
+
+              {/* Disclaimer Banner */}
+              {quiz.disclaimer && (
+                <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
+                  <AlertTriangle
+                    size={14}
+                    className='text-pw-warning shrink-0 mt-0.5'
+                  />
+                  <span>{quiz.disclaimer}</span>
                 </div>
               )}
 
@@ -1637,6 +2004,16 @@ export default function PublicQuizTaker() {
                     </span>
                   </Button>
 
+                  {/* Report button */}
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    title='Report this quiz'
+                    onClick={() => setShowReportModal(true)}
+                    className='h-9 w-9 rounded-full text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 transition-all border border-white/5'>
+                    <Flag size={14} />
+                  </Button>
+
                   {quiz?.allowEarlySubmit && (
                     <Button
                       title={`Submit ${capFirst(quiz.type)}`}
@@ -1675,155 +2052,285 @@ export default function PublicQuizTaker() {
               </div>
             </div>
 
-            <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-center'>
-              <div
-                className={cn(
-                  q?.accessory && q.accessory !== 'none' ?
-                    'lg:col-span-8'
-                  : 'lg:col-span-12',
-                )}>
-                {!q ?
-                  <div className='flex flex-col items-center justify-center min-h-[40vh] text-center p-6 bg-white/5 rounded-[3rem] border border-white/5'>
-                    <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 opacity-50' />
-                    <h2 className='text-xl font-bold mb-2'>
-                      Question Not Found
-                    </h2>
-                    <p className='text-sm text-pw-muted max-w-xs'>
-                      There was an issue loading this question. This can happen
-                      if the quiz routing is invalid.
-                    </p>
-                    <Button
-                      onClick={() => setCurrentQuestion(0)}
-                      className='mt-6 btn-ghost'>
-                      Return to Start
-                    </Button>
-                  </div>
-                : <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
-                    <div className='flex items-center gap-2'>
-                      <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
-                        {(
-                          quiz.questions.some(
-                            (q) => q.category || q.category !== null,
-                          )
-                        ) ?
-                          `Question ${currentQuestion + 1}`
-                        : `Question ${currentQuestion + 1} of ${activeQuestions.length}`
-                        }
+            {/* ===== SCROLL MODE: all answered + current question vertically ===== */}
+            {quiz.quizScroll ?
+              <div className='flex flex-col items-center w-full gap-0'>
+                {activeQuestions
+                  .slice(0, currentQuestion + 1)
+                  .map((quest, idx) => renderQuestionCard(quest, idx))}
+                <div ref={bottomRef} />
+
+                {/* Nav buttons (no back in scroll mode, show FINISH/NEXT inline) */}
+                <div className='flex items-center gap-3 mt-4 mb-12'>
+                  <Button
+                    onClick={handleNext}
+                    className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
+                    {currentQuestion + 1 === activeQuestions.length ?
+                      'FINISH'
+                    : 'NEXT QUESTION'}
+                    <ChevronRight className='h-5 w-5' />
+                  </Button>
+                </div>
+              </div>
+            : <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-center'>
+                <div
+                  className={cn(
+                    q?.accessory && q.accessory !== 'none' ?
+                      'lg:col-span-8'
+                    : 'lg:col-span-12',
+                  )}>
+                  {!q ?
+                    <div className='flex flex-col items-center justify-center min-h-[40vh] text-center p-6 bg-white/5 rounded-[3rem] border border-white/5'>
+                      <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 opacity-50' />
+                      <h2 className='text-xl font-bold mb-2'>
+                        Question Not Found
+                      </h2>
+                      <p className='text-sm text-pw-muted max-w-xs'>
+                        There was an issue loading this question. This can
+                        happen if the quiz routing is invalid.
+                      </p>
+                      <Button
+                        onClick={() => setCurrentQuestion(0)}
+                        className='mt-6 btn-ghost'>
+                        Return to Start
+                      </Button>
+                    </div>
+                  : <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
+                      <div className='flex items-center gap-2'>
+                        <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
+                          {(
+                            quiz.questions.some(
+                              (q) => q.category || q.category !== null,
+                            )
+                          ) ?
+                            `Question ${currentQuestion + 1}`
+                          : `Question ${currentQuestion + 1} of ${activeQuestions.length}`
+                          }
+                        </div>
+
+                        {questionTimeLeft !== null && (
+                          <div className='badge bg-pw-warning/10 text-pw-warning border-pw-warning/20 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1'>
+                            <Clock
+                              size={12}
+                              className='animate-pulse'
+                            />
+                            <span>{questionTimeLeft}s</span>
+                          </div>
+                        )}
                       </div>
 
-                      {questionTimeLeft !== null && (
-                        <div className='badge bg-pw-warning/10 text-pw-warning border-pw-warning/20 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1'>
-                          <Clock
-                            size={12}
-                            className='animate-pulse'
-                          />
-                          <span>{questionTimeLeft}s</span>
-                        </div>
-                      )}
-                    </div>
+                      <div className='w-full flex flex-col items-center gap-1 mt-2'>
+                        <AnimatePresence mode='wait'>
+                          <motion.div
+                            key={q.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                            className='space-y-8 w-full items-center max-w-[600px]'>
+                            <Card className='sm:glass sm:bkblur sm:rounded-4xl bg-transparent sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 relative overflow-hidden group flex flex-col'>
+                              <div className='flex-1 w-full flex flex-col'>
+                                <div className='flex flex-col gap-6 mb-5'>
+                                  <div className='flex justify-between items-start gap-4'>
+                                    <div className='flex items-center gap-4 flex-1'>
+                                      <div
+                                        className={cn(
+                                          'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
+                                          quiz.type === 'quiz' ?
+                                            'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+                                          : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+                                        )}>
+                                        {quiz.type === 'quiz' ?
+                                          <Brain
+                                            className='text-pw-primary'
+                                            size={24}
+                                          />
+                                        : <HelpCircle
+                                            className='text-pw-cyan'
+                                            size={24}
+                                          />
+                                        }
+                                      </div>
 
-                    <div className='w-full flex flex-col items-center gap-1 mt-2'>
-                      <AnimatePresence mode='wait'>
-                        <motion.div
-                          key={q.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ duration: 0.3, ease: 'easeOut' }}
-                          className='space-y-8 w-full items-center max-w-[600px]'>
-                          <Card className='sm:glass sm:bkblur sm:rounded-4xl bg-transparent sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 relative overflow-hidden group flex flex-col'>
-                            <div className='flex-1 w-full flex flex-col'>
-                              <div className='flex flex-col gap-6 mb-5'>
-                                <div className='flex justify-between items-start gap-4'>
-                                  <div className='flex items-center gap-4 flex-1'>
-                                    <div
-                                      className={cn(
-                                        'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
-                                        quiz.type === 'quiz' ?
-                                          'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-                                        : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
-                                      )}>
-                                      {quiz.type === 'quiz' ?
-                                        <Brain
-                                          className='text-pw-primary'
-                                          size={24}
-                                        />
-                                      : <BadgeQuestionMark
-                                          className='text-pw-cyan'
-                                          size={24}
-                                        />
-                                      }
+                                      <h2 className='text-lg font-medium leading-tight text-balance'>
+                                        {q.text}
+                                      </h2>
                                     </div>
 
-                                    <h2 className='text-lg font-medium leading-tight text-balance'>
-                                      {q.text}
-                                    </h2>
+                                    {quiz.type === 'quiz' &&
+                                      quiz.correctOption &&
+                                      showFeedback && (
+                                        <motion.div
+                                          initial={{ opacity: 0, scale: 0.5 }}
+                                          animate={{ opacity: 1, scale: 1 }}
+                                          className={cn(
+                                            'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
+                                            isCorrect ?
+                                              'bg-pw-success/10 border-pw-success text-pw-success'
+                                            : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
+                                          )}>
+                                          {isCorrect ? 'Correct' : 'Incorrect'}
+                                        </motion.div>
+                                      )}
                                   </div>
 
                                   {quiz.type === 'quiz' &&
-                                    quiz.correctOption &&
-                                    showFeedback && (
+                                    quiz.correctOptionDes &&
+                                    showFeedback &&
+                                    q?.correctExplanation && (
                                       <motion.div
-                                        initial={{ opacity: 0, scale: 0.5 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        className={cn(
-                                          'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
-                                          isCorrect ?
-                                            'bg-pw-success/10 border-pw-success text-pw-success'
-                                          : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                                        )}>
-                                        {isCorrect ? 'Correct' : 'Incorrect'}
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
+                                        <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
+                                          <Brain size={14} /> Explanation
+                                        </div>
+                                        {q.correctExplanation}
                                       </motion.div>
                                     )}
                                 </div>
 
-                                {quiz.type === 'quiz' &&
-                                  quiz.correctOptionDes &&
-                                  showFeedback &&
-                                  q?.correctExplanation && (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: -10 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
-                                      <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
-                                        <Brain size={14} /> Explanation
-                                      </div>
-                                      {q.correctExplanation}
-                                    </motion.div>
-                                  )}
-                              </div>
-
-                              <div className='space-y-4 px-1'>
-                                {q.type === 'dropdown' ?
-                                  <div className='flex justify-center py-4'>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger>
-                                        <Button
-                                          variant='outline'
-                                          className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
-                                          {selectedOption ?
-                                            (
+                                <div className='space-y-4 px-1'>
+                                  {q.type === 'dropdown' ?
+                                    <div className='flex justify-center py-4'>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger>
+                                          <Button
+                                            variant='outline'
+                                            className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
+                                            {selectedOption ?
                                               (
-                                                shuffledOptions[q.id] ||
-                                                q.options
-                                              ).find(
-                                                (o) =>
-                                                  (typeof o === 'string' ? o : (
-                                                    o.id
-                                                  )) === selectedOption,
-                                              ) as any
-                                            )?.text || selectedOption
-                                          : 'Choose your answer...'}
-                                          <ChevronDown
-                                            size={20}
-                                            className='text-pw-primary'
-                                          />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
-                                        {(
-                                          shuffledOptions[q.id] || q.options
-                                        )?.map((opt, idx) => {
+                                                (
+                                                  shuffledOptions[q.id] ||
+                                                  q.options
+                                                ).find(
+                                                  (o) =>
+                                                    (typeof o === 'string' ? o
+                                                    : o.id) === selectedOption,
+                                                ) as any
+                                              )?.text || selectedOption
+                                            : 'Choose your answer...'}
+                                            <ChevronDown
+                                              size={20}
+                                              className='text-pw-primary'
+                                            />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
+                                          {(
+                                            shuffledOptions[q.id] || q.options
+                                          )?.map((opt, idx) => {
+                                            const optId =
+                                              typeof opt === 'string' ?
+                                                idx.toString()
+                                              : opt.id;
+                                            const optText =
+                                              typeof opt === 'string' ? opt : (
+                                                opt.text
+                                              );
+                                            return (
+                                              <DropdownMenuItem
+                                                key={
+                                                  optId +
+                                                  idx +
+                                                  'dropdown-option'
+                                                }
+                                                onClick={() =>
+                                                  setSelectedOption(optId)
+                                                }
+                                                className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
+                                                {optText}
+                                                {selectedOption === optId && (
+                                                  <Check
+                                                    size={18}
+                                                    className='text-pw-primary'
+                                                  />
+                                                )}
+                                              </DropdownMenuItem>
+                                            );
+                                          })}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  : q.type === 'input' ?
+                                    <textarea
+                                      value={content}
+                                      onChange={(e) =>
+                                        setContent(e.target.value)
+                                      }
+                                      placeholder='Type your answer here...'
+                                      className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
+                                    />
+                                  : q.type === 'range' ?
+                                    <div className='flex flex-col items-center gap-10 py-8'>
+                                      <div className='w-full max-w-md space-y-6'>
+                                        <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
+                                          <span>{q.min || 0}</span>
+                                          <span>
+                                            {selectedOption || q.min || 0}
+                                          </span>
+                                          <span>{q.max || 10}</span>
+                                        </div>
+                                        <input
+                                          type='range'
+                                          min={q.min || 0}
+                                          max={q.max || 10}
+                                          step={q.step || 1}
+                                          value={selectedOption || q.min || 0}
+                                          onChange={(e) =>
+                                            setSelectedOption(e.target.value)
+                                          }
+                                          className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
+                                        />
+                                        <div className='flex justify-center'>
+                                          <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
+                                            {selectedOption || q.min || 0}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  : q.type === 'rating' ?
+                                    <div className='flex flex-col items-center gap-10 py-8'>
+                                      <div className='flex gap-4'>
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                          <button
+                                            key={i}
+                                            onClick={() =>
+                                              setSelectedOption(i.toString())
+                                            }
+                                            className={cn(
+                                              'transition-all transform hover:scale-125 active:scale-95',
+                                              Number(selectedOption) >= i ?
+                                                'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
+                                              : 'text-white/10 hover:text-white/20',
+                                            )}>
+                                            <Star
+                                              size={56}
+                                              fill={
+                                                Number(selectedOption) >= i ?
+                                                  'currentColor'
+                                                : 'none'
+                                              }
+                                              strokeWidth={1.5}
+                                            />
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
+                                        {selectedOption ?
+                                          `Rating: ${selectedOption} / 5`
+                                        : 'Select a Rating'}
+                                      </p>
+                                    </div>
+                                  : <div
+                                      className={cn(
+                                        'grid gap-4',
+                                        q.type === 'multiple_choice' ?
+                                          'grid-cols-1'
+                                        : 'grid-cols-1 md:grid-cols-2',
+                                      )}>
+                                      {(shuffledOptions[q.id] || q.options).map(
+                                        (opt, idx) => {
                                           const optId =
                                             typeof opt === 'string' ?
                                               idx.toString()
@@ -1832,223 +2339,224 @@ export default function PublicQuizTaker() {
                                             typeof opt === 'string' ? opt : (
                                               opt.text
                                             );
+                                          const isSelected =
+                                            q.type === 'checkbox' ?
+                                              selectedOptions.includes(optId)
+                                            : selectedOption === optId;
                                           return (
-                                            <DropdownMenuItem
+                                            <button
                                               key={
-                                                optId + idx + 'dropdown-option'
+                                                optId +
+                                                idx +
+                                                'assessment-option'
                                               }
                                               onClick={() =>
-                                                setSelectedOption(optId)
+                                                q.type === 'checkbox' ?
+                                                  setSelectedOptions((p) =>
+                                                    p.includes(optId) ?
+                                                      p.filter(
+                                                        (i) => i !== optId,
+                                                      )
+                                                    : [...p, optId],
+                                                  )
+                                                : setSelectedOption(optId)
                                               }
-                                              className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
-                                              {optText}
-                                              {selectedOption === optId && (
-                                                <Check
-                                                  size={18}
-                                                  className='text-pw-primary'
-                                                />
-                                              )}
-                                            </DropdownMenuItem>
-                                          );
-                                        })}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                : q.type === 'input' ?
-                                  <textarea
-                                    value={content}
-                                    onChange={(e) => setContent(e.target.value)}
-                                    placeholder='Type your answer here...'
-                                    className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
-                                  />
-                                : q.type === 'range' ?
-                                  <div className='flex flex-col items-center gap-10 py-8'>
-                                    <div className='w-full max-w-md space-y-6'>
-                                      <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
-                                        <span>{q.min || 0}</span>
-                                        <span>
-                                          {selectedOption || q.min || 0}
-                                        </span>
-                                        <span>{q.max || 10}</span>
-                                      </div>
-                                      <input
-                                        type='range'
-                                        min={q.min || 0}
-                                        max={q.max || 10}
-                                        step={q.step || 1}
-                                        value={selectedOption || q.min || 0}
-                                        onChange={(e) =>
-                                          setSelectedOption(e.target.value)
-                                        }
-                                        className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
-                                      />
-                                      <div className='flex justify-center'>
-                                        <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
-                                          {selectedOption || q.min || 0}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                : q.type === 'rating' ?
-                                  <div className='flex flex-col items-center gap-10 py-8'>
-                                    <div className='flex gap-4'>
-                                      {[1, 2, 3, 4, 5].map((i) => (
-                                        <button
-                                          key={i}
-                                          onClick={() =>
-                                            setSelectedOption(i.toString())
-                                          }
-                                          className={cn(
-                                            'transition-all transform hover:scale-125 active:scale-95',
-                                            Number(selectedOption) >= i ?
-                                              'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
-                                            : 'text-white/10 hover:text-white/20',
-                                          )}>
-                                          <Star
-                                            size={56}
-                                            fill={
-                                              Number(selectedOption) >= i ?
-                                                'currentColor'
-                                              : 'none'
-                                            }
-                                            strokeWidth={1.5}
-                                          />
-                                        </button>
-                                      ))}
-                                    </div>
-                                    <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
-                                      {selectedOption ?
-                                        `Rating: ${selectedOption} / 5`
-                                      : 'Select a Rating'}
-                                    </p>
-                                  </div>
-                                : <div
-                                    className={cn(
-                                      'grid gap-4',
-                                      q.type === 'multiple_choice' ?
-                                        'grid-cols-1'
-                                      : 'grid-cols-1 md:grid-cols-2',
-                                    )}>
-                                    {(shuffledOptions[q.id] || q.options).map(
-                                      (opt, idx) => {
-                                        const optId =
-                                          typeof opt === 'string' ?
-                                            idx.toString()
-                                          : opt.id;
-                                        const optText =
-                                          typeof opt === 'string' ? opt : (
-                                            opt.text
-                                          );
-                                        const isSelected =
-                                          q.type === 'checkbox' ?
-                                            selectedOptions.includes(optId)
-                                          : selectedOption === optId;
-                                        return (
-                                          <button
-                                            key={
-                                              optId + idx + 'assessment-option'
-                                            }
-                                            onClick={() =>
-                                              q.type === 'checkbox' ?
-                                                setSelectedOptions((p) =>
-                                                  p.includes(optId) ?
-                                                    p.filter((i) => i !== optId)
-                                                  : [...p, optId],
-                                                )
-                                              : setSelectedOption(optId)
-                                            }
-                                            className={cn(
-                                              'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
-                                              isSelected ?
-                                                'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
-                                              : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                                            )}>
-                                            <span className='font-bold text-base md:text-lg'>
-                                              {optText}
-                                            </span>
-                                            <CheckCircle
                                               className={cn(
-                                                'h-5 w-5 transition-all text-pw-primary',
+                                                'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
                                                 isSelected ?
-                                                  'opacity-100 scale-110'
-                                                : 'opacity-0 scale-50',
-                                              )}
-                                            />
-                                          </button>
-                                        );
-                                      },
-                                    )}
-                                  </div>
-                                }
+                                                  'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
+                                                : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
+                                              )}>
+                                              <span className='font-bold text-base md:text-lg'>
+                                                {optText}
+                                              </span>
+                                              <CheckCircle
+                                                className={cn(
+                                                  'h-5 w-5 transition-all text-pw-primary',
+                                                  isSelected ?
+                                                    'opacity-100 scale-110'
+                                                  : 'opacity-0 scale-50',
+                                                )}
+                                              />
+                                            </button>
+                                          );
+                                        },
+                                      )}
+                                    </div>
+                                  }
+                                </div>
                               </div>
-                            </div>
-                          </Card>
-                        </motion.div>
-                      </AnimatePresence>
-
-                      <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>
-                        <AnimatePresence mode='sync'>
-                          {quiz.canGoBack && currentQuestion > 0 && (
-                            <Button
-                              onClick={GoBack}
-                              className='btn-ghost h-10 px-8 text-lg rounded-2xl gap-2 font-bold'>
-                              <ChevronLeft className='h-5 w-5' />
-                              Previous
-                            </Button>
-                          )}
-
-                          <div className='flex items-center gap-3 ml-auto'>
-                            <Button
-                              onClick={handleNext}
-                              className='btn-primary h-10 px-8 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
-                              {currentQuestion + 1 === activeQuestions.length ?
-                                'FINISH'
-                              : 'NEXT'}
-                              <ChevronRight className='h-5 w-5' />
-                            </Button>
-                          </div>
+                            </Card>
+                          </motion.div>
                         </AnimatePresence>
+
+                        <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>
+                          <AnimatePresence mode='sync'>
+                            {quiz.canGoBack && currentQuestion > 0 && (
+                              <Button
+                                onClick={GoBack}
+                                className='btn-ghost h-10 px-8 text-lg rounded-2xl gap-2 font-bold'>
+                                <ChevronLeft className='h-5 w-5' />
+                                Previous
+                              </Button>
+                            )}
+
+                            <div className='flex items-center gap-3 ml-auto'>
+                              <Button
+                                onClick={handleNext}
+                                className='btn-primary h-10 px-8 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
+                                {(
+                                  currentQuestion + 1 === activeQuestions.length
+                                ) ?
+                                  'FINISH'
+                                : 'NEXT'}
+                                <ChevronRight className='h-5 w-5' />
+                              </Button>
+                            </div>
+                          </AnimatePresence>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                }
-              </div>
+                  }
+                </div>
 
-              {/* Assistant Sidebar */}
-              <div className='lg:col-span-4 space-y-6'>
-                {q?.accessory && q.accessory !== 'none' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className='sticky top-10'>
-                    <div className='flex items-center gap-2 mb-4 px-4'>
-                      <AlertTriangle
-                        size={14}
-                        className='text-pw-primary'
-                      />
-                      <h4 className='text-[10px] font-black text-pw-muted uppercase tracking-[0.3em]'>
-                        TOOLS
-                      </h4>
-                    </div>
-                    {q.accessory === 'calculator' && <Calculator />}
-                    {q.accessory === 'note' && (
-                      <NoteSheet note={q.accessoryNote || ''} />
-                    )}
-                    {q.accessory === 'periodic_table' && <PeriodicTable />}
-                    {q.accessory === 'formula_sheet' && (
-                      <FormulaSheet
-                        config={q.accessoryConfig}
-                        customFormulas={q.accessoryNote}
-                      />
-                    )}
-                    {q.accessory === 'glossary' && <Glossary />}
-                  </motion.div>
-                )}
+                {/* Assistant Sidebar */}
+                <div className='lg:col-span-4 space-y-6'>
+                  {q?.accessory && q.accessory !== 'none' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className='sticky top-10'>
+                      <div className='flex items-center gap-2 mb-4 px-4'>
+                        <AlertTriangle
+                          size={14}
+                          className='text-pw-primary'
+                        />
+                        <h4 className='text-[10px] font-black text-pw-muted uppercase tracking-[0.3em]'>
+                          TOOLS
+                        </h4>
+                      </div>
+                      {q.accessory === 'calculator' && <Calculator />}
+                      {q.accessory === 'note' && (
+                        <NoteSheet note={q.accessoryNote || ''} />
+                      )}
+                      {q.accessory === 'periodic_table' && <PeriodicTable />}
+                      {q.accessory === 'formula_sheet' && (
+                        <FormulaSheet
+                          config={q.accessoryConfig}
+                          customFormulas={q.accessoryNote}
+                        />
+                      )}
+                      {q.accessory === 'glossary' && <Glossary />}
+                    </motion.div>
+                  )}
+                </div>
               </div>
-            </div>
+            }
           </div>
         </>
       )}
+
+      {/* ===== Report Dialog ===== */}
+      <AnimatePresence>
+        {showReportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowReportModal(false);
+            }}>
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className='bg-pw-surface border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl'>
+              <div className='flex items-center gap-3 mb-6'>
+                <div className='h-12 w-12 rounded-2xl bg-pw-danger/10 border border-pw-danger/20 flex items-center justify-center'>
+                  <Flag
+                    size={20}
+                    className='text-pw-danger'
+                  />
+                </div>
+                <div>
+                  <h3 className='text-xl font-bold'>Report Assessment</h3>
+                  <p className='text-xs text-pw-muted'>
+                    Help us keep the platform safe and compliant.
+                  </p>
+                </div>
+              </div>
+
+              <div className='space-y-4'>
+                <div className='space-y-2'>
+                  <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
+                    Category
+                  </label>
+                  <div className='flex flex-wrap gap-2'>
+                    {[
+                      'Spam',
+                      'Harassment',
+                      'Cheating',
+                      'Inappropriate Content',
+                      'Copyright',
+                      'Other',
+                    ].map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setReportCategory(cat)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-full text-xs font-bold border transition-all',
+                          reportCategory === cat ?
+                            'bg-pw-danger/10 border-pw-danger text-pw-danger'
+                          : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/20',
+                        )}>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className='space-y-2'>
+                  <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
+                    Additional Notes
+                  </label>
+                  <textarea
+                    value={reportNotes}
+                    onChange={(e) => setReportNotes(e.target.value)}
+                    placeholder='Describe the issue...'
+                    className='w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-3 text-sm focus:border-pw-danger focus:outline-none resize-none'
+                  />
+                </div>
+              </div>
+
+              <div className='flex gap-3 mt-6'>
+                <Button
+                  variant='outline'
+                  onClick={() => setShowReportModal(false)}
+                  className='flex-1 h-11 bg-white/5 border-white/10 rounded-2xl'>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    toast.success(
+                      'Report submitted. Thank you for keeping PingWorld safe.',
+                    );
+                    setShowReportModal(false);
+                    setReportNotes('');
+                  }}
+                  className='flex-1 h-11 bg-pw-danger/10 border border-pw-danger/30 text-pw-danger hover:bg-pw-danger/20 rounded-2xl font-bold'>
+                  <Flag
+                    size={14}
+                    className='mr-2'
+                  />{' '}
+                  Submit Report
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

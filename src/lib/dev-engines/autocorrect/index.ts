@@ -1,44 +1,184 @@
+// ============================================================
+// AutoCorrect Engine — Industry-standard typo correction
+// Soundex phonetic matching + Levenshtein edit distance
+// Comprehensive English dictionary (verbs, nouns, adjectives)
+// ============================================================
+
 export interface AutoCorrectConfig {
   sensitivity?: 'low' | 'medium' | 'high';
   language?: string;
   customDictionary?: string[];
   maxSuggestions?: number;
+  autoCapitalize?: boolean;
+}
+
+export interface AutoCorrectToken {
+  word: string;
+  suggestion: string;
+  index: number;
+  confidence: number; // 0.0 – 1.0
+  reason: 'direct_match' | 'phonetic' | 'levenshtein' | 'capitalization';
 }
 
 export interface AutoCorrectResult {
   originalText: string;
   correctedText: string;
-  corrections: Array<{
-    word: string;
-    suggestion: string;
-    index: number;
-    confidence: number;
-    reason: string;
-  }>;
+  corrections: AutoCorrectToken[];
   suggestions: string[];
+  stats: {
+    totalWords: number;
+    correctedCount: number;
+    accuracy: number;
+  };
 }
 
-const EXPANDED_DICTIONARY: Record<string, string> = {
+// ---- Comprehensive misspelling → correction map ----
+const MISSPELLING_MAP: Record<string, string> = {
+  // Common transpositions
   teh: 'the',
   taht: 'that',
+  thsi: 'this',
+  adn: 'and',
+  nad: 'and',
+  hte: 'the',
+  ti: 'it',
+  fo: 'of',
+  ot: 'to',
+  si: 'is',
+  // Vowel errors
   recieve: 'receive',
+  beleive: 'believe',
+  releive: 'relieve',
+  freind: 'friend',
+  wierd: 'weird',
+  cheif: 'chief',
+  peice: 'piece',
+  acheive: 'achieve',
+  acchieve: 'achieve',
+  percieve: 'perceive',
+  // Double-letter errors
+  untill: 'until',
+  fullfil: 'fulfill',
+  occured: 'occurred',
+  writting: 'writing',
+  runing: 'running',
+  prefered: 'preferred',
+  refered: 'referred',
+  occurance: 'occurrence',
+  // -ance / -ence
+  existance: 'existence',
+  differance: 'difference',
+  independance: 'independence',
+  correspondance: 'correspondence',
+  importence: 'importance',
+  relevence: 'relevance',
+  referance: 'reference',
+  // -tion
+  seperation: 'separation',
+  administation: 'administration',
+  accomodation: 'accommodation',
+  pronouciation: 'pronunciation',
+  // Common words
   seperate: 'separate',
   definately: 'definitely',
-  untill: 'until',
-  occurred: 'occurred',
+  definatley: 'definitely',
+  accomodate: 'accommodate',
   accross: 'across',
-  thier: 'their',
-  whith: 'with',
+  apparant: 'apparent',
+  arguement: 'argument',
+  basicly: 'basically',
   beacuse: 'because',
-  goverment: 'government',
+  calender: 'calendar',
+  camoflage: 'camouflage',
+  catagory: 'category',
+  collegue: 'colleague',
+  comming: 'coming',
+  committment: 'commitment',
+  concious: 'conscious',
+  curiousity: 'curiosity',
+  copywrite: 'copyright',
+  dilemna: 'dilemma',
+  dissapear: 'disappear',
+  dissapoint: 'disappoint',
+  embarass: 'embarrass',
   enviroment: 'environment',
+  excercise: 'exercise',
+  familier: 'familiar',
+  fianlly: 'finally',
+  foriegn: 'foreign',
+  fourty: 'forty',
+  goverment: 'government',
+  grammer: 'grammar',
+  guidence: 'guidance',
+  happend: 'happened',
+  harrass: 'harass',
+  heigth: 'height',
+  humerous: 'humorous',
+  imediate: 'immediate',
+  incidently: 'incidentally',
+  independant: 'independent',
+  indispensible: 'indispensable',
+  innoculate: 'inoculate',
+  intergrate: 'integrate',
+  intimite: 'intimate',
+  irresistable: 'irresistible',
+  knowlegde: 'knowledge',
+  liberary: 'library',
+  lisence: 'license',
+  maintainance: 'maintenance',
+  medival: 'medieval',
+  millenium: 'millennium',
+  miniscule: 'minuscule',
+  mischevious: 'mischievous',
+  misspell: 'misspell',
+  neccessary: 'necessary',
+  nieghbor: 'neighbor',
+  noticable: 'noticeable',
+  ocassion: 'occasion',
+  omision: 'omission',
+  oppertunity: 'opportunity',
+  reccommend: 'recommend',
+  persistant: 'persistent',
+  pharoah: 'pharaoh',
+  plagarize: 'plagiarize',
+  posession: 'possession',
+  preceed: 'precede',
+  prejudice: 'prejudice',
+  priviledge: 'privilege',
+  probaly: 'probably',
+  proffessional: 'professional',
+  pronounciation: 'pronunciation',
+  publically: 'publicly',
+  questionaire: 'questionnaire',
+  realise: 'realize',
+  recomend: 'recommend',
+  resistence: 'resistance',
+  resturant: 'restaurant',
+  rythm: 'rhythm',
+  sacrilegious: 'sacrilegious',
+  sandwitch: 'sandwich',
+  scedule: 'schedule',
+  sence: 'sense',
+  siezure: 'seizure',
+  sieze: 'seize',
+  similer: 'similar',
+  sincerly: 'sincerely',
+  speach: 'speech',
+  succesful: 'successful',
+  supercede: 'supersede',
+  suprised: 'surprised',
+  temperture: 'temperature',
+  tendancy: 'tendency',
   tommorow: 'tomorrow',
-  referance: 'reference',
-  performace: 'performance',
-  usefull: 'useful',
-  succefully: 'successfully',
-  persond: 'person',
-  prodctivity: 'productivity',
+  tounge: 'tongue',
+  truely: 'truly',
+  uncommited: 'uncommitted',
+  underate: 'underrate',
+  usualy: 'usually',
+  vaccum: 'vacuum',
+  visious: 'vicious',
+  wether: 'whether',
+  wich: 'which',
   devloper: 'developer',
   funciton: 'function',
   sysem: 'system',
@@ -53,313 +193,1114 @@ const EXPANDED_DICTIONARY: Record<string, string> = {
   actuall: 'actual',
   depedning: 'depending',
   parramaters: 'parameters',
-  parm: 'param',
-  speach: 'speech',
-  beleive: 'believe',
-  acchieve: 'achieve',
-  accomodate: 'accommodate',
-  adress: 'address',
-  writting: 'writing',
-  runing: 'running',
   codeing: 'coding',
   algoritm: 'algorithm',
   exampel: 'example',
+  performace: 'performance',
+  usefull: 'useful',
+  succefully: 'successfully',
+  persond: 'person',
+  prodctivity: 'productivity',
   visualizer: 'visualizer',
-  interactive: 'interactive',
-  documentation: 'documentation',
+  documetation: 'documentation',
+  authintication: 'authentication',
+  autorization: 'authorization',
+  intrgration: 'integration',
+  databse: 'database',
+  asyncronous: 'asynchronous',
+  asyncronus: 'asynchronous',
+  javascrip: 'javascript',
+  typescritp: 'typescript',
+  reactjs: 'reactjs',
+  framwork: 'framework',
+  repositery: 'repository',
+  brach: 'branch',
+  comit: 'commit',
+  pul: 'pull',
+  depandency: 'dependency',
+  configration: 'configuration',
+  progrm: 'program',
+  progrmming: 'programming',
+  varieble: 'variable',
+  constatn: 'constant',
+  interfece: 'interface',
+  compoennt: 'component',
+  renderig: 'rendering',
+  proprty: 'property',
+  valure: 'value',
+  instace: 'instance',
+  inheratance: 'inheritance',
+  polymorpism: 'polymorphism',
+  encapsolation: 'encapsulation',
+  abstraction: 'abstraction',
+  // More common English
+  thier: 'their',
+  whith: 'with',
+  wuold: 'would',
+  shoudl: 'should',
+  coudl: 'could',
+  doesnt: "doesn't",
+  isnt: "isn't",
+  cant: "can't",
+  wont: "won't",
+  didnt: "didn't",
+  wasnt: "wasn't",
+  werent: "weren't",
+  havent: "haven't",
+  hasnt: "hasn't",
+  hadnt: "hadn't",
+  wouldnt: "wouldn't",
+  shouldnt: "shouldn't",
+  couldnt: "couldn't",
+  maynt: "mayn't",
+  // Homophones and commonly confused
+  affect: 'affect',
+  effect: 'effect',
+  their: 'their',
+  there: 'there',
+  its: 'its',
+  alot: 'a lot',
+  aswell: 'as well',
+  thankyou: 'thank you',
+  everyday: 'everyday',
+  noone: 'no one',
+  alright: 'alright',
+  // Plural/verb forms
+  chidlren: 'children',
+  libaries: 'libraries',
+  categoires: 'categories',
+  exmaples: 'examples',
+  resposnes: 'responses',
+  questoins: 'questions',
 };
 
-const COMMON_ENGLISH_WORDS = [
+// ---- Large valid English word set ----
+const ENGLISH_CORPUS = new Set([
+  // Articles / conjunctions / prepositions
+  'a',
+  'an',
   'the',
-  'be',
+  'and',
+  'but',
+  'or',
+  'nor',
+  'for',
+  'so',
+  'yet',
+  'while',
+  'although',
+  'because',
+  'since',
+  'unless',
+  'until',
+  'if',
+  'when',
+  'where',
+  'that',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'in',
+  'on',
+  'at',
+  'by',
+  'with',
+  'about',
+  'above',
+  'below',
+  'under',
+  'over',
+  'through',
+  'between',
+  'among',
+  'from',
   'to',
   'of',
-  'and',
-  'a',
-  'in',
-  'that',
-  'have',
-  'i',
-  'it',
-  'for',
-  'not',
-  'on',
-  'with',
-  'he',
-  'as',
-  'you',
-  'do',
-  'at',
-  'this',
-  'but',
-  'his',
-  'by',
-  'from',
-  'they',
-  'we',
-  'say',
-  'her',
-  'she',
-  'or',
-  'an',
-  'will',
-  'my',
-  'one',
-  'all',
-  'would',
-  'there',
-  'their',
-  'what',
-  'so',
-  'up',
+  'off',
   'out',
-  'if',
-  'about',
-  'who',
-  'get',
-  'which',
-  'go',
-  'me',
-  'when',
-  'make',
-  'can',
-  'like',
-  'time',
-  'no',
-  'just',
-  'him',
-  'know',
-  'take',
-  'people',
   'into',
-  'year',
+  'onto',
+  'upon',
+  'within',
+  'without',
+  'against',
+  'along',
+  'across',
+  'after',
+  'before',
+  'during',
+  'behind',
+  'beyond',
+  // Pronouns
+  'i',
+  'me',
+  'my',
+  'mine',
+  'myself',
+  'we',
+  'us',
+  'our',
+  'ours',
+  'ourselves',
+  'you',
   'your',
-  'good',
-  'some',
-  'could',
+  'yours',
+  'yourself',
+  'yourselves',
+  'he',
+  'him',
+  'his',
+  'himself',
+  'she',
+  'her',
+  'hers',
+  'herself',
+  'it',
+  'its',
+  'itself',
+  'they',
   'them',
+  'their',
+  'theirs',
+  'themselves',
+  'this',
+  'that',
+  'these',
+  'those',
+  'what',
+  'who',
+  'whom',
+  'which',
+  // Common verbs (base + inflections)
+  'be',
+  'is',
+  'was',
+  'are',
+  'were',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'having',
+  'do',
+  'does',
+  'did',
+  'done',
+  'doing',
+  'say',
+  'said',
+  'says',
+  'go',
+  'went',
+  'gone',
+  'get',
+  'got',
+  'gotten',
+  'make',
+  'made',
+  'makes',
+  'know',
+  'knew',
+  'known',
+  'think',
+  'thought',
+  'take',
+  'took',
+  'taken',
   'see',
-  'other',
-  'than',
+  'saw',
+  'seen',
+  'come',
+  'came',
+  'come',
+  'want',
+  'wanted',
+  'use',
+  'used',
+  'find',
+  'found',
+  'give',
+  'gave',
+  'given',
+  'tell',
+  'told',
+  'work',
+  'worked',
+  'call',
+  'called',
+  'try',
+  'tried',
+  'ask',
+  'asked',
+  'need',
+  'needed',
+  'feel',
+  'felt',
+  'become',
+  'became',
+  'leave',
+  'left',
+  'put',
+  'keep',
+  'kept',
+  'let',
+  'begin',
+  'began',
+  'begun',
+  'show',
+  'showed',
+  'shown',
+  'hear',
+  'heard',
+  'play',
+  'run',
+  'ran',
+  'move',
+  'live',
+  'believe',
+  'hold',
+  'bring',
+  'happen',
+  'write',
+  'wrote',
+  'written',
+  'provide',
+  'sit',
+  'sat',
+  'stand',
+  'stood',
+  'lose',
+  'lost',
+  'pay',
+  'paid',
+  'meet',
+  'met',
+  'include',
+  'continue',
+  'set',
+  'learn',
+  'learned',
+  'change',
+  'changed',
+  'lead',
+  'led',
+  'understand',
+  'understood',
+  'watch',
+  'follow',
+  'stop',
+  'create',
+  'speak',
+  'spoke',
+  'spoken',
+  'read',
+  'spend',
+  'spent',
+  'grow',
+  'grew',
+  'grown',
+  'open',
+  'walk',
+  'win',
+  'won',
+  'offer',
+  'remember',
+  'love',
+  'consider',
+  'appear',
+  'buy',
+  'bought',
+  'wait',
+  'serve',
+  'die',
+  'send',
+  'sent',
+  'expect',
+  'build',
+  'built',
+  'stay',
+  'fall',
+  'fell',
+  'fallen',
+  'reach',
+  'kill',
+  'remain',
+  'suggest',
+  'raise',
+  'pass',
+  'sell',
+  'sold',
+  'require',
+  'report',
+  'decide',
+  'pull',
+  'break',
+  'broke',
+  'broken',
+  'start',
+  'return',
+  'help',
+  'control',
+  'add',
+  'focus',
+  'order',
+  'start',
+  // Common nouns
+  'time',
+  'year',
+  'people',
+  'way',
+  'day',
+  'man',
+  'woman',
+  'child',
+  'world',
+  'life',
+  'hand',
+  'part',
+  'place',
+  'case',
+  'week',
+  'company',
+  'system',
+  'program',
+  'question',
+  'work',
+  'government',
+  'number',
+  'night',
+  'point',
+  'home',
+  'water',
+  'room',
+  'mother',
+  'area',
+  'money',
+  'story',
+  'fact',
+  'month',
+  'lot',
+  'right',
+  'study',
+  'book',
+  'eye',
+  'job',
+  'word',
+  'business',
+  'issue',
+  'side',
+  'kind',
+  'head',
+  'house',
+  'service',
+  'friend',
+  'father',
+  'power',
+  'hour',
+  'game',
+  'line',
+  'end',
+  'among',
+  'order',
+  'name',
+  'school',
+  'country',
+  'water',
+  'music',
+  'game',
+  'food',
+  'health',
+  'body',
+  'family',
+  'car',
+  'form',
+  'data',
+  'class',
+  'type',
+  'list',
+  'item',
+  'user',
+  'team',
+  'code',
+  'page',
+  'error',
+  'file',
+  'table',
+  'view',
+  'mode',
+  'step',
+  'plan',
+  'group',
+  'role',
+  'test',
+  'key',
+  'value',
+  'name',
+  'text',
+  'link',
+  'icon',
+  'card',
+  'form',
+  'note',
+  'task',
+  'date',
+  'rate',
+  'size',
+  'site',
+  'post',
+  'user',
+  'name',
+  'email',
+  'phone',
+  'address',
+  'city',
+  'state',
+  'country',
+  'zip',
+  'region',
+  'language',
+  'version',
+  'update',
+  'server',
+  'client',
+  'request',
+  'response',
+  'status',
+  'token',
+  'session',
+  'cache',
+  'query',
+  'route',
+  'model',
+  'schema',
+  'record',
+  'index',
+  'field',
+  'column',
+  'row',
+  'table',
+  'view',
+  'form',
+  'input',
+  'output',
+  'result',
+  'action',
+  // Common adjectives
+  'good',
+  'new',
+  'first',
+  'last',
+  'long',
+  'great',
+  'little',
+  'own',
+  'right',
+  'big',
+  'high',
+  'small',
+  'large',
+  'next',
+  'early',
+  'young',
+  'important',
+  'public',
+  'private',
+  'real',
+  'different',
+  'best',
+  'free',
+  'same',
+  'local',
+  'required',
+  'optional',
+  'main',
+  'entire',
+  'open',
+  'old',
+  'full',
+  'sure',
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'valid',
+  'invalid',
+  'active',
+  'inactive',
+  'visible',
+  'hidden',
+  'enabled',
+  'disabled',
+  'success',
+  'error',
+  'warning',
+  'info',
+  'complete',
+  'incomplete',
+  'pending',
+  'done',
+  'current',
+  'previous',
+  'next',
+  'latest',
+  'recent',
+  'popular',
+  'featured',
+  'premium',
+  // Common adverbs
+  'up',
+  'down',
+  'out',
+  'back',
+  'off',
+  'away',
   'then',
   'now',
-  'look',
-  'only',
-  'come',
-  'its',
-  'over',
-  'think',
-  'also',
-  'back',
-  'after',
-  'use',
-  'two',
+  'here',
+  'there',
+  'where',
+  'when',
   'how',
-  'our',
-  'work',
-  'first',
-  'well',
-  'way',
+  'all',
+  'also',
+  'just',
+  'only',
   'even',
-  'new',
-  'want',
-  'because',
-  'any',
-  'these',
-  'give',
-  'day',
+  'still',
+  'already',
+  'again',
+  'very',
+  'well',
+  'more',
   'most',
-  'us',
-  'developer',
+  'never',
+  'always',
+  'often',
+  'usually',
+  'often',
+  'sometimes',
+  'maybe',
+  'perhaps',
+  'quite',
+  'rather',
+  'really',
+  'simply',
+  'also',
+  // Tech/dev terms
+  'api',
+  'url',
+  'http',
+  'https',
+  'json',
+  'xml',
+  'html',
+  'css',
+  'sql',
+  'dom',
+  'npm',
+  'node',
+  'react',
+  'next',
+  'typescript',
+  'javascript',
+  'python',
+  'java',
+  'ruby',
   'function',
   'method',
-  'system',
-  'scratch',
-  'implemented',
-  'parameters',
-  'customization',
-  'productivity',
-  'alert',
+  'class',
+  'interface',
+  'type',
+  'const',
+  'let',
+  'var',
+  'async',
+  'await',
+  'return',
+  'import',
+  'export',
+  'default',
+  'extends',
+  'implements',
+  'new',
+  'this',
+  'super',
+  'static',
+  'public',
+  'private',
+  'protected',
+  'abstract',
+  'readonly',
+  'string',
+  'number',
+  'boolean',
+  'object',
+  'array',
+  'null',
+  'undefined',
+  'void',
+  'any',
+  'never',
+  'unknown',
+  'enum',
+  'namespace',
+  'module',
+  'package',
+  'component',
+  'hook',
+  'state',
+  'props',
+  'effect',
+  'ref',
+  'context',
+  'store',
+  'action',
+  'reducer',
+  'selector',
+  'middleware',
+  'route',
+  'controller',
+  'service',
+  'repository',
+  'model',
+  'entity',
+  'schema',
+  'migration',
+  'seed',
+  'query',
+  'mutation',
+  'subscription',
+  'endpoint',
+  'authentication',
+  'authorization',
+  'encryption',
+  'decryption',
+  'token',
+  'session',
+  'cookie',
+  'cache',
+  'database',
+  'table',
+  'index',
+  'column',
+  'row',
+  'field',
+  'record',
+  'document',
+  'collection',
+  'transaction',
+  'commit',
+  'rollback',
+  'backup',
+  'restore',
+  'deploy',
+  'build',
+  'test',
+  'lint',
+  'check',
+  'format',
+  'validate',
+  'parse',
+  'serialize',
+  'deserialize',
+  'encode',
+  'decode',
+  'hash',
+  'salt',
+  'sign',
+  'verify',
+  'generate',
+  'create',
+  'read',
+  'update',
+  'delete',
+  'list',
+  'search',
+  'filter',
+  'sort',
+  'paginate',
+  'aggregate',
+  'join',
+  'merge',
+  'split',
+  'trim',
+  'replace',
+  'match',
+  'algorithm',
+  'complexity',
+  'performance',
+  'optimization',
+  'refactor',
+  'debug',
+  'breakpoint',
+  'stack',
+  'heap',
+  'memory',
+  'cpu',
+  'gpu',
+  'network',
+  'latency',
+  'bandwidth',
+  'concurrency',
+  'parallelism',
+  'asynchronous',
+  'synchronous',
+  'callback',
+  'promise',
+  'observable',
+  'stream',
+  'buffer',
+  'pipe',
+  'channel',
+  'event',
+  'listener',
+  'handler',
+  'middleware',
+  'interceptor',
+  'decorator',
+  'factory',
+  'singleton',
+  'repository',
+  'adapter',
+  'facade',
+  'proxy',
+  'strategy',
+  'observer',
+  'command',
+  'template',
+  // Music / audio terms
   'audio',
   'sound',
-  'location',
-  'color',
+  'music',
+  'tone',
+  'frequency',
+  'pitch',
+  'volume',
+  'bass',
+  'treble',
+  'tempo',
+  'rhythm',
+  'beat',
+  'measure',
+  'melody',
+  'harmony',
+  'chord',
+  'scale',
+  'key',
+  'note',
+  'octave',
+  'waveform',
+  'sine',
+  'square',
+  'sawtooth',
+  'triangle',
+  'oscillator',
+  'filter',
+  'reverb',
+  'echo',
+  'delay',
+  'distortion',
+  'compression',
+  'equalization',
+  'sample',
+  'record',
+  'playback',
+  'export',
+  'wav',
+  'mp3',
+  'ogg',
+  'flac',
+  'stereo',
+  'mono',
+  // Image/color terms
   'image',
-  'visual',
-  'representation',
-  'interactive',
-  'playground',
-  'documentation',
-  'text',
-  'analysis',
-  'output',
-];
+  'photo',
+  'picture',
+  'color',
+  'colour',
+  'red',
+  'green',
+  'blue',
+  'yellow',
+  'orange',
+  'purple',
+  'pink',
+  'brown',
+  'black',
+  'white',
+  'gray',
+  'grey',
+  'hue',
+  'saturation',
+  'brightness',
+  'contrast',
+  'opacity',
+  'alpha',
+  'hex',
+  'rgb',
+  'hsl',
+  'pixel',
+  'resolution',
+  'width',
+  'height',
+  'canvas',
+  'filter',
+  'blur',
+  'sharpen',
+  'crop',
+  'resize',
+  'rotate',
+  'flip',
+  'mirror',
+  'overlay',
+  'layer',
+  'mask',
+  'blend',
+  // General vocabulary
+  'actually',
+  'currently',
+  'simply',
+  'specifically',
+  'particularly',
+  'generally',
+  'basically',
+  'essentially',
+  'typically',
+  'ultimately',
+  'clearly',
+  'exactly',
+  'certainly',
+  'absolutely',
+  'obviously',
+  'definitely',
+  'probably',
+  'possibly',
+  'approximately',
+  'relatively',
+  'significantly',
+  'substantially',
+  'considerably',
+  'gradually',
+  'immediately',
+  'suddenly',
+  'quickly',
+  'slowly',
+  'carefully',
+  'easily',
+  'rapidly',
+  'directly',
+  'effectively',
+  'efficiently',
+  'properly',
+  'successfully',
+  'correctly',
+  'accurately',
+  'precisely',
+  'consistently',
+  'continuously',
+  'automatically',
+  'dynamically',
+  'statically',
+  'globally',
+  'locally',
+  'internally',
+  'externally',
+  'remotely',
+  'securely',
+  'publicly',
+  'privately',
+  'explicitly',
+  'implicitly',
+  'recursively',
+  'iteratively',
+]);
 
 export class AutoCorrectEngine {
-  private dictionary: Set<string>;
-  private replacements: Map<string, string>;
+  private readonly dictionary: Set<string>;
+  private readonly replacements: Map<string, string>;
 
   constructor(customWords: string[] = []) {
     this.dictionary = new Set([
-      ...COMMON_ENGLISH_WORDS,
+      ...ENGLISH_CORPUS,
       ...customWords.map((w) => w.toLowerCase()),
     ]);
-    this.replacements = new Map(Object.entries(EXPANDED_DICTIONARY));
+    this.replacements = new Map(Object.entries(MISSPELLING_MAP));
   }
 
+  /** Full analysis with corrections and confidence scores */
   public analyze(
     text: string,
     config: AutoCorrectConfig = {},
   ): AutoCorrectResult {
-    try {
-      if (!text || typeof text !== 'string') {
-        return {
-          originalText: text || '',
-          correctedText: text || '',
-          corrections: [],
-          suggestions: [],
-        };
-      }
-
-      const words = text.split(/(\s+|[^\w\s])/);
-      const corrections: AutoCorrectResult['corrections'] = [];
-      const suggestionsSet = new Set<string>();
-
-      let charOffset = 0;
-      const correctedWords = words.map((chunk) => {
-        const lower = chunk.toLowerCase();
-
-        if (/^\w+$/.test(chunk)) {
-          // Direct dictionary replacement lookup
-          if (this.replacements.has(lower)) {
-            const suggestion = this.preserveCase(
-              chunk,
-              this.replacements.get(lower)!,
-            );
-            corrections.push({
-              word: chunk,
-              suggestion,
-              index: charOffset,
-              confidence: 0.98,
-              reason: 'Common typo',
-            });
-            suggestionsSet.add(suggestion);
-            charOffset += chunk.length;
-            return suggestion;
-          }
-
-          // Soundex & Levenshtein fallback for words > 2 chars
-          if (chunk.length > 2 && !this.dictionary.has(lower)) {
-            const closest = this.findClosestWord(lower);
-            if (closest && closest.distance <= 2) {
-              const suggestion = this.preserveCase(chunk, closest.word);
-              corrections.push({
-                word: chunk,
-                suggestion,
-                index: charOffset,
-                confidence: 0.85,
-                reason: 'Phonetic match',
-              });
-              suggestionsSet.add(suggestion);
-              charOffset += chunk.length;
-              return suggestion;
-            }
-          }
-        }
-
-        charOffset += chunk.length;
-        return chunk;
-      });
-
-      return {
-        originalText: text,
-        correctedText: correctedWords.join(''),
-        corrections,
-        suggestions: Array.from(suggestionsSet).slice(
-          0,
-          config.maxSuggestions || 8,
-        ),
-      };
-    } catch (e) {
+    if (!text || typeof text !== 'string') {
       return {
         originalText: text || '',
         correctedText: text || '',
         corrections: [],
         suggestions: [],
+        stats: { totalWords: 0, correctedCount: 0, accuracy: 1 },
       };
     }
+
+    const sensitivityMap = { low: 3, medium: 2, high: 1 };
+    const maxDist = sensitivityMap[config.sensitivity ?? 'medium'];
+    const maxSugg = config.maxSuggestions ?? 8;
+
+    // Split preserving whitespace + punctuation
+    const chunks = text.split(/(\s+|[^\w'-])/);
+    const corrections: AutoCorrectToken[] = [];
+    const suggSet = new Set<string>();
+
+    let charOffset = 0;
+    let wordCount = 0;
+
+    const correctedChunks = chunks.map((chunk) => {
+      const isWord = /^[\w'-]+$/.test(chunk) && /[a-zA-Z]/.test(chunk);
+      if (!isWord) {
+        charOffset += chunk.length;
+        return chunk;
+      }
+
+      wordCount++;
+      const lower = chunk.replace(/'/g, '').toLowerCase();
+
+      // Direct typo map lookup
+      if (this.replacements.has(lower)) {
+        const fixed = this.preserveCase(chunk, this.replacements.get(lower)!);
+        corrections.push({
+          word: chunk,
+          suggestion: fixed,
+          index: charOffset,
+          confidence: 0.99,
+          reason: 'direct_match',
+        });
+        suggSet.add(fixed);
+        charOffset += chunk.length;
+        return fixed;
+      }
+
+      // Already valid
+      if (this.dictionary.has(lower)) {
+        charOffset += chunk.length;
+        return chunk;
+      }
+
+      // Phonetic + edit-distance fallback for words ≥ 3 chars
+      if (lower.length >= 3) {
+        const closest = this.findClosest(lower, maxDist);
+        if (closest) {
+          const fixed = this.preserveCase(chunk, closest.word);
+          corrections.push({
+            word: chunk,
+            suggestion: fixed,
+            index: charOffset,
+            confidence: closest.reason === 'phonetic' ? 0.88 : 0.75,
+            reason: closest.reason,
+          });
+          suggSet.add(fixed);
+          charOffset += chunk.length;
+          return fixed;
+        }
+      }
+
+      charOffset += chunk.length;
+      return chunk;
+    });
+
+    const correctedText = correctedChunks.join('');
+    return {
+      originalText: text,
+      correctedText,
+      corrections,
+      suggestions: Array.from(suggSet).slice(0, maxSugg),
+      stats: {
+        totalWords: wordCount,
+        correctedCount: corrections.length,
+        accuracy:
+          wordCount > 0 ?
+            Number(((wordCount - corrections.length) / wordCount).toFixed(3))
+          : 1,
+      },
+    };
   }
 
+  /** Returns corrected string directly */
   public correct(text: string, config: AutoCorrectConfig = {}): string {
     return this.analyze(text, config).correctedText;
   }
 
+  /** Returns top correction suggestions for a word or phrase */
   public suggest(text: string, config: AutoCorrectConfig = {}): string[] {
     return this.analyze(text, config).suggestions;
   }
 
+  /** Word-level lookup: is this word valid? */
+  public isValid(word: string): boolean {
+    return this.dictionary.has(word.toLowerCase());
+  }
+
+  /** Extend the dictionary with custom terms */
+  public extend(words: string[]): void {
+    words.forEach((w) => this.dictionary.add(w.toLowerCase()));
+  }
+
+  /** Attach auto-correction to DOM inputs on blur */
   public attachToLayout(selector = 'input[type="text"], textarea'): void {
     if (typeof window === 'undefined') return;
     try {
-      const elements = document.querySelectorAll<
+      const els = document.querySelectorAll<
         HTMLInputElement | HTMLTextAreaElement
       >(selector);
-      elements.forEach((el) => {
+      els.forEach((el) => {
         el.addEventListener('blur', () => {
-          if (el.value) {
-            el.value = this.correct(el.value);
-          }
+          if (el.value) el.value = this.correct(el.value);
         });
       });
-    } catch (e) {}
+    } catch {
+      /* no-op in SSR */
+    }
   }
 
+  // ---- Private helpers ----
+
   private preserveCase(original: string, target: string): string {
-    if (original === original.toUpperCase()) return target.toUpperCase();
+    if (original === original.toUpperCase() && original.length > 1)
+      return target.toUpperCase();
     if (original[0] === original[0].toUpperCase()) {
       return target.charAt(0).toUpperCase() + target.slice(1);
     }
     return target;
   }
 
-  private findClosestWord(
+  private findClosest(
     word: string,
-  ): { word: string; distance: number } | null {
-    let minDistance = Infinity;
-    let closest: string | null = null;
-    const wordSoundex = this.soundex(word);
+    maxDist: number,
+  ): { word: string; reason: 'phonetic' | 'levenshtein' } | null {
+    const wordCode = this.soundex(word);
+    let bestLev: { word: string; dist: number } | null = null;
 
     for (const dictWord of this.dictionary) {
-      // Fast check if Soundex matches
-      const isSoundexMatch = this.soundex(dictWord) === wordSoundex;
-      const distance = this.levenshtein(word, dictWord);
-
-      if (isSoundexMatch && distance <= 3) {
-        return { word: dictWord, distance };
+      if (Math.abs(dictWord.length - word.length) > 3) continue;
+      // Soundex phonetic
+      if (this.soundex(dictWord) === wordCode) {
+        const d = this.levenshtein(word, dictWord);
+        if (d <= maxDist) return { word: dictWord, reason: 'phonetic' };
       }
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        closest = dictWord;
-      }
+      // Levenshtein
+      const d = this.levenshtein(word, dictWord);
+      if (!bestLev || d < bestLev.dist) bestLev = { word: dictWord, dist: d };
     }
 
-    return closest ? { word: closest, distance: minDistance } : null;
+    if (bestLev && bestLev.dist <= maxDist) {
+      return { word: bestLev.word, reason: 'levenshtein' };
+    }
+    return null;
   }
 
   private soundex(word: string): string {
-    const a = word.toLowerCase().split('');
-    const firstLetter = a[0];
-
-    const codes: Record<string, string> = {
-      a: '',
-      e: '',
-      i: '',
-      o: '',
-      u: '',
-      y: '',
-      h: '',
-      w: '',
+    const codeMap: Record<string, string> = {
       b: '1',
       f: '1',
       p: '1',
@@ -379,34 +1320,31 @@ export class AutoCorrectEngine {
       n: '5',
       r: '6',
     };
-
-    const soundex = a
-      .map((char) => codes[char] || '')
-      .filter((char, index, array) =>
-        index === 0 ? true : char !== array[index - 1],
-      )
-      .join('');
-
-    return (firstLetter + soundex.slice(1) + '000').slice(0, 4).toUpperCase();
+    const a = word.toLowerCase();
+    let result = a[0].toUpperCase();
+    let prev = codeMap[a[0]] || '0';
+    for (let i = 1; i < a.length && result.length < 4; i++) {
+      const code = codeMap[a[i]] || '0';
+      if (code !== '0' && code !== prev) result += code;
+      prev = code;
+    }
+    return result.padEnd(4, '0');
   }
 
   private levenshtein(a: string, b: string): number {
-    const matrix: number[][] = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-
-    for (let i = 1; i <= b.length; i++) {
-      for (let j = 1; j <= a.length; j++) {
-        if (b.charAt(i - 1) === a.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1),
-          );
-        }
+    const m = a.length,
+      n = b.length;
+    const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+    for (let i = 1; i <= m; i++) {
+      let prev = dp[0];
+      dp[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const temp = dp[j];
+        dp[j] =
+          a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+        prev = temp;
       }
     }
-    return matrix[b.length][a.length];
+    return dp[n];
   }
 }
