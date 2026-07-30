@@ -148,6 +148,27 @@ export default function ToolsHubPage() {
         </div>
       </div>
 
+      {/* Category Dropdown and Quick Sort Panel */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-4 w-full">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <span className="text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0">Filter Category:</span>
+          <select
+            value={activeCategory}
+            onChange={e => {
+              setActiveCategory(e.target.value);
+              setSearch('');
+            }}
+            className="h-10 rounded-xl bg-pw-surface/50 border border-white/10 px-4 font-mono text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer w-full sm:w-56"
+          >
+            {categories.map(cat => (
+              <option key={cat} value={cat} className="bg-pw-surface text-pw-text">
+                {cat.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* RENDER GRID */}
       {
         search.trim() ?
