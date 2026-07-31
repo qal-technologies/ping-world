@@ -745,13 +745,13 @@ export default function ApiDocsPlaygroundPage({
           <div className='flex justify-between items-center border-b border-white/5 pb-4'>
             <h3 className='text-lg font-bold font-display flex items-center gap-2'>
               <Play className='h-4 w-4 text-pw-primary' />
-              Interactive Method Sandbox
+              Interactive Sandbox
             </h3>
           </div>
 
           <div>
             <label className='text-xs font-bold uppercase tracking-wider text-pw-muted mb-2 block'>
-              Select Engine Method
+              Select Method
             </label>
             <select
               value={selectedMethodName}
@@ -773,7 +773,7 @@ export default function ApiDocsPlaygroundPage({
             <div className='p-3 rounded-xl bg-pw-primary/5 border border-pw-primary/20'>
               <span className='text-[10px] font-bold font-mono text-pw-primary uppercase block mb-1.5 flex items-center gap-1'>
                 <Sliders className='h-3 w-3' />
-                Permitted Parameter Options & Value Enums:
+                Parameter Options & Value Enums:
               </span>
               <ul className='list-disc list-inside text-xs font-mono text-pw-muted space-y-1'>
                 {activeMethod.allowedOptions.map((opt, idx) => (
@@ -884,7 +884,7 @@ export default function ApiDocsPlaygroundPage({
                       'bg-pw-primary/10 border-pw-primary/50 shadow-lg'
                     : 'bg-white/[0.02] border-white/10 hover:border-white/20'
                   }`}>
-                  <div className='flex items-center justify-between mb-2'>
+                  <div className='flex items-center justify-between mb-2 flex-wrap gap-1'>
                     <span className='font-mono font-bold text-base text-pw-primary'>
                       {m.name}()
                     </span>
@@ -899,7 +899,7 @@ export default function ApiDocsPlaygroundPage({
                   {/* Blog Article Guide */}
                   <div className='p-3 rounded-xl bg-black/40 border border-white/5 text-xs text-pw-text leading-relaxed mb-3'>
                     <span className='text-[10px] font-bold uppercase text-pw-muted block mb-1 font-mono'>
-                      // Developer Deep-Dive:
+                      Dev Article:
                     </span>
                     {m.guideArticle}
                   </div>

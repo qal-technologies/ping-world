@@ -131,8 +131,8 @@ export default function ColorDevTool() {
                 Ratio: {comparison.contrastRatio}:1
               </span>
               <span
-                className={`px-2 py-0.5 rounded font-bold ${comparison.isAccessibleAA ? 'bg-emerald-400 text-black' : 'bg-rose-500 text-white'}`}>
-                {comparison.isAccessibleAA ? 'WCAG AA ✓' : 'FAIL ✗'}
+                className={`px-2 py-0.5 rounded font-bold ${comparison.isAccessibleAAA_Normal ? 'bg-emerald-400 text-black' : 'bg-rose-500 text-white'}`}>
+                {comparison.isAccessibleAAA_Normal ? 'WCAG AA ✓' : 'FAIL ✗'}
               </span>
             </div>
           </div>

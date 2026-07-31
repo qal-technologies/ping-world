@@ -623,5 +623,6 @@ export class ImageEditingEngine {
       g: Math.round(hue(p, q, h) * 255),
       b: Math.round(hue(p, q, h - 1 / 3) * 255),
     };
+
   }
 }
