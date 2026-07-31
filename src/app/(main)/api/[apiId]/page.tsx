@@ -26,6 +26,7 @@ import EmailPreviewer from '@/components/dev-engines/EmailPreviewer';
 import ImageEditStudio from '@/components/dev-engines/ImageEditStudio';
 import StylingPreviewer from '@/components/dev-engines/StylingPreviewer';
 import ColorDevTool from '@/components/dev-engines/ColorDevTool';
+import AutocorrectStudio from '@/components/dev-engines/AutocorrectStudio';
 
 export interface MethodDoc {
   name: string;
@@ -352,22 +353,23 @@ const ENGINE_METADATA: Record<string, ApiFullMeta> = {
   'db-validation': {
     name: 'DB Validation Handler',
     description:
-      'Type-safe schema validator supporting intuitive `?` optional key syntax (e.g. `age?: "number"` or `"bio?": "string"`) and automatic null fallbacks.',
+      'TypeScript interface & type-safe validator supporting intuitive standard Optional Suffixes, automatic fallback defaults, and SQL/NoSQL anti-injection sanitization.',
     methods: [
       {
         name: 'validateAndSanitize',
         description:
-          'Validates object against concise `?` schema, coercing types and assigning null fallbacks for optional missing keys.',
-        parameters: 'data: object, schema: ConciseDbSchema',
+          'Validates and compiles dynamic payload values against standard TS interface code blocks, casting and applying SQL/NoSQL filters.',
+        parameters: 'data: object, schemaCode: string, defaultValues?: object',
         returns: 'DbValidationResult',
-        sampleInput: { name: 'John Doe', age: '28' },
-        sampleParams: { name: 'string', 'age?': 'number', 'bio?': 'string' },
+        sampleInput: { name: 'John Doe', age: '28', bio: 'I am a dev' },
+        sampleParams: "interface User {\n  name: string;\n  age?: number;\n  bio?: string;\n  passphrase?: string;\n}",
         allowedOptions: [
-          'types: "string" | "number" | "boolean" | "date" | "json" | "array" | "object"',
-          'suffix "?": marks field optional',
+          'TypeScript interface code blocks directly parsed as strings',
+          'Suffix "?": marks field optional, no defaults required',
+          'Deep Sanitizers: automatically strips SQL and NoSQL Injection patterns',
         ],
         guideArticle:
-          'Normalizes schema key definitions. If key ends with "?", the handler automatically permits missing values and populates null defaults.',
+          'Parses actual TypeScript interface/type code strings dynamically. Automatically recognizes optional parameters, applies smart fallback default assignments, and enforces absolute protection against database injections.',
       },
     ],
   },
@@ -731,6 +733,7 @@ export default function ApiDocsPlaygroundPage({
 
       {/* EMBED VISUAL DEV TOOLS */}
       <div className='mb-10 space-y-6'>
+        {apiId === 'autocorrect' && <AutocorrectStudio />}
         {apiId === 'audio-editing' && <AudioVisualizer />}
         {apiId === 'alerting-toast' && <AlertToastRenderer />}
         {apiId === 'email-engine' && <EmailPreviewer />}

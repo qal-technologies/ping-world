@@ -17,7 +17,12 @@ export interface AutoCorrectToken {
   suggestion: string;
   index: number;
   confidence: number; // 0.0 – 1.0
-  reason: 'direct_match' | 'phonetic' | 'levenshtein' | 'capitalization';
+  reason:
+    | 'direct_match'
+    | 'phonetic'
+    | 'levenshtein'
+    | 'capitalization'
+    | 'common_typo';
 }
 
 export interface AutoCorrectResult {
@@ -1120,6 +1125,7 @@ const ENGLISH_CORPUS = new Set([
 export class AutoCorrectEngine {
   private readonly dictionary: Set<string>;
   private readonly replacements: Map<string, string>;
+  private history: string[] = [];
 
   constructor(customWords: string[] = []) {
     this.dictionary = new Set([
@@ -1129,106 +1135,169 @@ export class AutoCorrectEngine {
     this.replacements = new Map(Object.entries(MISSPELLING_MAP));
   }
 
-  /** Full analysis with corrections and confidence scores */
+  // Suffix analysis to mimic professional search engines (checks if standard inflections of dictionary stems are correct)
+  private isCorrectWithSuffix(word: string): boolean {
+    const w = word.toLowerCase();
+    if (this.dictionary.has(w)) return true;
+
+    const suffixes = [
+      'ing',
+      'ed',
+      'es',
+      's',
+      'ly',
+      'er',
+      'est',
+      'ment',
+      'ness',
+      'able',
+      'ible',
+    ];
+    for (const suffix of suffixes) {
+      if (w.endsWith(suffix)) {
+        const stem = w.slice(0, -suffix.length);
+        if (this.dictionary.has(stem)) return true;
+        // Check doubled consonants, e.g. running -> run
+        if (
+          stem.length > 1 &&
+          stem[stem.length - 1] === stem[stem.length - 2]
+        ) {
+          const singleConsonantStem = stem.slice(0, -1);
+          if (this.dictionary.has(singleConsonantStem)) return true;
+        }
+        // Check silent e dropping, e.g. coding -> code
+        if (this.dictionary.has(stem + 'e')) return true;
+        // Check y inflections, e.g. easily -> easy
+        if (stem.endsWith('i') && this.dictionary.has(stem.slice(0, -1) + 'y'))
+          return true;
+      }
+    }
+    return false;
+  }
+
+  public pushToHistory(text: string): void {
+    if (this.history[this.history.length - 1] === text) return;
+    this.history.push(text);
+    if (this.history.length > 5) {
+      this.history.shift();
+    }
+  }
+
+  public getHistory(): string[] {
+    return this.history;
+  }
+
+  public undo(): string | null {
+    if (this.history.length > 1) {
+      this.history.pop(); // Remove current
+      return this.history[this.history.length - 1]; // Return previous
+    }
+    return null;
+  }
+
   public analyze(
     text: string,
     config: AutoCorrectConfig = {},
   ): AutoCorrectResult {
-    if (!text || typeof text !== 'string') {
+    try {
+      if (!text || typeof text !== 'string') {
+        return {
+          originalText: text || '',
+          correctedText: text || '',
+          corrections: [],
+          suggestions: [],
+          stats: {
+            accuracy: 0,
+            correctedCount: 0,
+            totalWords: 0,
+          },
+        };
+      }
+
+      const words = text.split(/(\s+|[^\w\s'])/);
+      const corrections: AutoCorrectResult['corrections'] = [];
+      const suggestionsSet = new Set<string>();
+
+      let charOffset = 0;
+      const correctedWords = words.map((chunk) => {
+        const lower = chunk.toLowerCase();
+
+        if (/^[\w']+$/.test(chunk)) {
+          // Direct dictionary replacement lookup
+          if (this.replacements.has(lower)) {
+            const suggestion = this.preserveCase(
+              chunk,
+              this.replacements.get(lower)!,
+            );
+            corrections.push({
+              word: chunk,
+              suggestion,
+              index: charOffset,
+              confidence: 0.98,
+              reason: 'common_typo',
+            });
+            suggestionsSet.add(suggestion);
+            charOffset += chunk.length;
+            return suggestion;
+          }
+
+          // Phonetic & stem suffix check fallback
+          if (chunk.length > 2 && !this.isCorrectWithSuffix(lower)) {
+            const closest = this.findClosest(lower, 2);
+            if (closest && closest.distance <= 2) {
+              const suggestion = this.preserveCase(chunk, closest.word);
+              corrections.push({
+                word: chunk,
+                suggestion,
+                index: charOffset,
+                confidence: 0.85,
+                reason: 'phonetic',
+              });
+              suggestionsSet.add(suggestion);
+              charOffset += chunk.length;
+              return suggestion;
+            }
+          }
+        }
+
+        charOffset += chunk.length;
+        return chunk;
+      });
+
+      const correctedText = correctedWords.join('');
+      return {
+        originalText: text,
+        correctedText,
+        corrections,
+        suggestions: Array.from(suggestionsSet).slice(
+          0,
+          config.maxSuggestions || 8,
+        ),
+        stats: {
+          totalWords: words.length,
+          correctedCount: corrections.length,
+          accuracy: corrections.length / words.length,
+        },
+      };
+    } catch (e) {
       return {
         originalText: text || '',
         correctedText: text || '',
         corrections: [],
         suggestions: [],
-        stats: { totalWords: 0, correctedCount: 0, accuracy: 1 },
+        stats: { totalWords: 0, correctedCount: 0, accuracy: 0 },
       };
     }
-
-    const sensitivityMap = { low: 3, medium: 2, high: 1 };
-    const maxDist = sensitivityMap[config.sensitivity ?? 'medium'];
-    const maxSugg = config.maxSuggestions ?? 8;
-
-    // Split preserving whitespace + punctuation
-    const chunks = text.split(/(\s+|[^\w'-])/);
-    const corrections: AutoCorrectToken[] = [];
-    const suggSet = new Set<string>();
-
-    let charOffset = 0;
-    let wordCount = 0;
-
-    const correctedChunks = chunks.map((chunk) => {
-      const isWord = /^[\w'-]+$/.test(chunk) && /[a-zA-Z]/.test(chunk);
-      if (!isWord) {
-        charOffset += chunk.length;
-        return chunk;
-      }
-
-      wordCount++;
-      const lower = chunk.replace(/'/g, '').toLowerCase();
-
-      // Direct typo map lookup
-      if (this.replacements.has(lower)) {
-        const fixed = this.preserveCase(chunk, this.replacements.get(lower)!);
-        corrections.push({
-          word: chunk,
-          suggestion: fixed,
-          index: charOffset,
-          confidence: 0.99,
-          reason: 'direct_match',
-        });
-        suggSet.add(fixed);
-        charOffset += chunk.length;
-        return fixed;
-      }
-
-      // Already valid
-      if (this.dictionary.has(lower)) {
-        charOffset += chunk.length;
-        return chunk;
-      }
-
-      // Phonetic + edit-distance fallback for words ≥ 3 chars
-      if (lower.length >= 3) {
-        const closest = this.findClosest(lower, maxDist);
-        if (closest) {
-          const fixed = this.preserveCase(chunk, closest.word);
-          corrections.push({
-            word: chunk,
-            suggestion: fixed,
-            index: charOffset,
-            confidence: closest.reason === 'phonetic' ? 0.88 : 0.75,
-            reason: closest.reason,
-          });
-          suggSet.add(fixed);
-          charOffset += chunk.length;
-          return fixed;
-        }
-      }
-
-      charOffset += chunk.length;
-      return chunk;
-    });
-
-    const correctedText = correctedChunks.join('');
-    return {
-      originalText: text,
-      correctedText,
-      corrections,
-      suggestions: Array.from(suggSet).slice(0, maxSugg),
-      stats: {
-        totalWords: wordCount,
-        correctedCount: corrections.length,
-        accuracy:
-          wordCount > 0 ?
-            Number(((wordCount - corrections.length) / wordCount).toFixed(3))
-          : 1,
-      },
-    };
   }
 
   /** Returns corrected string directly */
   public correct(text: string, config: AutoCorrectConfig = {}): string {
-    return this.analyze(text, config).correctedText;
+    const res = this.analyze(text, config);
+    if (res.correctedText !== text) {
+      this.pushToHistory(text); // Save pre-corrected text
+      this.pushToHistory(res.correctedText); // Save corrected text
+    }
+    return res.correctedText;
   }
 
   /** Returns top correction suggestions for a word or phrase */
@@ -1277,24 +1346,34 @@ export class AutoCorrectEngine {
   private findClosest(
     word: string,
     maxDist: number,
-  ): { word: string; reason: 'phonetic' | 'levenshtein' } | null {
+  ): {
+    word: string;
+    reason: 'phonetic' | 'levenshtein';
+    distance: number;
+  } | null {
     const wordCode = this.soundex(word);
-    let bestLev: { word: string; dist: number } | null = null;
+    let bestLev: { word: string; distance: number } | null = null;
 
     for (const dictWord of this.dictionary) {
       if (Math.abs(dictWord.length - word.length) > 3) continue;
       // Soundex phonetic
       if (this.soundex(dictWord) === wordCode) {
         const d = this.levenshtein(word, dictWord);
-        if (d <= maxDist) return { word: dictWord, reason: 'phonetic' };
+        if (d <= maxDist)
+          return { word: dictWord, reason: 'phonetic', distance: d };
       }
       // Levenshtein
       const d = this.levenshtein(word, dictWord);
-      if (!bestLev || d < bestLev.dist) bestLev = { word: dictWord, dist: d };
+      if (!bestLev || d < bestLev.distance)
+        bestLev = { word: dictWord, distance: d };
     }
 
-    if (bestLev && bestLev.dist <= maxDist) {
-      return { word: bestLev.word, reason: 'levenshtein' };
+    if (bestLev && bestLev.distance <= maxDist) {
+      return {
+        word: bestLev.word,
+        reason: 'levenshtein',
+        distance: bestLev.distance,
+      };
     }
     return null;
   }

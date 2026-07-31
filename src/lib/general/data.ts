@@ -15,6 +15,10 @@ import {
   Calculator,
   FileText as PdfIcon,
   Globe,
+  AudioLines,
+  Bell,
+  Mail,
+  Zap,
 } from 'lucide-react';
 
 export const tools = [
@@ -200,13 +204,73 @@ export const tools = [
   },
   {
     icon: PdfIcon,
-    title: 'PDF Tool',
+    title: 'PDF & Word Tool',
     description:
       'Image to PDF, PDF merging/splitting, text-to-pdf, and pdf-to-text conversion tool purely client-side.',
     href: '/tools/pdf',
     color: '#ff3b30',
     tag: 'PDF',
     id: 'pdf-tools',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Type,
+    title: 'AutoCorrect Studio',
+    description:
+      'Live spell checker and phonetic autocorrect engine that sanitizes typos continuously.',
+    href: '/tools/autocorrect',
+    color: '#ffe000',
+    tag: 'Autocorrect',
+    id: 'autocorrect-user',
+    category: 'Content',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: AudioLines,
+    title: 'Audio Synthesizer & Editor',
+    description:
+      'Upload and trim audio tracks, analyze tempo/key structures, and export WAV/MP3 files.',
+    href: '/tools/audio-editing',
+    color: '#a770ffff',
+    tag: 'Audio Edit',
+    id: 'audio-user',
+    category: 'Media',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Bell,
+    title: 'Alert & Toast Center',
+    description:
+      'Interactive custom notifications, sound chimes, haptic vibrations, and promise confirmations.',
+    href: '/tools/alerting-toast',
+    color: '#ff0055',
+    tag: 'Alerts',
+    id: 'alerts-user',
+    category: 'Utility',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Mail,
+    title: 'Modular Email Builder',
+    description:
+      'Visually compose professional responsive HTML email templates with custom buttons and footers.',
+    href: '/tools/email-engine',
+    color: '#00f0ff',
+    tag: 'Email Tool',
+    id: 'email-user',
+    category: 'Content',
+    version: { v: '1.0', s: 'Stable' },
+  },
+  {
+    icon: Zap,
+    title: 'Glassmorphism Style Decorator',
+    description:
+      'Generate glassmorphism styling tokens and beautiful liquid textures in real time.',
+    href: '/tools/styling-engine',
+    color: '#ffad61',
+    tag: 'CSS Style',
+    id: 'styling-user',
     category: 'Utility',
     version: { v: '1.0', s: 'Stable' },
   },

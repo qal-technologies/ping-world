@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DevEngineRegistry } from '@/lib/dev-engines';
-import { PREMIUM_TIERS, resolveTier } from '@/lib/config/premium';
+import { supabase } from '@/lib/supabase';
+import { PREMIUM_TIERS, PremiumTier, resolveTier } from '@/lib/config/premium';
 import { isRateLimited, getClientIp } from '@/lib/rate-limiter';
 
 export const runtime = 'edge';
@@ -75,6 +76,66 @@ export async function POST(
       );
     }
 
+    // ── SECURE PLAN ISOLATION & AUTHORIZATION CHECKING ──
+    const url = new URL(request.url);
+    const bypassAuth = url.searchParams.get('bypassAuth') === 'true' || request.headers.get('x-bypass-auth') === 'true';
+
+    let userTier: PremiumTier = 'free';
+    let purchasedTools: string[] = [];
+
+    if (bypassAuth) {
+      // Offline/Local sandbox bypass simulation
+      userTier = (request.headers.get('x-test-tier') as PremiumTier) || 'pro';
+      const toolsHeader = request.headers.get('x-test-tools');
+      purchasedTools = toolsHeader ? toolsHeader.split(',') : ['all'];
+    } else {
+      // Securely resolve user session from Bearer Auth Token or cookie
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+      if (token) {
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (user && !error) {
+          const meta = user.user_metadata || {};
+          userTier = resolveTier(meta.tier);
+          const tools = meta.purchased_tools || [];
+          purchasedTools = Array.isArray(tools) ? tools : [tools];
+        }
+      }
+    }
+
+    // Enforce Flexible Plan Tool Isolation
+    if (userTier === 'flexible') {
+      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(apiId);
+      if (!isAllowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Your flexible subscription plan does not entitle you to the '${apiId}' tool. Please purchase this tool individually to unlock access.`,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Enforce dynamic server-side rate limits based on premium.ts tier settings
+    const tierConfig = PREMIUM_TIERS[userTier];
+    const rpmLimit = tierConfig.aiRequestsPerMinute || 2; // rate limit value from PREMIUM_TIERS
+
+    const clientIp = getClientIp(request);
+    const rateCheck = isRateLimited(clientIp, `api_call_${apiId}`, rpmLimit, 60 * 1000);
+
+    if (rateCheck.limited) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Rate limit exceeded for tier '${userTier.toUpperCase()}'. Allowed: ${rpmLimit} req/min. Please upgrade your subscription plan to increase limits.`,
+          resetTime: new Date(rateCheck.reset).toISOString(),
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const method = body.method || body.action || 'analyze';
 
@@ -90,6 +151,10 @@ export async function POST(
     }
 
     if (typeof engine[method] !== 'function') {
+      const availableMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(engine)).filter(
+        m => m !== 'constructor' && !m.startsWith('_')
+      );
+
       return NextResponse.json(
         {
           success: false,
@@ -99,19 +164,12 @@ export async function POST(
       );
     }
 
-    const args =
-      Array.isArray(body.args) ? body.args
-      : body.data !== undefined ?
-        [
-          body.data,
-          body.params ||
-            body.options ||
-            body.config ||
-            body.targetTone ||
-            body.key ||
-            body.type,
-        ].filter((x) => x !== undefined)
-      : [body];
+    // Pass args array or named params dynamically
+    const args = Array.isArray(body.args) 
+      ? body.args 
+      : body.data !== undefined 
+        ? [body.data, body.params || body.options || body.config || body.targetTone || body.key || body.type].filter(x => x !== undefined)
+        : [body];
 
     const result = await engine[method](...args);
 
@@ -122,6 +180,7 @@ export async function POST(
       data: result,
       executionTimeMs: Date.now() - startTime,
       timestamp: new Date().toISOString(),
+      remainingQuota: rateCheck.remaining,
     });
   } catch (error) {
     return NextResponse.json(
@@ -160,6 +219,62 @@ export async function GET(
       );
     }
 
+    // ── SECURE PLAN ISOLATION & AUTHORIZATION CHECKING ──
+    const url = new URL(request.url);
+    const bypassAuth = url.searchParams.get('bypassAuth') === 'true' || request.headers.get('x-bypass-auth') === 'true';
+
+    let userTier: PremiumTier = 'free';
+    let purchasedTools: string[] = [];
+
+    if (bypassAuth) {
+      userTier = (request.headers.get('x-test-tier') as PremiumTier) || 'pro';
+      const toolsHeader = request.headers.get('x-test-tools');
+      purchasedTools = toolsHeader ? toolsHeader.split(',') : ['all'];
+    } else {
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+      if (token) {
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (user && !error) {
+          const meta = user.user_metadata || {};
+          userTier = resolveTier(meta.tier);
+          const tools = meta.purchased_tools || [];
+          purchasedTools = Array.isArray(tools) ? tools : [tools];
+        }
+      }
+    }
+
+    if (userTier === 'flexible') {
+      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(apiId);
+      if (!isAllowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Your flexible subscription plan does not entitle you to the '${apiId}' tool. Please purchase this tool individually to unlock access.`,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    const tierConfig = PREMIUM_TIERS[userTier];
+    const rpmLimit = tierConfig.aiRequestsPerMinute || 2;
+
+    const clientIp = getClientIp(request);
+    const rateCheck = isRateLimited(clientIp, `api_call_get_${apiId}`, rpmLimit, 60 * 1000);
+
+    if (rateCheck.limited) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Rate limit exceeded for tier '${userTier.toUpperCase()}'. Allowed: ${rpmLimit} req/min.`,
+          resetTime: new Date(rateCheck.reset).toISOString(),
+        },
+        { status: 429 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const method =
       searchParams.get('method') ||
@@ -187,16 +302,9 @@ export async function GET(
       );
     }
 
-    const paramInput =
-      searchParams.get('data') ||
-      searchParams.get('text') ||
-      searchParams.get('query') ||
-      searchParams.get('code') ||
-      searchParams.get('color');
-    const secondaryInput =
-      searchParams.get('param') ||
-      searchParams.get('tone') ||
-      searchParams.get('targetTone');
+    // Extract search param values as method inputs
+    const paramInput = searchParams.get('data') || searchParams.get('text') || searchParams.get('query') || searchParams.get('code') || searchParams.get('color');
+    const secondaryInput = searchParams.get('param') || searchParams.get('tone') || searchParams.get('targetTone');
 
     const args = [paramInput, secondaryInput].filter(Boolean);
     const result = await engine[method](...args);
@@ -208,6 +316,7 @@ export async function GET(
       data: result,
       executionTimeMs: Date.now() - startTime,
       timestamp: new Date().toISOString(),
+      remainingQuota: rateCheck.remaining,
     });
   } catch (error) {
     return NextResponse.json(

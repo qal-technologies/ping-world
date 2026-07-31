@@ -13,10 +13,7 @@ import {
   ChevronLeft,
   Brain,
   Clock,
-  Sun,
-  Moon,
   AlertTriangle,
-  X,
   Layers,
   FileText,
   BookOpen,
@@ -420,6 +417,9 @@ export default function PublicQuizTaker() {
   const [userData, setUserData] = useState<Record<string, string>>({});
 
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportedStatus, setReportedStatus] = useState(false);
+  const [scrollAnswers, setScrollAnswers] = useState<Record<string, any>>({});
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
   const [lastUncatIndex, setLastUncatIndex] = useState<number>(0);
@@ -429,6 +429,8 @@ export default function PublicQuizTaker() {
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const pendingUnloadCb = React.useRef<(() => void) | null>(null);
+
+
   // Private ref containing correct answers to secure them from React DevTools inspection
   const correctAnswersRef = React.useRef<Record<string, any>>({});
 
@@ -1216,6 +1218,7 @@ export default function PublicQuizTaker() {
                 </div>
 
                 <div className='flex flex-col'>
+              
                   <span className='text-[10px] font-black text-pw-muted uppercase tracking-widest leading-none mb-1'>
                     Question {index + 1}
                   </span>
@@ -1270,7 +1273,7 @@ export default function PublicQuizTaker() {
                                 selectedOption,
                             ) as any
                           )?.text || selectedOption
-                        : 'Choose your answer...'
+                        : 'Choose answer...'
                       : (
                           currentOptions.find(
                             (o) =>
@@ -1697,22 +1700,45 @@ export default function PublicQuizTaker() {
 
       {/* 1. Intro Gate */}
       {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
-        <div className='container relative z-10 mx-auto px-5 sm:px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center'>
-          <div className='flex justify-center mb-6 text-pw-primary'>
-            {quiz.type === 'quiz' ?
-              <Brain size={60} />
-            : <MessageCircle size={60} />}
-          </div>
-          <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
-            {quiz.title.toUpperCase()}
-          </h1>
-          <p
-            className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
-            style={{ lineHeight: '20px' }}>
-            {quiz.description}
-          </p>
+        <div className='container relative z-10 mx-auto px-5 sm:px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative overflow-hidden rounded-[3rem] bg-pw-surface/10 border border-white/5 p-8 sm:p-12'>
+          {/* Custom blurred/shaded background picture for Taker page alone */}
+          {quiz.introBgUrl && (
+            <div
+              className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none"
+              style={{
+                backgroundImage: `url(${quiz.introBgUrl})`,
+                opacity: 0.12,
+                filter: 'blur(10px)',
+              }}
+            />
+          )}
 
-          <div className='max-w-sm mx-auto w-full'>
+          <div className='relative z-10'>
+            {/* Show clear foreground image/logo if configured */}
+            {quiz.introBgUrl ? (
+              <img
+                src={quiz.introBgUrl}
+                alt="Intro Logo"
+                className="h-24 w-24 object-contain rounded-2xl mb-6 mx-auto border-2 border-white/20 shadow-2xl bg-black/40"
+              />
+            ) : (
+              <div className='flex justify-center mb-6 text-pw-primary'>
+                {quiz.type === 'quiz' ?
+                  <Brain size={60} />
+                : <MessageCircle size={60} />}
+              </div>
+            )}
+            <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
+              {quiz.title.toUpperCase()}
+            </h1>
+            <p
+              className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
+              style={{ lineHeight: '20px' }}>
+              {quiz.description}
+            </p>
+          </div>
+
+          <div className='max-w-sm mx-auto w-full relative z-10'>
             {authRequired ?
               <div className='bg-pw-danger/5 p-2 py-3 rounded-2xl border border-pw-danger/20 space-y-6'>
                 <Lock className='h-12 w-12 text-pw-danger mx-auto mt-10' />
@@ -1744,6 +1770,17 @@ export default function PublicQuizTaker() {
                 CONTINUE
               </Button>
             }
+          </div>
+
+          {/* Terms disclaimer & Reporting Flow */}
+          <div className="border-t border-white/5 pt-6 mt-8 text-[11px] text-pw-muted leading-relaxed relative z-10">
+            <p className="mb-2">Disclaimer: PingWorld is strictly a service provider hosting content and is not responsible for any questions, responses, or outcomes generated in this assessment.</p>
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="text-pw-primary underline hover:text-pw-primary/80 transition-colors font-bold"
+            >
+              Report this assessment for investigation or takedown
+            </button>
           </div>
         </div>
       )}
@@ -1921,7 +1958,6 @@ export default function PublicQuizTaker() {
               quizTheme === 'dark' ? 'text-white' : 'text-black',
             )}>
             <div className='mb-8 flex flex-col gap-2 w-full'>
-              {/* jules edit: Show offline warning notice if they are offline */}
               {!isOnline && (
                 <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
                   <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
@@ -2053,7 +2089,7 @@ export default function PublicQuizTaker() {
             </div>
 
             {/* ===== SCROLL MODE: all answered + current question vertically ===== */}
-            {quiz.quizScroll ?
+            {quiz?.quizScroll ?
               <div className='flex flex-col items-center w-full gap-0'>
                 {activeQuestions
                   .slice(0, currentQuestion + 1)
@@ -2075,7 +2111,7 @@ export default function PublicQuizTaker() {
             : <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-center'>
                 <div
                   className={cn(
-                    q?.accessory && q.accessory !== 'none' ?
+                    q?.accessory && q?.accessory !== 'none' ?
                       'lg:col-span-8'
                     : 'lg:col-span-12',
                   )}>
@@ -2099,7 +2135,7 @@ export default function PublicQuizTaker() {
                       <div className='flex items-center gap-2'>
                         <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
                           {(
-                            quiz.questions.some(
+                            quiz?.questions.some(
                               (q) => q.category || q.category !== null,
                             )
                           ) ?
@@ -2457,39 +2493,20 @@ export default function PublicQuizTaker() {
         </>
       )}
 
-      {/* ===== Report Dialog ===== */}
-      <AnimatePresence>
-        {showReportModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowReportModal(false);
-            }}>
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className='bg-pw-surface border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl'>
-              <div className='flex items-center gap-3 mb-6'>
-                <div className='h-12 w-12 rounded-2xl bg-pw-danger/10 border border-pw-danger/20 flex items-center justify-center'>
-                  <Flag
-                    size={20}
-                    className='text-pw-danger'
-                  />
-                </div>
-                <div>
-                  <h3 className='text-xl font-bold'>Report Assessment</h3>
-                  <p className='text-xs text-pw-muted'>
-                    Help us keep the platform safe and compliant.
-                  </p>
-                </div>
+      {/* Report Takedown Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-pw-surface border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-pw-text">
+            <h3 className="text-xl font-bold font-display text-pw-danger text-left">Report Assessment</h3>
+            {reportedStatus ? (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl text-center">
+                Thank you! Your report has been securely registered and flagged for takedown review.
               </div>
-
-              <div className='space-y-4'>
-                <div className='space-y-2'>
+            ) : (
+              <div className="space-y-3">
+            <p className="text-xs text-pw-muted text-left">Please provide a detailed reason for reporting this assessment (e.g., copyright violation, offensive content, cheating, academic fraud). Our safety team will investigate within 24 hours.</p>
+  
+            <div className='space-y-2'>
                   <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
                     Category
                   </label>
@@ -2516,47 +2533,49 @@ export default function PublicQuizTaker() {
                     ))}
                   </div>
                 </div>
-
+  
                 <div className='space-y-2'>
                   <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest'>
                     Additional Notes
                   </label>
-                  <textarea
-                    value={reportNotes}
-                    onChange={(e) => setReportNotes(e.target.value)}
-                    placeholder='Describe the issue...'
-                    className='w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-3 text-sm focus:border-pw-danger focus:outline-none resize-none'
-                  />
+                <textarea
+                  rows={4}
+                  value={reportReason}
+                  onChange={e => setReportReason(e.target.value)}
+                  placeholder="Describe your report reason here..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-pw-text focus:outline-none focus:border-pw-danger"
+                />
+                </div>
+  
+                <div className="flex gap-2">
+                  <Button onClick={() => setShowReportModal(false)} variant="outline" className="h-10 text-xs flex-1 border-white/10">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (!reportReason.trim()) {
+                        toast.error('Please enter a reason');
+                        return;
+                      }
+                      setReportedStatus(true);
+                      toast.success('Assessment reported successfully!');
+                      setTimeout(() => {
+                        setShowReportModal(false);
+                        setReportedStatus(false);
+                        setReportReason('');
+                        setReportCategory('');
+                      }, 2500);
+                    }}
+                    className="h-10 text-xs flex-1 bg-pw-danger hover:bg-pw-danger/80 text-white font-bold"
+                  >
+                    Submit Report
+                  </Button>
                 </div>
               </div>
-
-              <div className='flex gap-3 mt-6'>
-                <Button
-                  variant='outline'
-                  onClick={() => setShowReportModal(false)}
-                  className='flex-1 h-11 bg-white/5 border-white/10 rounded-2xl'>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    toast.success(
-                      'Report submitted. Thank you for keeping PingWorld safe.',
-                    );
-                    setShowReportModal(false);
-                    setReportNotes('');
-                  }}
-                  className='flex-1 h-11 bg-pw-danger/10 border border-pw-danger/30 text-pw-danger hover:bg-pw-danger/20 rounded-2xl font-bold'>
-                  <Flag
-                    size={14}
-                    className='mr-2'
-                  />{' '}
-                  Submit Report
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

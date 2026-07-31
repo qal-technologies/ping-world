@@ -203,7 +203,7 @@ export class EncryptionEngine {
   ): Promise<CryptoKey> {
     const keyMaterial = await this._getKeyMaterial(password);
     return window.crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt: salt as any, iterations: 100000, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       false,
@@ -248,7 +248,7 @@ export class EncryptionEngine {
     );
   }
 
-  private _bufferToHex(buffer: ArrayBuffer): string {
+  private _bufferToHex(buffer: ArrayBuffer | Uint8Array): string {
     return Array.from(new Uint8Array(buffer), (b) =>
       b.toString(16).padStart(2, '0'),
     ).join('');

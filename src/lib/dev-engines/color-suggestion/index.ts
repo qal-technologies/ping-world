@@ -442,12 +442,15 @@ export class ColorSuggestionEngine {
 
   // ---- Private Helpers ----
 
-  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+  private hexToRgb(hex: string): { r: number; g: number; b: number, a?:number } {
     const num = parseInt(hex.replace('#', ''), 16);
-    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    let a = undefined;
+    if(hex.length === 8) a = Number((num & 0xFF) / 255);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255, a: a };
   }
 
-  private rgbToHex(r: number, g: number, b: number): string {
+  private rgbToHex(r: number, g: number, b: number, a?:number): string {
+    if(a !== undefined) a = Number(a.toFixed(2));
     return (
       '#' +
       [r, g, b]
@@ -464,10 +467,14 @@ export class ColorSuggestionEngine {
     r: number,
     g: number,
     b: number,
-  ): { h: number; s: number; l: number } {
+    a?: number,
+  ): { h: number; s: number; l: number, a?:number } {
     r /= 255;
     g /= 255;
     b /= 255;
+
+    if(a !== undefined) a = Number(a.toFixed(2));
+
     const max = Math.max(r, g, b),
       min = Math.min(r, g, b);
     let h = 0,
@@ -493,6 +500,7 @@ export class ColorSuggestionEngine {
       h: Math.round(h * 360),
       s: Math.round(s * 100),
       l: Math.round(l * 100),
+      a: a,
     };
   }
 
@@ -500,14 +508,18 @@ export class ColorSuggestionEngine {
     h: number,
     s: number,
     l: number,
-  ): { r: number; g: number; b: number } {
+    a?: number,
+  ): { r: number; g: number; b: number, a?:number } {
     h /= 360;
     s /= 100;
     l /= 100;
+    if(a !== undefined) a = Number(a.toFixed(2));
+
     if (s === 0) {
       const v = Math.round(l * 255);
-      return { r: v, g: v, b: v };
+      return { r: v, g: v, b: v, a: a };
     }
+
     const hue2rgb = (p: number, q: number, t: number) => {
       if (t < 0) t += 1;
       if (t > 1) t -= 1;
@@ -522,6 +534,7 @@ export class ColorSuggestionEngine {
       r: Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
       g: Math.round(hue2rgb(p, q, h) * 255),
       b: Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+      a: a,
     };
   }
 

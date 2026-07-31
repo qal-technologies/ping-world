@@ -11,7 +11,9 @@ export type AlertType =
   | 'error'
   | 'toast'
   | 'confirm'
-  | 'prompt';
+  | 'prompt'
+  | 'critical';
+
 export type AlertPosition =
   | 'top-left'
   | 'top-center'
@@ -30,6 +32,16 @@ export type AlertAnimation =
   | 'scale'
   | 'bounce';
 
+export type AlertSounds =
+  | boolean
+  | 'chime'
+  | 'beep'
+  | 'alarm'
+  | 'success'
+  | 'error'
+  | 'warning'
+  | 'info'
+  | 'none';
 export interface AlertButton {
   label: string;
   action?: () => void | Promise<void>;
@@ -44,16 +56,7 @@ export interface AlertConfig {
   type?: AlertType;
   position?: AlertPosition;
   duration?: number; // ms (0 = persistent)
-  sound?:
-    | boolean
-    | 'chime'
-    | 'beep'
-    | 'alarm'
-    | 'success'
-    | 'error'
-    | 'warning'
-    | 'info'
-    | 'none';
+  sound?: AlertSounds;
   flashScreen?: boolean;
   flashColor?: string; // Default: type-matched
   flashDurationMs?: number;
@@ -208,21 +211,57 @@ function getContainer(): HTMLDivElement | null {
 }
 
 export class AlertingToastEngine {
+  private static instance: AlertingToastEngine | null = null;
+  private activeToasts: AlertConfig[] = [];
+
+  public static getInstance(): AlertingToastEngine {
+    if (!this.instance) {
+      this.instance = new AlertingToastEngine();
+    }
+    return this.instance;
+  }
+
   /** Primary trigger — plays sound, flash, vibration, and renders UI */
   public trigger(config: AlertConfig): AlertResult {
     const id =
       config.id ??
       `pw_alert_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const type = config.type ?? 'info';
+
+    const type = config.type ? config.type : 'info';
     const result: AlertResult = { id, type, dismissed: false };
+
+    const fullConfig: AlertConfig = {
+      type: type,
+      duration: 4000,
+      sound: 'chime',
+      position: 'top-right',
+      animation: 'slide',
+      stackMode: 'stack',
+      ...config,
+      id,
+    };
+
+    this.activeToasts.push(fullConfig);
 
     if (typeof window !== 'undefined') {
       this._playSound(config.sound, type);
-      if (config.flashScreen)
-        this._flashScreen(type, config.flashColor, config.flashDurationMs);
-      if (config.vibrate !== false && config.vibrate !== undefined)
-        this._vibrate(config.vibrate);
-      this._renderAlert(id, config, result);
+      if (fullConfig.flashScreen || fullConfig.type === 'critical') {
+        this._flashScreen(
+          type,
+          fullConfig.flashColor,
+          fullConfig.flashDurationMs,
+        );
+      }
+      if (fullConfig.vibrate !== false && fullConfig.vibrate !== undefined) {
+        this._vibrate(fullConfig.vibrate);
+      }
+      if (fullConfig.duration && fullConfig.duration > 0) {
+        setTimeout(() => {
+          this.dismiss(id);
+        }, fullConfig.duration);
+      }
+
+      this._renderAlert(id, fullConfig, result);
     }
 
     return result;
@@ -244,18 +283,29 @@ export class AlertingToastEngine {
 
   /** Confirm dialog with onConfirm / onCancel callbacks */
   public confirm(
+    title: string,
     message: string,
+    buttons?:{
+      confirmText: string,
+      cancelText: string,
+    },
     options: Partial<AlertConfig> = {},
   ): AlertResult {
-    return this.trigger({ ...options, message, type: 'confirm', duration: 0 });
+    return this.trigger({ ...options, message, title, type: 'confirm', duration: 0, confirmText: buttons?.confirmText, cancelText: buttons?.cancelText });
   }
 
   /** Prompt dialog — collects user input and returns via onConfirm(value) */
   public prompt(
+    title: string,
     message: string,
+    inputPlaceholder?: string,
+    buttons?:{
+      confirmText: string,
+      cancelText: string,
+    },
     options: Partial<AlertConfig> = {},
   ): AlertResult {
-    return this.trigger({ ...options, message, type: 'prompt', duration: 0 });
+    return this.trigger({ ...options, title, inputPlaceholder, message, type: 'prompt', duration: 0, confirmText: buttons?.confirmText, cancelText: buttons?.cancelText });
   }
 
   /** Manually dismiss an alert by ID */
@@ -300,7 +350,7 @@ export class AlertingToastEngine {
       if (!ctx) return;
 
       // Determine which sound sequence to use
-      let key = typeof sound === 'string' && sound !== true ? sound : type;
+      let key = typeof sound === 'string' && sound !== undefined ? sound : type;
       const sequence = ALERT_SOUNDS[key] ?? ALERT_SOUNDS['info'];
 
       let time = ctx.currentTime + 0.01;

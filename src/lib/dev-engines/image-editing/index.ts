@@ -1,3 +1,4 @@
+
 // ============================================================
 // Image Editing Engine — Full pixel-level manipulation
 // Canvas-based: filters, BW, sepia, blur, sharpen, highlight,
@@ -30,6 +31,8 @@ export interface ColorFilterConfig {
   vignette?: number; // 0 to 100
   noise?: number; // 0 to 100
   blur?: number; // 0 to 20
+  blueTone?: boolean; // true for blue tone
+  blackAndWhite?: boolean; // true for black and white
 }
 
 export interface ImageStats {
@@ -57,21 +60,23 @@ export class ImageEditingEngine {
       const tgt = this._hexToRgb(targetHex);
       const data = new Uint8ClampedArray(image.data);
       for (let i = 0; i < data.length; i += 4) {
-        if (
-          this._colorDist(
-            data[i],
-            data[i + 1],
-            data[i + 2],
-            tgt.r,
-            tgt.g,
-            tgt.b,
-          ) <= tolerance
-        ) {
-          data[i + 3] = 0;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        const diff = Math.sqrt(
+          Math.pow(r - tgt.r, 2) +
+          Math.pow(g - tgt.g, 2) +
+          Math.pow(b - tgt.b, 2)
+        );
+
+        if (diff <= tolerance) {
+          data[i + 3] = 0; // set alpha to 0 (transparent)
         }
       }
+
       return { width: image.width, height: image.height, data };
-    } catch {
+    } catch (e) {
       return image;
     }
   }
@@ -155,33 +160,28 @@ export class ImageEditingEngine {
 
   // ---- Tonal adjustments ----
 
-  /** Full filter pipeline: brightness, contrast, saturation, hue, temperature, highlights, shadows, exposure */
-  public applyFilters(
-    image: RawImageData,
-    config: ColorFilterConfig,
-  ): RawImageData {
+  // Expanded with blue tone, highlights, black/white, contrast and light editing parameters
+  public applyFilters(image: RawImageData, config: ColorFilterConfig): RawImageData {
     try {
       const data = new Uint8ClampedArray(image.data);
-      const {
-        brightness = 0,
-        contrast = 0,
-        saturation = 0,
-        hueShift = 0,
-        temperature = 0,
-        tint = 0,
-        highlights = 0,
-        shadows = 0,
-        exposure = 0,
-      } = config;
+      const hueShift = config.hueShift || 0;
+      const brightness = config.brightness || 0;
+      const saturationFactor = config.saturation !== undefined ? config.saturation / 100 : 1;
 
-      const expMul = Math.pow(2, exposure);
-      const contrastFactor =
-        (259 * (contrast + 255)) / (255 * (259 - contrast));
+      // Contrast factor calculation: maps -100..100 to 0.1..3.0
+      const contrast = config.contrast || 0;
+      const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+      const expMul = Math.pow(2, config.exposure || 0);
+
 
       for (let i = 0; i < data.length; i += 4) {
-        let r = data[i],
-          g = data[i + 1],
-          b = data[i + 2];
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+        const a = data[i + 3];
+
+        if (a === 0) continue;
 
         // Exposure
         r *= expMul;
@@ -193,42 +193,70 @@ export class ImageEditingEngine {
         g += brightness;
         b += brightness;
 
-        // Contrast
-        r = contrastFactor * (r - 128) + 128;
-        g = contrastFactor * (g - 128) + 128;
-        b = contrastFactor * (b - 128) + 128;
-
         // Temperature (warm/cool)
-        r += temperature * 0.8;
-        b -= temperature * 0.8;
-        g += tint * 0.4;
+        if(config.temperature && config.tint){
+          r += config.temperature * 0.8;
+          b -= config.temperature * 0.8;
+          g += config.tint * 0.4;
+        }
 
-        // Highlights/Shadows
+        // Brightness
+        r += brightness;
+        g += brightness;
+        b += brightness;
+
+        // Highlights (affects brighter pixels more than dark ones)
         const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-        if (lum > 180) {
+        if (config.highlights && lum > 180) {
           // highlights
-          const boost = (highlights / 100) * 30;
+          const boost = (config.highlights / 100) * 30;
           r += boost;
           g += boost;
           b += boost;
-        } else if (lum < 80) {
+        } else if (config.shadows && lum < 80) {
           // shadows
-          const lift = (shadows / 100) * 30;
+          const lift = (config.shadows / 100) * 30;
           r += lift;
           g += lift;
           b += lift;
         }
 
-        // Hue + Saturation
-        if (hueShift !== 0 || saturation !== 0) {
+        // Contrast
+        r = (r - 128) * contrastFactor + 128;
+        g = (g - 128) * contrastFactor + 128;
+        b = (b - 128) * contrastFactor + 128;
+
+        // Hue Shift using local HSL
+        if (hueShift !== 0) {
           const hsl = this._rgbToHsl(r, g, b);
-          if (hueShift !== 0) hsl.h = (hsl.h + hueShift + 360) % 360;
-          if (saturation !== 0)
-            hsl.s = Math.max(0, Math.min(100, hsl.s + saturation));
+          hsl.h = (hsl.h + hueShift + 360) % 360;
           const rgb = this._hslToRgb(hsl.h, hsl.s, hsl.l);
           r = rgb.r;
           g = rgb.g;
           b = rgb.b;
+        }
+
+        // Saturation factor
+        if (saturationFactor !== 1) {
+          const avg = (r + g + b) / 3;
+          r = avg + (r - avg) * saturationFactor;
+          g = avg + (g - avg) * saturationFactor;
+          b = avg + (b - avg) * saturationFactor;
+        }
+
+        // Blue Tone filter effect
+        if (config.blueTone) {
+          r = r * 0.8;
+          g = g * 0.9;
+          b = Math.min(255, b * 1.3);
+        }
+
+        // Black and White filter effect
+        if (config.blackAndWhite) {
+          const bw = 0.299 * r + 0.587 * g + 0.114 * b;
+          r = bw;
+          g = bw;
+          b = bw;
         }
 
         data[i] = this._clamp(r);
@@ -236,42 +264,21 @@ export class ImageEditingEngine {
         data[i + 2] = this._clamp(b);
       }
 
-      // Sharpness (simple unsharp mask approximation)
-      if (config.sharpness && config.sharpness > 0) {
-        return this._applySharpness(
-          { width: image.width, height: image.height, data },
-          config.sharpness,
-        );
-      }
+        // Sharpness (simple unsharp mask approximation)
+        if (config.sharpness && config.sharpness > 0) {
+          return this._applySharpness(
+            { width: image.width, height: image.height, data },
+            config.sharpness,
+          );
+        }
 
-      // Vignette
-      if (config.vignette && config.vignette > 0) {
-        return this._applyVignette(
-          { width: image.width, height: image.height, data },
-          config.vignette,
-        );
-      }
-
-      return { width: image.width, height: image.height, data };
-    } catch {
-      return image;
-    }
-  }
-
-  // ---- Preset filters ----
-
-  /** Convert to true black & white (luminance-based) */
-  public toBlackAndWhite(image: RawImageData): RawImageData {
-    try {
-      const data = new Uint8ClampedArray(image.data);
-      for (let i = 0; i < data.length; i += 4) {
-        const gray = Math.round(
-          0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2],
-        );
-        data[i] = gray;
-        data[i + 1] = gray;
-        data[i + 2] = gray;
-      }
+        // Vignette
+        if (config.vignette && config.vignette > 0) {
+          return this._applyVignette(
+            { width: image.width, height: image.height, data },
+            config.vignette,
+          );
+        }
       return { width: image.width, height: image.height, data };
     } catch {
       return image;

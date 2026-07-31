@@ -10,14 +10,18 @@ export type EmailTemplateType =
   | 'otp'
   | 'marketing'
   | 'social'
-  | 'information';
+  | 'information'
+  | 'otp'
+  | 'newsletter'
+  | 'welcome'
+  | 'modular';
 
 export type ButtonOrder = 'before-text' | 'after-text' | number;
 export type ButtonPosition = 'left' | 'center' | 'right';
 export type FontWeight = 'normal' | 'bold' | '600' | '700';
 
 export interface ButtonConfig {
-  title: string;
+  title: { text: string; color?: string; underline?: boolean; weight?: 'bold' | 'normal' };
   url: string;
   order?: ButtonOrder; // 'before-text', 'after-text', or numeric index
   position?: ButtonPosition;
@@ -51,6 +55,23 @@ export interface FooterConfig {
   color?: string;
 }
 
+export interface ModularEmailParams {
+  primaryColor?: string;
+  header?: {
+    title: string;
+    description?: string;
+    color?: string;
+    bgColor?: string;
+  };
+  body: {
+    text: string;
+    buttons?: ButtonConfig[];
+  };
+  footer?: {
+    text: string;
+    downlinks?: FooterConfig[];
+  };
+}
 export interface EmailTemplateParams {
   // Modular structural approach
   header?: HeaderConfig;
@@ -68,6 +89,7 @@ export interface EmailTemplateParams {
   companyName?: string;
   year?: number;
   unsubscribeUrl?: string;
+  modularConfig?: ModularEmailParams;
 }
 
 export interface EmailResult {
@@ -84,6 +106,9 @@ export class EmailEngine {
     marketing: '#7c3aed',
     social: '#0ea5e9',
     information: '#059669',
+    newsletter: '#ffe100',
+    welcome: '#e000d8',
+    modular: '#1a73e8',
   };
 
   /** Generate a complete responsive HTML email */
@@ -100,6 +125,8 @@ export class EmailEngine {
       const header = this._resolveHeader(type, params, primary);
       const body = this._resolveBody(type, params, primary);
       const footer = this._resolveFooter(params, primary, company, year);
+
+
 
       const html = this._buildHTML(header, body, footer, primary);
       const plainText = this._buildPlainText(header, body, footer);
@@ -134,7 +161,7 @@ export class EmailEngine {
 
   /** List all available template types */
   public getTemplateTypes(): EmailTemplateType[] {
-    return ['professional', 'otp', 'marketing', 'social', 'information'];
+    return ['professional', 'otp', 'marketing', 'social', 'information', 'newsletter', 'welcome', 'modular'];
   }
 
   // ---- Resolvers ----
@@ -166,6 +193,18 @@ export class EmailEngine {
         title: params.title ?? 'Information',
         description: params.preheader ?? '',
       },
+      newsletter: {
+        title: params.title ?? 'Newsletter',
+        description: params.preheader ?? '',
+      },
+      welcome: {
+        title: params.title ?? 'Welcome',
+        description: params.preheader ?? '',
+      },
+      modular: {
+        title: params.title ?? 'Modular Email',
+        description: params.preheader ?? '',
+      },
     };
     const base = defaults[type];
     return {
@@ -195,10 +234,9 @@ export class EmailEngine {
 
     if (params.ctaText && params.ctaUrl) {
       buttons.push({
-        title: params.ctaText,
+        title: {text: params.ctaText, color: '#ffffff', underline: true, weight: 'bold'},
         url: params.ctaUrl,
         bgColor: primary,
-        color: '#ffffff',
         position: 'center',
         order: 'after-text',
       });
@@ -258,16 +296,15 @@ export class EmailEngine {
 
     const buttonHtml = (btn: ButtonConfig) => {
       const bg = btn.bgColor ?? primary;
-      const color = btn.color ?? '#ffffff';
       const align = btn.position ?? 'center';
       const br = btn.style?.borderRadius ?? '6px';
       const underline =
-        btn.style?.underline ?
+        btn.style?.underline || btn.title.underline ?
           'text-decoration: underline;'
         : 'text-decoration: none;';
       const weight = btn.style?.weight ?? '600';
       return `<tr><td style="padding: 12px 0; text-align: ${align};">
-        <a href="${btn.url}" style="display: inline-block; background-color: ${bg}; color: ${color}; font-weight: ${weight}; padding: 14px 32px; border-radius: ${br}; ${underline} font-family: Arial, sans-serif; font-size: 15px;">${btn.title}</a>
+        <a href="${btn.url}" style="display: inline-block; background-color: ${bg}; color: ${btn.title.color}; font-weight: ${weight}; padding: 14px 32px; border-radius: ${br}; ${underline} font-family: Arial, sans-serif; font-size: 15px;">${btn.title.text}</a>
       </td></tr>`;
     };
 

@@ -136,6 +136,7 @@ export interface Quiz {
   questions: Question[];
   canGoBack?: boolean;
   showScore?: boolean;
+  introBgUrl?: string;
   showCategoryInPerformance?: boolean;
   askDetails?: Details[];
   //default time is 10mins
