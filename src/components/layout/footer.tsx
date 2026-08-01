@@ -60,7 +60,7 @@ export const Footer = () => {
           <div className='sm:col-span-2 md:col-span-1'>
             <Link
               href='/'
-              className='flex items-center gap-2 mb-4'>
+              className='flex items-center gap-2 mb-4 flex-wrap'>
             
                         <Image
                           width={40}

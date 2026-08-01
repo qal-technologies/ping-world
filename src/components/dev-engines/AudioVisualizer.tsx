@@ -94,7 +94,7 @@ export default function AudioVisualizer() {
       <div className='flex justify-between items-center border-b border-white/5 pb-4'>
         <h3 className='text-lg font-bold font-display flex items-center gap-2'>
           <AudioLines className="h-5 w-5 text-pw-primary" />
-          Pro Audio Synthesizer, Editor & Analyzer
+          Audio Editor
         </h3>
         <span
           className={`text-[10px] px-2.5 py-1 rounded-full font-mono font-bold ${isPlaying ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-white/5 text-pw-muted'}`}>
@@ -125,7 +125,7 @@ export default function AudioVisualizer() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Synthesis Controls */}
         <div className="flex flex-col gap-4 border-r border-white/5 pr-0 lg:pr-6">
-          <span className="text-xs font-mono font-bold text-pw-primary uppercase tracking-wider">// Tone Synthesis Mode</span>
+          <span className="text-xs font-mono font-bold text-pw-primary uppercase tracking-wider">Tone Synthesis Mode</span>
           <div>
             <label className='text-xs font-bold uppercase text-pw-muted mb-2 block'>
               Wave Type
@@ -186,7 +186,7 @@ export default function AudioVisualizer() {
 
         {/* Upload and Edit Controls */}
         <div className="flex flex-col gap-4">
-          <span className="text-xs font-mono font-bold text-pw-primary uppercase tracking-wider">// Audio File Editing Mode</span>
+          <span className="text-xs font-mono font-bold text-pw-primary uppercase tracking-wider">Audio Editing</span>
 
           <div className="flex flex-col gap-2">
             <input
@@ -218,7 +218,7 @@ export default function AudioVisualizer() {
                   <span className="text-pw-text font-bold">{audioMetadata.duration}s</span>
                 </div>
                 <div>
-                  <span className="text-pw-muted block">Estimated Key:</span>
+                  <span className="text-pw-muted block">Est. Key:</span>
                   <span className="text-pw-text font-bold text-emerald-400">{audioMetadata.estimatedKey}</span>
                 </div>
                 <div>

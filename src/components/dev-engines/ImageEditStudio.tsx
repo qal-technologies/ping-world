@@ -110,11 +110,11 @@ export default function ImageEditStudio() {
   };
 
   return (
-    <Card className="card-glow bkblur p-6 flex flex-col gap-6">
+    <Card className="bg-transparent sm:bg-pw-glass sm:bkblur ring-0 sm:ring-1 sm:p-6 flex flex-col gap-6">
       <div className="flex justify-between items-center border-b border-white/5 pb-4">
         <h3 className="text-lg font-bold font-display flex items-center gap-2">
           <ImageIcon className="h-5 w-5 text-pw-primary" />
-          Pro Canvas Image Pixel Processing Studio
+          Image Editor
         </h3>
         <Button onClick={handleReset} variant="outline" size="sm" className="h-8 text-xs border-white/10 gap-1.5">
           <RefreshCw className="h-3 w-3" />

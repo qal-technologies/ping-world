@@ -58,7 +58,7 @@ export default function ColorDevTool() {
   };
 
   return (
-    <Card className='bg-transparent ring-0 sm:ring-1 sm:bg-pw-glass sm:glass sm:bkblur p-3 sm:p-6 flex flex-col gap-6'>
+    <Card className='bg-transparent ring-0 sm:ring-1 sm:bg-pw-glass sm:bkblur p-3 sm:p-6 flex flex-col gap-6'>
       <div className='flex justify-between items-center border-b border-white/5 pb-4'>
         <h3 className='text-lg font-bold font-display flex items-center gap-2'>
           <Palette className='h-5 w-5 text-pw-primary' />

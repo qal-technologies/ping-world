@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
+import {useAppContext} from '@/context/AppContext';
 
 const toolLinks = [
   {
@@ -68,18 +69,20 @@ const toolLinks = [
   },
 ];
 
-const navLinks = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/tools', label: 'Browse Tools', icon: Wrench },
-  { href: '/api', label: 'Developer APIs', icon: Code },
-  { href: '/quiz', label: 'Quiz', icon: Brain },
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-];
 
 export const Navbar = () => {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState<any | null>();
+  const {isLoggedIn } = useAppContext();
+  
+  const navLinks = [
+    { href: '/', label: 'Home', icon: Home },
+    { href: '/tools', label: 'Browse Tools', icon: Wrench },
+    { href: '/api', label: 'Developer APIs', icon: Code },
+    { href: '/quiz', label: 'Quiz', icon: Brain },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, isLogged: isLoggedIn },
+  ];
 
   useEffect(() => {
     const checkUser = async () => {
@@ -116,7 +119,7 @@ export const Navbar = () => {
         {/* Desktop Nav */}
         <div
           className='hidden items-center gap-2 lg:flex shrink-0'
-          style={{ minWidth: '60%', width: 'auto', justifyContent:'center' }}>
+          style={{ minWidth: '60%', width: 'auto', justifyContent: 'center' }}>
           {/* Tools Dropdown */}
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger>
@@ -168,28 +171,31 @@ export const Navbar = () => {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {navLinks.map((link) => {
-            const isActive =
-              pathname === link.href || pathname.startsWith(link.href + '/');
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  'relative px-5 py-2 text-sm font-medium rounded-lg transition-colors duration-200 li-glass',
-                  isActive ?
-                    'text-pw-cyan bg-pw-cyan/5'
-                  : 'text-pw-mutded hover:text-pw-text hover:bg-white/5',
-                )}>
-                {link.label}
-              </Link>
-            );
-          })}
+          {navLinks
+            .filter((n) => (n.isLogged === undefined || n.isLogged == true))
+            .map((link) => {
+              const isActive =
+                pathname === link?.href ||
+                pathname.startsWith(link?.href + '/');
+              return (
+                <Link
+                  key={link?.href}
+                  href={link?.href}
+                  className={cn(
+                    'relative px-5 py-2 text-sm font-medium rounded-lg transition-colors duration-200 li-glass',
+                    isActive ?
+                      'text-pw-cyan bg-pw-cyan/5'
+                    : 'text-pw-mutded hover:text-pw-text hover:bg-white/5',
+                  )}>
+                  {link?.label}
+                </Link>
+              );
+            })}
         </div>
 
         {/* Right section */}
         <div className='flex items-center gap-3'>
-          {session && pathname !== '/dashboard' ?
+          {isLoggedIn && pathname !== '/dashboard' ?
             <Link
               href='/dashboard'
               className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
@@ -221,27 +227,33 @@ export const Navbar = () => {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto', overflow: 'hidden' }}
           exit={{ opacity: 0, height: 0 }}
-          className='lg:hidden border-t border-white/5 nav-glass' style={{backdropFilter:'brightness(50%) blur(12px)'}}>
+          className='lg:hidden border-t border-white/5 nav-glass'
+          style={{ backdropFilter: 'brightness(50%) blur(12px)' }}>
           <div className='flex flex-col gap-1 px-6 py-6'>
-            {[...navLinks].map((link) => {
-              const isActive =
-                pathname === link.href || pathname.startsWith(link.href + '/');
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors',
-                    isActive ?
-                      'text-pw-cyan bg-pw-cyan/10'
-                    : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
-                  )}>
-                  {'icon' in link && <link.icon className='h-4 w-4' />}
-                  {link.label}
-                </Link>
-              );
-            })}
+            {[...navLinks]
+              .filter((n) => n.isLogged !== true)
+              .map((link) => {
+                const isActive =
+                  pathname === link?.href ||
+                  pathname.startsWith(link?.href + '/');
+                return (
+                  <Link
+                    key={link?.href}
+                    href={link?.href as any}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors',
+                      isActive ?
+                        'text-pw-cyan bg-pw-cyan/10'
+                      : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
+                    )}>
+                    {link && 'icon' in link && (
+                      <link.icon className='h-4 w-4' />
+                    )}
+                    {link?.label}
+                  </Link>
+                );
+              })}
 
             <div className='px-3 py-1 mt-6 text-[14px] font-bold uppercase tracking-widest text-pw-cyan'>
               UTILITY
@@ -265,12 +277,25 @@ export const Navbar = () => {
                 </Link>
               );
             })}
-            <Link
-              href='/login'
-              onClick={() => setMobileOpen(false)}
-              className='btn-primary text-sm text-center mt-4 h-12'>
-              Sign In
-            </Link>
+
+            {isLoggedIn && pathname !== '/dashboard' ?
+              <Link
+                href='/dashboard'
+                onClick={() => setMobileOpen(false)}
+                target='_blank'
+                className='btn-ghost text-sm text-center mt-4 h-12'>
+                Dashboard
+              </Link>
+            : !session && (
+                <Link
+                  href='/login'
+                  onClick={() => setMobileOpen(false)}
+                  target='_blank'
+                  className='btn-primary text-sm text-center mt-4 h-12'>
+                  Sign In
+                </Link>
+              )
+            }
           </div>
         </motion.div>
       )}

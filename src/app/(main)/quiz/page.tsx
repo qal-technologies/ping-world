@@ -1122,6 +1122,7 @@ const QuizBuilder = ({
                       </div>
                     </Wrapper>
 
+                    {/* This should be only for premium and the image is to be uploaded from their local and saved to cloudinary not this::: */}
                     <Wrapper
                       title='Branding & Layout'
                       description='Customize background image, logo, and scrolling layout'
@@ -1155,109 +1156,37 @@ const QuizBuilder = ({
                             Institutional Branding
                           </h4>
 
-                          <div className='space-y-2'>
-                            <label
-                              className='text-[10px] font-bold text-pw-muted uppercase cursor-help'
-                              title='Provide clean Cloudinary images or other hosted assets'>
-                              Background Image URL (Cloudinary asset
-                              recommended)
-                            </label>
-                            <Input
-                              value={editedQuiz.branding?.image || ''}
-                              onChange={(e) =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  branding: {
-                                    ...(editedQuiz.branding || {}),
-                                    image: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder='e.g., https://res.cloudinary.com/demo/image/upload/sample.jpg'
-                              className='bg-white/5 border-white/10 h-10'
-                            />
-                          </div>
+                          <div className='grid grid-cols-2 gap-2'>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Background Image
+                              </label>
+                              <Input
+                                value={editedQuiz.branding?.image || ''}
+                                type='file'
+                                accept='image/*'
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      image: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder=''
+                                className='bg-white/5 border-white/10 h-10'
+                              />
+                            </div>
 
-                          <div className='grid grid-cols-2 gap-4'>
                             <div className='space-y-2'>
                               <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Image Opacity (0.0 - 1.0)
-                              </label>
-                              <Input
-                                type='number'
-                                step='0.1'
-                                min='0'
-                                max='1'
-                                value={
-                                  editedQuiz.branding?.opacity !== undefined ?
-                                    editedQuiz.branding.opacity
-                                  : 1
-                                }
-                                onChange={(e) =>
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    branding: {
-                                      ...(editedQuiz.branding || {}),
-                                      opacity: parseFloat(e.target.value) || 0,
-                                    },
-                                  })
-                                }
-                                className='bg-white/5 border-white/10 h-10'
-                              />
-                            </div>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Blur Amount (px)
-                              </label>
-                              <Input
-                                type='number'
-                                min='0'
-                                max='50'
-                                value={
-                                  editedQuiz.branding?.blur !== undefined ?
-                                    editedQuiz.branding.blur
-                                  : 0
-                                }
-                                onChange={(e) =>
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    branding: {
-                                      ...(editedQuiz.branding || {}),
-                                      blur: parseInt(e.target.value) || 0,
-                                    },
-                                  })
-                                }
-                                className='bg-white/5 border-white/10 h-10'
-                              />
-                            </div>
-                          </div>
-
-                          <div className='grid grid-cols-2 gap-4'>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Shade Overlay Color (Hex)
-                              </label>
-                              <Input
-                                value={editedQuiz.branding?.shadeColor || ''}
-                                onChange={(e) =>
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    branding: {
-                                      ...(editedQuiz.branding || {}),
-                                      shadeColor: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder='#000000'
-                                className='bg-white/5 border-white/10 h-10'
-                              />
-                            </div>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Brand Icon / Logo URL
+                                Brand Icon
                               </label>
                               <Input
                                 value={editedQuiz.branding?.icon || ''}
+                                type='file'
+                                accept='image/*'
                                 onChange={(e) =>
                                   setEditedQuiz({
                                     ...editedQuiz,
@@ -1272,33 +1201,6 @@ const QuizBuilder = ({
                               />
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    </Wrapper>
-
-                    <Wrapper
-                      title='Legal & Reporting'
-                      description='Specify legal disclaimers and guidelines'
-                      icon={
-                        <AlertTriangle className='h-4 w-4 text-pw-warning' />
-                      }
-                      color='warning'>
-                      <div className='flex flex-col gap-4 pt-2'>
-                        <div className='space-y-2'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Taker Disclaimer Banner Text
-                          </label>
-                          <textarea
-                            value={editedQuiz.disclaimer || ''}
-                            onChange={(e) =>
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                disclaimer: e.target.value,
-                              })
-                            }
-                            placeholder='e.g., This assessment is structured for general educational purposes...'
-                            className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none'
-                          />
                         </div>
                       </div>
                     </Wrapper>
@@ -2293,12 +2195,18 @@ const QuizBuilder = ({
 
 export default function QuizPage() {
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
-  const [filenameInput, setFilenameInput] = useState("");
-  const [filenameExtension, setFilenameExtension] = useState("");
-  const [onConfirmFilename, setOnConfirmFilename] = useState<((cleanName: string) => void) | null>(null);
+  const [filenameInput, setFilenameInput] = useState('');
+  const [filenameExtension, setFilenameExtension] = useState('');
+  const [onConfirmFilename, setOnConfirmFilename] = useState<
+    ((cleanName: string) => void) | null
+  >(null);
 
-  const triggerExport = (defaultName: string, ext: string, callback: (cleanName: string) => void) => {
-    setFilenameInput(defaultName.replace(/\.[^/.]+$/, "")); // Strip any extension initially
+  const triggerExport = (
+    defaultName: string,
+    ext: string,
+    callback: (cleanName: string) => void,
+  ) => {
+    setFilenameInput(defaultName.replace(/\.[^/.]+$/, '')); // Strip any extension initially
     setFilenameExtension(ext);
     setOnConfirmFilename(() => callback);
     setIsNameModalOpen(true);
@@ -2306,7 +2214,7 @@ export default function QuizPage() {
 
   const handleConfirmFilename = () => {
     let clean = filenameInput.trim();
-    if (!clean) clean = "untitled";
+    if (!clean) clean = 'untitled';
     // Screen/strip common extensions to avoid double extension bugs
     clean = clean.replace(/\.(txt|pdf|png|doc|docx|json|csv)$/i, '');
     if (onConfirmFilename) {
@@ -2322,11 +2230,11 @@ export default function QuizPage() {
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
   const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
 
-  
   const safeDecodeBase64 = (str: any): any => {
     if (typeof str !== 'string' || str.trim() === '') return str;
     // Check if string is structured as standard Base64 characters and padding
-    const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+    const base64Regex =
+      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
     if (!base64Regex.test(str)) return str;
     try {
       const decoded = atob(str);
@@ -2340,11 +2248,11 @@ export default function QuizPage() {
     }
   };
 
-  
   const resolveAnswerToText = (quiz: Quiz, questionId: string, val: any) => {
     const question = quiz.questions?.find((q) => q.id === questionId);
     if (!question) return String(val !== undefined && val !== null ? val : '');
-    if (question.type === 'input') return String(val !== undefined && val !== null ? val : '');
+    if (question.type === 'input')
+      return String(val !== undefined && val !== null ? val : '');
 
     const options = question.options || [];
     const findText = (id: any) => {
@@ -2369,18 +2277,20 @@ export default function QuizPage() {
       const foundByText = options.find(
         (o) => typeof o !== 'string' && o && o.text === idStr,
       );
-      if (foundByText && typeof foundByText !== 'string') return foundByText.text;
+      if (foundByText && typeof foundByText !== 'string')
+        return foundByText.text;
 
       // 4. Try to match options string if options list is string list
       const foundInStringArray = options.find(
         (o) => typeof o === 'string' && o === idStr,
       );
-      if (foundInStringArray && typeof foundInStringArray === 'string') return foundInStringArray;
+      if (foundInStringArray && typeof foundInStringArray === 'string')
+        return foundInStringArray;
 
       // Special Boolean/True/False check
       if (idStr === 'true' || idStr === 'false') {
         const foundTF = options.find(
-          (o) => typeof o !== 'string' && o && o.id.toLowerCase() === idStr
+          (o) => typeof o !== 'string' && o && o.id.toLowerCase() === idStr,
         );
         if (foundTF && typeof foundTF !== 'string') return foundTF.text;
         return idStr === 'true' ? 'True' : 'False';
@@ -2403,8 +2313,8 @@ export default function QuizPage() {
   };
 
   const exportResponsesAsCSV = (quiz: Quiz) => {
-    if(!quiz.responses || quiz.responses.length === 0) return;
-    
+    if (!quiz.responses || quiz.responses.length === 0) return;
+
     const userKeys = Array.from(
       new Set(
         quiz.responses.flatMap((resp) => Object.keys(resp.userData || {})),
@@ -2424,7 +2334,9 @@ export default function QuizPage() {
       `"${new Date(resp.timestamp).toLocaleString().replace(/"/g, '""')}"`,
       `"${resp.score}"`,
       `"${resp.totalQuestions}"`,
-      ...userKeys.map((k) => `"${String(resp.userData[k] || '').replace(/"/g, '""')}"`),
+      ...userKeys.map(
+        (k) => `"${String(resp.userData[k] || '').replace(/"/g, '""')}"`,
+      ),
       ...quiz.questions.map((q) => {
         const a = resp.answers.find((ans: any) => ans.questionId === q.id);
         if (!a) return '""';
@@ -2438,18 +2350,24 @@ export default function QuizPage() {
       ...rows.map((row) => row.join(',')),
     ].join('\n');
 
-    triggerExport(`${quiz.title.replace(/\s+/g, '_')}_responses`, "csv", (filename) => {
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `${filename}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success('Responses exported to CSV!');
-    });
+    triggerExport(
+      `${quiz.title.replace(/\s+/g, '_')}_responses`,
+      'csv',
+      (filename) => {
+        const blob = new Blob([csvContent], {
+          type: 'text/csv;charset=utf-8;',
+        });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filename}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('Responses exported to CSV!');
+      },
+    );
   };
 
   const clearResponses = async (quizId: string) => {
@@ -2542,7 +2460,7 @@ export default function QuizPage() {
     const quizToSave = {
       ...quiz,
       questions: securedQuestions,
-      expires_at: finalExpiry
+      expires_at: finalExpiry,
     };
 
     try {
@@ -2590,18 +2508,22 @@ export default function QuizPage() {
   };
 
   const exportQuiz = (quiz: Quiz) => {
-    triggerExport(quiz.title.replace(/\s+/g, '-').toLowerCase(), "json", (filename) => {
-      const dataStr =
-        'data:text/json;charset=utf-8,' +
-        encodeURIComponent(JSON.stringify(quiz));
-      const downloadAnchorNode = document.createElement('a');
-      downloadAnchorNode.setAttribute('href', dataStr);
-      downloadAnchorNode.setAttribute('download', `${filename}.json`);
-      document.body.appendChild(downloadAnchorNode);
-      downloadAnchorNode.click();
-      downloadAnchorNode.remove();
-      toast.success('Quiz exported to JSON!');
-    });
+    triggerExport(
+      quiz.title.replace(/\s+/g, '-').toLowerCase(),
+      'json',
+      (filename) => {
+        const dataStr =
+          'data:text/json;charset=utf-8,' +
+          encodeURIComponent(JSON.stringify(quiz));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute('href', dataStr);
+        downloadAnchorNode.setAttribute('download', `${filename}.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+        toast.success('Quiz exported to JSON!');
+      },
+    );
   };
 
   const importQuiz = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3086,41 +3008,42 @@ export default function QuizPage() {
         )}
       </AnimatePresence>
 
-      
-      <Dialog open={isNameModalOpen} onOpenChange={setIsNameModalOpen}>
-        <DialogContent className="max-w-md w-full pt-5 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl text-pw-text z-50 animate-fade-in">
+      <Dialog
+        open={isNameModalOpen}
+        onOpenChange={setIsNameModalOpen}>
+        <DialogContent className='max-w-md w-full pt-5 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl text-pw-text z-50 animate-fade-in'>
           <DialogHeader className='p-2'>
-            <DialogTitle className="text-xl font-extrabold font-display">
+            <DialogTitle className='text-xl font-extrabold font-display'>
               Export Name Customization
             </DialogTitle>
-            <DialogDescription className="text-pw-muted text-xs">
+            <DialogDescription className='text-pw-muted text-xs'>
               Specify the filename you want to save. Do not include extensions.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="relative">
+          <div className='space-y-4'>
+            <div className='relative'>
               <Input
                 value={filenameInput}
                 onChange={(e) => setFilenameInput(e.target.value)}
-                placeholder="Enter filename..."
-                className="card-glow bg-transparent h-11 text-sm border-white/5 focus-visible:ring-0 w-full"
+                placeholder='Enter filename...'
+                className='card-glow bg-transparent h-11 text-sm border-white/5 focus-visible:ring-0 w-full'
               />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-pw-primary font-mono uppercase">
+              <span className='absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-pw-primary font-mono uppercase'>
                 .{filenameExtension}
               </span>
             </div>
           </div>
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <DialogFooter className='flex flex-col sm:flex-row gap-2'>
             <button
               onClick={() => setIsNameModalOpen(false)}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all">
+              className='flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all'>
               Cancel
             </button>
             <button
               onClick={handleConfirmFilename}
-              className="flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all">
+              className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all'>
               Confirm &amp; Export
             </button>
           </DialogFooter>

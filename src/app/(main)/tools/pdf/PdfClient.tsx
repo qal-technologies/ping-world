@@ -43,7 +43,7 @@ interface PDFImagePage {
 
 interface PDFTextPage {
   id: string;
-  title: string;
+  title?: string;
   content: string;
 }
 
@@ -57,7 +57,7 @@ export default function PdfToolStudioPage() {
   );
 
   const [textPages, setTextPages] = useState<PDFTextPage[]>([
-    { id: '1', title: 'Page 1', content: '' },
+    { id: '1', title: 'Title 1', content: '' },
   ]);
 
   // PDF to Word states
@@ -95,7 +95,7 @@ export default function PdfToolStudioPage() {
   const handleConfirmFilename = () => {
     let clean = filenameInput.trim();
     if (!clean) clean = 'untitled';
-    clean = clean.replace(/\.(txt|pdf|png|doc|docx|json)$/i, '');
+    clean = clean.replace(/\.(txt|pdf|png|doc|docx|json|jpeg)$/i, '');
     if (onConfirmFilename) {
       onConfirmFilename(clean);
     }
@@ -438,7 +438,7 @@ export default function PdfToolStudioPage() {
     .slice(0, 3);
 
   return (
-    <div className='container mx-auto px-6 py-12 max-w-5xl min-h-screen'>
+    <div className='container mx-auto px-6 py-12 max-w-7xl min-h-screen'>
       <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12'>
         <div>
           <div className='badge mb-4'>
@@ -449,18 +449,19 @@ export default function PdfToolStudioPage() {
             PDF & Word <span className='gradient-text'>Studio.</span>
           </h1>
           <p className='mt-2 text-pw-muted'>
-            Advanced multi-page PDF image rendering, custom text document formatting, PDF to Word and Word to PDF client-side converters.
+            Advanced multi-page PDF image rendering, custom text document
+            formatting, PDF to Word and Word to PDF client-side converters.
           </p>
         </div>
       </div>
 
-      <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-6 space-y-8'>
+      <Card className='bg-transparent ring-0 space-y-4 sm:px-5'>
         <Tabs
           defaultValue='img-to-pdf'
           onValueChange={setActiveTab}
-          className='w-full flex flex-col'>
+          className='w-full flex flex-col space-y-2'>
           <TabsList
-            className='flex bg-white/5 mb-8 gap-2 h-auto p-1 sm:pl-2 w-full sm:min-w-full rounded-full gap-1 overflow-x-auto'
+            className='flex bg-white/5 mb-6 min-h-10 w-full max-w-[800px] rounded-full overflow-x-auto'
             style={{
               placeSelf: 'center',
               justifyContent: 'flex-start',
@@ -468,27 +469,27 @@ export default function PdfToolStudioPage() {
             }}>
             <TabsTrigger
               value='img-to-pdf'
-              className='gap-2 py-3 text-xs rounded-full px-4 cursor-pointer'>
+              className='gap-2 text-xs h-9 rounded-full px-3 cursor-pointer'>
               <ImageIcon className='h-4 w-4' /> Image To PDF
             </TabsTrigger>
             <TabsTrigger
               value='text-to-pdf'
-              className='gap-2 py-3 text-xs rounded-full px-4 cursor-pointer'>
+              className='gap-2 text-xs h-9 rounded-full px-3 cursor-pointer'>
               <FileText className='h-4 w-4' /> Text To PDF
             </TabsTrigger>
             <TabsTrigger
               value='pdf-to-word'
-              className='gap-2 py-3 text-xs rounded-full px-4 cursor-pointer'>
+              className='gap-2 text-xs h-9 rounded-full px-3 cursor-pointer'>
               <FileCode className='h-4 w-4' /> PDF To Word
             </TabsTrigger>
             <TabsTrigger
               value='word-to-pdf'
-              className='gap-2 py-3 text-xs rounded-full px-4 cursor-pointer'>
+              className='gap-2 text-xs h-9 rounded-full px-3 cursor-pointer'>
               <FileText className='h-4 w-4' /> Word To PDF
             </TabsTrigger>
             <TabsTrigger
               value='merge'
-              className='gap-2 py-3 text-xs rounded-full px-4 cursor-pointer'>
+              className='gap-2 text-xs h-9 rounded-full px-3 cursor-pointer'>
               <Layers className='h-4 w-4' /> Merge PDFs
             </TabsTrigger>
           </TabsList>
@@ -520,8 +521,8 @@ export default function PdfToolStudioPage() {
                   multi-page PDF document.
                 </p>
               </div>
-            : <div className='space-y-6'>
-                <div className='sm:p-4 sm:rounded-xl sm:bg-white/[0.02] sm:border sm:border-white/5 grid grid-cols-2 md:grid-cols-4 gap-4 items-center'>
+            : <div className='space-y-4'>
+                <div className='mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 items-center'>
                   <div className='space-y-1'>
                     <span className='text-[10px] text-pw-muted font-bold uppercase tracking-wider block'>
                       Orientation
@@ -595,7 +596,7 @@ export default function PdfToolStudioPage() {
                   {uploadedImages.map((img, idx) => (
                     <div
                       key={img.id}
-                      className='sm:p-4 sm:rounded-xl sm:border sm:border-white/5 sm:bg-white/[0.01] grid grid-cols-1 md:grid-cols-12 gap-3 items-center'>
+                      className='sm:p-2 sm:rounded-xl sm:border sm:border-white/5 sm:bg-white/[0.01] grid grid-cols-1 md:grid-cols-12 gap-3 items-start'>
                       <div className='md:col-span-3 aspect-video rounded-lg overflow-hidden border border-white/10 relative'>
                         <img
                           src={img.src}
@@ -625,12 +626,12 @@ export default function PdfToolStudioPage() {
                               caption: e.target.value,
                             })
                           }
-                          placeholder='Add Page Caption/Description text (Optional)...'
+                          placeholder='Add Page Description text (Optional)...'
                           className='bg-white/5 border-white/10 h-9 text-xs'
                         />
                       </div>
 
-                      <div className='md:col-span-2 flex items-center justify-end gap-1.5'>
+                      <div className='md:col-span-2 flex items-center justify-end gap-1.5 sm:pt-2'>
                         <Button
                           variant='ghost'
                           disabled={idx === 0}
@@ -762,7 +763,8 @@ export default function PdfToolStudioPage() {
                   Upload PDF Document
                 </h3>
                 <p className='text-pw-muted text-xs max-w-sm'>
-                  Extracts text and structures a genuine Microsoft Word (.doc) document.
+                  Extracts text and structures a genuine Microsoft Word (.doc)
+                  document.
                 </p>
               </div>
             : <div className='space-y-4'>
@@ -785,9 +787,9 @@ export default function PdfToolStudioPage() {
                 </div>
                 <Button
                   onClick={handleExportWordDoc}
-                  className="btn-primary h-12 gap-2 w-full font-bold"
-                >
-                  <Download className="h-4 w-4" /> Export as Microsoft Word Document (.doc)
+                  className='btn-primary h-12 gap-2 w-full font-bold'>
+                  <Download className='h-4 w-4' /> Export as Microsoft Word
+                  Document (.doc)
                 </Button>
               </div>
             }
@@ -813,11 +815,15 @@ export default function PdfToolStudioPage() {
                 <div className='w-12 h-12 rounded-2xl bg-pw-surface border border-white/10 flex items-center justify-center mb-4 shadow-2xl group-hover:scale-110 transition-transform'>
                   <Upload className='h-6 w-6 text-pw-primary' />
                 </div>
-                <h3 className='text-xl font-bold font-display mb-1'>
-                  Upload Word Document (.doc, .docx, .txt)
+                <h3 className='text-xl font-bold font-display mb-1 gap-1 flex items-center'>
+                  Upload Word Document
+                <span className='text-pw-muted text-sm'>
+                  (.doc, .docx, .txt)
+                </span>
                 </h3>
                 <p className='text-pw-muted text-xs max-w-sm'>
-                  Compiles Word document layouts into standard formatted PDF documents.
+                  Compiles Word document layouts into standard formatted PDF
+                  documents.
                 </p>
               </div>
             : <div className='space-y-4'>
@@ -837,14 +843,13 @@ export default function PdfToolStudioPage() {
                 </div>
                 <textarea
                   value={wordTextContent}
-                  onChange={e => setWordTextResult(e.target.value)}
+                  onChange={(e) => setWordTextResult(e.target.value)}
                   className='w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-xs font-mono text-pw-text focus:outline-none focus:border-pw-primary'
                 />
                 <Button
                   onClick={handleExportWordToPdf}
-                  className="btn-primary h-12 gap-2 w-full font-bold"
-                >
-                  <Download className="h-4 w-4" /> Export as PDF Document
+                  className='btn-primary h-12 gap-2 w-full font-bold'>
+                  <Download className='h-4 w-4' /> Export as PDF Document
                 </Button>
               </div>
             }
@@ -878,7 +883,7 @@ export default function PdfToolStudioPage() {
                 />
               </div>
 
-              <div className='space-y-2.5 max-h-60 overflow-y-auto'>
+              <div className='space-y-2.5 max-h-60 lg:max-h-65 overflow-y-auto'>
                 {mergeFiles.map((file) => (
                   <div
                     key={file.id}
@@ -924,7 +929,7 @@ export default function PdfToolStudioPage() {
                 onClick={executeMerge}
                 disabled={mergeFiles.length < 2}
                 className='btn-primary h-12 gap-2 w-full font-bold mt-4'>
-                <Layers className='h-4 w-4' /> Merge into Single PDF
+                <Layers className='h-4 w-4' /> Merge
               </Button>
             </div>
           </TabsContent>

@@ -164,7 +164,7 @@ export const ToolsGrid = () => {
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}>
               <Link href={tool.href}>
-                <Card className='card-gloww p-5 pt-6 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden liq-glass'>
+                <Card className='card-glow p-5 pt-6 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden liq-glass'>
                   <div className='absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity'>
                     <tool.icon
                       className='h-24 w-24'

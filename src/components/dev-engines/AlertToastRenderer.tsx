@@ -78,7 +78,7 @@ export default function AlertToastRenderer() {
   };
 
   return (
-    <Card className='card-glow bkblur p-6 flex flex-col gap-6'>
+    <Card className='bg-transparent sm:bg-pw-glass sm:bkblur sm:p-6 ring-0 sm:ring-1 flex flex-col gap-6'>
       <div className='flex justify-between items-center border-b border-white/5 pb-4'>
         <h3 className='text-lg font-bold font-display flex items-center gap-2'>
           <Bell className='h-5 w-5 text-pw-primary' />
