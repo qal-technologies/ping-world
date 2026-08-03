@@ -323,15 +323,26 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Restore privacy acceptance from localStorage
+  // jules edit: Restore privacy acceptance and draft base content from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const accepted = localStorage.getItem('composer_privacy_accepted');
       if (accepted === 'true') {
         dispatch({ type: 'ACCEPT_PRIVACY' });
       }
+      const cachedText = localStorage.getItem('pw_composer_base_content');
+      if (cachedText) {
+        dispatch({ type: 'SET_BASE_CONTENT', payload: cachedText });
+      }
     }
   }, []);
+
+  // jules edit: Auto-save draft base content on change
+  useEffect(() => {
+    if (typeof window !== 'undefined' && state.baseContent) {
+      localStorage.setItem('pw_composer_base_content', state.baseContent);
+    }
+  }, [state.baseContent]);
 
   // Persist privacy acceptance
   useEffect(() => {

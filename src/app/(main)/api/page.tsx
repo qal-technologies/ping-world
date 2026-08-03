@@ -1,5 +1,6 @@
 'use client';
 
+// jules edit: Developer APIs & Tools hub page with categorized dropdown search filter matching /tools behavior
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -266,10 +267,10 @@ export default function DeveloperHubPage() {
           <h1 className='text-4xl md:text-6xl font-extrabold font-display leading-tight mb-4'>
             Developer <span className='gradient-text'>APIs & Tools</span>
           </h1>
-          <p className='text-pw-muted max-w-2xl'>
+          <p className='text-pw-muted max-w-2xl text-sm leading-relaxed'>
             18 Class-based productivity engines built from scratch. Call
             directly via TypeScript classes or consume via Edge/Cron API
-            endpoints.
+            endpoints. All developer tools are documented below.
           </p>
         </div>
 
@@ -285,13 +286,39 @@ export default function DeveloperHubPage() {
         </div>
       </div>
 
-      {/* Categories */}
+      {/* jules edit: Categories Dropdown Search to match /tools/ page */}
+      <div className='flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-1 w-full'>
+        <div className='flex items-center gap-2.5 w-full sm:w-auto'>
+          <span className='text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0'>
+            Filter API Category:
+          </span>
+          <select
+            value={activeCategory}
+            onChange={(e) => {
+              setActiveCategory(e.target.value);
+              setSearch('');
+            }}
+            className='h-10 rounded-xl bg-pw-surface/50 border border-white/10 px-4 font-mono text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer w-full sm:w-56'
+          >
+            {CATEGORIES.map((cat) => (
+              <option key={cat} value={cat} className='bg-pw-surface text-pw-text'>
+                {cat.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Categories Buttons Row */}
       <div className='flex flex-wrap gap-2 mb-10 overflow-x-auto pb-2'>
         {CATEGORIES.map((cat) => (
           <Button
             key={cat}
             variant='ghost'
-            onClick={() => setActiveCategory(cat)}
+            onClick={() => {
+              setActiveCategory(cat);
+              setSearch('');
+            }}
             className={`h-9 rounded-full px-5 text-xs font-medium transition-all ${
               activeCategory === cat ?
                 'bg-pw-primary text-black font-bold shadow-lg shadow-pw-primary/20'
@@ -352,6 +379,21 @@ export default function DeveloperHubPage() {
           );
         })}
       </div>
+
+      {filteredTools.length === 0 && (
+        <div className='flex flex-col items-center justify-center py-20 text-center'>
+          <p className='text-pw-muted text-sm'>No matching Developer APIs found.</p>
+          <Button
+            variant='link'
+            onClick={() => {
+              setActiveCategory('All');
+              setSearch('');
+            }}
+            className='mt-2 text-pw-primary text-xs'>
+            Clear Category Filters
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

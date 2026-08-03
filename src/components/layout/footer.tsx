@@ -1,5 +1,6 @@
 'use client';
 
+// jules edit: Footer component with integrated Developer APIs / Tools section
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -32,6 +33,16 @@ const SOCIALS = [
   { name: 'LinkedIn', link: COMPANY.socials.linkedin, icon: Linkedin },
 ];
 
+// jules edit: Concise list of developer tools for footer integration
+const FOOTER_DEV_TOOLS = [
+  { href: '/api/autocorrect', label: 'AutoCorrect API' },
+  { href: '/api/tone-correction', label: 'Tone Correction API' },
+  { href: '/api/pdf-doc', label: 'PDF & Word API' },
+  { href: '/api/encryption', label: 'Encryption API' },
+  { href: '/api/image-editing', label: 'Image Editing API' },
+  { href: '/api/styling-engine', label: 'Styling Engine' },
+];
+
 export const Footer = () => {
   const { isLoggedIn } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
@@ -55,20 +66,19 @@ export const Footer = () => {
   return (
     <footer className='border-t border-pw-primary/10 bg-pw-bg/80 backdrop-blur-sm'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-12'>
-        <div className='grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4'>
+        <div className='grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-5'>
           {/* Brand column */}
           <div className='sm:col-span-2 md:col-span-1'>
             <Link
               href='/'
               className='flex items-center gap-2 mb-4 flex-wrap'>
-            
-                        <Image
-                          width={40}
-                          height={40}
-                          src='/images/logo.png'
-                          alt='Ping World Logo'
-                          className='h-15 w-15 object-fit'
-                        />
+              <Image
+                width={40}
+                height={40}
+                src='/images/logo.png'
+                alt='Ping World Logo'
+                className='h-10 w-10 object-contain'
+              />
               <span className='text-lg font-bold font-display text-pw-text'>
                 {COMPANY.name}
               </span>
@@ -149,6 +159,31 @@ export const Footer = () => {
                   )}
                 </li>
               )}
+            </ul>
+          </div>
+
+          {/* jules edit: Integrated Developer APIs Section */}
+          <div>
+            <h2 className='text-sm font-semibold text-pw-text mb-3 flex items-center gap-1.5'>
+              Developer APIs
+            </h2>
+            <ul className='space-y-2 flex flex-col flex-wrap max-w-full'>
+              {FOOTER_DEV_TOOLS.map((devTool) => (
+                <li key={devTool.href} className='truncate'>
+                  <Link
+                    href={devTool.href}
+                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px]'>
+                    {devTool.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link
+                  href='/api'
+                  className='text-xs text-pw-primary font-bold hover:underline transition-all block mt-2'>
+                  All 18 Dev APIs &rarr;
+                </Link>
+              </li>
             </ul>
           </div>
 

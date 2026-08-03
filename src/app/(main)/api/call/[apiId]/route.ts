@@ -1,34 +1,51 @@
+// jules edit: Secure Edge route handler for developer tool API calls with flexible plan validation & rate limiting
 import { NextRequest, NextResponse } from 'next/server';
 import { DevEngineRegistry } from '@/lib/dev-engines';
 import { supabase } from '@/lib/supabase';
 import { PREMIUM_TIERS, PremiumTier, resolveTier } from '@/lib/config/premium';
 import { isRateLimited, getClientIp } from '@/lib/rate-limiter';
+import { sanitizeInput } from '@/lib/general/sanitize';
+import { AiQuotaSyncer } from '@/lib/general/ai-quota-syncer';
 
 export const runtime = 'edge';
 
+// jules edit: Map common tool aliases to canonical flexible feature IDs
+function getCanonicalFeatureId(id: string): string {
+  const mapping: Record<string, string> = {
+    'pdf-tools': 'pdf-studio',
+    'pdf-doc': 'pdf-studio',
+    'quiz': 'quizzable',
+    'message': 'anonlink',
+    'anon-link': 'anonlink',
+  };
+  return mapping[id] || id;
+}
+
 function enforcePlanLimitsAndAuth(request: NextRequest, apiId: string) {
-  // In a real application, these values would be extracted from a verified JWT or server-to-server middleware header
   const userTierRaw = request.headers.get('x-user-tier') || 'free';
   const userTier = resolveTier(userTierRaw);
   const tierConfig = PREMIUM_TIERS[userTier];
 
   const userAllowedTools = (request.headers.get('x-flexible-tools') || '')
     .split(',')
-    .map((s) => s.trim());
+    .map((s) => s.trim())
+    .map(getCanonicalFeatureId);
+
+  const canonId = getCanonicalFeatureId(apiId);
 
   // 1. Flexible Plan Tool Isolation
   if (userTier === 'flexible') {
-    if (!userAllowedTools.includes(apiId)) {
+    if (!userAllowedTools.includes('all') && !userAllowedTools.includes(canonId)) {
       return {
         authorized: false,
-        error: `Tool '${apiId}' is not authorized on your flexible plan. Please upgrade or purchase this tool add-on.`,
+        error: `Tool '${apiId}' (gated under '${canonId}') is not authorized on your flexible plan. Please upgrade or purchase this tool add-on.`,
         status: 403,
       };
     }
   }
 
   // 2. Rate Limiting Enforcements
-  const limit = tierConfig.aiRequestsPerMinute;
+  const limit = tierConfig.aiRequestsPerMinute || 2;
   const ip = getClientIp(request);
   const { limited, remaining, reset } = isRateLimited(
     ip,
@@ -87,7 +104,7 @@ export async function POST(
       // Offline/Local sandbox bypass simulation
       userTier = (request.headers.get('x-test-tier') as PremiumTier) || 'pro';
       const toolsHeader = request.headers.get('x-test-tools');
-      purchasedTools = toolsHeader ? toolsHeader.split(',') : ['all'];
+      purchasedTools = toolsHeader ? toolsHeader.split(',').map(getCanonicalFeatureId) : ['all'];
     } else {
       // Securely resolve user session from Bearer Auth Token or cookie
       const authHeader = request.headers.get('Authorization');
@@ -99,14 +116,18 @@ export async function POST(
           const meta = user.user_metadata || {};
           userTier = resolveTier(meta.tier);
           const tools = meta.purchased_tools || [];
-          purchasedTools = Array.isArray(tools) ? tools : [tools];
+          purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
         }
       }
     }
 
+    const body = await request.json().catch(() => ({}));
+    const method = body.method || body.action || 'analyze';
+
     // Enforce Flexible Plan Tool Isolation
     if (userTier === 'flexible') {
-      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(apiId);
+      const canonId = getCanonicalFeatureId(apiId);
+      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(canonId);
       if (!isAllowed) {
         return NextResponse.json(
           {
@@ -116,6 +137,22 @@ export async function POST(
           { status: 403 }
         );
       }
+    }
+
+    // jules edit: Enforce daily AI quota counts and sync limiters
+    const isAiCall = apiId === 'tone-correction' || apiId === 'autocorrect' || method === 'translate' || method === 'suggest';
+    if (isAiCall) {
+      const quota = AiQuotaSyncer.checkQuota(userTier);
+      if (!quota.allowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Daily AI Quota exceeded for tier '${userTier.toUpperCase()}'. Allowed: ${quota.limit} calls/day. Please upgrade your plan to increase limits.`,
+          },
+          { status: 429 }
+        );
+      }
+      AiQuotaSyncer.incrementLocalCount();
     }
 
     // Enforce dynamic server-side rate limits based on premium.ts tier settings
@@ -136,9 +173,6 @@ export async function POST(
       );
     }
 
-    const body = await request.json().catch(() => ({}));
-    const method = body.method || body.action || 'analyze';
-
     if (apiId === 'styling-engine' && method === 'script') {
       const css = engine.generateCSS(body.config || {});
       const scriptContent = `(function(){const s=document.createElement('style');s.id='pingworld_injected_styles';s.textContent=${JSON.stringify(css)};document.head.appendChild(s);})();`;
@@ -151,10 +185,6 @@ export async function POST(
     }
 
     if (typeof engine[method] !== 'function') {
-      const availableMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(engine)).filter(
-        m => m !== 'constructor' && !m.startsWith('_')
-      );
-
       return NextResponse.json(
         {
           success: false,
@@ -171,7 +201,10 @@ export async function POST(
         ? [body.data, body.params || body.options || body.config || body.targetTone || body.key || body.type].filter(x => x !== undefined)
         : [body];
 
-    const result = await engine[method](...args);
+    // jules edit: Sanitize all execution inputs to prevent injection risks
+    const sanitizedArgs = args.map((arg: any) => sanitizeInput(arg));
+
+    const result = await engine[method](...sanitizedArgs);
 
     return NextResponse.json({
       success: true,
@@ -229,7 +262,7 @@ export async function GET(
     if (bypassAuth) {
       userTier = (request.headers.get('x-test-tier') as PremiumTier) || 'pro';
       const toolsHeader = request.headers.get('x-test-tools');
-      purchasedTools = toolsHeader ? toolsHeader.split(',') : ['all'];
+      purchasedTools = toolsHeader ? toolsHeader.split(',').map(getCanonicalFeatureId) : ['all'];
     } else {
       const authHeader = request.headers.get('Authorization');
       const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
@@ -240,13 +273,14 @@ export async function GET(
           const meta = user.user_metadata || {};
           userTier = resolveTier(meta.tier);
           const tools = meta.purchased_tools || [];
-          purchasedTools = Array.isArray(tools) ? tools : [tools];
+          purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
         }
       }
     }
 
     if (userTier === 'flexible') {
-      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(apiId);
+      const canonId = getCanonicalFeatureId(apiId);
+      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(canonId);
       if (!isAllowed) {
         return NextResponse.json(
           {
@@ -302,12 +336,13 @@ export async function GET(
       );
     }
 
-    // Extract search param values as method inputs
     const paramInput = searchParams.get('data') || searchParams.get('text') || searchParams.get('query') || searchParams.get('code') || searchParams.get('color');
     const secondaryInput = searchParams.get('param') || searchParams.get('tone') || searchParams.get('targetTone');
 
     const args = [paramInput, secondaryInput].filter(Boolean);
-    const result = await engine[method](...args);
+    // jules edit: Sanitize args for safety
+    const sanitizedArgs = args.map((arg: any) => sanitizeInput(arg));
+    const result = await engine[method](...sanitizedArgs);
 
     return NextResponse.json({
       success: true,

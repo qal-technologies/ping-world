@@ -1,5 +1,6 @@
 'use client';
 
+// jules edit: Pricing Page with live currency conversion using IP-lookup, browser locale, and open.er-api
 import { motion } from 'framer-motion';
 import {
   CheckCircle,
@@ -9,6 +10,9 @@ import {
   Crown,
   Rocket,
   ArrowRight,
+  Brain,
+  MessageCircle,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { PREMIUM_TIERS, type PremiumTier, FLEXIBLE_FEATURES } from '@/lib/config/premium';
 import { useAppContext } from '@/context/AppContext';
 import { COMPANY } from '@/lib/config/company';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -90,6 +94,41 @@ const FEATURES: {
 
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 
+// jules edit: Modular array representing tool-specific plan benefits for easy future expansions
+const TOOL_BENEFITS = [
+  {
+    id: 'quizzable',
+    title: 'Quizzable Pro',
+    icon: Brain,
+    textColor: 'text-pw-primary',
+    free: 'Create 5 quizzes with up to 4 options/question.',
+    premium: 'Unlock unlimited questions, more than 4 options, full responsive background images, local logo uploads, and 30-day lifespans.'
+  },
+  {
+    id: 'composer',
+    title: 'Creator Hub (Post Composer)',
+    icon: Sparkles,
+    textColor: 'text-pw-secondary',
+    free: 'Basic writing with platform previews.',
+    premium: 'Unlock AI suggestions, translation, branding overlays, draggable logos, and unlimited post draft history syncing.'
+  },
+  {
+    id: 'anonlink',
+    title: 'Anonymous Feedback Link',
+    icon: MessageCircle,
+    textColor: 'text-pw-success',
+    free: 'Standard inbox, 2-day lifespan limit.',
+    premium: 'Custom link-id alias, personalized questions, 30-day lifespan, and guest-read Public Message Boards.'
+  },
+  {
+    id: 'pdf-tools',
+    title: 'PDF Tool Studio',
+    icon: FileText,
+    textColor: 'text-pw-warning',
+    free: 'Basic document compilation.',
+    premium: 'Chapter-to-page book flow, automatic metrics, title & footer editing, and true textual stream extraction converters.'
+  }
+];
 
 export default function PricingPage() {
   const { premiumTier, refresh, user } = useAppContext();
@@ -101,10 +140,69 @@ export default function PricingPage() {
 
   const [selectedFlexibleToolId, setSelectedFlexibleToolId] = useState<string>('all');
 
+  // jules edit: Live currency conversion states
+  const [currency, setCurrency] = useState('USD');
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    if (!navigator.onLine) return;
+
+    const detectCurrency = async () => {
+      try {
+        // 1. IP Lookup detection (reliable fallback-free)
+        let ipCurrency = '';
+        try {
+          const res = await fetch('https://ipapi.co/json/');
+          const data = await res.json();
+          if (data && data.currency) {
+            ipCurrency = data.currency;
+          }
+        } catch (e) {
+          console.warn('IP lookup for currency failed:', e);
+        }
+
+        // 2. Browser Locale-based detection
+        let localeCurrency = 'USD';
+        try {
+          const locale = navigator.language || 'en-US';
+          const localeMap: Record<string, string> = {
+            'GB': 'GBP', 'DE': 'EUR', 'FR': 'EUR', 'IT': 'EUR', 'ES': 'EUR', 'NL': 'EUR',
+            'JP': 'JPY', 'CA': 'CAD', 'AU': 'AUD', 'CH': 'CHF', 'CN': 'CNY', 'IN': 'INR',
+            'KR': 'KRW', 'NZ': 'NZD', 'BR': 'BRL', 'MX': 'MXN', 'ZA': 'ZAR', 'NG': 'NGN'
+          };
+          const countryCode = locale.split('-')[1]?.toUpperCase();
+          if (countryCode && localeMap[countryCode]) {
+            localeCurrency = localeMap[countryCode];
+          }
+        } catch (e) {
+          console.warn('Locale-based currency detection failed:', e);
+        }
+
+        // Compare and resolve currency code
+        const resolvedCurrency = ipCurrency && ipCurrency !== 'USD' ? ipCurrency : (localeCurrency !== 'USD' ? localeCurrency : 'USD');
+        setCurrency(resolvedCurrency);
+
+        if (resolvedCurrency && resolvedCurrency !== 'USD') {
+          // Fetch live conversion rates from free open.er-api.com
+          const rateRes = await fetch('https://open.er-api.com/v6/latest/USD');
+          const rateData = await rateRes.json();
+          if (rateData && rateData.rates && rateData.rates[resolvedCurrency]) {
+            setExchangeRate(rateData.rates[resolvedCurrency]);
+          }
+        }
+      } catch (err) {
+        console.warn('Currency conversion setup failed:', err);
+      }
+    };
+
+    detectCurrency();
+  }, []);
+
   const selectedTier = selectedTierId ? PREMIUM_TIERS[selectedTierId] : null;
   const selectedFlexTool = FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId);
 
-  
   const displayMonthly = selectedTierId === 'flexible' && selectedFlexTool
     ? selectedFlexTool.monthly
     : selectedTier?.price.monthly;
@@ -245,8 +343,16 @@ export default function PricingPage() {
                         <span className='text-sm text-pw-muted'>/mo</span>
                       </div>
                     }
+
+                    {/* jules edit: Display live converted currency equivalent below price */}
+                    {isOnline && exchangeRate && currency !== 'USD' && tier.price.monthly !== null && (
+                      <p className='text-xs text-pw-success font-bold font-mono mt-1'>
+                        ~ {(tier.price.monthly * exchangeRate).toFixed(2)} {currency} / month
+                      </p>
+                    )}
+
                     {tier.price.yearly && (
-                      <p className='text-[11px] text-pw-muted mt-1'>
+                      <p className='text-[11px] text-pw-muted mt-2.5'>
                         or ${tier.price.yearly}/year (save{' '}
                         {Math.round(
                           (1 - tier.price.yearly / (tier.price.monthly! * 12)) *
@@ -394,6 +500,33 @@ export default function PricingPage() {
           })}
         </div>
 
+        {/* jules edit: Concise plan benefits section per tool */}
+        <div className='mb-20 space-y-8'>
+          <h2 className='text-3xl font-extrabold font-display text-center'>
+            Plan Benefits <span className='gradient-text'>per Tool.</span>
+          </h2>
+          <p className='text-center text-pw-muted text-sm max-w-xl mx-auto'>
+            Review exactly what each subscription tier unlocks across our core utilities.
+          </p>
+
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto'>
+            {TOOL_BENEFITS.map((tool) => {
+              const ToolIcon = tool.icon;
+              return (
+                <Card key={tool.id} className='p-6 bg-white/[0.01] border border-white/5 space-y-2 rounded-2xl hover:border-white/10 transition-all'>
+                  <h4 className={cn('font-bold text-sm flex items-center gap-1.5', tool.textColor)}>
+                    <ToolIcon className='h-4 w-4' /> {tool.title}
+                  </h4>
+                  <p className='text-xs text-pw-muted leading-relaxed'>
+                    <span className='font-bold text-white'>Free:</span> {tool.free} <br />
+                    <span className={cn('font-bold', tool.textColor)}>Premium:</span> {tool.premium}
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Feature Comparison Table */}
         <div className='mb-20'>
           <h2 className='text-2xl font-bold font-display text-center mb-8'>
@@ -539,9 +672,8 @@ export default function PricingPage() {
               )}
 
               {/* Price Calculation Card */}
-              {/* jules edit: Tweak the display price based on selected tool and billing cycle */}
-              <div className='p-4 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between flex-col'>
-                <div className='text-center'>
+              <div className='p-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col items-center justify-center text-center'>
+                <div>
                   <span className='text-xs text-pw-muted uppercase font-bold tracking-widest block'>
                     Total Checkout Price
                   </span>
@@ -551,10 +683,23 @@ export default function PricingPage() {
                     : `$${displayYearlyPrice}/yr`}
                   </span>
                 </div>
+
+                {/* jules edit: Live currency conversion total for the Modal */}
+                {isOnline && exchangeRate && currency !== 'USD' && displayMonthlyPrice && (
+                  <div className='mt-1.5'>
+                    <span className='text-xs text-pw-success font-bold font-mono block'>
+                      ~ {billingCycle === 'monthly'
+                        ? `${(displayMonthlyPrice * exchangeRate).toFixed(2)} ${currency} / month`
+                        : `${(displayYearlyPrice * exchangeRate).toFixed(2)} ${currency} / year`
+                      }
+                    </span>
+                  </div>
+                )}
+
                 {billingCycle === 'yearly' &&
                   displayMonthlyPrice &&
                   displayYearlyPrice && (
-                    <div className='text-center mt-1'>
+                    <div className='text-center mt-2.5'>
                       <span className='text-[10px] text-pw-success font-black uppercase tracking-wider block'>
                         Discount Applied
                       </span>

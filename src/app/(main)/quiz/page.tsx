@@ -157,6 +157,7 @@ export interface Quiz {
   allowEarlySubmit?: boolean;
   expires_at?: string; // ISO date — max 3 days from creation, cleaned by cron
   quizScroll?: boolean;
+  quizLayout?: string;
   branding?: {
     image?: string;
     opacity?: number;
@@ -271,6 +272,11 @@ const QuizBuilder = ({
   }, [editedQuiz]);
 
   const addQuestion = (category?: string) => {
+    // jules edit: Limit free users to maximum of 5 questions per quiz
+    if (editedQuiz.questions.length >= 5 && premiumTier === 'free') {
+      return toast.error('Free tier accounts are capped at a maximum of 5 questions per quiz! Please upgrade to add more.');
+    }
+
     const qId = Math.random().toString(36).substr(2, 9);
     const newQuestion: Question = {
       id: qId,
@@ -1122,38 +1128,38 @@ const QuizBuilder = ({
                       </div>
                     </Wrapper>
 
-                    {/* This should be only for premium and the image is to be uploaded from their local and saved to cloudinary not this::: */}
+                    {/* jules edit: Highly perfected Branding & Sizing layouts with real local file readers and 3 layout options */}
                     <Wrapper
                       title='Branding & Layout'
                       description='Customize background image, logo, and scrolling layout'
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
                       color='primary'>
-                      <div className='flex flex-col gap-2 pt-2'>
+                      <div className='flex flex-col gap-4 pt-2'>
                         <QuizSettingItem
-                          label='Continuous Vertical Scroll'
-                          description='Render all questions in a vertical list, appending next questions dynamically.'>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() =>
+                          label='Quiz Layout Presentation'
+                          description='Select how questions are rendered visually: Scroll All (continuous), Scroll Show (add next on-response), or Single Show (page-by-page).'>
+                          <select
+                            value={editedQuiz.quizLayout || (editedQuiz.quizScroll ? 'scroll' : 'single')}
+                            onChange={(e) => {
+                              const val = e.target.value;
                               setEditedQuiz({
                                 ...editedQuiz,
-                                quizScroll: !editedQuiz.quizScroll,
-                              })
-                            }
-                            className={cn(
-                              'h-6 min-w-[100px]',
-                              editedQuiz.quizScroll ?
-                                'bg-pw-primary/10 border-pw-primary text-pw-primary font-bold'
-                              : 'bg-white/5 border-white/10 text-pw-muted',
-                            )}>
-                            {editedQuiz.quizScroll ? 'SCROLL' : 'PAGE-BY-PAGE'}
-                          </Button>
+                                quizLayout: val,
+                                quizScroll: val !== 'single',
+                              });
+                              toast.success(`Layout changed to: ${val.toUpperCase().replace('_', ' ')}`);
+                            }}
+                            className='bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none cursor-pointer'
+                          >
+                            <option value='single' className='bg-[#0A0C1B]'>Single Show (Standard)</option>
+                            <option value='scroll' className='bg-[#0A0C1B]'>Scroll All (Continuous)</option>
+                            <option value='scroll_show' className='bg-[#0A0C1B]'>Scroll Show (On Response)</option>
+                          </select>
                         </QuizSettingItem>
 
                         <div className='space-y-4 mt-4 border-t border-white/5 pt-4'>
                           <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
-                            Institutional Branding
+                            Institutional Branding (File Uploads)
                           </h4>
 
                           <div className='grid grid-cols-2 gap-2'>
@@ -1162,41 +1168,53 @@ const QuizBuilder = ({
                                 Background Image
                               </label>
                               <Input
-                                value={editedQuiz.branding?.image || ''}
                                 type='file'
                                 accept='image/*'
-                                onChange={(e) =>
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    branding: {
-                                      ...(editedQuiz.branding || {}),
-                                      image: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder=''
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const r = new FileReader();
+                                    r.onload = (ev) => {
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        branding: {
+                                          ...(editedQuiz.branding || {}),
+                                          image: ev.target?.result as string,
+                                        },
+                                      });
+                                      toast.success('Background image loaded!');
+                                    };
+                                    r.readAsDataURL(file);
+                                  }
+                                }}
                                 className='bg-white/5 border-white/10 h-10'
                               />
                             </div>
 
                             <div className='space-y-2'>
                               <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Brand Icon
+                                Brand Icon / Logo
                               </label>
                               <Input
-                                value={editedQuiz.branding?.icon || ''}
                                 type='file'
                                 accept='image/*'
-                                onChange={(e) =>
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    branding: {
-                                      ...(editedQuiz.branding || {}),
-                                      icon: e.target.value,
-                                    },
-                                  })
-                                }
-                                placeholder='Logo URL'
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const r = new FileReader();
+                                    r.onload = (ev) => {
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        branding: {
+                                          ...(editedQuiz.branding || {}),
+                                          icon: ev.target?.result as string,
+                                        },
+                                      });
+                                      toast.success('Brand logo loaded!');
+                                    };
+                                    r.readAsDataURL(file);
+                                  }
+                                }}
                                 className='bg-white/5 border-white/10 h-10'
                               />
                             </div>
@@ -2166,6 +2184,11 @@ const QuizBuilder = ({
                           variant='outline'
                           size='sm'
                           onClick={() => {
+                            // jules edit: Limit free users to maximum of 4 options per question
+                            if (editedQuiz.questions[currentStep].options.length >= 4 && premiumTier === 'free') {
+                              return toast.error('Free tier accounts are capped at a maximum of 4 options per question! Please upgrade to add more.');
+                            }
+
                             const newId = `${editedQuiz.questions[currentStep].id}-opt-${editedQuiz.questions[currentStep].options.length}`;
                             const newOpts = [
                               ...(editedQuiz.questions[currentStep]
