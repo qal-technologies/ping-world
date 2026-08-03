@@ -128,7 +128,7 @@ export default function PricingPage() {
     }
 
     setIsSimulating(true);
-    toast.loading(`Processing Stripe checkout for ${selectedTier.label} plan...`);
+    toast.loading(`Processing payment for ${selectedTier.label} plan...`);
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 

@@ -15,7 +15,6 @@ import { HybridStorage } from '@/lib/storage-utils';
 import type { User } from '@supabase/supabase-js';
 
 // ─── Types ──────────────────────────────────────────────────────
-// jules edit: Extended the app context interface to manage purchased flexible tools and feature unlocking rules
 export interface AppContextValue {
   /** Current Supabase user, null if not logged in */
   user: User | null;
@@ -49,7 +48,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [premiumTier, setPremiumTier] = useState<PremiumTier>('free');
-  // jules edit: State for keeping track of specific tools purchased in the flexible plan
   const [purchasedTools, setPurchasedTools] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,16 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // jules edit: function to change premium state locally immediately upon payment
-  const updatePremiumTierLocally = useCallback((tier: PremiumTier) => {
-    setPremiumTier(tier);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem("pingworld_premium_local_tier", tier);
-    }
-  }, []);
-
   // ── Session loader
-  // jules edit: Extended loadSession to bridge authenticated users to Firebase using Custom Tokens and load purchased tools
   const loadSession = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -128,7 +117,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const tools = meta.purchased_tools || [];
         setPurchasedTools(Array.isArray(tools) ? tools : [tools]);
 
-        // jules edit: Exchange Supabase session token for a Firebase custom token to bridge DB sessions
         try {
           const res = await fetch('/api/auth/firebase-token', {
             method: 'POST',
@@ -151,7 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPremiumTier('free');
         setPurchasedTools([]);
 
-        // jules edit: Fallback to Firebase anonymous authentication when unauthenticated so Firestore security allows general access
+     
         try {
           const { signInAnonymously } = await import('firebase/auth');
           const { auth: firebaseAuth } = await import('@/lib/firebase');
@@ -168,7 +156,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // jules edit: Evaluate if a specific feature is unlocked based on tier and active flexible purchases
   const isFeatureUnlocked = useCallback((featureId: string): boolean => {
     if (premiumTier === 'pro' || premiumTier === 'standard') return true;
     if (premiumTier === 'flexible') {

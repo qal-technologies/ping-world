@@ -1,0 +1,78 @@
+Here are few fixes, addition and upgrade.
+
+General:
+1. All premium feature should be shown with a crown for free users and the higher quota keylock.
+2. Still no actual mechanism yet to give access to only paid flexible tool.
+3. Create a themed not found page, loading page and other web server code pages or other browser utility pages.
+4. Integerate the developer tool section into the footer.
+5. The dropdown search should be applicable to the developer tools too 
+6. There's no dev tools docs
+7. Find a very conventional naming for tools and features, as adding vague words may mislead the user. Use more of a summarative name
+8. Some tools (eg. url shortner) exists but it's core function has not been implemented yet.
+9. All dates should display, dayName, day, month, year or somthing shorter but day before month, to reduce misunderstanding.
+10. Each pricing should be converted to the viewing user currency for easy understanding.(a small text below amount to show the converted price, and that if there's internet and the conversion is not usd or converted successfully).
+11. Each premiumfeature gate show have a way to redirect to the actual payment page.
+12. The social media chat editor and mimicing needs serious attention. Make it to perfection and add also mimicing posts or chats.
+13. Link similar tools on their pages, just above the footer to foster usabiity from the users.
+14. Link all ai trigger count, to filter the ai calls per plan and restrict or alert properly.
+15. Anything sent to the db should be sanitized and processed, this is to aovid db injection and hacking or cloud malfunction.
+16. Link and use the rate limiter properly to limit calls per time, to avoid hook loop errors on the datbase or overcall and overuse.
+17. Disable all premium featire or button, so it doesnt even trigger the action at all if it is exclusively for premium and if its a quota thing, properly track the used quota and remaining and guard from overuse and fishy actions.
+
+
+For PDF:
+1. The pdf to word and word to pdf is crap and doesnt even detect the actual pdf or word document and instead of the actual image or content in the pdf it just add random texted internally with a header thast is not asked. lOOK INTO IT AND MAKE IT BETTER
+2. Add more practical pdf utility and make the pdf page sophistivated and actually utility filled on pdf tools and utilities.
+3. For text to pdf add text metrics and calculations, using the fontsize, margin, paper type, title & footer space, calculate the actual words that can enter a certain page and display if overflow that it would automatically be added to a new page. Make title optional, as some page may not directly have a title. Each page with a new title has a slight upper margin to create indention and the title and pages should have edit beside them that they can use to edit the alignment, to help actually edit the pdf beforehand. Ability to add nold, italic, underline, paragraph indentation and other text edits and when saving or converting parse the text detect the keywords or tag and transform them accordingly. Ability to add footer and instead of adding the inputs for these, redesign the text to pdf ui to have a single page preadded, with jsut title and body, the top of the content/body input has a basic style tab and the top of the direct page card a element dropdown. the tab detects the selected text or next typed text if turned on and inject the effect or edit to it on type. the element dropdown is where elements like footer, images etc. on the title input at the left add an edit button that calls a stick tab that shows the edit for title, like alignment, color - both backgrounf and text, padding and margin both all sides.
+Handle the automatic overflow sequence of adding the extra texts and retaining their footer. The rule is the first page with the title assigned has the title as a bigger text above the main paragraph, but the next page under that has the chapter and title in smaller text and positioned like an actual book.
+See what is going to different with the pdf tool:
+1. You can categorize pages under a certain chapter and once a chapter is created you can create pages under it or a new chapter.
+See the flow, on load it shows only a page as default, but if you want a chapter based,
+the ui update; the tabContent contains a dropdown for the general page margin and the stack type(chapter or page - defualt is page) beside is an add button that adds the stack.
+when a stack is a chapter and add is clicked, it automatically goes to page as dropdown to avoid stacking chapters instead of pages. So the next stacks are under the previous chapter and id. add a slight left padding to pages under a chapter and a button beside the chapter header to add more pages under it directly.
+Each page without a chapter can easily be assigned a chapter by clicking the page (index) and it shows a sticky div beside showing all avialable chaoters.
+Each page has a ch, and pg tag and each ch click opens for chapter switch or making the page independent (no chapter).
+The heirachy :
+Chapter is different from title,
+Chapter => title => page => body.
+If a chapter is specified, show the chapter at the top left and the title right, this is only when that page is not the first titled page with same title. This should be detected automatically and a page can opt out to not display title for itself. Displaying no title means no chapter too. The page with the first title would have the chapter directly above the title in smaller size and not on the top left anymore only if it is under a chapter. this should be only for title pages on the first index of a chapter, but the next title shows only title and not chapter ontop.
+The aim is to make one able to use this tool and write books easily and without stress and make it best.
+Make a way to save the progress locally and even save an uncompleted work on draft (or db if premium), and the list of previous works shows if any and the default template shows if there's none. Someone can come back to continue his work and easily turn it to pdf, book writers can have fun with it.
+In all pdf conversions and arrangement, look well into overflow handling and nice editng for both on the pdf and text editor tool.
+4. Look into perfecring the pdf to word and word to pdf as it doesnt convert the actual uploaded document into these file type.
+5. For pdf merging, add a sorting button to move up or down and other merging tweaks and features. Try to get the number of page from the metadata and kinda show how many pages total the merged files would be.
+
+
+For the composer:
+1. The actual logic for connecting, interacting, sending and posting for the social platforms has not be done.
+2. All premium features should have a button to link bavk to price page.
+3. The blobs on this page, doesnt save. inspect and figure out why. It is very necessary the blobs save for both instagram text to canvas posting and also user canvas design and social platform post saving. 
+4. Santize post before posting to avoid injection or any platform errors or rejection.
+5. Add something new in the text or post structure that could cause a trend and make people ask around and come to use it.
+6. If editing posts is allowwed using api, create a way to keep track of all your composed posts (if you are user), so one can come back and edit it. 
+7. Gate this feature in premium with like 2 post history and 2 time edit max per post and higher history is ranked depending on the plan. This is because we'll need to be storing these data on a db and would cost.
+8. Make sure everything in the composer, both text count, words and other actual platform restrictions look into, detected and warned or stopped.
+9. Use actual platform Icons, X should be the actual icon not the outdated bird icon.
+10. Always warn users if they are not logged in or no internet connection, so they don't waste time.
+11. Handle saving the composing texts while typing to avoid user starting afresh if error or page reload. 
+12. hANDLE drafting and syncing to db, and display accordingly.
+13.
+
+
+For Quiz:
+1. Handle the actual removal of expired quiz from the db and local storage.
+2. The logo and company icon should be an upoad from the local device and uploaded to cloudinary.
+3. Handle actual full background imaging and also the icon displau propelt to be resposicve and fit screen sizes 
+4. The vertical quiznfeature is good, but the quiz still hides and appear, make the option to set it 3, with scroll(scroll all questions at once), single show(showing questions from left to right, previous doesnt show), scroll show(showing them vertically but hide the next question and show the previous) ---> Find a better name for the options if it doesnt sound professional.
+5. Tighen the quiz security and effectiveness more with best practices, cyber secuirty practices and also error pruning and removal. Anything at all that could possibly cause issue for rhe setter or taker.
+6. Premium users can add more than  4 options and limit number of questions per quiz too.
+
+
+For pricing:
+1. Create a concise section for each tool and the benefits for each plan, then beofre a comparation in a table.
+
+For Anonymous:
+1. Handle the saving, retriving and using the anonLink
+2. Handle security, safe senfing and filter from the anonymous to avoid db injection
+3. The features in the anonLink should be very relatable and match the user current plan and proper restrictions and allowance.
+4. 
