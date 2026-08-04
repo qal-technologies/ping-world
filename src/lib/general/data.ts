@@ -274,6 +274,18 @@ export const tools = [
     category: 'Utility',
     version: { v: '1.0', s: 'Stable' },
   },
+  {
+    icon: MessageCircle,
+    title: 'Chat & Post Mimicry',
+    description:
+      'Generate realistic chat screenshots and social post mockups for WhatsApp, X, Instagram, and Messenger with dynamic status bars.',
+    href: '/tools/chat-editor',
+    color: '#34d399',
+    tag: 'Social Mimic',
+    id: 'chat-editor',
+    category: 'Engagement',
+    version: { v: '1.0', s: 'Stable' },
+  },
 ];
 
 export const companyData = {

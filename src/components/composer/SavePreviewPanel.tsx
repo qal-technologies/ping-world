@@ -10,7 +10,6 @@ import {
   Loader2,
   Image as ImageIcon,
   Crown,
-  Twitter,
   Instagram,
   Facebook,
   Linkedin,
@@ -26,13 +25,14 @@ import type { Platform } from '@/lib/composer/types';
 import { PremiumGate } from './PremiumGate';
 import { LivePreview } from './LivePreview';
 import { toast } from 'sonner';
+import { XIcon } from '@/components/ui/XIcon';
 
 const cleanExportFeature = PREMIUM_FEATURES.find(
   (f) => f.id === 'clean_preview',
 )!;
 
 const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
-  x: Twitter,
+  x: XIcon,
   instagram: Instagram,
   facebook: Facebook,
   linkedin: Linkedin,
@@ -43,6 +43,7 @@ export function SavePreviewPanel() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<string | null>(null);
+  const [rawBlob, setRawBlob] = useState<Blob | null>(null);
 
   const [darkMode, setDarkMode] = useState(true);
 
@@ -87,39 +88,36 @@ export function SavePreviewPanel() {
         }
         const downloadUrl = URL.createObjectURL(blob);
         setPreviewBlob(downloadUrl);
+        setRawBlob(blob);
         toast.success('Preview captured!');
         setIsCapturing(false);
       }, 'image/png');
-    } catch {
+    } catch (e) {
       toast.error('Failed to capture preview.');
       setIsCapturing(false);
     }
   };
 
-  // jules edit: Safe cross-platform file saving using file-saver with a true binary Blob
+  // jules edit: Safe cross-platform file saving using file-saver with a true binary Blob directly to prevent sandboxed URL blocks
   const downloadPreview = async () => {
-    if (!previewBlob) return;
+    if (!rawBlob) return;
     try {
-      const res = await fetch(previewBlob);
-      const blob = await res.blob();
       const { saveAs } = await import('file-saver');
-      saveAs(blob, `pingworld-post-preview-${Date.now()}.png`);
+      saveAs(rawBlob, `pingworld-post-preview-${Date.now()}.png`);
       toast.success('Preview saved!');
-    } catch {
+    } catch (e) {
       toast.error('Failed to save preview blob.');
     }
   };
 
   const copyToClipboard = async () => {
-    if (!previewBlob) return;
+    if (!rawBlob) return;
     try {
-      const res = await fetch(previewBlob);
-      const blob = await res.blob();
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob }),
+        new ClipboardItem({ 'image/png': rawBlob }),
       ]);
       toast.success('Copied to clipboard!');
-    } catch {
+    } catch (e) {
       toast.error('Copy to clipboard not supported in this browser.');
     }
   };
