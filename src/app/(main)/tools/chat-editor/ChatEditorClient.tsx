@@ -1,6 +1,6 @@
 'use client';
 
-// jules edit: Highly perfected Chat & Post Mimicking workstation with iOS vs Android Toggle and High-Fidelity App Mockups
+// jules edit: Highly perfected Chat & Post Mimicking workstation with iOS vs Android Toggle and High-Fidelity App Mockups and Inline Chat Image Uploads
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -30,6 +30,7 @@ import {
   Signal,
   MoreHorizontal,
   ThumbsUp,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -45,6 +46,7 @@ interface ChatMessage {
   sender: 'me' | 'them';
   text: string;
   timestamp: string;
+  imageSrc?: string; // jules edit: added optional chat image upload source
 }
 
 interface PostComment {
@@ -67,6 +69,7 @@ export default function ChatEditorPage() {
   const [editingName, setEditingName] = useState('Alex');
   const [chatTheme, setChatTheme] = useState<'whatsapp' | 'instagram' | 'x' | 'messenger'>('whatsapp');
   const [deviceOS, setDeviceOS] = useState<'ios' | 'android'>('ios');
+  const [chatImageInput, setChatImageInput] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
 
   // --- Post Mimic States ---
@@ -88,15 +91,30 @@ export default function ChatEditorPage() {
 
   // --- Chat Functions ---
   const addMessage = (sender: 'me' | 'them') => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !chatImageInput) return;
     const newMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
       sender,
       text: inputText,
+      imageSrc: chatImageInput || undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     setMessages([...messages, newMessage]);
     setInputText('');
+    setChatImageInput(null);
+  };
+
+  // Handle local image uploads in chat
+  const handleChatImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const r = new FileReader();
+      r.onload = (ev) => {
+        setChatImageInput(ev.target?.result as string);
+        toast.success('Chat image selected! Choose "From Me" or "From Contact" to post.');
+      };
+      r.readAsDataURL(file);
+    }
   };
 
   const removeMessage = (id: string) => {
@@ -219,7 +237,6 @@ export default function ChatEditorPage() {
         {deviceOS === 'ios' ? (
           <>
             <span>9:41</span>
-            {/* Dynamic Island / Notch Mock */}
             <div className='w-24 h-5 bg-black rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-1.5 hidden sm:block border border-white/10' />
             <div className='flex items-center gap-1.5'>
               <Signal className='h-3 w-3' />
@@ -339,6 +356,31 @@ export default function ChatEditorPage() {
                     placeholder='Type a message...'
                     className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none'
                   />
+
+                  {/* jules edit: Chat image upload controls */}
+                  <div className='space-y-1.5'>
+                    <label className='text-[10px] text-pw-muted uppercase font-bold block flex items-center gap-1.5'>
+                      <Upload className='h-3.5 w-3.5' /> Upload Inline Chat Image
+                    </label>
+                    <Input
+                      type='file'
+                      accept='image/*'
+                      onChange={handleChatImageUpload}
+                      className='bg-white/5 border-white/10 h-10 text-xs'
+                    />
+                    {chatImageInput && (
+                      <div className='relative w-20 h-20 rounded-xl overflow-hidden border border-white/10'>
+                        <img src={chatImageInput} className='w-full h-full object-cover' />
+                        <button
+                          onClick={() => setChatImageInput(null)}
+                          className='absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 text-pw-danger'
+                        >
+                          <Trash2 className='h-3 w-3' />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className='grid grid-cols-2 gap-3'>
                     <Button
                       onClick={() => addMessage('them')}
@@ -377,7 +419,13 @@ export default function ChatEditorPage() {
                         <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded uppercase', m.sender === 'me' ? 'bg-pw-primary/20 text-pw-primary' : 'bg-pw-secondary/20 text-pw-secondary')}>
                           {m.sender === 'me' ? 'Me' : editingName}
                         </span>
-                        <p className='text-xs truncate text-pw-text'>{m.text}</p>
+                        {m.imageSrc ? (
+                          <span className='text-xs italic text-pw-primary flex items-center gap-1'>
+                            <ImageIcon className='h-3.5 w-3.5' /> [Image Upload]
+                          </span>
+                        ) : (
+                          <p className='text-xs truncate text-pw-text'>{m.text}</p>
+                        )}
                       </div>
                       <Button
                         size='icon'
@@ -493,7 +541,12 @@ export default function ChatEditorPage() {
                             isMe ? 'bg-[#0084FF] text-white self-end rounded-br-none' : 'bg-slate-100 text-slate-800 self-start rounded-bl-none'
                         )}
                       >
-                        <p>{m.text}</p>
+                        {/* jules edit: Render inline image uploads cleanly */}
+                        {m.imageSrc ? (
+                          <img src={m.imageSrc} className='w-44 h-auto rounded-xl object-contain mb-1' />
+                        ) : (
+                          <p>{m.text}</p>
+                        )}
                         <span className={cn('text-[8px] text-right mt-1.5 block opacity-60', isMe ? 'text-slate-500' : 'text-slate-400')}>
                           {m.timestamp}
                         </span>
