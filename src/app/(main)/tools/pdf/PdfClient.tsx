@@ -1,6 +1,6 @@
 'use client';
 
-// jules edit: Highly sophisticated PDF & Word Studio Client with Chapter/Book Hierarchy, Auto-Overflow, and Real-Stream parsing fallbacks
+// jules edit: Highly perfected PDF & Word Studio Client with Front/Back Covers, Footnotes, Chapter Deletions, Highlights, Bullet Lists, and Full-Book Word Exports
 import { useState, useEffect, useRef } from 'react';
 import {
   FileText,
@@ -24,10 +24,10 @@ import {
   Underline,
   Indent,
   Settings,
-  FolderOpen,
   Save,
   BookOpen,
-  ChevronDown,
+  Image,
+  Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -54,18 +54,32 @@ interface PDFImagePage {
   caption: string;
 }
 
-// jules edit: PDF Book Page with Chapter associations & custom style alignments
+interface ImagePaletteItem {
+  id: string;
+  name: string; // reference name (e.g. graph1)
+  src: string; // base64 URL
+  width: number;
+  height: number;
+}
+
+interface Footnote {
+  id: string;
+  number: number;
+  text: string;
+}
+
 interface BookPage {
   id: string;
   title: string;
   showTitle: boolean;
   content: string;
-  chapterId: string | null; // associated chapter ID or null for independent
+  chapterId: string | null;
   titleAlign: 'left' | 'center' | 'right';
   titleColor: string;
   titleBgColor: string;
   titlePadding: number;
   titleMargin: number;
+  footnotes: Footnote[];
 }
 
 interface BookChapter {
@@ -74,36 +88,24 @@ interface BookChapter {
 }
 
 export default function PdfToolStudioPage() {
-  const { isPremium, user } = useAppContext();
+  const { isPremium } = useAppContext();
   const [activeTab, setActiveTab] = useState('img-to-pdf');
 
   // --- Image to PDF States ---
   const [uploadedImages, setUploadedImages] = useState<PDFImagePage[]>([]);
   const [pdfOrientation, setPdfOrientation] = useState<'p' | 'l'>('p');
-
-  const handleMultipleImagesUpload = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const newImg: PDFImagePage = {
-          id: `${Date.now()}-${Math.random()}`,
-          name: file.name,
-          src: event.target?.result as string,
-          title: file.name.split('.')[0],
-          caption: '',
-        };
-        setUploadedImages((prev) => [...prev, newImg]);
-      };
-      reader.readAsDataURL(file);
-    });
-    toast.success('Images added to PDF layout queue!');
-  };
   const [pdfMargin, setPdfMargin] = useState<'none' | 'small' | 'normal'>('normal');
+
+  // --- Cover Page States ---
+  const [hasFrontCover, setHasFrontCover] = useState(true);
+  const [frontCoverTitle, setFrontCoverTitle] = useState('The Great Manuscript');
+  const [frontCoverSubtitle, setFrontCoverSubtitle] = useState('A comprehensive study of digital workspaces.');
+  const [frontCoverAuthor, setFrontCoverAuthor] = useState('Author Name');
+  const [frontCoverBg, setFrontCoverBg] = useState<string | null>(null);
+
+  const [hasBackCover, setHasBackCover] = useState(true);
+  const [backCoverSummary, setBackCoverSummary] = useState('This book outlines standard client-side compilers and modular book builders designed exclusively for creators.');
+  const [backCoverBgColor, setBackCoverBgColor] = useState('#0B0F19');
 
   // --- Book Creator (Text to PDF) States ---
   const [chapters, setChapters] = useState<BookChapter[]>([
@@ -114,13 +116,16 @@ export default function PdfToolStudioPage() {
       id: 'pg-1',
       title: 'First Page Title',
       showTitle: true,
-      content: 'This is the main body paragraph of the first page. You can customize alignments, borders, and margins using the left edit panel.',
+      content: 'This is the main body paragraph of the first page. Highlight some text and click the <b>Bold</b> or <i>Italic</i> buttons below to see rich formatting. Or add a footnote at the bottom of the page!\n\nHere is a list of features:\n* Unlimited chapters & pages\n* Modular footnoting structures\n* Built-in Image Reference Palettes\n* Dynamic highlights using the <mark>highlighter</mark> markup.',
       chapterId: 'ch-1',
       titleAlign: 'left',
       titleColor: '#00f0ff',
       titleBgColor: 'transparent',
       titlePadding: 4,
       titleMargin: 10,
+      footnotes: [
+        { id: 'fn-1', number: 1, text: 'This is the first footnote in this chapter.' }
+      ]
     }
   ]);
 
@@ -128,8 +133,14 @@ export default function PdfToolStudioPage() {
   const [stackType, setStackType] = useState<'page' | 'chapter'>('page');
   const [showStickyChapterSelector, setShowStickyChapterSelector] = useState<string | null>(null);
 
-  // Styling tab state for content editor
-  const [selectedEffect, setSelectedEffect] = useState<'normal' | 'bold' | 'italic' | 'underline'>('normal');
+  // Image Palette State
+  const [imagePalette, setImagePalette] = useState<ImagePaletteItem[]>([]);
+  const [showImagePaletteDialog, setShowImagePaletteDialog] = useState(false);
+
+  // New Footnote States
+  const [footnoteInput, setFootnoteInput] = useState('');
+
+  // Title configuration box
   const [showTitleConfig, setShowTitleConfig] = useState<string | null>(null);
 
   // PDF to Word states
@@ -154,13 +165,21 @@ export default function PdfToolStudioPage() {
 
   // Save drafts locally
   useEffect(() => {
-    const saved = localStorage.getItem('pw_pdf_book_workspace');
+    const saved = localStorage.getItem('pw_pdf_book_workspace_v3');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.chapters && parsed.pages) {
           setChapters(parsed.chapters);
           setPages(parsed.pages);
+          if (parsed.imagePalette) {
+            setImagePalette(parsed.imagePalette);
+          }
+          if (parsed.frontCoverTitle) {
+            setFrontCoverTitle(parsed.frontCoverTitle);
+            setFrontCoverSubtitle(parsed.frontCoverSubtitle);
+            setFrontCoverAuthor(parsed.frontCoverAuthor);
+          }
         }
       } catch (e) {
         console.warn(e);
@@ -170,8 +189,8 @@ export default function PdfToolStudioPage() {
 
   const saveBookDraft = () => {
     localStorage.setItem(
-      'pw_pdf_book_workspace',
-      JSON.stringify({ chapters, pages })
+      'pw_pdf_book_workspace_v3',
+      JSON.stringify({ chapters, pages, imagePalette, frontCoverTitle, frontCoverSubtitle, frontCoverAuthor })
     );
     toast.success('Progress saved locally as draft!');
   };
@@ -198,7 +217,6 @@ export default function PdfToolStudioPage() {
   };
 
   // --- TEXT METRICS & OVERFLOW CALCULATION ---
-  // Calculates estimated pages or overflow status for A4 page sizing (roughly 450 words max per page)
   const calculateTextMetrics = (content: string) => {
     const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
     const maxWordsPerPage = 400;
@@ -216,7 +234,6 @@ export default function PdfToolStudioPage() {
         name: `Chapter ${chapters.length + 1}: Unnamed Chapter`,
       };
       setChapters([...chapters, newCh]);
-      // "when a stack is a chapter and add is clicked, it automatically goes to page as dropdown to avoid stacking chapters"
       setStackType('page');
       toast.success('Chapter stack added! Stack type auto-switched to Page.');
     } else {
@@ -233,10 +250,11 @@ export default function PdfToolStudioPage() {
         titleBgColor: 'transparent',
         titlePadding: 4,
         titleMargin: 10,
+        footnotes: []
       };
       setPages([...pages, newPage]);
       setActivePageIndex(pages.length);
-      toast.success('New page added under active chapter!');
+      toast.success('New page added!');
     }
   };
 
@@ -245,24 +263,165 @@ export default function PdfToolStudioPage() {
       prev.map((p) => (p.id === pageId ? { ...p, chapterId } : p))
     );
     setShowStickyChapterSelector(null);
-    toast.success('Chapter association updated.');
+    toast.success('Chapter updated.');
   };
 
-  // --- STYLING BAR / TEXT INJECTOR ---
-  const handleFormatText = (style: 'bold' | 'italic' | 'underline') => {
-    setSelectedEffect(style);
-    const textToAdd =
-      style === 'bold' ? ' **bold text**'
-      : style === 'italic' ? ' *italic text*'
-      : ' __underlined text__';
+  // Edit Chapter Name directly
+  const handleEditChapterName = (id: string, newName: string) => {
+    setChapters(prev =>
+      prev.map((ch) => (ch.id === id ? { ...ch, name: newName } : ch))
+    );
+  };
 
-    // Append formatting indicators
-    const currentActive = pages[activePageIndex];
-    if (currentActive) {
-      const updatedContent = currentActive.content + textToAdd;
-      setPages(prev =>
-        prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: updatedContent } : p))
-      );
+  // Delete Chapter
+  const handleDeleteChapter = (id: string) => {
+    setChapters(prev => prev.filter((ch) => ch.id !== id));
+    // Orphan associated pages
+    setPages(prev =>
+      prev.map((p) => (p.chapterId === id ? { ...p, chapterId: null } : p))
+    );
+    toast.success('Chapter deleted. Sub-pages are now independent.');
+  };
+
+  // Delete Page
+  const handleDeletePage = (id: string) => {
+    if (pages.length === 1) {
+      return toast.error('You must keep at least one page!');
+    }
+    setPages(prev => prev.filter((p) => p.id !== id));
+    setActivePageIndex(0);
+    toast.success('Page deleted.');
+  };
+
+  // --- STYLING BAR / TEXT INJECTOR (Detect and replace selected text) ---
+  const handleFormatSelectedText = (tag: 'b' | 'i' | 'u' | 'mark') => {
+    const textarea = document.getElementById('body-textarea') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = activePage.content;
+
+    const selectedText = text.substring(start, end);
+    const formattedText = `<${tag}>${selectedText || 'styled text'}</${tag}>`;
+
+    const updatedContent = text.substring(0, start) + formattedText + text.substring(end);
+    setPages(prev =>
+      prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: updatedContent } : p))
+    );
+
+    // Focus back on textarea
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start, start + formattedText.length);
+    }, 50);
+  };
+
+  // --- FOOTNOTES SUPPORT ---
+  const handleAddFootnote = () => {
+    if (!footnoteInput.trim()) return;
+    const activePageObj = pages[activePageIndex];
+    if (!activePageObj) return;
+
+    const newFn: Footnote = {
+      id: `fn-${Date.now()}`,
+      number: activePageObj.footnotes.length + 1,
+      text: footnoteInput.trim()
+    };
+
+    const textarea = document.getElementById('body-textarea') as HTMLTextAreaElement;
+    const cursor = textarea ? textarea.selectionStart : activePageObj.content.length;
+    const text = activePageObj.content;
+    const superscriptTag = ` [fn:${newFn.number}]`;
+    const updatedContent = text.substring(0, cursor) + superscriptTag + text.substring(cursor);
+
+    setPages(prev =>
+      prev.map((p, idx) =>
+        idx === activePageIndex
+          ? { ...p, content: updatedContent, footnotes: [...p.footnotes, newFn] }
+          : p
+      )
+    );
+
+    setFootnoteInput('');
+    toast.success('Footnote added!');
+  };
+
+  const handleRemoveFootnote = (fnId: string) => {
+    setPages(prev =>
+      prev.map((p, idx) =>
+        idx === activePageIndex
+          ? { ...p, footnotes: p.footnotes.filter(fn => fn.id !== fnId) }
+          : p
+      )
+    );
+  };
+
+  // --- IMAGE PALETTE MANAGER ---
+  const handleImagePaletteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newItem: ImagePaletteItem = {
+          id: `img-${Date.now()}-${Math.random()}`,
+          name: file.name.split('.')[0].replace(/\s+/g, '_').toLowerCase(),
+          src: event.target?.result as string,
+          width: 100,
+          height: 100,
+        };
+        setImagePalette(prev => [...prev, newItem]);
+        toast.success(`Image "${newItem.name}" added to palette!`);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleInsertImagePaletteRef = (refName: string) => {
+    const textarea = document.getElementById('body-textarea') as HTMLTextAreaElement;
+    const cursor = textarea ? textarea.selectionStart : activePage.content.length;
+    const text = activePage.content;
+    const imgTag = ` image[${refName}, width=100, height=100, align=center]`;
+    const updatedContent = text.substring(0, cursor) + imgTag + text.substring(cursor);
+
+    setPages(prev =>
+      prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: updatedContent } : p))
+    );
+  };
+
+  const handleMultipleImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newImg: PDFImagePage = {
+          id: `${Date.now()}-${Math.random()}`,
+          name: file.name,
+          src: event.target?.result as string,
+          title: file.name.split('.')[0],
+          caption: '',
+        };
+        setUploadedImages((prev) => [...prev, newImg]);
+      };
+      reader.readAsDataURL(file);
+    });
+    toast.success('Images added to PDF layout queue!');
+  };
+
+  // Compile full cover background loading
+  const handleFrontCoverBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const r = new FileReader();
+      r.onload = (ev) => {
+        setFrontCoverBg(ev.target?.result as string);
+        toast.success('Front cover background image loaded!');
+      };
+      r.readAsDataURL(file);
     }
   };
 
@@ -326,6 +485,87 @@ export default function PdfToolStudioPage() {
     });
   };
 
+  // Draw rich text with <b>, <i>, <u>, and highlights/lists parsing into PDF
+  const drawRichText = (doc: any, text: string, x: number, y: number, maxWidth: number) => {
+    let currentX = x;
+    let currentY = y;
+    let currentStyle = 'normal';
+
+    const words = text.split(/\s+/);
+    doc.setFont('helvetica', 'normal');
+
+    // Bullet points list detection
+    const isBulletLine = text.trim().startsWith('*');
+    if (isBulletLine) {
+      doc.text('•', x - 4, y);
+    }
+
+    words.forEach((word) => {
+      let fontStyle = currentStyle;
+      let cleanWord = word;
+      let isUnderline = false;
+      let isHighlight = false;
+
+      if (cleanWord.includes('<b>')) {
+        fontStyle = 'bold';
+        cleanWord = cleanWord.replace('<b>', '');
+      }
+      if (cleanWord.includes('</b>')) {
+        currentStyle = 'normal';
+        cleanWord = cleanWord.replace('</b>', '');
+      }
+      if (cleanWord.includes('<i>')) {
+        fontStyle = 'italic';
+        cleanWord = cleanWord.replace('<i>', '');
+      }
+      if (cleanWord.includes('</i>')) {
+        currentStyle = 'normal';
+        cleanWord = cleanWord.replace('</i>', '');
+      }
+      if (cleanWord.includes('<u>')) {
+        isUnderline = true;
+        cleanWord = cleanWord.replace('<u>', '');
+      }
+      if (cleanWord.includes('</u>')) {
+        isUnderline = false;
+        cleanWord = cleanWord.replace('</u>', '');
+      }
+      if (cleanWord.includes('<mark>')) {
+        isHighlight = true;
+        cleanWord = cleanWord.replace('<mark>', '');
+      }
+      if (cleanWord.includes('</mark>')) {
+        isHighlight = false;
+        cleanWord = cleanWord.replace('</mark>', '');
+      }
+
+      if (cleanWord.startsWith('*')) {
+        cleanWord = cleanWord.replace('*', '');
+      }
+
+      doc.setFont('helvetica', fontStyle);
+      const wordWidth = doc.getTextWidth(cleanWord + ' ');
+
+      if (currentX + wordWidth > x + maxWidth) {
+        currentX = x;
+        currentY += 7;
+      }
+
+      if (isHighlight) {
+        doc.setFillColor(255, 235, 59); // Yellow highlighter
+        doc.rect(currentX, currentY - 4.5, wordWidth, 6.5, 'F');
+      }
+
+      doc.text(cleanWord, currentX, currentY);
+      if (isUnderline) {
+        doc.line(currentX, currentY + 1, currentX + wordWidth - 1, currentY + 1);
+      }
+      currentX += wordWidth;
+    });
+
+    return currentY;
+  };
+
   // Compile Book-style chapters and titles to PDF
   const handleCompileBookPdf = async () => {
     triggerExport('book-manuscript', 'pdf', async (filename) => {
@@ -334,55 +574,146 @@ export default function PdfToolStudioPage() {
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF();
 
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // 1. RENDER FRONT COVER (Page 1)
+        if (hasFrontCover) {
+          if (frontCoverBg) {
+            doc.addImage(frontCoverBg, 'JPEG', 0, 0, 210, 297);
+          } else {
+            doc.setFillColor(15, 23, 42); // Elegant slate-900 front cover
+            doc.rect(0, 0, 210, 297, 'F');
+          }
+
+          doc.setFontSize(28);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(255, 255, 255);
+          doc.text(frontCoverTitle.toUpperCase(), 15, 90);
+
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(200, 200, 200);
+          doc.text(frontCoverSubtitle, 15, 110);
+
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(255, 255, 255);
+          doc.text(`Written by ${frontCoverAuthor}`, 15, 240);
+
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(150, 150, 150);
+          doc.text('Published on Ping World Platform', 15, 275);
+          doc.addPage();
+        }
+
+        // 2. RENDER PAGES & CHAPTERS
         pages.forEach((page, idx) => {
-          if (idx > 0) doc.addPage();
+          if (idx > 0 || hasFrontCover) doc.addPage();
 
           const belongsToChapter = chapters.find((c) => c.id === page.chapterId);
-
-          // Rule: First titled page under same chapter displays chapter directly above title in smaller font
           const isFirstPageOfChapter = page.chapterId && pages.findIndex(p => p.chapterId === page.chapterId) === idx;
 
           if (page.showTitle) {
+            doc.setTextColor(0, 240, 255); // styled book titles
+
+            // Calculate precise alignment coordinates
+            const titleWidth = doc.getTextWidth(page.title);
+            let titleX = 15;
+            if (page.titleAlign === 'center') {
+              titleX = (pageWidth - titleWidth) / 2;
+            } else if (page.titleAlign === 'right') {
+              titleX = pageWidth - 15 - titleWidth;
+            }
+
             if (belongsToChapter && isFirstPageOfChapter) {
-              // Chapter directly above title
               doc.setFontSize(12);
               doc.setFont('helvetica', 'italic');
               doc.text(belongsToChapter.name.toUpperCase(), 15, 20);
 
               doc.setFontSize(22);
               doc.setFont('helvetica', 'bold');
-              doc.text(page.title, 15, 30);
+              doc.text(page.title, titleX, 30);
             } else if (belongsToChapter) {
-              // Regular chapter display on top left, title right
               doc.setFontSize(9);
               doc.setFont('helvetica', 'normal');
               doc.text(belongsToChapter.name, 15, 12);
               doc.text(page.title, 150, 12);
               doc.line(15, 15, 195, 15);
             } else {
-              // Independent page title
               doc.setFontSize(20);
               doc.setFont('helvetica', 'bold');
-              doc.text(page.title, 15, 25);
+              doc.text(page.title, titleX, 25);
             }
           }
 
-          // Main body text flow
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'normal');
-          const splitText = doc.splitTextToSize(page.content, 180);
+          // Main body text flow with paragraph indentation rules
+          doc.setTextColor(30, 41, 59); // Dark slate body text
           const startY = page.showTitle ? 42 : 25;
-          doc.text(splitText, 15, startY);
+          let currentY = startY;
 
-          // Render standard footer
+          const lines = page.content.split('\n');
+          lines.forEach((line) => {
+            if (line.trim().startsWith('image[')) {
+              const imgMatches = line.match(/image\[(.*?)\]/);
+              if (imgMatches) {
+                const parts = imgMatches[1].split(',');
+                const refName = parts[0].trim();
+                const paletteItem = imagePalette.find(item => item.name === refName);
+                if (paletteItem) {
+                  doc.addImage(paletteItem.src, 'PNG', 15, currentY, 60, 60);
+                  currentY += 65;
+                }
+              }
+            } else {
+              // Apply indented layout to paragraph begins
+              const isIndentedBegin = line.length > 5 && !line.trim().startsWith('*');
+              const finalX = isIndentedBegin ? 23 : 15; // 8mm left paragraph indent for book compatibility
+
+              currentY = drawRichText(doc, line, finalX, currentY, 180);
+              currentY += 7;
+            }
+          });
+
+          // Draw Footnotes
+          if (page.footnotes && page.footnotes.length > 0) {
+            let footnoteY = 250;
+            doc.line(15, footnoteY - 4, 80, footnoteY - 4);
+            page.footnotes.forEach((fn) => {
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'normal');
+              doc.text(`[${fn.number}] ${fn.text}`, 15, footnoteY);
+              footnoteY += 5;
+            });
+          }
+
+          // Footer page numbering
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
-          doc.text(`Page ${idx + 1} | Compiled with Ping World`, 15, 285);
+          doc.text(`Page ${hasFrontCover ? idx + 2 : idx + 1} | Compiled with Ping World`, 15, 285);
         });
+
+        // 3. RENDER BACK COVER (Page Last)
+        if (hasBackCover) {
+          doc.addPage();
+          doc.setFillColor(15, 23, 42); // Elegant slate back cover
+          doc.rect(0, 0, 210, 297, 'F');
+
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(200, 200, 200);
+          const splitSummary = doc.splitTextToSize(backCoverSummary, 160);
+          doc.text(splitSummary, 25, 100);
+
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(0, 240, 255);
+          doc.text('PING WORLD CREATIVE STUDIOS', 25, 240);
+        }
 
         doc.save(`${filename}.pdf`);
         toast.dismiss();
-        toast.success('PDF manuscript compiled!');
+        toast.success('PDF manuscript compiled with Front & Back Covers, Footnotes, and Paragraph Indents!');
       } catch (err) {
         toast.dismiss();
         toast.error('Compilation failed.');
@@ -390,7 +721,91 @@ export default function PdfToolStudioPage() {
     });
   };
 
-  // --- UPGRADED REAL STREAM CONVERTERS ---
+  // Compile/Export complete book manuscript as MS Word (.doc compatible HTML XML)
+  const handleExportBookAsWord = () => {
+    triggerExport('book-manuscript-full', 'doc', (filename) => {
+      let htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><title>Book Manuscript</title><meta charset="utf-8">
+        <style>
+          body { font-family: 'Calibri', 'Arial', sans-serif; line-height: 1.6; padding: 50px; }
+          .cover { text-align: center; margin-top: 100px; page-break-after: always; }
+          .cover h1 { font-size: 32pt; font-weight: bold; margin-bottom: 10px; }
+          .cover h2 { font-size: 18pt; color: #555; margin-bottom: 200px; }
+          .chapter { font-size: 20pt; font-weight: bold; color: #00f0ff; margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
+          .page-title { font-size: 16pt; font-weight: bold; margin-top: 20px; }
+          p { text-indent: 30px; font-size: 11pt; margin-bottom: 10px; text-align: justify; }
+          .footnotes { font-size: 9pt; border-top: 1px solid #aaa; margin-top: 50px; padding-top: 10px; }
+        </style>
+        </head>
+        <body>
+      `;
+
+      // 1. Add Front Cover
+      if (hasFrontCover) {
+        htmlContent += `
+          <div class="cover">
+            <h1>${frontCoverTitle}</h1>
+            <h2>${frontCoverSubtitle}</h2>
+            <h3>Written by: ${frontCoverAuthor}</h3>
+          </div>
+        `;
+      }
+
+      // 2. Add Chapters & Pages
+      pages.forEach((page, idx) => {
+        const belongsToChapter = chapters.find((c) => c.id === page.chapterId);
+        const isFirstPageOfChapter = page.chapterId && pages.findIndex(p => p.chapterId === page.chapterId) === idx;
+
+        if (belongsToChapter && isFirstPageOfChapter) {
+          htmlContent += `<div class="chapter">${belongsToChapter.name}</div>`;
+        }
+
+        if (page.showTitle) {
+          htmlContent += `<div class="page-title" style="text-align: ${page.titleAlign};">${page.title}</div>`;
+        }
+
+        // Clean inline tags into HTML-compatible tags
+        const formattedContent = page.content
+          .replace(/\n\n/g, '</p><p>')
+          .replace(/\n/g, '<br/>')
+          .replace(/image\[(.*?)\]/g, '<b>[Image reference: $1]</b>');
+
+        htmlContent += `<p>${formattedContent}</p>`;
+
+        // Footnotes
+        if (page.footnotes && page.footnotes.length > 0) {
+          htmlContent += `<div class="footnotes">`;
+          page.footnotes.forEach((fn) => {
+            htmlContent += `<div>[${fn.number}] ${fn.text}</div>`;
+          });
+          htmlContent += `</div>`;
+        }
+      });
+
+      // 3. Add Back Cover
+      if (hasBackCover) {
+        htmlContent += `
+          <div style="page-break-before: always; text-align: center; margin-top: 100px;">
+            <p>${backCoverSummary}</p>
+            <h4 style="color: #00f0ff; margin-top: 200px;">PING WORLD STUDIOS</h4>
+          </div>
+        `;
+      }
+
+      htmlContent += `</body></html>`;
+
+      const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Full Book manuscript exported as Microsoft Word Document (.doc) successfully!');
+    });
+  };
+
   const handlePdfToWordUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -401,8 +816,6 @@ export default function PdfToolStudioPage() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const raw = event.target?.result as string;
-
-      // smart extraction parser
       const textStream: string[] = [];
       const matches = raw.match(/\((.*?)\)\s*Tj/g);
       if (matches && matches.length > 0) {
@@ -563,7 +976,7 @@ export default function PdfToolStudioPage() {
             PDF & Word <span className='gradient-text'>Studio.</span>
           </h1>
           <p className='mt-2 text-pw-muted text-sm leading-relaxed'>
-            Sophisticated book publishing workspace with chapter-page structures, automatic overflow sequence tracking, and high-fidelity text-stream parses.
+            Sophisticated book publishing workspace with chapter-page structures, front/back covers creator, footnotes, local image palette referencing, and high-fidelity text-stream parses.
           </p>
         </div>
       </div>
@@ -688,9 +1101,14 @@ export default function PdfToolStudioPage() {
                 <Card className='p-4 bg-white/[0.01] border border-white/5 space-y-4'>
                   <div className='flex items-center justify-between'>
                     <span className='text-xs font-bold text-pw-muted uppercase'>Book Stack Maker</span>
-                    <Button onClick={saveBookDraft} size='sm' variant='outline' className='h-8 text-[10px] gap-1'>
-                      <Save className='h-3 w-3' /> Save Draft
-                    </Button>
+                    <div className='flex gap-1.5'>
+                      <Button onClick={() => setShowImagePaletteDialog(true)} size='sm' variant='outline' className='h-8 text-[10px] gap-1'>
+                        <ImageIcon className='h-3 w-3 text-pw-primary' /> Image Palette
+                      </Button>
+                      <Button onClick={saveBookDraft} size='sm' variant='outline' className='h-8 text-[10px] gap-1'>
+                        <Save className='h-3 w-3' /> Save Draft
+                      </Button>
+                    </div>
                   </div>
 
                   <div className='grid grid-cols-1 gap-2'>
@@ -716,32 +1134,49 @@ export default function PdfToolStudioPage() {
                       const chPages = pages.filter((p) => p.chapterId === ch.id);
                       return (
                         <div key={ch.id} className='space-y-1.5'>
-                          <div className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5'>
-                            <span className='text-xs font-bold text-pw-primary font-mono'>{ch.name}</span>
-                            <Button
-                              size='icon'
-                              variant='ghost'
-                              onClick={() => {
-                                const newPage: BookPage = {
-                                  id: `pg-${Date.now()}`,
-                                  title: `Page ${pages.length + 1} Title`,
-                                  showTitle: true,
-                                  content: '',
-                                  chapterId: ch.id,
-                                  titleAlign: 'left',
-                                  titleColor: '#00f0ff',
-                                  titleBgColor: 'transparent',
-                                  titlePadding: 4,
-                                  titleMargin: 10,
-                                };
-                                setPages([...pages, newPage]);
-                                setActivePageIndex(pages.length);
-                              }}
-                              title='Add page under chapter'
-                              className='h-6 w-6 text-pw-muted hover:text-pw-primary'
-                            >
-                              <Plus className='h-3 w-3' />
-                            </Button>
+                          {/* Chapter Header with direct rename input & Delete button */}
+                          <div className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 gap-2'>
+                            <Input
+                              value={ch.name}
+                              onChange={(e) => handleEditChapterName(ch.id, e.target.value)}
+                              className='h-8 bg-transparent border-none text-xs font-bold text-pw-primary font-mono focus-visible:ring-0 p-0 flex-1'
+                            />
+                            <div className='flex items-center gap-1 shrink-0'>
+                              <Button
+                                size='icon'
+                                variant='ghost'
+                                onClick={() => handleDeleteChapter(ch.id)}
+                                className='h-6 w-6 text-pw-muted hover:text-pw-danger'
+                                title='Delete Chapter'
+                              >
+                                <Trash2 className='h-3 w-3' />
+                              </Button>
+                              <Button
+                                size='icon'
+                                variant='ghost'
+                                onClick={() => {
+                                  const newPage: BookPage = {
+                                    id: `pg-${Date.now()}`,
+                                    title: `Page ${pages.length + 1} Title`,
+                                    showTitle: true,
+                                    content: '',
+                                    chapterId: ch.id,
+                                    titleAlign: 'left',
+                                    titleColor: '#00f0ff',
+                                    titleBgColor: 'transparent',
+                                    titlePadding: 4,
+                                    titleMargin: 10,
+                                    footnotes: []
+                                  };
+                                  setPages([...pages, newPage]);
+                                  setActivePageIndex(pages.length);
+                                }}
+                                title='Add page under chapter'
+                                className='h-6 w-6 text-pw-muted hover:text-pw-primary'
+                              >
+                                <Plus className='h-3 w-3' />
+                              </Button>
+                            </div>
                           </div>
 
                           {/* Pages Indented slightly under chapter */}
@@ -761,9 +1196,23 @@ export default function PdfToolStudioPage() {
                                     <span className='font-mono text-[10px] text-pw-primary'>pg-{pIdx + 1}</span>
                                     <span className='truncate'>{page.title || 'Untitled Page'}</span>
                                   </div>
-                                  <span className='text-[8px] font-bold font-mono px-1 py-0.5 rounded bg-white/5 uppercase'>
-                                    pg
-                                  </span>
+                                  <div className='flex items-center gap-1.5 shrink-0'>
+                                    <Button
+                                      size='icon'
+                                      variant='ghost'
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePage(page.id);
+                                      }}
+                                      className='h-5 w-5 text-pw-muted hover:text-pw-danger'
+                                      title='Delete Page'
+                                    >
+                                      <Trash2 className='h-3 w-3' />
+                                    </Button>
+                                    <span className='text-[8px] font-bold font-mono px-1 py-0.5 rounded bg-white/5 uppercase'>
+                                      pg
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             })}
@@ -791,15 +1240,29 @@ export default function PdfToolStudioPage() {
                                 <span className='font-mono text-[10px] text-pw-primary'>pg-{pIdx + 1}</span>
                                 <span className='truncate'>{page.title || 'Untitled Page'}</span>
                               </div>
-                              <span
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowStickyChapterSelector(page.id);
-                                }}
-                                className='text-[8px] font-bold font-mono px-1 py-0.5 rounded bg-pw-primary/20 text-pw-primary uppercase hover:bg-pw-primary/30'
-                              >
-                                Assign Ch
-                              </span>
+                              <div className='flex items-center gap-1.5 shrink-0'>
+                                <Button
+                                  size='icon'
+                                  variant='ghost'
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeletePage(page.id);
+                                  }}
+                                  className='h-5 w-5 text-pw-muted hover:text-pw-danger'
+                                  title='Delete Page'
+                                >
+                                  <Trash2 className='h-3 w-3' />
+                                </Button>
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowStickyChapterSelector(page.id);
+                                  }}
+                                  className='text-[8px] font-bold font-mono px-1 py-0.5 rounded bg-pw-primary/20 text-pw-primary uppercase hover:bg-pw-primary/30 shrink-0'
+                                >
+                                  Assign Ch
+                                </span>
+                              </div>
                             </div>
                           );
                         })}
@@ -837,6 +1300,69 @@ export default function PdfToolStudioPage() {
 
               {/* Editor Workspace Right */}
               <div className='lg:col-span-8 space-y-4'>
+                {/* Front & Back Cover Creator (Dynamic Panel) */}
+                <Card className='p-5 bg-white/[0.01] border border-white/5 space-y-4'>
+                  <div className='flex items-center justify-between border-b border-white/5 pb-2'>
+                    <span className='text-xs font-bold uppercase text-pw-primary flex items-center gap-1.5'>
+                      <Sparkles className='h-4 w-4' /> Covers Creator (Front & Back Cover)
+                    </span>
+                  </div>
+
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                    {/* Front Cover Settings */}
+                    <div className='space-y-3 p-3.5 rounded-xl bg-white/[0.01] border border-white/5'>
+                      <div className='flex items-center justify-between'>
+                        <span className='text-xs font-bold text-white'>Front Cover</span>
+                        <label className='text-[10px] text-pw-muted flex items-center gap-1 cursor-pointer select-none'>
+                          <input type='checkbox' checked={hasFrontCover} onChange={(e) => setHasFrontCover(e.target.checked)} /> Include Cover
+                        </label>
+                      </div>
+                      <Input
+                        value={frontCoverTitle}
+                        onChange={(e) => setFrontCoverTitle(e.target.value)}
+                        placeholder='Book Main Title...'
+                        className='bg-white/5 border-white/10 h-9 text-xs'
+                      />
+                      <Input
+                        value={frontCoverSubtitle}
+                        onChange={(e) => setFrontCoverSubtitle(e.target.value)}
+                        placeholder='Sub-title...'
+                        className='bg-white/5 border-white/10 h-9 text-xs'
+                      />
+                      <Input
+                        value={frontCoverAuthor}
+                        onChange={(e) => setFrontCoverAuthor(e.target.value)}
+                        placeholder='Author Name...'
+                        className='bg-white/5 border-white/10 h-9 text-xs'
+                      />
+                      <div className='space-y-1'>
+                        <span className='text-[9px] text-pw-muted uppercase font-bold block'>Cover Background Image</span>
+                        <Input type='file' accept='image/*' onChange={handleFrontCoverBgUpload} className='bg-white/5 border-white/10 h-9 text-xs' />
+                      </div>
+                    </div>
+
+                    {/* Back Cover Settings */}
+                    <div className='space-y-3 p-3.5 rounded-xl bg-white/[0.01] border border-white/5'>
+                      <div className='flex items-center justify-between'>
+                        <span className='text-xs font-bold text-white'>Back Cover</span>
+                        <label className='text-[10px] text-pw-muted flex items-center gap-1 cursor-pointer select-none'>
+                          <input type='checkbox' checked={hasBackCover} onChange={(e) => setHasBackCover(e.target.checked)} /> Include Back
+                        </label>
+                      </div>
+                      <textarea
+                        value={backCoverSummary}
+                        onChange={(e) => setBackCoverSummary(e.target.value)}
+                        placeholder='Book Summary / Back blurb...'
+                        className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:border-pw-primary resize-none'
+                      />
+                      <div className='space-y-1.5'>
+                        <span className='text-[9px] text-pw-muted uppercase font-bold block'>Back Cover Color</span>
+                        <Input value={backCoverBgColor} onChange={(e) => setBackCoverBgColor(e.target.value)} className='bg-white/5 border-white/10 h-8 text-xs font-mono' />
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
                 {activePage ? (
                   <Card className='p-6 bg-white/[0.01] border border-white/5 space-y-4'>
                     {/* Header Controls (Title alignment & Toggle) */}
@@ -850,7 +1376,7 @@ export default function PdfToolStudioPage() {
                         >
                           <Settings className='h-3.5 w-3.5' /> Title Settings
                         </Button>
-                        <label className='text-xs text-pw-muted flex items-center gap-1.5 cursor-pointer'>
+                        <label className='text-xs text-pw-muted flex items-center gap-1.5 cursor-pointer select-none'>
                           <input
                             type='checkbox'
                             checked={activePage.showTitle}
@@ -958,53 +1484,110 @@ export default function PdfToolStudioPage() {
                         />
                       )}
 
-                      {/* Formatting Tool bar above body text */}
-                      <div className='flex items-center gap-1 bg-white/5 p-1.5 rounded-xl border border-white/10'>
+                      {/* Formatting Tool bar above body text (Handles selected text formatting & Highlights) */}
+                      <div className='flex items-center gap-1 bg-white/5 p-1.5 rounded-xl border border-white/10 flex-wrap'>
                         <Button
                           size='sm'
                           variant='ghost'
-                          onClick={() => handleFormatText('bold')}
-                          title='Add Bold Text'
-                          className='h-8 px-2.5'
+                          onClick={() => handleFormatSelectedText('b')}
+                          title='Bold (Wrap selection)'
+                          className='h-8 px-2.5 hover:bg-white/5'
                         >
-                          <Bold className='h-4 w-4' />
+                          <Bold className='h-4 w-4 text-pw-primary' />
                         </Button>
                         <Button
                           size='sm'
                           variant='ghost'
-                          onClick={() => handleFormatText('italic')}
-                          title='Add Italic Text'
-                          className='h-8 px-2.5'
+                          onClick={() => handleFormatSelectedText('i')}
+                          title='Italic (Wrap selection)'
+                          className='h-8 px-2.5 hover:bg-white/5'
                         >
-                          <Italic className='h-4 w-4' />
+                          <Italic className='h-4 w-4 text-pw-primary' />
                         </Button>
                         <Button
                           size='sm'
                           variant='ghost'
-                          onClick={() => handleFormatText('underline')}
-                          title='Add Underline'
-                          className='h-8 px-2.5'
+                          onClick={() => handleFormatSelectedText('u')}
+                          title='Underline (Wrap selection)'
+                          className='h-8 px-2.5 hover:bg-white/5'
                         >
-                          <Underline className='h-4 w-4' />
+                          <Underline className='h-4 w-4 text-pw-primary' />
+                        </Button>
+                        <Button
+                          size='sm'
+                          variant='ghost'
+                          onClick={() => handleFormatSelectedText('mark')}
+                          title='Highlight Text (Wrap selection)'
+                          className='h-8 px-2.5 hover:bg-white/5 text-pw-warning text-[10px] font-bold'
+                        >
+                          Highlight
                         </Button>
                       </div>
 
                       <textarea
+                        id='body-textarea'
                         value={activePage.content}
                         onChange={(e) =>
                           setPages(prev =>
                             prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: e.target.value } : p))
                           )
                         }
-                        placeholder='Type body content paragraphs for this page...'
+                        placeholder='Type body content. Bullet lists (* item) and inline tags like <b>bold</b>, <i>italic</i>, and <mark>highlights</mark> are fully supported!'
                         className='w-full h-80 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none leading-relaxed font-body text-pw-text'
                       />
                     </div>
 
-                    {/* Compile All pages button */}
-                    <Button onClick={handleCompileBookPdf} className='btn-primary h-12 gap-2 w-full font-bold'>
-                      <Download className='h-4 w-4' /> Compile Book PDF manuscript
-                    </Button>
+                    {/* Footnotes Panel */}
+                    <div className='border-t border-white/5 pt-4 space-y-3.5'>
+                      <div className='flex justify-between items-center'>
+                        <h4 className='text-xs font-bold uppercase tracking-wider text-pw-muted'>Footnotes & References</h4>
+                        <span className='text-[10px] text-pw-muted font-mono'>{activePage.footnotes?.length || 0} active</span>
+                      </div>
+
+                      {activePage.footnotes && activePage.footnotes.length > 0 && (
+                        <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar'>
+                          {activePage.footnotes.map((fn) => (
+                            <div key={fn.id} className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 text-xs'>
+                              <div className='flex items-center gap-2 truncate'>
+                                <span className='font-mono font-bold text-pw-primary'>[{fn.number}]</span>
+                                <span className='truncate text-pw-muted'>{fn.text}</span>
+                              </div>
+                              <Button
+                                size='icon'
+                                variant='ghost'
+                                onClick={() => handleRemoveFootnote(fn.id)}
+                                className='h-6 w-6 text-pw-muted hover:text-pw-danger'
+                              >
+                                <Trash2 className='h-3.5 w-3.5' />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className='flex gap-2'>
+                        <Input
+                          value={footnoteInput}
+                          onChange={(e) => setFootnoteInput(e.target.value)}
+                          placeholder='Add footnote text...'
+                          className='h-10 bg-white/5 border-white/10 text-xs'
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddFootnote()}
+                        />
+                        <Button onClick={handleAddFootnote} size='sm' className='btn-primary h-10 px-4 text-xs font-bold shrink-0'>
+                          Add Footnote
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Export compilation options */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mt-2'>
+                      <Button onClick={handleCompileBookPdf} className='btn-primary h-12 gap-2 font-bold'>
+                        <Download className='h-4 w-4' /> Compile Full Book PDF
+                      </Button>
+                      <Button onClick={handleExportBookAsWord} className='btn-secondary h-12 gap-2 font-bold bg-white/5 border border-white/10 text-white hover:bg-white/10'>
+                        <FileCode className='h-4 w-4' /> Export Book as Word (.doc)
+                      </Button>
+                    </div>
                   </Card>
                 ) : (
                   <p className='text-center py-20 text-pw-muted text-xs'>No active pages found. Add a page or chapter stack on the left navigator.</p>
@@ -1078,9 +1661,8 @@ export default function PdfToolStudioPage() {
                 <div className='w-12 h-12 rounded-2xl bg-pw-surface border border-white/10 flex items-center justify-center mb-4 shadow-2xl group-hover:scale-110 transition-transform'>
                   <Upload className='h-6 w-6 text-pw-primary' />
                 </div>
-                <h3 className='text-xl font-bold font-display mb-1 gap-1 flex items-center'>
-                  Upload Word Document
-                  <span className='text-pw-muted text-sm'>(.doc, .docx, .txt)</span>
+                <h3 className='text-xl font-bold font-display mb-1 flex items-center gap-1.5'>
+                  Upload Word Document (.doc, .docx, .txt)
                 </h3>
                 <p className='text-pw-muted text-xs max-w-sm'>
                   Compiles Word document layout layers into standard formatted PDF documents.
@@ -1197,6 +1779,84 @@ export default function PdfToolStudioPage() {
           ))}
         </div>
       </div>
+
+      {/* Image Palette Dialog Modal */}
+      <Dialog open={showImagePaletteDialog} onOpenChange={setShowImagePaletteDialog}>
+        <DialogContent className='max-w-xl w-full bg-[#0c0d1c] border border-white/10 rounded-2xl text-pw-text p-6 max-h-[85vh] overflow-y-auto custom-scrollbar'>
+          <DialogHeader>
+            <DialogTitle className='text-lg font-bold font-display flex items-center gap-1.5'>
+              <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Reference Palette
+            </DialogTitle>
+            <DialogDescription className='text-xs text-pw-muted'>
+              Upload images to your book palette, rename them, and reference them in your page body using the syntax: <span className='font-mono text-pw-primary font-bold'>image[ref_name]</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-6 pt-4'>
+            {/* Upload Area */}
+            <div
+              onClick={() => document.getElementById('palette-upload-input')?.click()}
+              className='flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-white/5 rounded-2xl bg-white/[0.01] hover:bg-white/[0.02] cursor-pointer transition-all'
+            >
+              <input
+                id='palette-upload-input'
+                type='file'
+                accept='image/*'
+                onChange={handleImagePaletteUpload}
+                className='hidden'
+              />
+              <Upload className='h-5 w-5 text-pw-muted mb-2' />
+              <span className='text-xs font-bold'>Upload Image Asset</span>
+              <span className='text-[10px] text-pw-muted mt-1'>PNG, JPG, WEBP formats</span>
+            </div>
+
+            {/* List of active images in the palette */}
+            <div className='space-y-4'>
+              <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>Active Palette Assets ({imagePalette.length})</span>
+              <div className='grid grid-cols-2 gap-4'>
+                {imagePalette.map((item) => (
+                  <Card key={item.id} className='p-3 bg-white/[0.02] border border-white/5 space-y-2 rounded-xl relative group'>
+                    <div className='aspect-video rounded-lg overflow-hidden border border-white/10 relative'>
+                      <img src={item.src} alt={item.name} className='w-full h-full object-cover' />
+                    </div>
+                    <div className='space-y-1'>
+                      <label className='text-[9px] font-bold text-pw-muted uppercase'>Reference Name</label>
+                      <Input
+                        value={item.name}
+                        onChange={(e) =>
+                          setImagePalette(prev =>
+                            prev.map(img => img.id === item.id ? { ...img, name: e.target.value.toLowerCase().replace(/\s+/g, '_') } : img)
+                          )
+                        }
+                        className='h-8 bg-white/5 border-white/10 text-xs font-mono text-pw-primary'
+                      />
+                    </div>
+                    <div className='flex gap-1.5 pt-1.5'>
+                      <Button onClick={() => handleInsertImagePaletteRef(item.name)} size='sm' className='h-8 text-[10px] btn-primary flex-1'>
+                        Insert to Content
+                      </Button>
+                      <Button
+                        onClick={() => setImagePalette(prev => prev.filter(img => img.id !== item.id))}
+                        variant='ghost'
+                        size='icon'
+                        className='h-8 w-8 text-pw-muted hover:text-pw-danger'
+                      >
+                        <Trash2 className='h-4 w-4' />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setShowImagePaletteDialog(false)} variant='outline' className='h-10 text-xs px-6 border-white/10'>
+              Close Palette
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isNameModalOpen} onOpenChange={setIsNameModalOpen}>
         <DialogContent className='max-w-md w-full bg-[#0c0d1c] pt-5 border border-white/10 rounded-2xl shadow-2xl text-pw-text'>

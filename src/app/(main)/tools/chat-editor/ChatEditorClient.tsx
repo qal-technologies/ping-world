@@ -1,6 +1,6 @@
 'use client';
 
-// jules edit: Highly perfected Chat & Post Mimicking workstation with theme switching, interactive comments, and branded image downloads
+// jules edit: Highly perfected Chat & Post Mimicking workstation with iOS vs Android Toggle and High-Fidelity App Mockups and Inline Chat Image Uploads
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -25,6 +25,12 @@ import {
   Bookmark,
   PlusCircle,
   Sparkles,
+  Wifi,
+  Battery,
+  Signal,
+  MoreHorizontal,
+  ThumbsUp,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -40,6 +46,7 @@ interface ChatMessage {
   sender: 'me' | 'them';
   text: string;
   timestamp: string;
+  imageSrc?: string; // jules edit: added optional chat image upload source
 }
 
 interface PostComment {
@@ -61,9 +68,12 @@ export default function ChatEditorPage() {
   const [inputText, setInputText] = useState('');
   const [editingName, setEditingName] = useState('Alex');
   const [chatTheme, setChatTheme] = useState<'whatsapp' | 'instagram' | 'x' | 'messenger'>('whatsapp');
+  const [deviceOS, setDeviceOS] = useState<'ios' | 'android'>('ios');
+  const [chatImageInput, setChatImageInput] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
 
   // --- Post Mimic States ---
+  const [postPlatform, setPostPlatform] = useState<'x' | 'instagram' | 'facebook' | 'linkedin'>('x');
   const [postAuthor, setPostAuthor] = useState('John Doe');
   const [postHandle, setPostHandle] = useState('johndoe_dev');
   const [postContent, setPostContent] = useState('Just compiled a magnificent multi-page PDF book in under 2 minutes on #ping-world! Exceptional speed and client-side security.');
@@ -81,15 +91,30 @@ export default function ChatEditorPage() {
 
   // --- Chat Functions ---
   const addMessage = (sender: 'me' | 'them') => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !chatImageInput) return;
     const newMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
       sender,
       text: inputText,
+      imageSrc: chatImageInput || undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     setMessages([...messages, newMessage]);
     setInputText('');
+    setChatImageInput(null);
+  };
+
+  // Handle local image uploads in chat
+  const handleChatImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const r = new FileReader();
+      r.onload = (ev) => {
+        setChatImageInput(ev.target?.result as string);
+        toast.success('Chat image selected! Choose "From Me" or "From Contact" to post.');
+      };
+      r.readAsDataURL(file);
+    }
   };
 
   const removeMessage = (id: string) => {
@@ -98,18 +123,19 @@ export default function ChatEditorPage() {
 
   const exportChatAsImage = async () => {
     if (!chatRef.current) return;
-    toast.loading('Compiling chat image...');
+    toast.loading('Compiling high-fidelity chat image...');
     try {
       const canvas = await html2canvas(chatRef.current, {
         backgroundColor: '#0F172A',
         useCORS: true,
         allowTaint: true,
+        scale: 2,
       });
 
-      // jules edit: inject ping-world watermark into exported image
+      // inject watermark
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
         ctx.font = 'bold 12px sans-serif';
         ctx.fillText('#ping-world chat-mimic', 20, canvas.height - 20);
       }
@@ -127,7 +153,7 @@ export default function ChatEditorPage() {
 
         setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
         toast.dismiss();
-        toast.success('Chat compiled with #ping-world tag & downloaded!');
+        toast.success('Chat compiled & downloaded!');
       }, 'image/png');
     } catch (err) {
       toast.dismiss();
@@ -151,7 +177,7 @@ export default function ChatEditorPage() {
     setCommentName('');
     setCommentHandle('');
     setCommentBody('');
-    toast.success('Mock comment appended!');
+    toast.success('Comment added!');
   };
 
   const removeComment = (id: string) => {
@@ -166,6 +192,7 @@ export default function ChatEditorPage() {
         backgroundColor: '#0A0C1B',
         useCORS: true,
         allowTaint: true,
+        scale: 2,
       });
 
       // Inject watermark
@@ -189,12 +216,49 @@ export default function ChatEditorPage() {
 
         setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
         toast.dismiss();
-        toast.success('Post mockup card saved successfully!');
+        toast.success('Post mockup card saved!');
       }, 'image/png');
     } catch (err) {
       toast.dismiss();
       toast.error('Compilation failed.');
     }
+  };
+
+  // --- Render high-fidelity Mobile status bar ---
+  const renderMobileStatusBar = () => {
+    return (
+      <div className={cn(
+        'px-6 py-2 flex items-center justify-between text-xs font-semibold select-none z-50',
+        chatTheme === 'whatsapp' ? 'bg-[#075e54] text-white' : '',
+        chatTheme === 'instagram' ? 'bg-black text-white' : '',
+        chatTheme === 'x' ? 'bg-[#15202B] text-white' : '',
+        chatTheme === 'messenger' ? 'bg-white text-slate-800' : ''
+      )}>
+        {deviceOS === 'ios' ? (
+          <>
+            <span>9:41</span>
+            <div className='w-24 h-5 bg-black rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-1.5 hidden sm:block border border-white/10' />
+            <div className='flex items-center gap-1.5'>
+              <Signal className='h-3 w-3' />
+              <Wifi className='h-3 w-3' />
+              <Battery className='h-3.5 w-5' />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className='flex items-center gap-1'>
+              <Signal className='h-3 w-3' />
+              <Wifi className='h-3 w-3' />
+            </div>
+            <span>12:30 PM</span>
+            <div className='flex items-center gap-1'>
+              <span className='text-[10px]'>85%</span>
+              <Battery className='h-3.5 w-5' />
+            </div>
+          </>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -235,6 +299,30 @@ export default function ChatEditorPage() {
               <Card className='card-glow p-6 space-y-6'>
                 <div className='space-y-4'>
                   <label className='text-xs font-bold text-pw-muted uppercase block'>Theme & Contact Settings</label>
+
+                  {/* iPhone vs Android Toggle */}
+                  <div className='space-y-1.5'>
+                    <label className='text-[10px] text-pw-muted uppercase font-bold block'>Device Operating System</label>
+                    <div className='grid grid-cols-2 gap-2 bg-white/5 p-1 rounded-xl'>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => setDeviceOS('ios')}
+                        className={cn('h-8 text-xs font-bold rounded-lg', deviceOS === 'ios' ? 'bg-pw-primary text-black' : 'text-pw-muted')}
+                      >
+                        iPhone (iOS)
+                      </Button>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => setDeviceOS('android')}
+                        className={cn('h-8 text-xs font-bold rounded-lg', deviceOS === 'android' ? 'bg-pw-primary text-black' : 'text-pw-muted')}
+                      >
+                        Android
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className='grid grid-cols-2 gap-4'>
                     <div className='space-y-1.5'>
                       <label className='text-[10px] text-pw-muted uppercase font-bold block'>Chat Theme</label>
@@ -268,6 +356,31 @@ export default function ChatEditorPage() {
                     placeholder='Type a message...'
                     className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none'
                   />
+
+                  {/* jules edit: Chat image upload controls */}
+                  <div className='space-y-1.5'>
+                    <label className='text-[10px] text-pw-muted uppercase font-bold block flex items-center gap-1.5'>
+                      <Upload className='h-3.5 w-3.5' /> Upload Inline Chat Image
+                    </label>
+                    <Input
+                      type='file'
+                      accept='image/*'
+                      onChange={handleChatImageUpload}
+                      className='bg-white/5 border-white/10 h-10 text-xs'
+                    />
+                    {chatImageInput && (
+                      <div className='relative w-20 h-20 rounded-xl overflow-hidden border border-white/10'>
+                        <img src={chatImageInput} className='w-full h-full object-cover' />
+                        <button
+                          onClick={() => setChatImageInput(null)}
+                          className='absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 text-pw-danger'
+                        >
+                          <Trash2 className='h-3 w-3' />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className='grid grid-cols-2 gap-3'>
                     <Button
                       onClick={() => addMessage('them')}
@@ -306,7 +419,13 @@ export default function ChatEditorPage() {
                         <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded uppercase', m.sender === 'me' ? 'bg-pw-primary/20 text-pw-primary' : 'bg-pw-secondary/20 text-pw-secondary')}>
                           {m.sender === 'me' ? 'Me' : editingName}
                         </span>
-                        <p className='text-xs truncate text-pw-text'>{m.text}</p>
+                        {m.imageSrc ? (
+                          <span className='text-xs italic text-pw-primary flex items-center gap-1'>
+                            <ImageIcon className='h-3.5 w-3.5' /> [Image Upload]
+                          </span>
+                        ) : (
+                          <p className='text-xs truncate text-pw-text'>{m.text}</p>
+                        )}
                       </div>
                       <Button
                         size='icon'
@@ -339,9 +458,12 @@ export default function ChatEditorPage() {
                   chatTheme === 'messenger' && 'bg-white text-slate-900'
                 )}
               >
+                {/* Mobile top status bar */}
+                {renderMobileStatusBar()}
+
                 {/* Whatsapp Header */}
                 {chatTheme === 'whatsapp' && (
-                  <div className='bg-[#075e54] text-white px-5 pt-10 pb-3 flex items-center justify-between border-b border-black/10'>
+                  <div className='bg-[#075e54] text-white px-5 pt-3 pb-3 flex items-center justify-between border-b border-black/10'>
                     <div className='flex items-center gap-2'>
                       <ChevronLeft className='h-5 w-5' />
                       <div className='h-8 w-8 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-sm'>
@@ -358,7 +480,7 @@ export default function ChatEditorPage() {
 
                 {/* Instagram Header */}
                 {chatTheme === 'instagram' && (
-                  <div className='bg-black text-white px-5 pt-10 pb-3 flex items-center justify-between border-b border-white/10'>
+                  <div className='bg-black text-white px-5 pt-3 pb-3 flex items-center justify-between border-b border-white/10'>
                     <div className='flex items-center gap-3'>
                       <ChevronLeft className='h-6 w-6' />
                       <div className='h-8 w-8 rounded-full bg-gradient-to-tr from-yellow-500 to-purple-600 p-0.5'>
@@ -374,7 +496,7 @@ export default function ChatEditorPage() {
 
                 {/* X Header */}
                 {chatTheme === 'x' && (
-                  <div className='bg-[#15202B] text-white px-5 pt-10 pb-3 flex items-center justify-between border-b border-white/10'>
+                  <div className='bg-[#15202B] text-white px-5 pt-3 pb-3 flex items-center justify-between border-b border-white/10'>
                     <div className='flex items-center gap-3'>
                       <ChevronLeft className='h-5 w-5 text-pw-primary' />
                       <div className='flex flex-col'>
@@ -388,7 +510,7 @@ export default function ChatEditorPage() {
 
                 {/* Messenger Header */}
                 {chatTheme === 'messenger' && (
-                  <div className='bg-white text-slate-900 px-5 pt-10 pb-3 flex items-center justify-between border-b border-slate-100'>
+                  <div className='bg-white text-slate-900 px-5 pt-3 pb-3 flex items-center justify-between border-b border-slate-100'>
                     <div className='flex items-center gap-2'>
                       <ChevronLeft className='h-6 w-6 text-blue-500' />
                       <div className='h-8 w-8 rounded-full bg-slate-200 text-slate-800 font-bold flex items-center justify-center text-sm'>
@@ -419,7 +541,12 @@ export default function ChatEditorPage() {
                             isMe ? 'bg-[#0084FF] text-white self-end rounded-br-none' : 'bg-slate-100 text-slate-800 self-start rounded-bl-none'
                         )}
                       >
-                        <p>{m.text}</p>
+                        {/* jules edit: Render inline image uploads cleanly */}
+                        {m.imageSrc ? (
+                          <img src={m.imageSrc} className='w-44 h-auto rounded-xl object-contain mb-1' />
+                        ) : (
+                          <p>{m.text}</p>
+                        )}
                         <span className={cn('text-[8px] text-right mt-1.5 block opacity-60', isMe ? 'text-slate-500' : 'text-slate-400')}>
                           {m.timestamp}
                         </span>
@@ -445,6 +572,22 @@ export default function ChatEditorPage() {
             <div className='lg:col-span-5 space-y-6'>
               <Card className='card-glow p-6 space-y-4'>
                 <h3 className='font-bold text-sm border-b border-white/5 pb-2'>Post Customizer</h3>
+
+                {/* Platform select dropdown */}
+                <div className='space-y-1.5'>
+                  <label className='text-[10px] text-pw-muted uppercase font-bold block'>Target Social App</label>
+                  <select
+                    value={postPlatform}
+                    onChange={(e) => setPostPlatform(e.target.value as any)}
+                    className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
+                  >
+                    <option value='x' className='bg-[#0A0C1B]'>X (Twitter)</option>
+                    <option value='instagram' className='bg-[#0A0C1B]'>Instagram</option>
+                    <option value='facebook' className='bg-[#0A0C1B]'>Facebook</option>
+                    <option value='linkedin' className='bg-[#0A0C1B]'>LinkedIn</option>
+                  </select>
+                </div>
+
                 <div className='grid grid-cols-2 gap-4'>
                   <div className='space-y-1.5'>
                     <label className='text-[10px] text-pw-muted uppercase font-bold block'>Author Name</label>
@@ -534,10 +677,16 @@ export default function ChatEditorPage() {
                 <Smartphone className='h-4 w-4 text-pw-primary' /> Live Feed Preview
               </div>
 
-              {/* Social Media Tweet Card Frame */}
+              {/* Dynamic Platform Post Mockup Cards */}
               <div
                 ref={postRef}
-                className='w-full max-w-[480px] bg-[#15202B] text-white rounded-3xl border border-white/10 p-6 flex flex-col gap-4 shadow-2xl'
+                className={cn(
+                  'w-full max-w-[480px] rounded-3xl border p-6 flex flex-col gap-4 shadow-2xl transition-all duration-300',
+                  postPlatform === 'x' && 'bg-[#15202B] text-white border-white/10',
+                  postPlatform === 'instagram' && 'bg-black text-white border-white/10',
+                  postPlatform === 'facebook' && 'bg-[#242526] text-[#e4e6eb] border-white/10',
+                  postPlatform === 'linkedin' && 'bg-[#1d2226] text-[#e0e0e0] border-white/10'
+                )}
               >
                 {/* Author profile row */}
                 <div className='flex items-center justify-between'>
@@ -548,7 +697,7 @@ export default function ChatEditorPage() {
                     <div className='flex flex-col'>
                       <span className='text-sm font-bold flex items-center gap-1'>
                         {postAuthor}
-                        <Check className='h-3.5 w-3.5 text-[#1D9BF0] fill-[#1D9BF0]' />
+                        {postPlatform === 'x' && <Check className='h-3.5 w-3.5 text-[#1D9BF0] fill-[#1D9BF0]' />}
                       </span>
                       <span className='text-xs text-pw-muted'>@{postHandle}</span>
                     </div>
@@ -561,19 +710,41 @@ export default function ChatEditorPage() {
                   {postContent}
                 </p>
 
-                {/* Interactive metrics row */}
-                <div className='flex items-center justify-between border-y border-white/5 py-3 text-xs text-pw-muted font-mono'>
-                  <span className='flex items-center gap-1.5'>
-                    <Repeat className='h-4 w-4 text-emerald-400' /> {postReposts}
-                  </span>
-                  <span className='flex items-center gap-1.5'>
-                    <Heart className='h-4 w-4 text-rose-500 fill-rose-500' /> {postLikes}
-                  </span>
-                  <span className='flex items-center gap-1.5'>
-                    <MessageCircle className='h-4 w-4 text-[#1D9BF0]' /> {comments.length}
-                  </span>
-                  <Bookmark className='h-4 w-4' />
-                </div>
+                {/* Platform Action bars */}
+                {postPlatform === 'x' && (
+                  <div className='flex items-center justify-between border-y border-white/5 py-3 text-xs text-pw-muted font-mono'>
+                    <span className='flex items-center gap-1.5'><Repeat className='h-4 w-4 text-emerald-400' /> {postReposts}</span>
+                    <span className='flex items-center gap-1.5'><Heart className='h-4 w-4 text-rose-500 fill-rose-500' /> {postLikes}</span>
+                    <span className='flex items-center gap-1.5'><MessageSquare className='h-4 w-4 text-[#1D9BF0]' /> {comments.length}</span>
+                    <Bookmark className='h-4 w-4' />
+                  </div>
+                )}
+
+                {postPlatform === 'instagram' && (
+                  <div className='flex items-center justify-between py-2 border-t border-white/5 text-xs text-pw-muted'>
+                    <div className='flex items-center gap-4'>
+                      <Heart className='h-5 w-5 text-rose-500 fill-rose-500' />
+                      <MessageCircle className='h-5 w-5 text-white' />
+                      <Share2 className='h-5 w-5 text-white' />
+                    </div>
+                    <span className='font-semibold text-white'>{postLikes} likes</span>
+                  </div>
+                )}
+
+                {postPlatform === 'facebook' && (
+                  <div className='flex border-t border-white/5 pt-3 justify-around text-xs text-pw-muted'>
+                    <button className='flex items-center gap-1.5'><ThumbsUp className='h-4 w-4 text-blue-500' /> Like ({postLikes})</button>
+                    <button className='flex items-center gap-1.5'><MessageSquare className='h-4 w-4' /> Comment ({comments.length})</button>
+                    <button className='flex items-center gap-1.5'><Share2 className='h-4 w-4' /> Share</button>
+                  </div>
+                )}
+
+                {postPlatform === 'linkedin' && (
+                  <div className='flex border-t border-white/5 pt-3 justify-between text-xs text-pw-muted px-2'>
+                    <span>👍💡❤️ {postLikes} reactions</span>
+                    <span>{comments.length} comments</span>
+                  </div>
+                )}
 
                 {/* Comment Section List */}
                 <div className='space-y-4 pt-1'>
@@ -603,7 +774,7 @@ export default function ChatEditorPage() {
                   ))}
                 </div>
 
-                {/* Brand water mark footer inside frame */}
+                {/* Brand watermark footer inside frame */}
                 <div className='pt-2 border-t border-white/5 flex justify-between items-center text-[10px] text-pw-primary/60 font-mono'>
                   <span>DESIGNED ON PING-WORLD.SITE</span>
                   <span>#ping-world watermark</span>

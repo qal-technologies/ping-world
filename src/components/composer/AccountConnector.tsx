@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Twitter,
   Instagram,
   Facebook,
   Linkedin,
@@ -19,9 +18,10 @@ import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { PLATFORMS, OAUTH_CONFIG } from '@/lib/composer/constants';
 import type { Platform, ConnectedAccount } from '@/lib/composer/types';
+import { XIcon } from '@/components/ui/XIcon';
 
 const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
-  x: Twitter,
+  x: XIcon,
   instagram: Instagram,
   facebook: Facebook,
   linkedin: Linkedin,

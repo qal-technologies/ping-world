@@ -13,13 +13,13 @@ import {
   MoreHorizontal,
   Globe,
   Eye,
-  Twitter,
   Instagram,
   Facebook,
   Linkedin,
   Sun,
   Moon,
 } from 'lucide-react';
+import { XIcon } from '@/components/ui/XIcon';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { getPlatform } from '@/lib/composer/constants';
 import type { Platform } from '@/lib/composer/types';
