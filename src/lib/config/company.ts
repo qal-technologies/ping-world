@@ -28,9 +28,9 @@ export const COMPANY = {
   },
 
   parent: {
-    name: 'QAL TECH',
-    url: 'https://qal-tech.website',
-    short: 'Qal Technologies',
+    name: 'Basic Alley LLC',
+    url: 'https://basic-alley.com',
+    short: 'Basic Alley LLC',
   },
 
   socials: {
