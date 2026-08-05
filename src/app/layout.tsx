@@ -21,12 +21,12 @@ export const metadata: Metadata = {
     googleBot: { index: true, follow: true },
   },
   authors: [
-    { name: 'Qal Technologies', url: 'https://qal-tech.site' },
+    { name: 'Basic Alley LLC', url: 'https://basic-alley.com' },
     { name: 'Ping World', url: COMPANY.domain },
     { name: 'Pascodez', url: 'https://pascodez.site' },
     { name: 'Paschal Ngaoka', url: 'https://pasqal-dev.site' },
   ],
-  creator: 'Qal Technologies',
+  creator: 'Basic Alley LLC',
   description:
     'Ping World is a free, all-in-one utility and creator platform. PDF tools, Image toolkit, Quiz builder, Anonymous messaging, URL shortener, post composer, and more.',
   metadataBase: new URL(COMPANY.domain),
