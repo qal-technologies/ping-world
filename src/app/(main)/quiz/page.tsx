@@ -158,6 +158,7 @@ export interface Quiz {
   expires_at?: string; // ISO date — max 3 days from creation, cleaned by cron
   quizScroll?: boolean;
   quizLayout?: string;
+  surveyType?: string;
   branding?: {
     image?: string;
     opacity?: number;
@@ -521,7 +522,7 @@ const QuizBuilder = ({
                         <Button
                           variant='ghost'
                           onClick={() =>
-                            setEditedQuiz({ ...editedQuiz, type: 'survey' })
+                            setEditedQuiz({ ...editedQuiz, type: 'survey', surveyType: 'research' })
                           }
                           className={cn(
                             'flex-1 h-9 rounded-full transition-all',
@@ -533,6 +534,31 @@ const QuizBuilder = ({
                         </Button>
                       </div>
                     </div>
+
+                    {editedQuiz.type === 'survey' && (
+                      <div className='space-y-2'>
+                        <label className='text-xs font-bold text-pw-muted uppercase tracking-widest block'>
+                          Survey Purpose / Style
+                        </label>
+                        <select
+                          value={editedQuiz.surveyType || 'research'}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditedQuiz({
+                              ...editedQuiz,
+                              surveyType: val,
+                              quizLayout: val === 'form' ? 'scroll' : 'single',
+                              quizScroll: val === 'form',
+                            });
+                            toast.success(`Survey style set to: ${val.toUpperCase()}`);
+                          }}
+                          className='w-full h-10 rounded-xl bg-white/5 border border-white/10 px-3 text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
+                        >
+                          <option value='research' className='bg-[#0A0C1B]'>Research (Logical Branching, Page-by-Page)</option>
+                          <option value='form' className='bg-[#0A0C1B]'>Form / Feedback (Scroll-All, No Branching)</option>
+                        </select>
+                      </div>
+                    )}
                     <div className='space-y-2'>
                       <label className='text-xs font-bold text-pw-muted uppercase'>
                         Title
