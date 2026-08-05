@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Highly perfected PDF & Word Studio Client with Front/Back Covers, Footnotes, Chapter Deletions, Highlights, Bullet Lists, and Full-Book Word Exports
 import { useState, useEffect, useRef } from 'react';
 import {
   FileText,

@@ -1,7 +1,6 @@
 'use client';
 
-// jules edit: Developer APIs & Tools hub page with categorized dropdown search filter matching /tools behavior
-import { useState } from 'react';
+import {useState} from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -286,7 +285,6 @@ export default function DeveloperHubPage() {
         </div>
       </div>
 
-      {/* jules edit: Categories Dropdown Search to match /tools/ page */}
       <div className='flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-1 w-full'>
         <div className='flex items-center gap-2.5 w-full sm:w-auto'>
           <span className='text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0'>

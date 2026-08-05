@@ -11,7 +11,6 @@ export function capFirst(text: string) {
   return outcome as string;
 }
 
-// jules edit: Central date formatting helper with day-before-month ordering
 export function formatDate(
   input: string | Date | undefined | null,
   options: { short?: boolean; includeTime?: boolean } = {}

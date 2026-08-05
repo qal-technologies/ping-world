@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Highly perfected Chat & Post Mimicking workstation with iOS vs Android Toggle and High-Fidelity App Mockups and Inline Chat Image Uploads
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -46,7 +45,7 @@ interface ChatMessage {
   sender: 'me' | 'them';
   text: string;
   timestamp: string;
-  imageSrc?: string; // jules edit: added optional chat image upload source
+  imageSrc?: string; 
 }
 
 interface PostComment {
@@ -320,8 +319,7 @@ export default function ChatEditorPage() {
                       >
                         Android
                       </Button>
-                    </div>
-                  </div>
+                    </div>                  </div>
 
                   <div className='grid grid-cols-2 gap-4'>
                     <div className='space-y-1.5'>
@@ -357,7 +355,7 @@ export default function ChatEditorPage() {
                     className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none'
                   />
 
-                  {/* jules edit: Chat image upload controls */}
+                  
                   <div className='space-y-1.5'>
                     <label className='text-[10px] text-pw-muted uppercase font-bold block flex items-center gap-1.5'>
                       <Upload className='h-3.5 w-3.5' /> Upload Inline Chat Image
@@ -539,9 +537,8 @@ export default function ChatEditorPage() {
                             isMe ? 'bg-[#1D9BF0] text-white self-end rounded-br-sm' : 'bg-[#2F3336] text-white self-start rounded-bl-sm'
                           : // Messenger default
                             isMe ? 'bg-[#0084FF] text-white self-end rounded-br-none' : 'bg-slate-100 text-slate-800 self-start rounded-bl-none'
-                        )}
-                      >
-                        {/* jules edit: Render inline image uploads cleanly */}
+                        )}>
+                        
                         {m.imageSrc ? (
                           <img src={m.imageSrc} className='w-44 h-auto rounded-xl object-contain mb-1' />
                         ) : (

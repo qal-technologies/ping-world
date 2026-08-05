@@ -79,7 +79,6 @@ export function SavePreviewPanel() {
         ctx.fillText('pingwrld.com', canvas.width - 118, canvas.height - 12);
       }
 
-      // jules edit: Native HTML5 canvas toBlob is extremely robust and does not suffer from data URL lengths
       canvas.toBlob((blob) => {
         if (!blob) {
           toast.error('Failed to capture preview blob.');
@@ -98,7 +97,6 @@ export function SavePreviewPanel() {
     }
   };
 
-  // jules edit: Safe cross-platform file saving using file-saver with a true binary Blob directly to prevent sandboxed URL blocks
   const downloadPreview = async () => {
     if (!rawBlob) return;
     try {

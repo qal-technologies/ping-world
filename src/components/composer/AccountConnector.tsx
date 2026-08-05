@@ -8,8 +8,6 @@ import {
   Linkedin,
   Plus,
   Check,
-  Wifi,
-  WifiOff,
   ChevronRight,
   UserCircle2,
   AlertTriangle,

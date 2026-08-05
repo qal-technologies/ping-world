@@ -1,4 +1,4 @@
-import { COMPANY } from '@/lib/config/company';
+import {COMPANY} from '@/lib/config/company';
 import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 import { fontDisplay, fontBody, fontMono } from '@/lib/fonts';

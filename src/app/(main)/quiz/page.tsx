@@ -272,9 +272,8 @@ const QuizBuilder = ({
   }, [editedQuiz]);
 
   const addQuestion = (category?: string) => {
-    // jules edit: Limit free users to maximum of 5 questions per quiz
-    if (editedQuiz.questions.length >= 5 && premiumTier === 'free') {
-      return toast.error('Free tier accounts are capped at a maximum of 5 questions per quiz! Please upgrade to add more.');
+    if (editedQuiz.questions.length >= 10 && premiumTier === 'free') {
+      return toast.error('Free tier accounts are capped at a maximum of 10 questions per quiz! Please upgrade to add more.');
     }
 
     const qId = Math.random().toString(36).substr(2, 9);
@@ -1128,7 +1127,6 @@ const QuizBuilder = ({
                       </div>
                     </Wrapper>
 
-                    {/* jules edit: Highly perfected Branding & Sizing layouts with real local file readers and 3 layout options */}
                     <Wrapper
                       title='Branding & Layout'
                       description='Customize background image, logo, and scrolling layout'
@@ -2184,7 +2182,6 @@ const QuizBuilder = ({
                           variant='outline'
                           size='sm'
                           onClick={() => {
-                            // jules edit: Limit free users to maximum of 4 options per question
                             if (editedQuiz.questions[currentStep].options.length >= 4 && premiumTier === 'free') {
                               return toast.error('Free tier accounts are capped at a maximum of 4 options per question! Please upgrade to add more.');
                             }

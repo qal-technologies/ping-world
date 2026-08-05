@@ -1,7 +1,6 @@
 'use client';
 
-// jules edit: Perfected Public Quiz Taker with Scroll All, Single Show, Scroll Show layout options and cybersecurity shield
-import { useEffect, useState, useMemo } from 'react';
+import {useEffect, useState, useMemo} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -451,13 +450,14 @@ export default function PublicQuizTaker() {
       }
 
       if (target) {
-        // jules edit: Block expired quizzes from loading
         if (
           target.expires_at &&
           new Date(target.expires_at).getTime() < Date.now()
         ) {
           setQuiz(null);
           setLoading(false);
+
+          toast.error('Quiz has expired');
           return;
         }
 
@@ -1111,7 +1111,6 @@ export default function PublicQuizTaker() {
             )}
           </div>
 
-          {/* jules edit: Layout selector routing (Scroll All vs Scroll Show vs Single Show) */}
           <div className='flex flex-col items-center w-full'>
             {quiz?.quizScroll ? (
               // Continuous scroll layout (Scroll All vs Scroll Show)

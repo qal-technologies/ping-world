@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Modern high-fidelity X icon component replacing the outdated Twitter bird
 import React from 'react';
 
 interface XIconProps {
@@ -13,7 +12,7 @@ interface XIconProps {
 export function XIcon({ className, size = '1em', style, color = 'currentColor' }: XIconProps) {
   return (
     <svg
-      viewBox='0 0 24 24'
+      viewBox='0 0 20 20'
       aria-hidden='true'
       className={className}
       style={{

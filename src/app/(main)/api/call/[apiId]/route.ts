@@ -1,4 +1,3 @@
-// jules edit: Secure Edge route handler for developer tool API calls with flexible plan validation & rate limiting
 import { NextRequest, NextResponse } from 'next/server';
 import { DevEngineRegistry } from '@/lib/dev-engines';
 import { supabase } from '@/lib/supabase';
@@ -9,7 +8,6 @@ import { AiQuotaSyncer } from '@/lib/general/ai-quota-syncer';
 
 export const runtime = 'edge';
 
-// jules edit: Map common tool aliases to canonical flexible feature IDs
 function getCanonicalFeatureId(id: string): string {
   const mapping: Record<string, string> = {
     'pdf-tools': 'pdf-studio',
@@ -139,7 +137,7 @@ export async function POST(
       }
     }
 
-    // jules edit: Enforce daily AI quota counts and sync limiters
+    
     const isAiCall = apiId === 'tone-correction' || apiId === 'autocorrect' || method === 'translate' || method === 'suggest';
     if (isAiCall) {
       const quota = AiQuotaSyncer.checkQuota(userTier);
@@ -201,8 +199,7 @@ export async function POST(
         ? [body.data, body.params || body.options || body.config || body.targetTone || body.key || body.type].filter(x => x !== undefined)
         : [body];
 
-    // jules edit: Sanitize all execution inputs to prevent injection risks
-    const sanitizedArgs = args.map((arg: any) => sanitizeInput(arg));
+   const sanitizedArgs = args.map((arg: any) => sanitizeInput(arg));
 
     const result = await engine[method](...sanitizedArgs);
 
@@ -340,7 +337,6 @@ export async function GET(
     const secondaryInput = searchParams.get('param') || searchParams.get('tone') || searchParams.get('targetTone');
 
     const args = [paramInput, secondaryInput].filter(Boolean);
-    // jules edit: Sanitize args for safety
     const sanitizedArgs = args.map((arg: any) => sanitizeInput(arg));
     const result = await engine[method](...sanitizedArgs);
 

@@ -1,6 +1,6 @@
 'use client';
 
-// jules edit: Footer component with integrated Developer APIs / Tools section
+
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -17,6 +17,7 @@ import { COMPANY } from '@/lib/config/company';
 import { tools } from '@/lib/general/data';
 import { useAppContext } from '@/context/AppContext';
 import Image from 'next/image';
+import XIcon from '../ui/XIcon';
 
 const companyLinks = [
   { href: '/about', label: 'About' },
@@ -28,12 +29,12 @@ const companyLinks = [
 const SOCIALS = [
   { name: 'Youtube', link: COMPANY.socials.youtube, icon: Youtube },
   { name: 'Email', link: COMPANY.socials.email, icon: Mail },
-  { name: 'X / Twitter', link: COMPANY.socials.x, icon: Twitter },
+  { name: 'X / Twitter', link: COMPANY.socials.x, icon: XIcon },
   { name: 'Instagram', link: COMPANY.socials.instagram, icon: Instagram },
   { name: 'LinkedIn', link: COMPANY.socials.linkedin, icon: Linkedin },
 ];
 
-// jules edit: Concise list of developer tools for footer integration
+
 const FOOTER_DEV_TOOLS = [
   { href: '/api/autocorrect', label: 'AutoCorrect API' },
   { href: '/api/tone-correction', label: 'Tone Correction API' },
@@ -162,7 +163,7 @@ export const Footer = () => {
             </ul>
           </div>
 
-          {/* jules edit: Integrated Developer APIs Section */}
+          
           <div>
             <h2 className='text-sm font-semibold text-pw-text mb-3 flex items-center gap-1.5'>
               Developer APIs

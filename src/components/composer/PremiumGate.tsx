@@ -1,7 +1,6 @@
 'use client';
 
-// jules edit: PremiumGate component with crown/lock overlays and stopPropagation redirect
-import { motion } from 'framer-motion';
+import {motion} from 'framer-motion';
 import { Lock, Crown, Sparkles, ArrowRight, LockIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -11,7 +10,6 @@ interface PremiumGateProps {
   feature: PremiumFeatureDef;
   isPremium: boolean;
   children: React.ReactNode;
-  /** If true, shows partial access (blurred) rather than fully hidden */
   showPartial?: boolean;
   className?: string;
 }
@@ -128,7 +126,6 @@ export function UsageCounter({ used, limit, label, isPremium }: UsageCounterProp
   const isNearLimit = used >= limit - 1;
   const isAtLimit = used >= limit;
 
-  // jules edit: Display remaining free calls only for AI features as per requirements
   const isAi = label.toLowerCase().includes('ai') || label.toLowerCase().includes('generate') || label.toLowerCase().includes('translate') || label.toLowerCase().includes('suggest');
   if (!isAi) return null;
 

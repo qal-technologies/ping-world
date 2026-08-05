@@ -1,4 +1,3 @@
-// jules edit: Global SQL/NoSQL Sanitizer & Database Protection Helper
 import { DbValidationHandler } from '@/lib/dev-engines/db-validation';
 
 const handler = new DbValidationHandler();

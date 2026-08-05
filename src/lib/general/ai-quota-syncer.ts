@@ -1,4 +1,3 @@
-// jules edit: AI Quota Tracker & Syncer to avoid frequent DB queries and enforce daily usage bounds
 import { supabase } from '@/lib/supabase';
 import { PREMIUM_TIERS, PremiumTier } from '@/lib/config/premium';
 

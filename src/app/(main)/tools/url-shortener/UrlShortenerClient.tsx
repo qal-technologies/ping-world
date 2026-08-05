@@ -1,7 +1,6 @@
 'use client';
 
-// jules edit: Highly advanced URL Shortener with real Supabase persistence and premium analytics
-import { useState, useEffect } from 'react';
+import {useState, useEffect} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Link as LinkIcon,
@@ -26,7 +25,7 @@ import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
-import { formatDate } from '@/lib/utils'; // We'll make sure date formats are correct in step 7
+import { formatDate } from '@/lib/utils'; 
 
 interface ClickLog {
   clicked_at: string;

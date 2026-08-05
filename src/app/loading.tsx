@@ -1,14 +1,14 @@
 'use client';
 
-// jules edit: Sleek themed dark page loader with static branding (NO logo spinning) and pulsing indicators
 import Image from 'next/image';
 
 export default function Loading() {
   return (
     <div className='min-h-screen bg-[#0A0C1B] flex flex-col items-center justify-center p-6 font-body relative overflow-hidden'>
       {/* Background gradients */}
-      <div className='absolute -top-40 -left-40 w-96 h-96 bg-pw-primary/10 rounded-full blur-[120px]' />
-      <div className='absolute -bottom-40 -right-40 w-96 h-96 bg-pw-secondary/10 rounded-full blur-[120px]' />
+
+      <div className='absolute -top-35 -left-40 w-100 h-100 bg-pw-primary/10 rounded-full blur-[50px]' />
+      <div className='absolute -bottom-40 -right-40 w-100 h-100 bg-pw-cyan/8 rounded-full blur-[45px]' />
 
       <div className='flex flex-col items-center space-y-6 relative z-10'>
         {/* Static branding logo with high fidelity, not spinning */}

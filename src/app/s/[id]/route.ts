@@ -1,4 +1,3 @@
-// jules edit: Server-side redirect route for shortened links with analytics tracking
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 

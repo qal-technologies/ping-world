@@ -1,6 +1,6 @@
 'use client';
 
-// jules edit: Pricing Page with live currency conversion using IP-lookup, browser locale, and open.er-api
+
 import { motion } from 'framer-motion';
 import {
   CheckCircle,
@@ -94,7 +94,6 @@ const FEATURES: {
 
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 
-// jules edit: Modular array representing tool-specific plan benefits for easy future expansions
 const TOOL_BENEFITS = [
   {
     id: 'quizzable',
@@ -140,7 +139,7 @@ export default function PricingPage() {
 
   const [selectedFlexibleToolId, setSelectedFlexibleToolId] = useState<string>('all');
 
-  // jules edit: Live currency conversion states
+  
   const [currency, setCurrency] = useState('USD');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -344,7 +343,7 @@ export default function PricingPage() {
                       </div>
                     }
 
-                    {/* jules edit: Display live converted currency equivalent below price */}
+                    
                     {isOnline && exchangeRate && currency !== 'USD' && tier.price.monthly !== null && (
                       <p className='text-xs text-pw-success font-bold font-mono mt-1'>
                         ~ {(tier.price.monthly * exchangeRate).toFixed(2)} {currency} / month
@@ -500,7 +499,7 @@ export default function PricingPage() {
           })}
         </div>
 
-        {/* jules edit: Concise plan benefits section per tool */}
+        
         <div className='mb-20 space-y-8'>
           <h2 className='text-3xl font-extrabold font-display text-center'>
             Plan Benefits <span className='gradient-text'>per Tool.</span>
@@ -684,7 +683,7 @@ export default function PricingPage() {
                   </span>
                 </div>
 
-                {/* jules edit: Live currency conversion total for the Modal */}
+                
                 {isOnline && exchangeRate && currency !== 'USD' && displayMonthlyPrice && (
                   <div className='mt-1.5'>
                     <span className='text-xs text-pw-success font-bold font-mono block'>
