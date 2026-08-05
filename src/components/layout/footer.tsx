@@ -95,7 +95,7 @@ export const Footer = () => {
                 className='font-bold text-pw-primary'>
                 {COMPANY.parent.name}
               </Link>{' '}
-              Company
+              brand
             </p>
           </div>
 

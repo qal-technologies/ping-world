@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Perfected Public Quiz Taker with Scroll All, Single Show, Scroll Show layout options and cybersecurity shield
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -454,14 +453,13 @@ export default function PublicQuizTaker() {
       }
 
       if (target) {
+        // jules edit: Block expired quizzes from loading
         if (
           target.expires_at &&
           new Date(target.expires_at).getTime() < Date.now()
         ) {
           setQuiz(null);
           setLoading(false);
-
-          toast.error('Quiz has expired');
           return;
         }
 
@@ -1470,6 +1468,7 @@ export default function PublicQuizTaker() {
     );
   }
 
+  // jules edit: Block loading of uncached quizzes offline
   if (isOfflineUncached) {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
@@ -1646,6 +1645,7 @@ export default function PublicQuizTaker() {
         quizTheme === 'dark' ? 'bg-pw-bg text-white' : 'bg-slate-50 text-black',
         quiz.enforceSecurity && 'select-none',
       )}>
+      {/* Branding background overlay */}
       {bgImg && (
         <div
           className='fixed inset-0 pointer-events-none z-0'
@@ -1844,28 +1844,256 @@ export default function PublicQuizTaker() {
           </div>
         )}
 
-      {/* Main quiz interface */}
-      {started && !isFinished && (
-        <div className='container mx-auto px-6 py-12 max-w-3xl flex-1 flex flex-col justify-center relative z-10'>
-          <div className='mb-6 flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5'>
-            <div>
-              <h2 className='text-md font-bold text-white'>{quiz?.title}</h2>
-              <span className='text-[10px] text-pw-muted uppercase font-mono tracking-wider'>
-                {currentQuestion + 1} of {activeQuestions.length} Questions
-              </span>
+      {/* 3. Details Gate */}
+      {showDetails &&
+        !detailsCollected &&
+        (quiz.askDetails || []).length > 0 && (
+          <div className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
+            <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl'>
+              <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
+                ENTER YOUR DETAILS
+              </h3>
+              <div className='space-y-5'>
+                {quiz.askDetails?.map((detail, idx) => (
+                  <div
+                    key={(detail?.title as string) + idx + '6r5e4wx4wyn6rs43'}
+                    className='space-y-2'>
+                    <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
+                      {detail.title}
+                    </label>
+                    {detail.type === 'sex' ?
+                      <div className='flex gap-3'>
+                        {['Male', 'Female'].map((s) => (
+                          <Button
+                            key={s + '990087g87g7f7'}
+                            variant='outline'
+                            onClick={() =>
+                              setUserData({ ...userData, [detail.title]: s })
+                            }
+                            className={cn(
+                              'flex-1 h-12 rounded-2xl transition-all',
+                              userData[detail.title] === s ?
+                                'bg-pw-primary text-white border-pw-primary shadow-lg shadow-pw-primary/30'
+                              : 'bg-black/20 hover:bg-black/40',
+                            )}>
+                            {s}
+                          </Button>
+                        ))}
+                      </div>
+                    : detail.type === 'dropdown' ?
+                      <div
+                        className='flex gap-2 w-full'
+                        style={{
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}>
+                        <p className='title font-bold'>{detail.title}</p>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            className={'w-[40%] min-w-[100px] overflow-hidden'}>
+                            <Button
+                              variant='outline'
+                              className='h-8 text-xs w-full flex justify-between'>
+                              {userData[detail.title] || 'Select'}
+                              <ChevronDown size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className='w-56 bg-pw-surface border-white/10 rounded-2xl'>
+                            {detail.options?.map((opt, index) => (
+                              <DropdownMenuItem
+                                key={opt + index + '98gdewaa576yfy'}
+                                onClick={() =>
+                                  setUserData({
+                                    ...userData,
+                                    [detail.title]: opt,
+                                  })
+                                }
+                                className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
+                                {opt}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    : <input
+                        type={detail.type}
+                        className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
+                        placeholder={`Enter ${detail.title}...`}
+                        value={userData[detail.title] || ''}
+                        onChange={(e) =>
+                          setUserData({
+                            ...userData,
+                            [detail.title]: e.target.value,
+                          })
+                        }
+                      />
+                    }
+                  </div>
+                ))}
+                <Button
+                  className='btn-primary h-12 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
+                  onClick={() => {
+                    const complete = quiz.askDetails?.every(
+                      (d) => userData[d.title],
+                    );
+                    if (!complete)
+                      return toast.error('Required fields missing');
+                    setDetailsCollected(true);
+                    setStart(true);
+                  }}>
+                  START {quiz.type.toUpperCase()}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* 4. Active Assessment View */}
+      {started && (
+        <>
+          <div
+            className={cn(
+              'container relative z-10 mx-auto px-4 md:px-6 pt-12 pb-10 max-w-7xl',
+              quizTheme === 'dark' ? 'text-white' : 'text-black',
+            )}>
+            <div className='mb-8 flex flex-col gap-2 w-full'>
+              {!isOnline && (
+                <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
+                  <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
+                  <span>
+                    Offline Mode: Your responses will be saved securely on this
+                    device and uploaded once you connect to the internet.
+                  </span>
+                </div>
+              )}
+
+              {/* Brand Icon */}
+              {brandIcon && (
+                <div className='flex justify-center mb-4'>
+                  <img
+                    src={brandIcon}
+                    alt='Brand Logo'
+                    className='h-14 w-auto rounded-xl object-contain drop-shadow-lg'
+                  />
+                </div>
+              )}
+
+              {/* Disclaimer Banner */}
+              {quiz.disclaimer && (
+                <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
+                  <AlertTriangle
+                    size={14}
+                    className='text-pw-warning shrink-0 mt-0.5'
+                  />
+                  <span>{quiz.disclaimer}</span>
+                </div>
+              )}
+
+              {/* Header Row */}
+              <div className='flex flex-wrap items-center justify-between gap-4 bg-white/2 p-2 rounded-full border border-white/4 bkblur'>
+                <div className='flex items-center gap-4 pl-3'>
+                  <div className='flex flex-col'>
+                    <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
+                      {quiz.title}
+                    </h1>
+                    <span
+                      className='text-[8px] leading-none opacity-40 hidden'
+                      style={{ placeSelf: 'flex-start' }}>
+                      {quiz.type.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className='flex items-center gap-2'>
+                  {quiz.hasTimer && timeLeft !== null && (
+                    <div
+                      title={`${capFirst(quiz.type)} Timer`}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[14px] font-mono lg:text-lg border transition-all',
+                        timeLeft < 60 ?
+                          'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
+                        : 'bg-white/5 border-white/10 text-pw-primary',
+                      )}>
+                      <Clock
+                        size={18}
+                        className={
+                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
+                        }
+                      />
+                      {Math.floor(timeLeft / 60)}:
+                      {String(timeLeft % 60).padStart(2, '0')}
+                    </div>
+                  )}
+
+                  <Button
+                    variant='ghost'
+                    title={`Quit ${capFirst(quiz.type)}`}
+                    size='sm'
+                    onClick={() =>
+                      confirmLeaveQuiz(() => (window.location.href = '/quiz'))
+                    }
+                    className='h-10 px-4 gap-2 rounded-full text-pw-danger hover:bg-pw-danger/10 hover:text-pw-danger transition-all active:scale-95 border border-pw-danger/10'>
+                    <LogOut size={16} />
+                    <span className='hidden sm:inline font-bold text-pw-danger'>
+                      Quit
+                    </span>
+                  </Button>
+
+                  {/* Report button */}
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    title='Report this quiz'
+                    onClick={() => setShowReportModal(true)}
+                    className='h-9 w-9 rounded-full text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 transition-all border border-white/5'>
+                    <Flag size={14} />
+                  </Button>
+
+                  {quiz?.allowEarlySubmit && (
+                    <Button
+                      title={`Submit ${capFirst(quiz.type)}`}
+                      onClick={confirmSubmitQuiz}
+                      className='h-10 px-4 rounded-full gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 hidden md:flex ml-4'>
+                      <CheckCircle2 size={16} />
+                      <span className='font-bold'>SUBMIT</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
+                {/* Top Progress Bar */}
+                {quiz.type === 'quiz' && (
+                  <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${(answeredCount / activeQuestions.length) * 100}%`,
+                      }}
+                      className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
+                    />
+                  </div>
+                )}
+
+                {quiz?.allowEarlySubmit && (
+                  <Button
+                    title={`Submit ${capFirst(quiz.type)}`}
+                    onClick={confirmSubmitQuiz}
+                    className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden '>
+                    <CheckCircle2 size={18} />
+                    <span className='font-bold'>SUBMIT</span>
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {quiz?.hasTimer && timeLeft !== null && (
-              <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pw-danger/10 border border-pw-danger/20 text-pw-danger text-xs font-bold font-mono'>
-                <Clock className='h-3.5 w-3.5 animate-pulse' />
-                <span>{formatTime(timeLeft)}</span>
-              </div>
-            )}
-          </div>
-
-          <div className='flex flex-col items-center w-full'>
-            {quiz?.quizScroll ?
-              // Continuous scroll layout (Scroll All vs Scroll Show)
+            {/* ===== SCROLL MODE: all answered + current question vertically ===== */}
+            {(
+              quiz?.quizScroll &&
+              (quiz?.quizLayout === 'scroll_show' || !quiz?.quizLayout)
+            ) ?
+              // jules edit: Scroll Show layout (Dynamic appending as answered)
               <div className='flex flex-col items-center w-full gap-0'>
                 {activeQuestions
                   .slice(
@@ -2288,7 +2516,7 @@ export default function PublicQuizTaker() {
               </div>
             }
           </div>
-        </div>
+        </>
       )}
 
       {/* Report Takedown Modal */}
