@@ -203,7 +203,8 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
-  const { premiumTier } = useAppContext();
+  const { premiumTier, isFeatureUnlocked } = useAppContext();
+  const isQuizzablePremium = isFeatureUnlocked('quizzable');
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
@@ -273,8 +274,8 @@ const QuizBuilder = ({
   }, [editedQuiz]);
 
   const addQuestion = (category?: string) => {
-    // jules edit: Limit free users to maximum of 5 questions per quiz
-    if (editedQuiz.questions.length >= 5 && premiumTier === 'free') {
+    // jules edit: Limit free users to maximum of 5 questions per quiz (strictly secure flexible tier gating)
+    if (editedQuiz.questions.length >= 5 && !isQuizzablePremium) {
       return toast.error('Free tier accounts are capped at a maximum of 5 questions per quiz! Please upgrade to add more.');
     }
 
@@ -2210,8 +2211,8 @@ const QuizBuilder = ({
                           variant='outline'
                           size='sm'
                           onClick={() => {
-                            // jules edit: Limit free users to maximum of 4 options per question
-                            if (editedQuiz.questions[currentStep].options.length >= 4 && premiumTier === 'free') {
+                            // jules edit: Limit free users to maximum of 4 options per question (strictly secure flexible tier gating)
+                            if (editedQuiz.questions[currentStep].options.length >= 4 && !isQuizzablePremium) {
                               return toast.error('Free tier accounts are capped at a maximum of 4 options per question! Please upgrade to add more.');
                             }
 
@@ -2272,7 +2273,8 @@ export default function QuizPage() {
     setIsNameModalOpen(false);
   };
 
-  const { premiumTier } = useAppContext();
+  const { premiumTier, isFeatureUnlocked } = useAppContext();
+  const isQuizzablePremium = isFeatureUnlocked('quizzable');
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);

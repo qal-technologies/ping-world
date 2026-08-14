@@ -37,7 +37,9 @@ interface MessageRow {
 import { useAppContext } from '@/context/AppContext';
 
 export default function MessageLandingPage() {
-  const { premiumTier, isPremium, isOnline } = useAppContext();
+  const { premiumTier, isOnline, user, isFeatureUnlocked } = useAppContext();
+  // jules edit: Secure tool-specific flexible plan gating for Anonymous Link Messages
+  const isPremium = isFeatureUnlocked('anonlink');
   const [activeTab, setActiveTab] = useState<'inbox' | 'settings'>('inbox');
   const [username, setUsername] = useState('creator');
   const [linkId, setLinkId] = useState('');
