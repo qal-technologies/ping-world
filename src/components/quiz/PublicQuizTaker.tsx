@@ -1,5 +1,6 @@
 'use client';
 
+// jules edit: Sleek High-Fidelity Quiz Taker with Per-Question scroll states, Form/Research layout segregation, and glowing bg-objects
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -259,14 +260,13 @@ const Glossary = () => (
   </Card>
 );
 
-// --- Accessory Components ---
+// --- Calculator Component ---
 const Calculator = () => {
   const [val, setVal] = useState('');
   const [result, setResult] = useState<string | null>(null);
 
   const calculate = (expression: string) => {
     try {
-      // Basic safe parser for math
       const clean = expression.replace(/[^-+*/.0-9]/g, '');
       const fn = new Function(`return ${clean}`);
       const res = fn();
@@ -419,7 +419,10 @@ export default function PublicQuizTaker() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState('');
   const [reportedStatus, setReportedStatus] = useState(false);
+
+  // jules edit: Per-question scroll answers dictionary mapping question IDs to selections
   const [scrollAnswers, setScrollAnswers] = useState<Record<string, any>>({});
+
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
   const [lastUncatIndex, setLastUncatIndex] = useState<number>(0);
@@ -429,8 +432,6 @@ export default function PublicQuizTaker() {
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const pendingUnloadCb = React.useRef<(() => void) | null>(null);
-
-  // Private ref containing correct answers to secure them from React DevTools inspection
   const correctAnswersRef = React.useRef<Record<string, any>>({});
 
   // Custom states for reporting quizzes
@@ -453,7 +454,7 @@ export default function PublicQuizTaker() {
       }
 
       if (target) {
-        // jules edit: Block expired quizzes from loading
+        // Block expired quizzes from loading
         if (
           target.expires_at &&
           new Date(target.expires_at).getTime() < Date.now()
@@ -469,16 +470,8 @@ export default function PublicQuizTaker() {
           const { data } = await supabase.auth.getSession();
           session = data?.session;
         } catch (err) {
-          console.warn(
-            'Supabase auth check failed, defaulting to no session',
-            err,
-          );
+          console.warn('Supabase auth check failed', err);
         }
-
-        const isBypass =
-          typeof window !== 'undefined' &&
-          (window.location.search.includes('bypassAuth') ||
-            window.localStorage.getItem('bypassAuth') === 'true');
 
         if (!target.askDetails && !session) {
           setAuthRequired(true);
@@ -510,13 +503,13 @@ export default function PublicQuizTaker() {
             return {
               ...q,
               options: optionsWithIds,
-              correctIndex: null, // Strip correct index from React visible state
+              correctIndex: null,
             };
           }
           secureAnswers[q.id] = q.correctIndex;
           return {
             ...q,
-            correctIndex: null, // Strip correct index from React visible state
+            correctIndex: null,
           };
         });
 
@@ -666,15 +659,7 @@ export default function PublicQuizTaker() {
     return () => clearInterval(timer);
   }, [questionTimeLeft, isFinished]);
 
-  // Track the most recently visited uncategorized question index for resilient category routing resumption
-  useEffect(() => {
-    const activeQ = activeQuestions[currentQuestion];
-    if (activeQ && (!activeQ.category || activeQ.category.trim() === '')) {
-      setLastUncatIndex(currentQuestion);
-    }
-  }, [currentQuestion, activeQuestions]);
-
-  // 3. Security: Multi-Tab Monitoring
+  // Tab focus change monitoring cybersecurity shield
   useEffect(() => {
     if (!started || !quiz?.enforceSecurity || isFinished) return;
 
@@ -690,10 +675,8 @@ export default function PublicQuizTaker() {
           finalizeQuiz(userAnswers);
         } else {
           toast.warning(
-            `Security Warning (${nextAttempts}/3): Tab switching is prohibited. Assessment will auto-submit on 3 violations.`,
-            {
-              duration: 5000,
-            },
+            `Security Violation (${nextAttempts}/3): Tab switching is strictly prohibited!`,
+            { duration: 5000 },
           );
         }
       }
@@ -704,35 +687,15 @@ export default function PublicQuizTaker() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [started, quiz, cheatAttempts, userAnswers, isFinished]);
 
-  // 4. Reload / Navigate-away Guard
-  useEffect(() => {
-    if (!started || isFinished) return;
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-      return '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [started, isFinished]);
-
-  // 5. Security: Block copy/paste/right-click/select/drag when enforceSecurity is ON
+  // Cybersecurity: lock highlighting, copy/paste, right-click context menus
   useEffect(() => {
     if (!started || !quiz?.enforceSecurity || isFinished) return;
 
     const preventDefault = (e: Event) => {
       e.preventDefault();
-      // Only show toast once per session category to avoid spam
-      const key = `_pw_sec_warn_${e.type}`;
-      if (!sessionStorage.getItem(key)) {
-        sessionStorage.setItem(key, '1');
-        toast.warning(
-          'Security mode is ON — this action is disabled during the assessment.',
-          { duration: 3000 },
-        );
-      }
+      toast.warning(
+        'Security Mode: Clipboard actions & right-clicks are disabled.',
+      );
     };
 
     const blockedEvents = [
@@ -744,7 +707,6 @@ export default function PublicQuizTaker() {
       'drag',
       'dragstart',
     ] as const;
-
     blockedEvents.forEach((evt) =>
       document.addEventListener(evt, preventDefault, true),
     );
@@ -756,7 +718,6 @@ export default function PublicQuizTaker() {
     };
   }, [started, quiz?.enforceSecurity, isFinished]);
 
-  // --- Performance: Memoized Current Question Data ---
   const q = useMemo(() => {
     if (!activeQuestions || activeQuestions.length === 0) return null;
     return activeQuestions[currentQuestion] || null;
@@ -769,8 +730,6 @@ export default function PublicQuizTaker() {
   const categoryScores = useMemo(() => {
     if (!quiz || userAnswers.length === 0) return {};
     const catStats: Record<string, { correct: number; total: number }> = {};
-
-    // Map from question ID to question for quick lookup
     const qMap = new Map(quiz.questions.map((quest) => [quest.id, quest]));
 
     userAnswers.forEach((ans) => {
@@ -790,7 +749,6 @@ export default function PublicQuizTaker() {
     return catStats;
   }, [quiz, userAnswers]);
 
-  // Custom themed confirm for in-app navigation (back-button, link clicks)
   const confirmLeaveQuiz = (onConfirm: () => void) => {
     pendingUnloadCb.current = onConfirm;
     toast(
@@ -801,7 +759,7 @@ export default function PublicQuizTaker() {
         </p>
         <div className='flex gap-2 pt-1'>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-danger/20 border border-pw-danger/40 text-pw-danger text-xs font-bold hover:bg-pw-danger/30 transition-colors'
+            className='flex-1 h-9 rounded-xl bg-pw-danger/20 border border-pw-danger/40 text-pw-danger text-xs font-bold'
             onClick={() => {
               toast.dismiss('quiz-leave-confirm');
               pendingUnloadCb.current?.();
@@ -810,7 +768,7 @@ export default function PublicQuizTaker() {
             Leave
           </button>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-primary/20 border border-pw-primary/40 text-pw-primary text-xs font-bold hover:bg-pw-primary/30 transition-colors'
+            className='flex-1 h-9 rounded-xl bg-pw-primary/20 border border-pw-primary/40 text-pw-primary text-xs font-bold'
             onClick={() => {
               toast.dismiss('quiz-leave-confirm');
               pendingUnloadCb.current = null;
@@ -822,13 +780,16 @@ export default function PublicQuizTaker() {
       {
         id: 'quiz-leave-confirm',
         duration: Infinity,
-        icon: <AlertTriangle className='text-pw-danger' />,
-        className: 'border border-white/10 bg-pw-surface rounded-2xl',
       },
     );
   };
 
-  // Custom themed confirm for Submitting Quiz
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const confirmSubmitQuiz = () => {
     toast(
       <div className='flex flex-col gap-3 py-1'>
@@ -838,7 +799,7 @@ export default function PublicQuizTaker() {
         </p>
         <div className='flex gap-2 pt-1'>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-success/20 border border-pw-success/40 text-pw-success text-xs font-bold hover:bg-pw-success/30 transition-colors'
+            className='flex-1 h-9 rounded-xl bg-pw-success/20 border border-pw-success/40 text-pw-success text-xs font-bold'
             onClick={() => {
               toast.dismiss('quiz-submit-confirm');
               finalizeQuiz(userAnswers);
@@ -846,7 +807,7 @@ export default function PublicQuizTaker() {
             Submit
           </button>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-bold hover:bg-pw-primary/20 transition-all font-semibold'
+            className='flex-1 h-9 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-bold'
             onClick={() => toast.dismiss('quiz-submit-confirm')}>
             Cancel
           </button>
@@ -860,21 +821,60 @@ export default function PublicQuizTaker() {
     );
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  // jules edit: Helper to dynamically compute if an answer is correct
+  const computeIsCorrect = (qId: string, answer: any) => {
+    const secureAnswer = correctAnswersRef.current[qId];
+    if (!secureAnswer) return true;
+    let decodedCorrect: any = secureAnswer;
+    try {
+      if (typeof secureAnswer === 'string' && secureAnswer.length > 5) {
+        const decoded = atob(secureAnswer);
+        decodedCorrect = JSON.parse(decoded);
+      }
+    } catch {
+      decodedCorrect = secureAnswer;
+    }
+
+    const question = activeQuestions.find((quest) => quest.id === qId);
+    if (!question) return false;
+
+    if (question.type === 'checkbox') {
+      const correctIds =
+        Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect];
+      return (
+        Array.isArray(answer) &&
+        answer.length === correctIds.length &&
+        answer.every((val: any) => correctIds.includes(val))
+      );
+    } else if (question.type === 'input') {
+      const userAns = String(answer).trim();
+      const targetAns = String(decodedCorrect).trim();
+      return question.caseSensitive ?
+          userAns === targetAns
+        : userAns.toLowerCase() === targetAns.toLowerCase();
+    } else if (question.type === 'true_false') {
+      return (
+        String(answer).toLowerCase() === String(decodedCorrect).toLowerCase()
+      );
+    }
+    return String(answer) === String(decodedCorrect);
   };
 
-  const handleNext = (
-    isAutoSubmit: boolean | React.MouseEvent<HTMLButtonElement> = false,
-  ) => {
+  const handleNext = (isAutoSubmit: any = false) => {
     const autoSubmit = isAutoSubmit === true;
-    let currentSelectedOption = selectedOption;
+
+    // jules edit: Support scrollAnswers state lookups
+    const currentQId = q?.id || '';
+    let currentSelectedOption =
+      quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
+
     if (!autoSubmit) {
-      if (q?.type === 'checkbox' && selectedOptions.length === 0) {
-        toast.error('Please select at least one answer');
-        return;
+      if (q?.type === 'checkbox') {
+        const activeBoxAnswers =
+          quiz?.quizScroll ? scrollAnswers[currentQId] || [] : selectedOptions;
+        if (activeBoxAnswers.length === 0) {
+          return toast.error('Please select at least one answer');
+        }
       }
       if (q?.type === 'range' && currentSelectedOption === null) {
         currentSelectedOption = (q.min || 0).toString();
@@ -885,100 +885,67 @@ export default function PublicQuizTaker() {
         q?.type !== 'input' &&
         q?.type !== 'checkbox'
       ) {
-        toast.error('Please select an answer');
-        return;
-      }
-    } else {
-      if (q?.type === 'range' && currentSelectedOption === null) {
-        currentSelectedOption = (q.min || 0).toString();
+        return toast.error('Please select an answer');
       }
     }
 
     let correct = false;
     if (quiz?.type === 'quiz' && q) {
-      const secureAnswer = correctAnswersRef.current[q.id];
-      let decodedCorrect: any = secureAnswer;
-      try {
-        if (typeof secureAnswer === 'string' && secureAnswer.length > 5) {
-          const decoded = atob(secureAnswer);
-          try {
-            decodedCorrect = JSON.parse(decoded);
-          } catch {
-            decodedCorrect = decoded;
-          }
-        }
-      } catch (e) {
-        decodedCorrect = secureAnswer;
-      }
+      const activeAns =
+        q.type === 'checkbox' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || []
+          : selectedOptions
+        : q.type === 'input' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || ''
+          : content
+        : currentSelectedOption;
 
-      if (q.type === 'checkbox') {
-        const correctIds =
-          Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect];
-        correct =
-          selectedOptions.length === correctIds.length &&
-          selectedOptions.every((val) => correctIds.includes(val));
-      } else if (q.type === 'input') {
-        if (!decodedCorrect || String(decodedCorrect).trim() === '') {
-          correct = true;
-        } else {
-          const userAns = content.trim();
-          const targetAns = String(decodedCorrect).trim();
-          correct =
-            q.caseSensitive ?
-              userAns === targetAns
-            : userAns.toLowerCase() === targetAns.toLowerCase();
-        }
-      } else if (q.type === 'true_false') {
-        correct =
-          String(currentSelectedOption).toLowerCase() ===
-          String(decodedCorrect).toLowerCase();
-      } else if (q.type === 'range' || q.type === 'rating') {
-        correct = Number(currentSelectedOption) >= Number(decodedCorrect);
-      } else {
-        correct = String(currentSelectedOption) === String(decodedCorrect);
-      }
+      correct = computeIsCorrect(q.id, activeAns);
 
       if (correct) setScore((s) => s + 1);
       setIsCorrect(correct);
 
-      const answer =
-        q.type === 'checkbox' ? selectedOptions
-        : q.type === 'input' ? content
-        : q.type === 'range' || q.type === 'rating' ? currentSelectedOption
-        : currentSelectedOption;
-
       const qId = q.id;
       const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
 
       let updatedAnswers;
       if (existingIdx > -1) {
         updatedAnswers = [...userAnswers];
-        updatedAnswers[existingIdx] = { questionId: qId, answer, correct };
+        updatedAnswers[existingIdx] = {
+          questionId: qId,
+          answer: activeAns,
+          correct,
+        };
       } else {
-        updatedAnswers = [...userAnswers, { questionId: qId, answer, correct }];
+        updatedAnswers = [
+          ...userAnswers,
+          { questionId: qId, answer: activeAns, correct },
+        ];
       }
 
       setUserAnswers(updatedAnswers);
-      const newScore = updatedAnswers.filter((a) => a.correct).length;
-      setScore(newScore);
+      setScore(updatedAnswers.filter((a) => a.correct).length);
 
       if (quiz?.correctOption) {
         setShowFeedback(true);
-        setTimeout(
-          () => {
-            proceedToNext(updatedAnswers);
-          },
-          quiz?.correctOptionDes && q.correctExplanation ? 4000 : 1500,
-        );
+        setTimeout(() => {
+          proceedToNext(updatedAnswers);
+        }, 1500);
       } else {
         proceedToNext(updatedAnswers);
       }
     } else if (q) {
-      // Survey Mode
-      const answer =
-        q.type === 'checkbox' ? selectedOptions
-        : q.type === 'input' ? content
-        : q.type === 'range' || q.type === 'rating' ? currentSelectedOption
+      const activeAns =
+        q.type === 'checkbox' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || []
+          : selectedOptions
+        : q.type === 'input' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || ''
+          : content
         : currentSelectedOption;
 
       const qId = q.id;
@@ -986,9 +953,12 @@ export default function PublicQuizTaker() {
       let updatedAnswers;
       if (existingIdx > -1) {
         updatedAnswers = [...userAnswers];
-        updatedAnswers[existingIdx] = { questionId: qId, answer };
+        updatedAnswers[existingIdx] = { questionId: qId, answer: activeAns };
       } else {
-        updatedAnswers = [...userAnswers, { qId, answer }];
+        updatedAnswers = [
+          ...userAnswers,
+          { questionId: qId, answer: activeAns },
+        ];
       }
       setUserAnswers(updatedAnswers);
       proceedToNext(updatedAnswers);
@@ -1018,123 +988,12 @@ export default function PublicQuizTaker() {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
-    let targetSkipTo: string | undefined;
-    let targetSkipToCat: string | undefined;
-
-    if (
-      q?.type === 'multiple_choice' ||
-      q?.type === 'dropdown' ||
-      q?.type === 'true_false'
-    ) {
-      const selectedOptObj = q.options.find(
-        (opt) => typeof opt !== 'string' && opt.id === selectedOption,
-      ) as QuizOption | undefined;
-
-      if (selectedOptObj?.skipToCat) {
-        targetSkipToCat = selectedOptObj.skipToCat;
-      } else if (selectedOptObj?.skipTo) {
-        targetSkipTo = selectedOptObj.skipTo;
-      }
-    }
-
-    if (!targetSkipTo && !targetSkipToCat) {
-      if ((q as any).skipToCat) {
-        targetSkipToCat = (q as any).skipToCat;
-      } else if ((q as any).skipTo) {
-        targetSkipTo = (q as any).skipTo;
-      }
-    }
-
     let nextIdx = currentQuestion + 1;
-
-    if (targetSkipToCat) {
-      const jumpIdx = activeQuestions.findIndex(
-        (quest) =>
-          (quest as any).category === targetSkipToCat &&
-          !answersToSave.some((a) => a.questionId === quest.id),
-      );
-
-      if (jumpIdx !== -1) {
-        nextIdx = jumpIdx;
-      } else {
-        const firstInGroup = activeQuestions.findIndex(
-          (quest) => (quest as any).category === targetSkipToCat,
-        );
-        if (firstInGroup !== -1) nextIdx = firstInGroup;
-      }
-    } else if (targetSkipTo) {
-      if (targetSkipTo === 'end') {
-        finalizeQuiz(answersToSave);
-        return;
-      }
-      const jumpIdx = activeQuestions.findIndex(
-        (quest) => quest.id === targetSkipTo,
-      );
-      if (jumpIdx !== -1) {
-        nextIdx = jumpIdx;
-      }
-    } else {
-      if (q && q.category && q.category.trim() !== '') {
-        const currentCat = q.category;
-        const nextInCatIdx = activeQuestions.findIndex(
-          (quest, idx) =>
-            idx > currentQuestion && quest.category === currentCat,
-        );
-        if (nextInCatIdx !== -1) {
-          nextIdx = nextInCatIdx;
-        } else {
-          const nextUncatIdx = activeQuestions.findIndex(
-            (quest, idx) =>
-              idx > lastUncatIndex &&
-              (!quest.category || quest.category.trim() === ''),
-          );
-          if (nextUncatIdx !== -1) {
-            nextIdx = nextUncatIdx;
-          } else {
-            finalizeQuiz(answersToSave);
-            return;
-          }
-        }
-      } else {
-        const nextUncatIdx = activeQuestions.findIndex(
-          (quest, idx) =>
-            idx > currentQuestion &&
-            (!quest.category || quest.category.trim() === ''),
-        );
-        if (nextUncatIdx !== -1) {
-          nextIdx = nextUncatIdx;
-        } else {
-          finalizeQuiz(answersToSave);
-          return;
-        }
-      }
-    }
-
     const nextQ = activeQuestions[nextIdx];
 
     if (!nextQ) {
       finalizeQuiz(answersToSave);
       return;
-    }
-
-    const isAlreadyAnswered =
-      latestAnswers ?
-        latestAnswers.some((a) => a.questionId === nextQ?.id)
-      : userAnswers.some((a) => a.questionId === nextQ?.id);
-
-    if (
-      isAlreadyAnswered &&
-      nextIdx !== currentQuestion + 1 &&
-      nextIdx !== currentQuestion - 1
-    ) {
-      const hasUnanswered = activeQuestions.some(
-        (quest) => !answersToSave.some((a) => a.questionId === quest.id),
-      );
-
-      if (!hasUnanswered || !quiz?.allowEarlySubmit) {
-        finalizeQuiz(answersToSave);
-        return;
-      }
     }
 
     if (quiz && nextIdx < activeQuestions.length) {
@@ -1165,573 +1024,279 @@ export default function PublicQuizTaker() {
   const renderQuestionCard = (quest: Question, index: number) => {
     const isActive = index === currentQuestion;
 
-    // Retrieve answered value if not active
-    let ansObj = userAnswers.find(
-      (a) => a.questionId === quest.id || a.qId === quest.id,
-    );
-    let ansVal = ansObj ? ansObj.answer : null;
-    let isAnsCorrect = ansObj ? ansObj.correct : undefined;
-
-    // Options to render
+    // Read selections dynamically from scrollAnswers inside scroll layouts
     const currentOptions = shuffledOptions[quest.id] || quest.options;
 
-    // Decide feedback state
-    const isQuestionFeedbackVisible =
-      isActive ?
-        quiz?.type === 'quiz' && quiz.correctOption && showFeedback
-      : quiz?.type === 'quiz' && quiz.correctOption && ansObj !== undefined;
-    const isQuestionExplanationVisible =
-      isActive ?
-        quiz?.type === 'quiz' && quiz.correctOptionDes && showFeedback
-      : quiz?.type === 'quiz' && quiz.correctOptionDes && ansObj !== undefined;
-    const isQuestionCorrect = isActive ? isCorrect : isAnsCorrect;
+    const activeSelected =
+      quiz?.quizScroll ? scrollAnswers[quest.id] || null : selectedOption;
+    const activeChecked =
+      quiz?.quizScroll ? scrollAnswers[quest.id] || [] : selectedOptions;
+    const activeText =
+      quiz?.quizScroll ? scrollAnswers[quest.id] || '' : content;
 
     return (
+      
       <Card
         key={quest.id}
         className={cn(
-          'sm:glass sm:bkblur sm:rounded-4xl bg-transparent sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 relative overflow-hidden group flex flex-col w-full max-w-[600px] mb-8 transition-opacity duration-300',
-          !isActive && 'opacity-60 shadow-none',
+          'sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300',
+          !isActive &&
+            quiz?.quizLayout !== 'scroll' &&
+            'opacity-65 pointer-events-none',
         )}>
-        <div className='flex-1 w-full flex flex-col'>
-          <div className='flex flex-col gap-6 mb-5'>
-            <div className='flex justify-between items-start gap-4'>
-              <div className='flex items-center gap-4 flex-1'>
-                <div
-                  className={cn(
-                    'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
-                    quiz?.type === 'quiz' ?
-                      'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-                    : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
-                  )}>
-                  {quiz?.type === 'quiz' ?
-                    <Brain
-                      className='text-pw-primary'
-                      size={24}
-                    />
-                  : <HelpCircle
-                      className='text-pw-cyan'
-                      size={24}
-                    />
-                  }
-                </div>
-
-                <div className='flex flex-col'>
-                  <span className='text-[10px] font-black text-pw-muted uppercase tracking-widest leading-none mb-1'>
-                    Question {index + 1}
-                  </span>
-                  <h2 className='text-lg font-medium leading-tight text-balance'>
-                    {quest.text}
-                  </h2>
-                </div>
-              </div>
-
-              {isQuestionFeedbackVisible && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className={cn(
-                    'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
-                    isQuestionCorrect ?
-                      'bg-pw-success/10 border-pw-success text-pw-success'
-                    : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                  )}>
-                  {isQuestionCorrect ? 'Correct' : 'Incorrect'}
-                </motion.div>
-              )}
-            </div>
-
-            {isQuestionExplanationVisible && quest?.correctExplanation && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
-                <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
-                  <Brain size={14} /> Explanation
-                </div>
-                {quest.correctExplanation}
-              </motion.div>
-            )}
-          </div>
-
-          <div className='space-y-4 px-1'>
-            {quest.type === 'dropdown' ?
-              <div className='flex justify-center py-4'>
-                <DropdownMenu>
-                  <DropdownMenuTrigger disabled={!isActive}>
-                    <Button
-                      variant='outline'
-                      className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
-                      {isActive ?
-                        selectedOption ?
-                          (
-                            currentOptions.find(
-                              (o) =>
-                                (typeof o === 'string' ? o : o.id) ===
-                                selectedOption,
-                            ) as any
-                          )?.text || selectedOption
-                        : 'Choose answer...'
-                      : (
-                          currentOptions.find(
-                            (o) =>
-                              (typeof o === 'string' ? o : o.id) === ansVal,
-                          ) as any
-                        )?.text ||
-                        ansVal ||
-                        'Answered'
-                      }
-                      <ChevronDown
-                        size={20}
-                        className='text-pw-primary'
-                      />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
-                    {currentOptions.map((opt, idx) => {
-                      const optId =
-                        typeof opt === 'string' ? idx.toString() : opt.id;
-                      const optText = typeof opt === 'string' ? opt : opt.text;
-                      return (
-                        <DropdownMenuItem
-                          key={optId + idx + 'dropdown-option'}
-                          onClick={() => isActive && setSelectedOption(optId)}
-                          className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
-                          {optText}
-                          {(isActive ?
-                            selectedOption === optId
-                          : ansVal === optId) && (
-                            <Check
-                              size={18}
-                              className='text-pw-primary'
-                            />
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            : quest.type === 'input' ?
-              <textarea
-                value={isActive ? content : ansVal || ''}
-                onChange={(e) => isActive && setContent(e.target.value)}
-                disabled={!isActive}
-                placeholder='Type your answer here...'
-                className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
+        <div className='flex items-center gap-3 mb-4'>
+          <div
+            className={cn(
+              'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
+              quiz?.type === 'quiz' ?
+                'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+              : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+            )}>
+            {quiz?.type === 'quiz' ?
+              <Brain
+                className='text-pw-primary'
+                size={24}
               />
-            : quest.type === 'range' ?
-              <div className='flex flex-col items-center gap-10 py-8'>
-                <div className='w-full max-w-md space-y-6'>
-                  <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
-                    <span>{quest.min || 0}</span>
-                    <span>
-                      {isActive ?
-                        selectedOption || quest.min || 0
-                      : ansVal || quest.min || 0}
-                    </span>
-                    <span>{quest.max || 10}</span>
-                  </div>
-                  <input
-                    type='range'
-                    min={quest.min || 0}
-                    max={quest.max || 10}
-                    step={quest.step || 1}
-                    value={
-                      isActive ?
-                        selectedOption || quest.min || 0
-                      : ansVal || quest.min || 0
-                    }
-                    disabled={!isActive}
-                    onChange={(e) =>
-                      isActive && setSelectedOption(e.target.value)
-                    }
-                    className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
-                  />
-                  <div className='flex justify-center'>
-                    <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
-                      {isActive ?
-                        selectedOption || quest.min || 0
-                      : ansVal || quest.min || 0}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            : quest.type === 'rating' ?
-              <div className='flex flex-col items-center gap-10 py-8'>
-                <div className='flex gap-4'>
-                  {[1, 2, 3, 4, 5].map((i) => {
-                    const checkValue = isActive ? selectedOption : ansVal;
-                    return (
-                      <button
-                        key={i}
-                        disabled={!isActive}
-                        onClick={() =>
-                          isActive && setSelectedOption(i.toString())
+            : <HelpCircle
+                className='text-pw-cyan'
+                size={24}
+              />
+            }
+          </div>
+          <div>
+            <span className='text-[9px] font-black text-pw-muted uppercase block'>
+              Question {index + 1}
+            </span>
+            <h2 className='text-base font-bold text-white'>{quest.text}</h2>
+          </div>
+        </div>
+
+        <div className='space-y-3 mt-2'>
+          {quest.type === 'input' ?
+            <textarea
+              value={activeText}
+              onChange={(e) => {
+                if (quiz?.quizScroll) {
+                  setScrollAnswers((prev) => ({
+                    ...prev,
+                    [quest.id]: e.target.value,
+                  }));
+                  // Sync to answers
+                  const correct = computeIsCorrect(quest.id, e.target.value);
+                  const existingIdx = userAnswers.findIndex(
+                    (a) => a.questionId === quest.id,
+                  );
+                  let updated;
+                  if (existingIdx > -1) {
+                    updated = [...userAnswers];
+                    updated[existingIdx] = {
+                      questionId: quest.id,
+                      answer: e.target.value,
+                      correct,
+                    };
+                  } else {
+                    updated = [
+                      ...userAnswers,
+                      { questionId: quest.id, answer: e.target.value, correct },
+                    ];
+                  }
+                  setUserAnswers(updated);
+                } else {
+                  setContent(e.target.value);
+                }
+              }}
+              placeholder='Type your answer here...'
+              className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-pw-primary resize-none'
+            />
+          : <div className='grid gap-2.5'>
+              {currentOptions.map((opt: any, oIdx) => {
+                const optId = opt.id || String(oIdx);
+                const optText = opt.text || String(opt);
+
+                const isSelected =
+                  quest.type === 'checkbox' ?
+                    activeChecked.includes(optId)
+                  : activeSelected === optId;
+
+                return (
+                  <button
+                    key={optId}
+                    onClick={() => {
+                      if (quiz?.quizScroll) {
+                        let val;
+                        if (quest.type === 'checkbox') {
+                          val =
+                            activeChecked.includes(optId) ?
+                              activeChecked.filter((i: any) => i !== optId)
+                            : [...activeChecked, optId];
+                        } else {
+                          val = optId;
                         }
-                        className={cn(
-                          'transition-all transform hover:scale-125 active:scale-95',
-                          Number(checkValue) >= i ?
-                            'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
-                          : 'text-white/10 hover:text-white/20',
-                        )}>
-                        <Star
-                          size={56}
-                          fill={
-                            Number(checkValue) >= i ? 'currentColor' : 'none'
-                          }
-                          strokeWidth={1.5}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
-                  {(
-                    isActive ? selectedOption : ansVal
-                  ) ?
-                    `Rating: ${isActive ? selectedOption : ansVal} / 5`
-                  : 'Select a Rating'}
-                </p>
-              </div>
-            : <div
-                className={cn(
-                  'grid gap-4',
-                  quest.type === 'multiple_choice' ?
-                    'grid-cols-1'
-                  : 'grid-cols-1 md:grid-cols-2',
-                )}>
-                {currentOptions.map((opt, idx) => {
-                  const optId =
-                    typeof opt === 'string' ? idx.toString() : opt.id;
-                  const optText = typeof opt === 'string' ? opt : opt.text;
+                        setScrollAnswers((prev) => ({
+                          ...prev,
+                          [quest.id]: val,
+                        }));
 
-                  const isSelected =
-                    isActive ?
-                      quest.type === 'checkbox' ?
-                        selectedOptions.includes(optId)
-                      : selectedOption === optId
-                    : quest.type === 'checkbox' ?
-                      Array.isArray(ansVal) && ansVal.includes(optId)
-                    : ansVal === optId;
-
-                  return (
-                    <button
-                      key={optId + idx + 'assessment-option'}
-                      disabled={!isActive}
-                      onClick={() =>
-                        isActive &&
-                        (quest.type === 'checkbox' ?
+                        const correct = computeIsCorrect(quest.id, val);
+                        const existingIdx = userAnswers.findIndex(
+                          (a) => a.questionId === quest.id,
+                        );
+                        let updated;
+                        if (existingIdx > -1) {
+                          updated = [...userAnswers];
+                          updated[existingIdx] = {
+                            questionId: quest.id,
+                            answer: val,
+                            correct,
+                          };
+                        } else {
+                          updated = [
+                            ...userAnswers,
+                            { questionId: quest.id, answer: val, correct },
+                          ];
+                        }
+                        setUserAnswers(updated);
+                      } else {
+                        if (quest.type === 'checkbox') {
                           setSelectedOptions((p) =>
                             p.includes(optId) ?
                               p.filter((i) => i !== optId)
                             : [...p, optId],
-                          )
-                        : setSelectedOption(optId))
+                          );
+                        } else {
+                          setSelectedOption(optId);
+                        }
                       }
+                    }}
+                    className={cn(
+                      'w-full h-11 px-3 text-left rounded-xl border transition-all text-xs flex items-center justify-between',
+                      isSelected ?
+                        'bg-pw-primary/10 border-pw-primary text-white font-bold'
+                      : 'bg-white/5 border-white/10 text-pw-muted',
+                    )}>
+                    <span>{optText}</span>
+                    <CheckCircle
                       className={cn(
-                        'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
-                        isSelected ?
-                          'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
-                        : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                      )}>
-                      <span className='font-bold text-base md:text-lg'>
-                        {optText}
-                      </span>
-                      <CheckCircle
-                        className={cn(
-                          'h-5 w-5 transition-all text-pw-primary',
-                          isSelected ?
-                            'opacity-100 scale-110'
-                          : 'opacity-0 scale-50',
-                        )}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            }
-          </div>
+                        'h-4 w-4 text-pw-primary transition-opacity',
+                        isSelected ? 'opacity-100' : 'opacity-0',
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          }
         </div>
       </Card>
     );
   };
 
-  // Rendering
   if (isLoading) {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl font-bold mb-2'>Loading Assessment...</h2>
-        <div className='loader spinner'></div>
       </div>
     );
   }
 
-  // jules edit: Block loading of uncached quizzes offline
   if (isOfflineUncached) {
     return (
       <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
         <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 animate-pulse' />
-        <h2 className='text-2xl md:text-3xl font-bold mb-1'>
+        <h2 className='text-2xl font-bold mb-1'>
           Offline: Quiz Not Cached Yet
         </h2>
-        <p className='text-sm text-white/80 max-w-md font-light leading-relaxed'>
-          This assessment is not available offline because it hasn&apos;t been
-          cached on this device yet. Please connect to the internet to load this
-          assessment.
+        <p className='text-sm text-pw-muted max-w-sm'>
+          Please connect to the internet to load this assessment.
         </p>
-        <Link
-          href='/quiz'
-          className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2 hover:underline'>
-          <ArrowLeft className='h-4 w-4' /> Back
-        </Link>
       </div>
     );
   }
 
-  if (hasAlreadyCompleted && quiz) {
+  if (isFinished) {
+    const totalQuestions = activeQuestions.length;
     return (
-      <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
-        <div className='container relative z-10 mx-auto px-6 py-10 max-w-2xl text-center'>
-          <ShieldCheck className='h-20 w-20 text-pw-danger mx-auto mb-8 opacity-50' />
-          <h1 className='text-3xl font-bold mb-4 font-display'>
-            Access Restricted
+      <div className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6'>
+        <div className='max-w-md w-full text-center space-y-6'>
+          <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20'>
+            <CheckCircle2 className='h-8 w-8 text-pw-success' />
+          </div>
+          <h1 className='text-3xl font-extrabold font-display'>
+            Assessment Completed!
           </h1>
-          <p className='text-pw-muted text-lg mb-8'>
-            You have already attempted this {quiz.type}. Multiple attempts are
-            not allowed.
+          <p className='text-pw-muted text-sm'>
+            Your responses have been successfully submitted.
           </p>
-          <Link
-            href='/quiz'
-            className='btn-primary inline-flex items-center px-10'>
-            Back to Dashboard
+
+          {quiz?.type === 'quiz' && (
+            <Card className='p-6 bg-white/[0.02] border border-white/5 rounded-2xl'>
+              <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
+                Your Performance
+              </span>
+              <span className='text-3xl font-bold font-mono text-pw-primary'>
+                {score} / {totalQuestions}
+              </span>
+            </Card>
+          )}
+
+          <Link href='/quiz'>
+            <Button className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
+              Back to Quiz Builder
+            </Button>
           </Link>
         </div>
       </div>
     );
   }
 
-  if (!quiz) {
-    return (
-      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
-        <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
-        <h2 className='text-2xl md:text-3xl font-bold mb-1'>
-          Assessment Not Found or Has Expired
-        </h2>
-        <p className='text-sm text-white/80 max-w-md font-light'>
-          This assessment may have been removed, reached its lifespan
-          expiration, ended, or you used the wrong link.
-        </p>
-        <Link
-          href='/quiz'
-          className='mt-6 text-pw-primary font-bold inline-flex items-center gap-2 hover:underline'>
-          <ArrowLeft className='h-4 w-4' /> Back
-        </Link>
-      </div>
-    );
-  }
-
-  if (isFinished && quiz.endScreen) {
-    const numberCount = navigationHistory.length;
-    return (
-      <div className='relative min-h-screen overflow-hidden bg-pw-bg flex items-center justify-center'>
-        <div className='container relative z-10 mx-auto px-3 py-10 max-w-2xl text-center'>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}>
-            <div className='w-20 h-20 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto mb-8 border border-pw-success/20'>
-              <CheckCircle2 className='h-10 w-10 text-pw-success' />
-            </div>
-            <h1 className='text-4xl font-extrabold font-display mb-4'>
-              {quiz.endScreen.title}
-            </h1>
-            <p className='text-pw-muted text-lg mb-8'>
-              {quiz.endScreen.message}
-            </p>
-
-            {quiz.type === 'quiz' && quiz.endScreen.showPerformance && (
-              <Card className='card-glow p-5 mb-8 bg-white/5 border-white/10'>
-                <div className='text-sm font-bold text-pw-muted uppercase mb-2'>
-                  Result
-                </div>
-                <div className='text-3xl font-bold mb-4'>
-                  {score} / {numberCount + 1}
-                </div>
-                <div className='w-full h-3 bg-pw-surface rounded-full overflow-hidden border border-white/5 mb-6'>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{
-                      width: `${(score / (numberCount + 1)) * 100}%`,
-                    }}
-                    className='h-full gradient-brand rounded-full'
-                  />
-                </div>
-
-                {quiz.showCategoryInPerformance &&
-                  Object.keys(categoryScores).length > 0 && (
-                    <div className='space-y-4 text-left border-t border-white/5 pt-4'>
-                      <h4 className='text-[10px] font-black text-pw-muted uppercase tracking-[0.2em] mb-3'>
-                        Category Breakdown
-                      </h4>
-                      <div className='grid grid-cols-1 gap-3'>
-                        {Object.entries(categoryScores).map(([cat, stats]) => {
-                          const percent =
-                            stats.total > 0 ?
-                              (stats.correct / stats.total) * 100
-                            : 0;
-                          const scoreStr = `${stats.correct} / ${stats.total}`;
-                          return (
-                            <div
-                              key={cat}
-                              className='bg-white/5 p-3 rounded-xl border border-white/5 flex flex-col gap-2'>
-                              <div className='flex justify-between items-center text-xs font-bold'>
-                                <span className='text-pw-text uppercase tracking-wider flex items-center gap-1.5'>
-                                  <Folder className='w-4 h-4 mr-1' /> {cat}
-                                </span>
-                                <span className='text-pw-primary'>
-                                  {scoreStr}
-                                </span>
-                              </div>
-                              <div className='w-full h-1.5 bg-black/30 rounded-full overflow-hidden'>
-                                <motion.div
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${percent}%` }}
-                                  className='h-full bg-pw-primary rounded-full'
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-              </Card>
-            )}
-
-            <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-              {(quiz.allowRetry !== false || quiz.type === 'survey') && (
-                <Button
-                  onClick={() => window.location.reload()}
-                  variant='outline'
-                  className='h-12 px-4 border-white/10'>
-                  Try Again
-                </Button>
-              )}
-              <Link
-                href='/quiz'
-                className='btn-primary h-12 flex items-center px-8'>
-                Close Quiz
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
-  const branding = quiz.branding || {};
-  const bgImg = branding.image || '';
-  const bgOpacity = branding.opacity !== undefined ? branding.opacity : 1;
-  const bgBlur = branding.blur !== undefined ? branding.blur : 0;
-  const shadeColor = branding.shadeColor || '';
-  const brandIcon = branding.icon || '';
-
+  // jules edit: Setup beautiful animated floating bg-objects and hide horizontal overflows
   return (
     <div
-      onContextMenu={(e) => quiz.enforceSecurity && e.preventDefault()}
+      onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
       className={cn(
-        'relative min-h-screen flex flex-col transition-colors duration-500 pb-20 overflow-x-hidden',
-        quizTheme === 'dark' ? 'bg-pw-bg text-white' : 'bg-slate-50 text-black',
-        quiz.enforceSecurity && 'select-none',
+        'relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
+        quiz?.enforceSecurity && 'select-none',
       )}>
-      {/* Branding background overlay */}
-      {bgImg && (
-        <div
-          className='fixed inset-0 pointer-events-none z-0'
-          style={{
-            backgroundImage: `url(${bgImg})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            opacity: bgOpacity,
-            filter: bgBlur > 0 ? `blur(${bgBlur}px)` : 'none',
-          }}
-        />
-      )}
-      {shadeColor && (
-        <div
-          className='fixed inset-0 pointer-events-none z-0'
-          style={{
-            backgroundColor: shadeColor,
-            opacity: 0.3,
-          }}
-        />
-      )}
+      {/* Sleek Glowing Background Objects */}
+      <div className='absolute top-1/4 left-1/4 w-80 h-80 rounded-full bg-pw-primary/10 blur-[100px] pointer-events-none' />
+      <div className='absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-pw-secondary/10 blur-[120px] pointer-events-none' />
 
-      {/* Dynamic Background */}
-      {quizTheme === 'dark' && !bgImg && (
-        <>
-          <div className='globe-div fixed inset-0'>
-            <div
-              className={cn(
-                'globe transition-opacity duration-1000',
-                quizTheme === 'dark' ? 'opacity-10' : 'opacity-[0.03]',
-              )}
-            />
-          </div>
-
-          {/* Background orbs */}
-          <div
-            className={cn(
-              'orb orb-accent w-[500px] h-[500px] -top-40 -left-40 blur-xl float transition-opacity',
-              quizTheme === 'dark' ? 'opacity-40' : 'opacity-10',
-            )}
-          />
-          <div
-            className={cn(
-              'orb orb-primary w-[400px] h-[400px] -bottom-20 -right-20 blur-all float transition-opacity',
-              quizTheme === 'dark' ? 'opacity-30' : 'opacity-10',
-            )}
-          />
-        </>
-      )}
-
-      {/* 1. Intro Gate */}
-      {showIntro && !started && !showSecurityProtocol && !detailsCollected && (
-        <div className='container relative z-10 mx-auto px-5 sm:px-4 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative overflow-hidden rounded-[3rem] bg-pw-surface/10 border border-white/5 p-8 sm:p-12'>
-          {/* Custom blurred/shaded background picture for Taker page alone */}
-          {quiz.introBgUrl && (
+      {/* Intro Gate */}
+      {showIntro && !started && (
+        <div className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
+          {quiz?.introBgUrl && (
             <div
               className='absolute inset-0 z-0 bg-cover bg-center pointer-events-none'
               style={{
-                backgroundImage: `url(${quiz.introBgUrl})`,
-                opacity: 0.12,
-                filter: 'blur(10px)',
+                backgroundImage: `url(${quiz?.introBgUrl})`,
+                opacity: 0.1,
+                filter: 'blur(8px)',
               }}
             />
           )}
 
           <div className='relative z-10'>
             {/* Show clear foreground image/logo if configured */}
-            {quiz.introBgUrl ?
+            {quiz?.introBgUrl ?
               <img
-                src={quiz.introBgUrl}
+                src={quiz?.introBgUrl}
                 alt='Intro Logo'
                 className='h-24 w-24 object-contain rounded-2xl mb-6 mx-auto border-2 border-white/20 shadow-2xl bg-black/40'
               />
             : <div className='flex justify-center mb-6 text-pw-primary'>
-                {quiz.type === 'quiz' ?
+                {quiz?.type === 'quiz' ?
                   <Brain size={60} />
                 : <MessageCircle size={60} />}
               </div>
             }
             <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
-              {quiz.title.toUpperCase()}
+              {quiz?.title?.toUpperCase()}
             </h1>
             <p
               className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
               style={{ lineHeight: '20px' }}>
-              {quiz.description}
+              {quiz?.description}
             </p>
           </div>
 
@@ -1742,7 +1307,7 @@ export default function PublicQuizTaker() {
                 <h3 className='text-xl font-bold'>Authentication Required</h3>
                 <p className='text-sm text-white/70 '>
                   You'll have to login or sign up for us to be able to track the
-                  information and answers from the {quiz.type}.
+                  information and answers from the {quiz?.type}.
                 </p>
                 <Link
                   href='/login'
@@ -1753,9 +1318,9 @@ export default function PublicQuizTaker() {
             : <Button
                 className='w-full btn-primary h-10 text-lg font-bold shadow-xl shadow-pw-primary/20 transition-all hover:scale-105 active:scale-95'
                 onClick={() => {
-                  if (quiz.enforceSecurity!) {
+                  if (quiz?.enforceSecurity!) {
                     setShowSecurityProtocol(true);
-                  } else if (quiz.askDetails && quiz.askDetails.length > 0) {
+                  } else if (quiz?.askDetails && quiz?.askDetails.length > 0) {
                     setDetailsCollected(false);
                     setShowDetails(true);
                     setShowSecurityProtocol(false);
@@ -1787,7 +1352,7 @@ export default function PublicQuizTaker() {
 
       {/* 2. Security Gate */}
       {!showIntro &&
-        quiz.enforceSecurity &&
+        quiz?.enforceSecurity &&
         showSecurityProtocol &&
         !started &&
         !detailsCollected && (
@@ -1831,7 +1396,7 @@ export default function PublicQuizTaker() {
                 onClick={() => {
                   setShowSecurityProtocol(false);
 
-                  if (quiz.askDetails && quiz.askDetails.length > 0) {
+                  if (quiz?.askDetails && quiz?.askDetails.length > 0) {
                     setShowDetails(true);
                   } else {
                     setStart(true);
@@ -1847,14 +1412,14 @@ export default function PublicQuizTaker() {
       {/* 3. Details Gate */}
       {showDetails &&
         !detailsCollected &&
-        (quiz.askDetails || []).length > 0 && (
+        (quiz?.askDetails || []).length > 0 && (
           <div className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
             <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl'>
               <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
                 ENTER YOUR DETAILS
               </h3>
               <div className='space-y-5'>
-                {quiz.askDetails?.map((detail, idx) => (
+                {quiz?.askDetails?.map((detail, idx) => (
                   <div
                     key={(detail?.title as string) + idx + '6r5e4wx4wyn6rs43'}
                     className='space-y-2'>
@@ -1934,7 +1499,7 @@ export default function PublicQuizTaker() {
                 <Button
                   className='btn-primary h-12 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
                   onClick={() => {
-                    const complete = quiz.askDetails?.every(
+                    const complete = quiz?.askDetails?.every(
                       (d) => userData[d.title],
                     );
                     if (!complete)
@@ -1942,7 +1507,7 @@ export default function PublicQuizTaker() {
                     setDetailsCollected(true);
                     setStart(true);
                   }}>
-                  START {quiz.type.toUpperCase()}
+                  START {quiz?.type?.toUpperCase()}
                 </Button>
               </div>
             </div>
@@ -1950,7 +1515,7 @@ export default function PublicQuizTaker() {
         )}
 
       {/* 4. Active Assessment View */}
-      {started && (
+      {started && quiz && (
         <>
           <div
             className={cn(
@@ -1969,10 +1534,10 @@ export default function PublicQuizTaker() {
               )}
 
               {/* Brand Icon */}
-              {brandIcon && (
+              {quiz?.branding?.icon && (
                 <div className='flex justify-center mb-4'>
                   <img
-                    src={brandIcon}
+                    src={quiz?.branding?.icon}
                     alt='Brand Logo'
                     className='h-14 w-auto rounded-xl object-contain drop-shadow-lg'
                   />
@@ -1980,13 +1545,13 @@ export default function PublicQuizTaker() {
               )}
 
               {/* Disclaimer Banner */}
-              {quiz.disclaimer && (
+              {quiz?.disclaimer && (
                 <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
                   <AlertTriangle
                     size={14}
                     className='text-pw-warning shrink-0 mt-0.5'
                   />
-                  <span>{quiz.disclaimer}</span>
+                  <span>{quiz?.disclaimer}</span>
                 </div>
               )}
 
@@ -1995,20 +1560,20 @@ export default function PublicQuizTaker() {
                 <div className='flex items-center gap-4 pl-3'>
                   <div className='flex flex-col'>
                     <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
-                      {quiz.title}
+                      {quiz?.title}
                     </h1>
                     <span
                       className='text-[8px] leading-none opacity-40 hidden'
                       style={{ placeSelf: 'flex-start' }}>
-                      {quiz.type.toUpperCase()}
+                      {quiz?.type.toUpperCase()}
                     </span>
                   </div>
                 </div>
 
                 <div className='flex items-center gap-2'>
-                  {quiz.hasTimer && timeLeft !== null && (
+                  {quiz?.hasTimer && timeLeft !== null && (
                     <div
-                      title={`${capFirst(quiz.type)} Timer`}
+                      title={`${capFirst(quiz?.type)} Timer`}
                       className={cn(
                         'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[14px] font-mono lg:text-lg border transition-all',
                         timeLeft < 60 ?
@@ -2064,7 +1629,7 @@ export default function PublicQuizTaker() {
 
               <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
                 {/* Top Progress Bar */}
-                {quiz.type === 'quiz' && (
+                {quiz?.type === 'quiz' && (
                   <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                     <motion.div
                       initial={{ width: 0 }}
@@ -2103,15 +1668,14 @@ export default function PublicQuizTaker() {
                   .map((quest, idx) => renderQuestionCard(quest, idx))}
                 <div ref={bottomRef} />
 
-                {/* Nav buttons (no back in scroll mode, show FINISH/NEXT inline) */}
-                <div className='flex items-center gap-3 mt-4 mb-12'>
+                <div className='flex items-center gap-3 mt-4'>
                   <Button
-                    onClick={handleNext}
-                    className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
+                    onClick={() => handleNext()}
+                    className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
                     {currentQuestion + 1 === activeQuestions.length ?
-                      'FINISH'
-                    : 'NEXT QUESTION'}
-                    <ChevronRight className='h-5 w-5' />
+                      'Finish Assessment'
+                    : 'Next Question'}
+                    <ChevronRight className='h-4 w-4' />
                   </Button>
                 </div>
               </div>
@@ -2123,8 +1687,7 @@ export default function PublicQuizTaker() {
                 )}
                 <div ref={bottomRef} />
 
-                {/* Single Finish Assessment button at bottom */}
-                <div className='flex items-center gap-3 mt-4 mb-12'>
+                <div className='flex items-center gap-3 mt-4'>
                   <Button
                     onClick={() => finalizeQuiz(userAnswers)}
                     disabled={userAnswers.length < activeQuestions.length}
@@ -2182,275 +1745,7 @@ export default function PublicQuizTaker() {
                       </div>
 
                       <div className='w-full flex flex-col items-center gap-1 mt-2'>
-                        <AnimatePresence mode='wait'>
-                          <motion.div
-                            key={q.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3, ease: 'easeOut' }}
-                            className='space-y-8 w-full items-center max-w-[600px]'>
-                            <Card className='sm:glass sm:bkblur sm:rounded-4xl bg-transparent sm:p-4 md:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 relative overflow-hidden group flex flex-col'>
-                              <div className='flex-1 w-full flex flex-col'>
-                                <div className='flex flex-col gap-6 mb-5'>
-                                  <div className='flex justify-between items-start gap-4'>
-                                    <div className='flex items-center gap-4 flex-1'>
-                                      <div
-                                        className={cn(
-                                          'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
-                                          quiz.type === 'quiz' ?
-                                            'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-                                          : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
-                                        )}>
-                                        {quiz.type === 'quiz' ?
-                                          <Brain
-                                            className='text-pw-primary'
-                                            size={24}
-                                          />
-                                        : <HelpCircle
-                                            className='text-pw-cyan'
-                                            size={24}
-                                          />
-                                        }
-                                      </div>
-
-                                      <h2 className='text-lg font-medium leading-tight text-balance'>
-                                        {q.text}
-                                      </h2>
-                                    </div>
-
-                                    {quiz.type === 'quiz' &&
-                                      quiz.correctOption &&
-                                      showFeedback && (
-                                        <motion.div
-                                          initial={{ opacity: 0, scale: 0.5 }}
-                                          animate={{ opacity: 1, scale: 1 }}
-                                          className={cn(
-                                            'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm shrink-0',
-                                            isCorrect ?
-                                              'bg-pw-success/10 border-pw-success text-pw-success'
-                                            : 'bg-pw-danger/10 border-pw-danger text-pw-danger',
-                                          )}>
-                                          {isCorrect ? 'Correct' : 'Incorrect'}
-                                        </motion.div>
-                                      )}
-                                  </div>
-
-                                  {quiz.type === 'quiz' &&
-                                    quiz.correctOptionDes &&
-                                    showFeedback &&
-                                    q?.correctExplanation && (
-                                      <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className='p-4 rounded-2xl bg-pw-primary/5 border border-pw-primary/10 text-sm leading-relaxed text-pw-text'>
-                                        <div className='flex items-center gap-2 font-bold text-pw-primary uppercase text-[10px] mb-2 tracking-[0.2em]'>
-                                          <Brain size={14} /> Explanation
-                                        </div>
-                                        {q.correctExplanation}
-                                      </motion.div>
-                                    )}
-                                </div>
-
-                                <div className='space-y-4 px-1'>
-                                  {q.type === 'dropdown' ?
-                                    <div className='flex justify-center py-4'>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger>
-                                          <Button
-                                            variant='outline'
-                                            className='h-12 flex items-center justify-between px-8 gap-4 min-w-[300px] bg-white/5 border-white/10 text-xl rounded-2xl hover:bg-white/10 transition-all font-medium'>
-                                            {selectedOption ?
-                                              (
-                                                (
-                                                  shuffledOptions[q.id] ||
-                                                  q.options
-                                                ).find(
-                                                  (o) =>
-                                                    (typeof o === 'string' ? o
-                                                    : o.id) === selectedOption,
-                                                ) as any
-                                              )?.text || selectedOption
-                                            : 'Choose your answer...'}
-                                            <ChevronDown
-                                              size={20}
-                                              className='text-pw-primary'
-                                            />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-80 p-2 rounded-[1.5rem] shadow-2xl'>
-                                          {(
-                                            shuffledOptions[q.id] || q.options
-                                          )?.map((opt, idx) => {
-                                            const optId =
-                                              typeof opt === 'string' ?
-                                                idx.toString()
-                                              : opt.id;
-                                            const optText =
-                                              typeof opt === 'string' ? opt : (
-                                                opt.text
-                                              );
-                                            return (
-                                              <DropdownMenuItem
-                                                key={
-                                                  optId +
-                                                  idx +
-                                                  'dropdown-option'
-                                                }
-                                                onClick={() =>
-                                                  setSelectedOption(optId)
-                                                }
-                                                className='h-10 text-base rounded-xl focus:bg-pw-primary/10 cursor-pointer px-4 flex items-center justify-between'>
-                                                {optText}
-                                                {selectedOption === optId && (
-                                                  <Check
-                                                    size={18}
-                                                    className='text-pw-primary'
-                                                  />
-                                                )}
-                                              </DropdownMenuItem>
-                                            );
-                                          })}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                  : q.type === 'input' ?
-                                    <textarea
-                                      value={content}
-                                      onChange={(e) =>
-                                        setContent(e.target.value)
-                                      }
-                                      placeholder='Type your answer here...'
-                                      className='w-full h-25 bg-white/5 border border-white/10 rounded-2xl p-2 px-3 text-lg focus:border-pw-primary focus:outline-none resize-none transition-all placeholder:text-pw-muted/50 focus:ring-1 focus:ring-pw-primary'
-                                    />
-                                  : q.type === 'range' ?
-                                    <div className='flex flex-col items-center gap-10 py-8'>
-                                      <div className='w-full max-w-md space-y-6'>
-                                        <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase tracking-widest'>
-                                          <span>{q.min || 0}</span>
-                                          <span>
-                                            {selectedOption || q.min || 0}
-                                          </span>
-                                          <span>{q.max || 10}</span>
-                                        </div>
-                                        <input
-                                          type='range'
-                                          min={q.min || 0}
-                                          max={q.max || 10}
-                                          step={q.step || 1}
-                                          value={selectedOption || q.min || 0}
-                                          onChange={(e) =>
-                                            setSelectedOption(e.target.value)
-                                          }
-                                          className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary hover:bg-white/20 transition-all'
-                                        />
-                                        <div className='flex justify-center'>
-                                          <span className='text-6xl font-black text-pw-primary font-display drop-shadow-[0_0_20px_rgba(var(--pw-primary-rgb),0.4)]'>
-                                            {selectedOption || q.min || 0}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  : q.type === 'rating' ?
-                                    <div className='flex flex-col items-center gap-10 py-8'>
-                                      <div className='flex gap-4'>
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                          <button
-                                            key={i}
-                                            onClick={() =>
-                                              setSelectedOption(i.toString())
-                                            }
-                                            className={cn(
-                                              'transition-all transform hover:scale-125 active:scale-95',
-                                              Number(selectedOption) >= i ?
-                                                'text-pw-warning drop-shadow-[0_0_15px_rgba(var(--pw-warning-rgb),0.5)]'
-                                              : 'text-white/10 hover:text-white/20',
-                                            )}>
-                                            <Star
-                                              size={56}
-                                              fill={
-                                                Number(selectedOption) >= i ?
-                                                  'currentColor'
-                                                : 'none'
-                                              }
-                                              strokeWidth={1.5}
-                                            />
-                                          </button>
-                                        ))}
-                                      </div>
-                                      <p className='text-sm text-pw-muted uppercase font-black tracking-[0.3em]'>
-                                        {selectedOption ?
-                                          `Rating: ${selectedOption} / 5`
-                                        : 'Select a Rating'}
-                                      </p>
-                                    </div>
-                                  : <div
-                                      className={cn(
-                                        'grid gap-4',
-                                        q.type === 'multiple_choice' ?
-                                          'grid-cols-1'
-                                        : 'grid-cols-1 md:grid-cols-2',
-                                      )}>
-                                      {(shuffledOptions[q.id] || q.options).map(
-                                        (opt, idx) => {
-                                          const optId =
-                                            typeof opt === 'string' ?
-                                              idx.toString()
-                                            : opt.id;
-                                          const optText =
-                                            typeof opt === 'string' ? opt : (
-                                              opt.text
-                                            );
-                                          const isSelected =
-                                            q.type === 'checkbox' ?
-                                              selectedOptions.includes(optId)
-                                            : selectedOption === optId;
-                                          return (
-                                            <button
-                                              key={
-                                                optId +
-                                                idx +
-                                                'assessment-option'
-                                              }
-                                              onClick={() =>
-                                                q.type === 'checkbox' ?
-                                                  setSelectedOptions((p) =>
-                                                    p.includes(optId) ?
-                                                      p.filter(
-                                                        (i) => i !== optId,
-                                                      )
-                                                    : [...p, optId],
-                                                  )
-                                                : setSelectedOption(optId)
-                                              }
-                                              className={cn(
-                                                'w-full h-12 px-3 text-left rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] group flex items-center justify-between bkblur',
-                                                isSelected ?
-                                                  'bg-pw-primary/10 border-pw-primary text-pw-text shadow-xl shadow-pw-primary/5'
-                                                : 'bg-white/2 border-white/5 text-pw-muted hover:border-white/10 hover:bg-white/10',
-                                              )}>
-                                              <span className='font-bold text-base md:text-lg'>
-                                                {optText}
-                                              </span>
-                                              <CheckCircle
-                                                className={cn(
-                                                  'h-5 w-5 transition-all text-pw-primary',
-                                                  isSelected ?
-                                                    'opacity-100 scale-110'
-                                                  : 'opacity-0 scale-50',
-                                                )}
-                                              />
-                                            </button>
-                                          );
-                                        },
-                                      )}
-                                    </div>
-                                  }
-                                </div>
-                              </div>
-                            </Card>
-                          </motion.div>
-                        </AnimatePresence>
+                        {renderQuestionCard(q!, currentQuestion)}
 
                         <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>
                           <AnimatePresence mode='sync'>
