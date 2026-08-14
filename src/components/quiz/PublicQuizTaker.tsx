@@ -47,6 +47,7 @@ import React from 'react';
 import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
+import {useAppContext} from '@/context/AppContext';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -356,7 +357,8 @@ const Calculator = () => {
 };
 
 export default function PublicQuizTaker() {
-  const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
+  const {setHideNavbar, setHideFooter, setPaddingTop} = usePageLayout();
+  const {isLoggedIn} = useAppContext()
   setHideNavbar(true);
   setHideFooter(true);
   setPaddingTop('pt-0');
@@ -523,8 +525,6 @@ export default function PublicQuizTaker() {
           })),
         };
         setQuiz(finalQuiz);
-        if (finalQuiz)
-          document.title = `${capFirst(finalQuiz.title)} | Ping World`;
 
         // Completion check
         const completionMarker = localStorage.getItem(
@@ -599,6 +599,8 @@ export default function PublicQuizTaker() {
         }
       }
       setLoading(false);
+      if(quiz?.title)
+        document.title = `${capFirst(quiz.title)} | Ping World`;
     };
     loadQuiz();
   }, [quizId]);
@@ -1240,9 +1242,9 @@ export default function PublicQuizTaker() {
             </Card>
           )}
 
-          <Link href='/quiz'>
+          <Link href={isLoggedIn ? '/quiz' : '/'}>
             <Button className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
-              Back to Quiz Builder
+              Close Quiz
             </Button>
           </Link>
         </div>

@@ -61,12 +61,6 @@ const toolLinks = [
     icon: ImageIcon,
     description: 'Filters and processing',
   },
-  {
-    href: '/tools/url-shortener',
-    label: 'URL Shortener',
-    icon: Zap,
-    description: 'Clean links with QR codes',
-  },
 ];
 
 
@@ -195,12 +189,12 @@ export const Navbar = () => {
 
         {/* Right section */}
         <div className='flex items-center gap-3'>
-          {isLoggedIn && pathname !== '/dashboard' ?
+          {isLoggedIn ? pathname !== '/dashboard' ?
             <Link
-              href='/dashboard'
-              className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
+              href={'/dashboard'}
+              className={cn('hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20')}>
               Dashboard
-            </Link>
+            </Link> : <div className='hidden md:inline-flex btn-primary text-sm px-10 py-2 opacity-0'>Dashboard</div>
           : !session && (
               <Link
                 href='/login'

@@ -276,13 +276,13 @@ pre {
 .li-glass {
   -webkit-backdrop-filter: blur(12px) saturate(180%) brightness(120%);
   backdrop-filter: blur(12px) saturate(180%) brightness(120%) !important;
-  border: 1px solid rgba(58, 58, 58, 0.24);
-  border-bottom-color: rgba(58, 58, 58, 0.1);
-  border-right-color: rgba(58, 58, 58, 0.1);
+  border: 1px solid rgba(58, 58, 58, 0.14);
+  border-bottom-color: rgba(58, 58, 58, 0.05);
+  border-right-color: rgba(58, 58, 58, 0.05);
   box-shadow:
-    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.15),
-    inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.1),
-    0 10px 30px rgba(0, 0, 0, 0.3);
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.05),
+    inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.05),
+    0 10px 30px rgba(0, 0, 0, 0.15);
   transition: all ease-in-out 600ms;
   text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8);
 }
@@ -295,8 +295,8 @@ pre {
   border-radius: 100px;
   padding-inline: calc(1px + 2.5%);
   box-shadow:
-    inset 0 2px 2px rgba(255, 255, 255, 0.1),
-    inset 0 -2px 2px rgba(0, 0, 0, 0.0512),
+    inset 0 2px 2px rgba(255, 255, 255, 0.05),
+    inset 0 -2px 2px rgba(0, 0, 0, 0.05),
     0 12px 35px rgba(92, 111, 255, 0.05);
 }
 

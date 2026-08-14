@@ -40,6 +40,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { tools } from '@/lib/general/data';
 import { cn } from '@/lib/utils';
@@ -86,8 +96,26 @@ interface BookChapter {
   name: string;
 }
 
+// jules edit: Book Volume schema interface for sidebar books management
+interface Book {
+  id: string;
+  name: string;
+  chapters: BookChapter[];
+  pages: BookPage[];
+  imagePalette: ImagePaletteItem[];
+  frontCoverTitle: string;
+  frontCoverSubtitle: string;
+  frontCoverAuthor: string;
+  backCoverSummary: string;
+  backCoverBgColor: string;
+  hasFrontCover: boolean;
+  hasBackCover: boolean;
+}
+
 export default function PdfToolStudioPage() {
-  const { isPremium } = useAppContext();
+  const { isFeatureUnlocked } = useAppContext();
+  // jules edit: Secure tool-specific flexible plan gating for PDF Studio
+  const isPremium = isFeatureUnlocked('pdf-tools');
   const [activeTab, setActiveTab] = useState('img-to-pdf');
 
   // --- Image to PDF States ---
@@ -118,7 +146,7 @@ export default function PdfToolStudioPage() {
       content: 'This is the main body paragraph of the first page. Highlight some text and click the <b>Bold</b> or <i>Italic</i> buttons below to see rich formatting. Or add a footnote at the bottom of the page!\n\nHere is a list of features:\n* Unlimited chapters & pages\n* Modular footnoting structures\n* Built-in Image Reference Palettes\n* Dynamic highlights using the <mark>highlighter</mark> markup.',
       chapterId: 'ch-1',
       titleAlign: 'left',
-      titleColor: '#00f0ff',
+      titleColor: '#3b82f6',
       titleBgColor: 'transparent',
       titlePadding: 4,
       titleMargin: 10,
@@ -127,10 +155,6 @@ export default function PdfToolStudioPage() {
       ]
     }
   ]);
-
-  const [activePageIndex, setActivePageIndex] = useState(0);
-  const [stackType, setStackType] = useState<'page' | 'chapter'>('page');
-  const [showStickyChapterSelector, setShowStickyChapterSelector] = useState<string | null>(null);
 
   // Image Palette State
   const [imagePalette, setImagePalette] = useState<ImagePaletteItem[]>([]);
@@ -141,6 +165,219 @@ export default function PdfToolStudioPage() {
 
   // Title configuration box
   const [showTitleConfig, setShowTitleConfig] = useState<string | null>(null);
+
+  // jules edit: Multiple Books Sidebar Manager States and Seed template
+  const [books, setBooks] = useState<Book[]>([]);
+  const [activeBookId, setActiveBookId] = useState<string>('book-1');
+
+  const BRAND_SEED_BOOK: Book = {
+    id: 'book-1',
+    name: 'Qal Technologies Blueprint',
+    chapters: [
+      { id: 'ch-1', name: 'Chapter 1: Corporate Blueprint' }
+    ],
+    pages: [
+      {
+        id: 'pg-1',
+        title: 'Qal Technologies Corporate Blueprint',
+        showTitle: true,
+        content: `Welcome to the official corporate Brand Blueprint of Qal Technologies! This default template showcases our sophisticated page flow and modular design guidelines.
+
+Qal Technologies is a pioneering developer and orchestrator of visual platforms, high-integrity developer sandboxes, and hybrid edge synchronizations. Our core tenets represent:
+* Precision craftsmanship & pixel-perfect designs
+* Advanced real-time visual formatting and pagination
+* Multi-source database synchronization integrity
+
+This template also showcases rich text annotations, inline footnotes, custom list listings, and hyperlinked references:
+* Read our <a href="https://qaltech.io">Technical Whitepaper</a>
+* Explore <a href="https://poshcodes.com">Poshcodes Styling Core</a>
+
+To load brand logo graphics directly inside your text content streams, use the Image Palette tool! Pre-loaded brand assets have been supplied for immediate visual formatting.`,
+        chapterId: 'ch-1',
+        titleAlign: 'center',
+        titleColor: '#3b82f6',
+        titleBgColor: 'transparent',
+        titlePadding: 4,
+        titleMargin: 10,
+        footnotes: [
+          { id: 'fn-1', number: 1, text: 'This blueprint document is powered by Qal Technologies in partnership with Poshcodes.' }
+        ]
+      }
+    ],
+    imagePalette: [
+      {
+        id: 'palette-logo',
+        name: 'company_logo',
+        src: 'https://www.ping-world.site/logo.png', // high resolution corporate logo
+        width: 120,
+        height: 120,
+      }
+    ],
+    frontCoverTitle: 'Qal Technologies',
+    frontCoverSubtitle: 'Corporate Brand and Creative Asset Manual',
+    frontCoverAuthor: 'Qal Executive Board',
+    backCoverSummary: 'A cohesive style manual and technical visual specification blueprint compiled on the Ping World platform.',
+    backCoverBgColor: '#0a0c1b',
+    hasFrontCover: true,
+    hasBackCover: true
+  };
+
+  // Load books list from local storage or seed the default
+  useEffect(() => {
+    const saved = localStorage.getItem('pw_pdf_books_list_v4');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBooks(parsed);
+          const activeId = localStorage.getItem('pw_pdf_active_book_id_v4') || parsed[0].id;
+          setActiveBookId(activeId);
+          const activeBook = parsed.find(b => b.id === activeId) || parsed[0];
+          setChapters(activeBook.chapters || []);
+          setPages(activeBook.pages || []);
+          setImagePalette(activeBook.imagePalette || []);
+          setFrontCoverTitle(activeBook.frontCoverTitle || '');
+          setFrontCoverSubtitle(activeBook.frontCoverSubtitle || '');
+          setFrontCoverAuthor(activeBook.frontCoverAuthor || '');
+          setBackCoverSummary(activeBook.backCoverSummary || '');
+          setBackCoverBgColor(activeBook.backCoverBgColor || '#0a0c1b');
+          setHasFrontCover(activeBook.hasFrontCover !== undefined ? activeBook.hasFrontCover : true);
+          setHasBackCover(activeBook.hasBackCover !== undefined ? activeBook.hasBackCover : true);
+          setActivePageIndex(0);
+        }
+      } catch (e) {
+        console.warn('Failed to parse books list', e);
+      }
+    } else {
+      const defaultList = [BRAND_SEED_BOOK];
+      setBooks(defaultList);
+      setActiveBookId('book-1');
+      localStorage.setItem('pw_pdf_books_list_v4', JSON.stringify(defaultList));
+      localStorage.setItem('pw_pdf_active_book_id_v4', 'book-1');
+      setChapters(BRAND_SEED_BOOK.chapters);
+      setPages(BRAND_SEED_BOOK.pages);
+      setImagePalette(BRAND_SEED_BOOK.imagePalette);
+      setFrontCoverTitle(BRAND_SEED_BOOK.frontCoverTitle);
+      setFrontCoverSubtitle(BRAND_SEED_BOOK.frontCoverSubtitle);
+      setFrontCoverAuthor(BRAND_SEED_BOOK.frontCoverAuthor);
+      setBackCoverSummary(BRAND_SEED_BOOK.backCoverSummary);
+      setBackCoverBgColor(BRAND_SEED_BOOK.backCoverBgColor);
+      setHasFrontCover(BRAND_SEED_BOOK.hasFrontCover);
+      setHasBackCover(BRAND_SEED_BOOK.hasBackCover);
+      setActivePageIndex(0);
+    }
+  }, []);
+
+  // Continuous auto-save when any workbook state changes
+  useEffect(() => {
+    if (books.length === 0 || !activeBookId) return;
+
+    const saveTimer = setTimeout(() => {
+      const updatedBooks = books.map(b => {
+        if (b.id === activeBookId) {
+          return {
+            ...b,
+            chapters,
+            pages,
+            imagePalette,
+            frontCoverTitle,
+            frontCoverSubtitle,
+            frontCoverAuthor,
+            backCoverSummary,
+            backCoverBgColor,
+            hasFrontCover,
+            hasBackCover
+          };
+        }
+        return b;
+      });
+
+      setBooks(updatedBooks);
+      localStorage.setItem('pw_pdf_books_list_v4', JSON.stringify(updatedBooks));
+      localStorage.setItem('pw_pdf_active_book_id_v4', activeBookId);
+    }, 500);
+
+    return () => clearTimeout(saveTimer);
+  }, [chapters, pages, imagePalette, frontCoverTitle, frontCoverSubtitle, frontCoverAuthor, backCoverSummary, backCoverBgColor, hasFrontCover, hasBackCover]);
+
+  const createNewBook = () => {
+    const newId = `book-${Date.now()}`;
+    const newBook: Book = {
+      id: newId,
+      name: `Book ${books.length + 1}: Unnamed Volume`,
+      chapters: [
+        { id: `ch-${Date.now()}`, name: 'Chapter 1: The Beginning' }
+      ],
+      pages: [
+        {
+          id: `pg-${Date.now()}`,
+          title: 'First Page Title',
+          showTitle: true,
+          content: 'Start writing your sophisticated volume here...',
+          chapterId: `ch-${Date.now()}`,
+          titleAlign: 'left',
+          titleColor: '#3b82f6',
+          titleBgColor: 'transparent',
+          titlePadding: 4,
+          titleMargin: 10,
+          footnotes: []
+        }
+      ],
+      imagePalette: [],
+      frontCoverTitle: 'New Volume',
+      frontCoverSubtitle: 'Custom Subtitle',
+      frontCoverAuthor: 'Author Name',
+      backCoverSummary: 'Summary of the book.',
+      backCoverBgColor: '#0a0c1b',
+      hasFrontCover: true,
+      hasBackCover: true
+    };
+
+    const list = [...books, newBook];
+    setBooks(list);
+    setActiveBookId(newId);
+    setChapters(newBook.chapters);
+    setPages(newBook.pages);
+    setImagePalette([]);
+    setFrontCoverTitle(newBook.frontCoverTitle);
+    setFrontCoverSubtitle(newBook.frontCoverSubtitle);
+    setFrontCoverAuthor(newBook.frontCoverAuthor);
+    setBackCoverSummary(newBook.backCoverSummary);
+    setBackCoverBgColor(newBook.backCoverBgColor);
+    setHasFrontCover(newBook.hasFrontCover);
+    setHasBackCover(newBook.hasBackCover);
+    setActivePageIndex(0);
+    toast.success('🎉 Created a brand new book!');
+  };
+
+  const handleSelectBook = (id: string) => {
+    const selected = books.find(b => b.id === id);
+    if (!selected) return;
+
+    setActiveBookId(id);
+    setChapters(selected.chapters || []);
+    setPages(selected.pages || []);
+    setImagePalette(selected.imagePalette || []);
+    setFrontCoverTitle(selected.frontCoverTitle || '');
+    setFrontCoverSubtitle(selected.frontCoverSubtitle || '');
+    setFrontCoverAuthor(selected.frontCoverAuthor || '');
+    setBackCoverSummary(selected.backCoverSummary || '');
+    setBackCoverBgColor(selected.backCoverBgColor || '#0a0c1b');
+    setHasFrontCover(selected.hasFrontCover !== undefined ? selected.hasFrontCover : true);
+    setHasBackCover(selected.hasBackCover !== undefined ? selected.hasBackCover : true);
+    setActivePageIndex(0);
+    localStorage.setItem('pw_pdf_active_book_id_v4', id);
+    toast.success(`Loaded book workspace: ${selected.name}`);
+  };
+
+  const handleRenameBookName = (id: string, newName: string) => {
+    setBooks(prev => prev.map(b => b.id === id ? { ...b, name: newName } : b));
+  };
+
+  const [activePageIndex, setActivePageIndex] = useState(0);
+  const [stackType, setStackType] = useState<'page' | 'chapter'>('page');
+  const [showStickyChapterSelector, setShowStickyChapterSelector] = useState<string | null>(null);
+
 
   // PDF to Word states
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -163,35 +400,90 @@ export default function PdfToolStudioPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Save drafts locally
-  useEffect(() => {
-    const saved = localStorage.getItem('pw_pdf_book_workspace_v3');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.chapters && parsed.pages) {
-          setChapters(parsed.chapters);
-          setPages(parsed.pages);
-          if (parsed.imagePalette) {
-            setImagePalette(parsed.imagePalette);
-          }
-          if (parsed.frontCoverTitle) {
-            setFrontCoverTitle(parsed.frontCoverTitle);
-            setFrontCoverSubtitle(parsed.frontCoverSubtitle);
-            setFrontCoverAuthor(parsed.frontCoverAuthor);
+  const saveBookDraft = () => {
+    const updatedBooks = books.map(b => {
+      if (b.id === activeBookId) {
+        return {
+          ...b,
+          chapters,
+          pages,
+          imagePalette,
+          frontCoverTitle,
+          frontCoverSubtitle,
+          frontCoverAuthor,
+          backCoverSummary,
+          backCoverBgColor,
+          hasFrontCover,
+          hasBackCover
+        };
+      }
+      return b;
+    });
+    setBooks(updatedBooks);
+    localStorage.setItem('pw_pdf_books_list_v4', JSON.stringify(updatedBooks));
+    toast.success('Progress saved locally as draft!');
+  };
+
+  // jules edit: Auto-pagination split calculations and metrics
+  const checkAutoPagination = (text: string) => {
+    const words = text.trim() ? text.trim().split(/\s+/) : [];
+    const maxWords = 400;
+
+    if (words.length > maxWords) {
+      // Find character split index of the 400th word
+      let splitIdx = 0;
+      let wordCount = 0;
+      for (let i = 0; i < text.length; i++) {
+        if (text[i].match(/\s/)) {
+          if (i > 0 && !text[i - 1].match(/\s/)) {
+            wordCount++;
+            if (wordCount === maxWords) {
+              splitIdx = i;
+              break;
+            }
           }
         }
-      } catch (e) {
-        console.warn(e);
+      }
+
+      if (splitIdx > 0) {
+        const firstHalf = text.substring(0, splitIdx);
+        const secondHalf = text.substring(splitIdx).trim();
+
+        // Check if a next page exists
+        const currentPageObj = pages[activePageIndex];
+        const nextPageIndex = activePageIndex + 1;
+
+        if (nextPageIndex < pages.length) {
+          // Prepend carry-over text to existing next page
+          const nextPg = pages[nextPageIndex];
+          const updatedNextContent = (secondHalf + '\n' + nextPg.content).trim();
+          setPages(prev => prev.map((p, idx) => {
+            if (idx === activePageIndex) return { ...p, content: firstHalf };
+            if (idx === nextPageIndex) return { ...p, content: updatedNextContent };
+            return p;
+          }));
+          toast.info('Text overflowed! Excess words successfully pushed to the next page.');
+        } else {
+          // Create a brand new page and carry over overflow text
+          const newPage: BookPage = {
+            id: `pg-${Date.now()}`,
+            title: `Page ${pages.length + 1} Title`,
+            showTitle: true,
+            content: secondHalf,
+            chapterId: currentPageObj ? currentPageObj.chapterId : null,
+            titleAlign: 'left',
+            titleColor: '#3b82f6',
+            titleBgColor: 'transparent',
+            titlePadding: 4,
+            titleMargin: 10,
+            footnotes: []
+          };
+          setPages([...pages.map((p, idx) => idx === activePageIndex ? { ...p, content: firstHalf } : p), newPage]);
+          setActivePageIndex(nextPageIndex);
+          toast.success('Text overflowed! A new page has been automatically created to accommodate excess words.');
+        }
       }
     }
-  }, []);
-
-  const saveBookDraft = () => {
-    localStorage.setItem(
-      'pw_pdf_book_workspace_v3',
-      JSON.stringify({ chapters, pages, imagePalette, frontCoverTitle, frontCoverSubtitle, frontCoverAuthor })
-    );
-    toast.success('Progress saved locally as draft!');
   };
 
   const triggerExport = (
@@ -565,6 +857,15 @@ export default function PdfToolStudioPage() {
     return currentY;
   };
 
+  // jules edit: Helper to convert hex colors to RGB values for jsPDF
+  const hexToRgb = (hex: string) => {
+    const cleanHex = hex.replace('#', '');
+    const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+    const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+    const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+    return { r, g, b };
+  };
+
   // Compile Book-style chapters and titles to PDF
   const handleCompileBookPdf = async () => {
     triggerExport('book-manuscript', 'pdf', async (filename) => {
@@ -602,7 +903,7 @@ export default function PdfToolStudioPage() {
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(150, 150, 150);
-          doc.text('Published on Ping World Platform', 15, 275);
+          doc.text('Created with Ping World', 15, 275);
           doc.addPage();
         }
 
@@ -614,7 +915,8 @@ export default function PdfToolStudioPage() {
           const isFirstPageOfChapter = page.chapterId && pages.findIndex(p => p.chapterId === page.chapterId) === idx;
 
           if (page.showTitle) {
-            doc.setTextColor(0, 240, 255); // styled book titles
+            const { r, g, b } = hexToRgb(page.titleColor || '#3b82f6');
+            doc.setTextColor(r, g, b); // styled book titles
 
             // Calculate precise alignment coordinates
             const titleWidth = doc.getTextWidth(page.title);
@@ -761,7 +1063,7 @@ export default function PdfToolStudioPage() {
         }
 
         if (page.showTitle) {
-          htmlContent += `<div class="page-title" style="text-align: ${page.titleAlign};">${page.title}</div>`;
+          htmlContent += `<div class="page-title" style="text-align: ${page.titleAlign || 'left'}; color: ${page.titleColor || '#3b82f6'}; padding: ${page.titlePadding || 4}px; margin-bottom: ${page.titleMargin || 10}px; font-weight: bold; font-size: 20px;">${page.title}</div>`;
         }
 
         // Clean inline tags into HTML-compatible tags
@@ -1097,6 +1399,47 @@ export default function PdfToolStudioPage() {
             <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
               {/* Stack Navigator Left (Chapters & Pages Tree) */}
               <div className='lg:col-span-4 space-y-4'>
+                {/* jules edit: Multiple Books Sidebar Manager */}
+                <Card className='p-4 bg-white/[0.01] border border-white/5 space-y-4'>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-xs font-bold text-pw-muted uppercase'>My Books Library</span>
+                    <Button onClick={createNewBook} size='sm' className='btn-primary h-8 gap-1 text-[10px] font-bold px-3.5'>
+                      <Plus className='h-3 w-3' /> New Book
+                    </Button>
+                  </div>
+
+                  {books.length > 1 ? (
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] text-pw-muted uppercase font-bold block'>Select active book</label>
+                      <select
+                        value={activeBookId}
+                        onChange={(e) => handleSelectBook(e.target.value)}
+                        className='w-full h-9 px-2 bg-[#0a0c1b] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none cursor-pointer'
+                      >
+                        {books.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : books.length === 1 ? (
+                    <div className='p-2 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-pw-primary font-mono'>
+                      📚 Active: {books[0].name}
+                    </div>
+                  ) : null}
+
+                  {books.length > 0 && (
+                    <div className='space-y-1.5 pt-1'>
+                      <label className='text-[10px] text-pw-muted uppercase font-bold block'>Volume Name</label>
+                      <Input
+                        value={books.find(b => b.id === activeBookId)?.name || ''}
+                        onChange={(e) => handleRenameBookName(activeBookId, e.target.value)}
+                        className='h-8 bg-white/5 border-white/10 text-xs font-bold focus:border-pw-primary'
+                        placeholder='Book Volume Name...'
+                      />
+                    </div>
+                  )}
+                </Card>
+
                 <Card className='p-4 bg-white/[0.01] border border-white/5 space-y-4'>
                   <div className='flex items-center justify-between'>
                     <span className='text-xs font-bold text-pw-muted uppercase'>Book Stack Maker</span>
@@ -1133,27 +1476,43 @@ export default function PdfToolStudioPage() {
                       const chPages = pages.filter((p) => p.chapterId === ch.id);
                       return (
                         <div key={ch.id} className='space-y-1.5'>
-                          {/* Chapter Header with direct rename input & Delete button */}
-                          <div className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 gap-2'>
-                            <Input
-                              value={ch.name}
-                              onChange={(e) => handleEditChapterName(ch.id, e.target.value)}
-                              className='h-8 bg-transparent border-none text-xs font-bold text-pw-primary font-mono focus-visible:ring-0 p-0 flex-1'
-                            />
-                            <div className='flex items-center gap-1 shrink-0'>
-                              <Button
-                                size='icon'
-                                variant='ghost'
-                                onClick={() => handleDeleteChapter(ch.id)}
-                                className='h-6 w-6 text-pw-muted hover:text-pw-danger'
-                                title='Delete Chapter'
-                              >
-                                <Trash2 className='h-3 w-3' />
-                              </Button>
-                              <Button
-                                size='icon'
-                                variant='ghost'
-                                onClick={() => {
+                          {/* Chapter Header with Chevron-triggered Dropdown actions */}
+                          <div className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 gap-2 group'>
+                            <span className='text-xs font-bold text-pw-primary font-mono truncate flex-1 pl-1'>
+                              📁 {ch.name}
+                            </span>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild={true as any}>
+                                <Button size='icon' variant='ghost' className='h-7 w-7 text-pw-muted hover:text-white shrink-0'>
+                                  <ChevronRight className='h-3.5 w-3.5 rotate-90' />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
+                                <DropdownMenuItem onClick={() => {
+                                  const name = prompt('Enter new chapter name:', ch.name);
+                                  if (name) handleEditChapterName(ch.id, name);
+                                }}>
+                                  <span className='text-xs'>✏️ Rename Chapter</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  if (confirm('Disband this chapter? Sub-pages will remain intact as independent pages.')) {
+                                    handleDeleteChapter(ch.id);
+                                  }
+                                }}>
+                                  <span className='text-xs text-pw-warning'>🔗 Disband (Keep Pages)</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  if (confirm('Delete this chapter AND all of its sub-pages? This action is permanent.')) {
+                                    setChapters(prev => prev.filter(c => c.id !== ch.id));
+                                    setPages(prev => prev.filter(p => p.chapterId !== ch.id));
+                                    setActivePageIndex(0);
+                                    toast.success('Chapter and pages deleted!');
+                                  }
+                                }}>
+                                  <span className='text-xs text-pw-danger'>🗑️ Delete Chapter & Pages</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
                                   const newPage: BookPage = {
                                     id: `pg-${Date.now()}`,
                                     title: `Page ${pages.length + 1} Title`,
@@ -1161,7 +1520,7 @@ export default function PdfToolStudioPage() {
                                     content: '',
                                     chapterId: ch.id,
                                     titleAlign: 'left',
-                                    titleColor: '#00f0ff',
+                                    titleColor: '#3b82f6',
                                     titleBgColor: 'transparent',
                                     titlePadding: 4,
                                     titleMargin: 10,
@@ -1169,13 +1528,11 @@ export default function PdfToolStudioPage() {
                                   };
                                   setPages([...pages, newPage]);
                                   setActivePageIndex(pages.length);
-                                }}
-                                title='Add page under chapter'
-                                className='h-6 w-6 text-pw-muted hover:text-pw-primary'
-                              >
-                                <Plus className='h-3 w-3' />
-                              </Button>
-                            </div>
+                                }}>
+                                  <span className='text-xs text-pw-primary'>➕ Add Page Under This Ch</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
 
                           {/* Pages Indented slightly under chapter */}
@@ -1187,31 +1544,69 @@ export default function PdfToolStudioPage() {
                                   key={page.id}
                                   onClick={() => setActivePageIndex(pIdx)}
                                   className={cn(
-                                    'p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors',
+                                    'p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors group',
                                     activePageIndex === pIdx ? 'bg-pw-primary/10 text-pw-primary' : 'hover:bg-white/[0.02] text-pw-muted'
                                   )}
                                 >
-                                  <div className='flex items-center gap-1.5 truncate'>
-                                    <span className='font-mono text-[10px] text-pw-primary'>pg-{pIdx + 1}</span>
+                                  <div className='flex items-center gap-1.5 truncate flex-1'>
+                                    <span className='font-mono text-[10px] text-pw-primary shrink-0'>pg-{pIdx + 1}</span>
                                     <span className='truncate'>{page.title || 'Untitled Page'}</span>
                                   </div>
-                                  <div className='flex items-center gap-1.5 shrink-0'>
-                                    <Button
-                                      size='icon'
-                                      variant='ghost'
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeletePage(page.id);
-                                      }}
-                                      className='h-5 w-5 text-pw-muted hover:text-pw-danger'
-                                      title='Delete Page'
-                                    >
-                                      <Trash2 className='h-3 w-3' />
-                                    </Button>
-                                    <span className='text-[8px] font-bold font-mono px-1 py-0.5 rounded bg-white/5 uppercase'>
-                                      pg
-                                    </span>
-                                  </div>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild={true as any} onClick={(e: any) => e.stopPropagation()}>
+                                      <Button size='icon' variant='ghost' className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
+                                        <ChevronRight className='h-3.5 w-3.5' />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <span className='text-xs'>📁 Move to Chapter</span>
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuPortal>
+                                          <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-44'>
+                                            <DropdownMenuItem onClick={() => handlePageSelectChapter(page.id, null)}>
+                                              <span className='text-xs text-pw-muted'>Independent (None)</span>
+                                            </DropdownMenuItem>
+                                            {chapters.map(c => (
+                                              <DropdownMenuItem key={c.id} onClick={() => handlePageSelectChapter(page.id, c.id)}>
+                                                <span className='text-xs truncate'>{c.name}</span>
+                                              </DropdownMenuItem>
+                                            ))}
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuPortal>
+                                      </DropdownMenuSub>
+
+                                      <DropdownMenuItem disabled={pIdx === 0} onClick={() => {
+                                        if (pIdx > 0) {
+                                          const list = [...pages];
+                                          const temp = list[pIdx];
+                                          list[pIdx] = list[pIdx - 1];
+                                          list[pIdx - 1] = temp;
+                                          setPages(list);
+                                          setActivePageIndex(pIdx - 1);
+                                        }
+                                      }}>
+                                        <span className='text-xs'>⬆️ Move Up</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem disabled={pIdx === pages.length - 1} onClick={() => {
+                                        if (pIdx < pages.length - 1) {
+                                          const list = [...pages];
+                                          const temp = list[pIdx];
+                                          list[pIdx] = list[pIdx + 1];
+                                          list[pIdx + 1] = temp;
+                                          setPages(list);
+                                          setActivePageIndex(pIdx + 1);
+                                        }
+                                      }}>
+                                        <span className='text-xs'>⬇️ Move Down</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleDeletePage(page.id)}>
+                                        <span className='text-xs text-pw-danger'>🗑️ Delete Page</span>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               );
                             })}
@@ -1231,37 +1626,66 @@ export default function PdfToolStudioPage() {
                               key={page.id}
                               onClick={() => setActivePageIndex(pIdx)}
                               className={cn(
-                                'p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors',
+                                'p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors group',
                                 activePageIndex === pIdx ? 'bg-pw-primary/10 text-pw-primary' : 'hover:bg-white/[0.02] text-pw-muted'
                               )}
                             >
-                              <div className='flex items-center gap-1.5 truncate'>
-                                <span className='font-mono text-[10px] text-pw-primary'>pg-{pIdx + 1}</span>
+                              <div className='flex items-center gap-1.5 truncate flex-1'>
+                                <span className='font-mono text-[10px] text-pw-primary shrink-0'>pg-{pIdx + 1}</span>
                                 <span className='truncate'>{page.title || 'Untitled Page'}</span>
                               </div>
-                              <div className='flex items-center gap-1.5 shrink-0'>
-                                <Button
-                                  size='icon'
-                                  variant='ghost'
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeletePage(page.id);
-                                  }}
-                                  className='h-5 w-5 text-pw-muted hover:text-pw-danger'
-                                  title='Delete Page'
-                                >
-                                  <Trash2 className='h-3 w-3' />
-                                </Button>
-                                <span
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowStickyChapterSelector(page.id);
-                                  }}
-                                  className='text-[8px] font-bold font-mono px-1 py-0.5 rounded bg-pw-primary/20 text-pw-primary uppercase hover:bg-pw-primary/30 shrink-0'
-                                >
-                                  Assign Ch
-                                </span>
-                              </div>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild={true as any} onClick={(e: any) => e.stopPropagation()}>
+                                  <Button size='icon' variant='ghost' className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
+                                    <ChevronRight className='h-3.5 w-3.5' />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                      <span className='text-xs'>📁 Move to Chapter</span>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuPortal>
+                                      <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-44'>
+                                        {chapters.map(c => (
+                                          <DropdownMenuItem key={c.id} onClick={() => handlePageSelectChapter(page.id, c.id)}>
+                                            <span className='text-xs truncate'>{c.name}</span>
+                                          </DropdownMenuItem>
+                                        ))}
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuPortal>
+                                  </DropdownMenuSub>
+
+                                  <DropdownMenuItem disabled={pIdx === 0} onClick={() => {
+                                    if (pIdx > 0) {
+                                      const list = [...pages];
+                                      const temp = list[pIdx];
+                                      list[pIdx] = list[pIdx - 1];
+                                      list[pIdx - 1] = temp;
+                                      setPages(list);
+                                      setActivePageIndex(pIdx - 1);
+                                    }
+                                  }}>
+                                    <span className='text-xs'>⬆️ Move Up</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem disabled={pIdx === pages.length - 1} onClick={() => {
+                                    if (pIdx < pages.length - 1) {
+                                      const list = [...pages];
+                                      const temp = list[pIdx];
+                                      list[pIdx] = list[pIdx + 1];
+                                      list[pIdx + 1] = temp;
+                                      setPages(list);
+                                      setActivePageIndex(pIdx + 1);
+                                    }
+                                  }}>
+                                    <span className='text-xs'>⬇️ Move Down</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDeletePage(page.id)}>
+                                    <span className='text-xs text-pw-danger'>🗑️ Delete Page</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           );
                         })}
@@ -1407,20 +1831,20 @@ export default function PdfToolStudioPage() {
                       </div>
                     </div>
 
-                    {/* Title Configuration Sticky Box */}
+                    {/* jules edit: Collapsible title styling accordion behind a Chevron dropdown */}
                     {showTitleConfig === activePage.id && (
-                      <Card className='p-4 border border-white/10 bg-black/40 space-y-3'>
-                        <div className='grid grid-cols-2 gap-4'>
+                      <Card className='p-4 border border-white/10 bg-black/40 space-y-4 rounded-xl'>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                           <div className='space-y-1.5'>
                             <label className='text-[10px] text-pw-muted uppercase font-bold'>Title Color</label>
                             <Input
-                              value={activePage.titleColor}
+                              value={activePage.titleColor || '#3b82f6'}
                               onChange={(e) =>
                                 setPages(prev =>
                                   prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleColor: e.target.value } : p))
                                 )
                               }
-                              className='h-9 bg-white/5 border-white/10 text-xs font-mono'
+                              className='h-9 bg-white/5 border-white/10 text-xs font-mono text-pw-primary'
                             />
                           </div>
                           <div className='space-y-1.5'>
@@ -1464,12 +1888,39 @@ export default function PdfToolStudioPage() {
                               </Button>
                             </div>
                           </div>
+
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] text-pw-muted uppercase font-bold'>Title Padding (px)</label>
+                            <Input
+                              type='number'
+                              value={activePage.titlePadding ?? 4}
+                              onChange={(e) =>
+                                setPages(prev =>
+                                  prev.map((p, idx) => (idx === activePageIndex ? { ...p, titlePadding: parseInt(e.target.value) || 0 } : p))
+                                )
+                              }
+                              className='h-9 bg-white/5 border-white/10 text-xs font-mono'
+                            />
+                          </div>
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] text-pw-muted uppercase font-bold'>Title Bottom Margin (px)</label>
+                            <Input
+                              type='number'
+                              value={activePage.titleMargin ?? 10}
+                              onChange={(e) =>
+                                setPages(prev =>
+                                  prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleMargin: parseInt(e.target.value) || 0 } : p))
+                                )
+                              }
+                              className='h-9 bg-white/5 border-white/10 text-xs font-mono'
+                            />
+                          </div>
                         </div>
                       </Card>
                     )}
 
                     {/* Page Content Fields */}
-                    <div className='space-y-3'>
+                    <div className='space-y-4'>
                       {activePage.showTitle && (
                         <Input
                           value={activePage.title}
@@ -1523,17 +1974,83 @@ export default function PdfToolStudioPage() {
                         </Button>
                       </div>
 
+                      {/* Word counter remaining till auto split */}
+                      <div className='flex items-center justify-between text-[10px] text-pw-muted font-bold font-mono bg-white/5 p-2.5 rounded-xl border border-white/5'>
+                        <span>LIMIT: 400 WORDS/PAGE</span>
+                        {wordCount >= 400 ? (
+                          <span className='text-pw-danger font-black animate-pulse'>OVERFLOW PASS! PAGINATING...</span>
+                        ) : (
+                          <span className='text-pw-success'>{400 - wordCount} WORDS REMAINING TILL AUTO-SPLIT</span>
+                        )}
+                      </div>
+
                       <textarea
                         id='body-textarea'
                         value={activePage.content}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const val = e.target.value;
                           setPages(prev =>
-                            prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: e.target.value } : p))
-                          )
-                        }
+                            prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: val } : p))
+                          );
+                          checkAutoPagination(val);
+                        }}
                         placeholder='Type body content. Bullet lists (* item) and inline tags like <b>bold</b>, <i>italic</i>, and <mark>highlights</mark> are fully supported!'
                         className='w-full h-80 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none leading-relaxed font-body text-pw-text'
                       />
+
+                      {/* Visual Dashed Divider showing the page boundary end */}
+                      <div className='relative flex items-center justify-center my-3 select-none'>
+                        <div className='absolute inset-0 flex items-center' aria-hidden='true'>
+                          <div className='w-full border-t border-dashed border-white/20' />
+                        </div>
+                        <div className='relative flex justify-center text-[9px] font-bold uppercase tracking-wider bg-[#0c0d1c] px-3 text-pw-primary/60'>
+                          ✨ Page {activePageIndex + 1} Visual Boundary (End of printable area)
+                        </div>
+                      </div>
+
+                      {/* jules edit: Live Styled Visual White Paper Book Page Preview Sheet */}
+                      <div className='space-y-1 pt-2'>
+                        <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest pl-1 block'>Page Physical Preview</span>
+                        <Card className='p-8 bg-white border border-slate-200 text-slate-800 shadow-xl rounded-2xl font-serif space-y-4 relative min-h-[380px] flex flex-col justify-between select-all selection:bg-pw-primary/20'>
+                          <div>
+                            {activePage.showTitle && (
+                              <div
+                                style={{
+                                  textAlign: activePage.titleAlign || 'left',
+                                  color: activePage.titleColor || '#3b82f6',
+                                  backgroundColor: activePage.titleBgColor || 'transparent',
+                                  padding: `${activePage.titlePadding ?? 4}px`,
+                                  marginBottom: `${activePage.titleMargin ?? 10}px`,
+                                }}
+                                className='text-2xl font-black tracking-tight border-b pb-2'
+                              >
+                                {activePage.title || 'Untitled Page'}
+                              </div>
+                            )}
+                            <div
+                              className='text-sm leading-relaxed whitespace-pre-wrap font-sans text-slate-700'
+                              dangerouslySetInnerHTML={{
+                                __html: activePage.content
+                                  .replace(/\*(.*?)(?:\n|$)/g, '<li style="margin-left: 16px; list-style-type: square; padding-left: 4px;">$1</li>') // basic list render
+                                  .replace(/<b>(.*?)<\/b>/g, '<strong>$1</strong>')
+                                  .replace(/<i>(.*?)<\/i>/g, '<em>$1</em>')
+                                  .replace(/<mark>(.*?)<\/mark>/g, '<span style="background-color: rgba(253, 224, 71, 0.4); padding: 1px 4px; border-radius: 4px;">$1</span>')
+                              }}
+                            />
+                          </div>
+
+                          {/* Footnotes list render at bottom of white sheet */}
+                          {activePage.footnotes && activePage.footnotes.length > 0 && (
+                            <div className='border-t border-slate-200 pt-4 mt-8 text-[11px] text-slate-500 font-sans space-y-1'>
+                              {activePage.footnotes.map(fn => (
+                                <div key={fn.id}>
+                                  <span className='font-bold text-pw-primary mr-1'>[{fn.number}]</span> {fn.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </Card>
+                      </div>
                     </div>
 
                     {/* Footnotes Panel */}

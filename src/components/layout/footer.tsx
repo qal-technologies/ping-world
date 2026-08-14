@@ -228,7 +228,7 @@ export const Footer = () => {
             &copy; {COMPANY.legal.year} {COMPANY.name}. All rights reserved.
           </p>
           <p className='text-xs text-pw-muted'>
-            Developed by{' '}
+            Website by{' '}
             <Link
               href={COMPANY.developer.contact}
               target='_blank'

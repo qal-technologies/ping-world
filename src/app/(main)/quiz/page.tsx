@@ -203,7 +203,8 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
-  const { premiumTier } = useAppContext();
+  const { premiumTier, isFeatureUnlocked } = useAppContext();
+  const isQuizzablePremium = isFeatureUnlocked('quizzable');
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
@@ -2269,7 +2270,8 @@ export default function QuizPage() {
     setIsNameModalOpen(false);
   };
 
-  const { premiumTier } = useAppContext();
+  const { premiumTier, isFeatureUnlocked } = useAppContext();
+  const isQuizzablePremium = isFeatureUnlocked('quizzable');
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
