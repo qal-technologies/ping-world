@@ -216,7 +216,7 @@ export default function PricingPage() {
   const displayYearlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.yearly : (selectedTier?.price.yearly || 0);
   const savings = Math.round(displayMonthlyPrice * 12 - displayYearlyPrice);
 
-  // Handle Simulated Payment Engine
+  // jules edit: Secure payment gateway checkout routing with Stripe and Sandbox fallbacks
   const handleCheckout = async () => {
     if (!selectedTierId || !selectedTier) return;
 
@@ -226,11 +226,38 @@ export default function PricingPage() {
     }
 
     setIsSimulating(true);
-    toast.loading(`Processing payment for ${selectedTier.label} plan...`);
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    toast.loading(`Connecting to Checkout Gateway...`);
 
     try {
+      const targetPrice = billingCycle === 'monthly' ? displayMonthlyPrice : displayYearlyPrice;
+
+      // Invoke server-side checkout session creation
+      const res = await fetch('/api/checkout/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tier: selectedTierId,
+          billingCycle,
+          selectedFlexibleToolId: selectedTierId === 'flexible' ? selectedFlexibleToolId : 'all',
+          price: targetPrice
+        })
+      });
+
+      const sessionData = await res.json();
+
+      if (sessionData.url) {
+        // Redirect to real Stripe billing portal
+        toast.dismiss();
+        toast.loading('Redirecting to Stripe payment portal...');
+        window.location.href = sessionData.url;
+        return;
+      }
+
+      // If Stripe secret key is not set, fall back to simulated sandbox upgrade
+      toast.dismiss();
+      toast.loading(`Running simulated sandbox checkout upgrade for ${selectedTier.label}...`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       const { error } = await supabase.auth.updateUser({
         data: {
           tier: selectedTierId,
@@ -244,7 +271,7 @@ export default function PricingPage() {
       await refresh();
 
       toast.dismiss();
-      toast.success(`🎉 Congratulations! Your plan was upgraded to ${selectedTier.label} successfully!`);
+      toast.success(`🎉 Sandbox Upgrade Success! Your plan was upgraded to ${selectedTier.label} successfully!`);
       setIsModalOpen(false);
     } catch (err: any) {
       toast.dismiss();

@@ -380,7 +380,8 @@ export function useComposer() {
   const stateWithGlobal = {
     ...ctx.state,
     isOnline: appCtx.isOnline,
-    isPremium: appCtx.isPremium,
+    // jules edit: Secure flexible tier tool-specific gating check (must purchase 'composer' to get premium composer)
+    isPremium: appCtx.isFeatureUnlocked('composer'),
   };
 
   return {
