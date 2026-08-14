@@ -925,11 +925,61 @@ export default function PublicQuizTaker() {
     }
   };
 
+  // jules edit: Proceed to the next question, taking logical branching configuration into account
   const proceedToNext = (latestAnswers?: any[]) => {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
+    const q = activeQuestions[currentQuestion];
     let nextIdx = currentQuestion + 1;
+
+    // Apply logical branching (skipTo / skipToCat targets on both options and questions) for progressive layouts
+    if (q && !quiz?.quizScroll) {
+      let branchTarget: string | undefined = undefined;
+      let branchCat: string | undefined = undefined;
+
+      // Option-level branching
+      if (q.type !== 'checkbox' && q.type !== 'input') {
+        const currentQId = q.id;
+        const currentSelectedOption = selectedOption;
+
+        if (currentSelectedOption !== null) {
+          const currentOpts = shuffledOptions[q.id] || q.options || [];
+          const foundOpt = currentOpts.find((opt: any, oIdx: number) => {
+            const optId = opt && typeof opt === 'object' ? (opt.id || String(oIdx)) : String(oIdx);
+            return optId === currentSelectedOption;
+          });
+          if (foundOpt && typeof foundOpt === 'object') {
+            if (foundOpt.skipTo) branchTarget = foundOpt.skipTo;
+            if (foundOpt.skipToCat) branchCat = foundOpt.skipToCat;
+          }
+        }
+      }
+
+      // Question-level branching fallback
+      if (!branchTarget && !branchCat) {
+        if (q.skipTo) branchTarget = q.skipTo;
+        if (q.skipToCat) branchCat = q.skipToCat;
+      }
+
+      if (branchTarget === 'end') {
+        finalizeQuiz(answersToSave);
+        return;
+      } else if (branchTarget) {
+        const targetIdx = activeQuestions.findIndex((quest) => quest.id === branchTarget);
+        if (targetIdx !== -1) {
+          nextIdx = targetIdx;
+        }
+      } else if (branchCat) {
+        const targetIdx = activeQuestions.findIndex(
+          (quest) => quest.category && quest.category.trim().toLowerCase() === branchCat!.trim().toLowerCase()
+        );
+        if (targetIdx !== -1) {
+          nextIdx = targetIdx;
+        }
+      }
+    }
+
     const nextQ = activeQuestions[nextIdx];
 
     if (!nextQ) {
@@ -982,9 +1032,16 @@ export default function PublicQuizTaker() {
         )}
       >
         <div className='flex items-center gap-3 mb-4'>
-          <div className='h-10 w-10 rounded-xl bg-pw-primary/10 border border-pw-primary/20 flex items-center justify-center text-pw-primary font-bold'>
-            {index + 1}
-          </div>
+          {quiz?.quizScroll && quiz?.quizLayout === 'scroll' ? (
+            // jules edit: Clean plain numeric list-style list numbering with no large card-like container box
+            <div className='text-pw-primary font-black text-xl select-none mr-1'>
+              {index + 1}.
+            </div>
+          ) : (
+            <div className='h-10 w-10 rounded-xl bg-pw-primary/10 border border-pw-primary/20 flex items-center justify-center text-pw-primary font-bold'>
+              {index + 1}
+            </div>
+          )}
           <div>
             <span className='text-[9px] font-black text-pw-muted uppercase block'>Question {index + 1}</span>
             <h2 className='text-base font-bold text-white'>{quest.text}</h2>
@@ -1169,7 +1226,7 @@ export default function PublicQuizTaker() {
       {/* Main quiz interface */}
       {started && !isFinished && (
         <div className='container mx-auto px-6 py-12 max-w-3xl flex-1 flex flex-col justify-center relative z-10'>
-          <div className='mb-6 flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5'>
+          <div className='mb-6 flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5 flex-wrap gap-4'>
             <div>
               <h2 className='text-md font-bold text-white'>{quiz?.title}</h2>
               <span className='text-[10px] text-pw-muted uppercase font-mono tracking-wider'>
@@ -1177,12 +1234,38 @@ export default function PublicQuizTaker() {
               </span>
             </div>
 
-            {quiz?.hasTimer && timeLeft !== null && (
-              <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pw-danger/10 border border-pw-danger/20 text-pw-danger text-xs font-bold font-mono'>
-                <Clock className='h-3.5 w-3.5 animate-pulse' />
-                <span>{formatTime(timeLeft)}</span>
-              </div>
-            )}
+            <div className='flex items-center gap-3.5 flex-wrap'>
+              {/* jules edit: Live presentation layout switcher dropdown directly inside the taker header (locked for mandatory form types) */}
+              {quiz?.surveyType !== 'form' && (
+                <div className='flex flex-col gap-1 items-start'>
+                  <span className='text-[8px] uppercase tracking-widest text-pw-muted font-black'>Presentation</span>
+                  <select
+                    value={quiz?.quizLayout || (quiz?.quizScroll ? 'scroll' : 'single')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setQuiz(prev => prev ? {
+                        ...prev,
+                        quizLayout: val,
+                        quizScroll: val !== 'single'
+                      } : null);
+                      toast.success(`Presentation layout set to: ${val.toUpperCase().replace('_', ' ')}`);
+                    }}
+                    className='bg-black/30 border border-white/10 rounded-lg px-2.5 py-1 text-[10px] text-white focus:outline-none cursor-pointer font-bold'
+                  >
+                    <option value='single' className='bg-[#0A0C1B]'>Single Page</option>
+                    <option value='scroll' className='bg-[#0A0C1B]'>Scroll All</option>
+                    <option value='scroll_show' className='bg-[#0A0C1B]'>Scroll Show</option>
+                  </select>
+                </div>
+              )}
+
+              {quiz?.hasTimer && timeLeft !== null && (
+                <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pw-danger/10 border border-pw-danger/20 text-pw-danger text-xs font-bold font-mono'>
+                  <Clock className='h-3.5 w-3.5 animate-pulse' />
+                  <span>{formatTime(timeLeft)}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* jules edit: Layout selector routing (Scroll All vs Scroll Show vs Single Show) */}
