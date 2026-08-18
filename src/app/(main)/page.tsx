@@ -22,8 +22,8 @@ export default function HomePage() {
     <>
       <HeroSection />
       <ToolsGrid />
-      <div className="divider h-1" />
-      <FeedbackWidget />
+      {/* <div className="divider h-1" /> */}
+      {/* <FeedbackWidget /> */}
       <div className="divider h-1" />
       <CTASection />
     </>

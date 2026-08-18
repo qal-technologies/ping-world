@@ -323,6 +323,7 @@ export default function PricingPage() {
       toast.success(
         `🎉 Sandbox Upgrade Success! Your plan was upgraded to ${selectedTier.label} successfully!`,
       );
+      setIsModalOpen(false);
     } catch (err: any) {
       toast.dismiss();
       toast.error(`Payment failed: ${err?.message || 'Please try again.'}`);
@@ -383,71 +384,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Active Flexible Subscriptions & Purchased Tools */}
-        {user &&
-          ((user.user_metadata?.purchased_tools &&
-            user.user_metadata.purchased_tools.length > 0) ||
-            premiumTier === 'flexible' ||
-            premiumTier === 'standard' ||
-            premiumTier === 'pro') && (
-            <Card className='p-6 mb-12 bg-pw-primary/5 border border-pw-primary/20 rounded-2xl space-y-4'>
-              <div className='flex items-center justify-between flex-wrap gap-2'>
-                <div className='flex items-center gap-2'>
-                  <Crown className='h-5 w-5 text-pw-warning' />
-                  <h3 className='text-lg font-bold font-display text-white'>
-                    My Active Subscriptions & Purchased Tools
-                  </h3>
-                </div>
-                <Button
-                  onClick={() => {
-                    setSelectedTierId('flexible');
-                    setIsModalOpen(true);
-                  }}
-                  size='sm'
-                  className='btn-primary h-8 text-xs font-bold gap-1.5'>
-                  <Plus className='h-3.5 w-3.5' /> Add Flexible Tools
-                </Button>
-              </div>
-              <p className='text-xs text-pw-muted'>
-                Current active plan:{' '}
-                <span className='font-bold text-pw-primary uppercase'>
-                  {premiumTier}
-                </span>
-                . Below are your tool licenses:
-              </p>
-              <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3'>
-                {FLEXIBLE_FEATURES.map((tool: any) => {
-                  const purchasedList =
-                    user?.user_metadata?.purchased_tools || [];
-                  const isPurchased =
-                    purchasedList.includes('all') ||
-                    purchasedList.includes(tool.id) ||
-                    premiumTier === 'pro' ||
-                    premiumTier === 'standard';
-                  return (
-                    <div
-                      key={tool.id}
-                      className={cn(
-                        'p-3 rounded-xl border text-xs flex items-center justify-between',
-                        isPurchased ?
-                          'bg-pw-success/10 border-pw-success/30 text-pw-success font-bold'
-                        : 'bg-white/5 border-white/10 text-pw-muted opacity-60',
-                      )}>
-                      <span>{tool.label}</span>
-                      {isPurchased ?
-                        <span className='text-[10px] bg-pw-success/20 px-2 py-0.5 rounded-full font-mono uppercase'>
-                          Active
-                        </span>
-                      : <span className='text-[10px] text-pw-muted font-mono'>
-                          Not Active
-                        </span>
-                      }
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
+
 
         {/* Tier Cards */}
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20'>
@@ -643,6 +580,44 @@ export default function PricingPage() {
                     </li>
                   </ul>
 
+              
+                      {/* Dropdown to add another tool only when current plan is Flexible */}
+                      {premiumTier === 'flexible' && (
+                        <div className='pt-2 border-t border-white/10 space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-primary uppercase block'>
+                            Purchase Tool
+                          </label>
+                          <div className='flex gap-1.5'>
+                            <select
+                              value={selectedFlexibleToolId}
+                              onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
+                              className='w-full h-8 px-2 bg-[#0c0d1c] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none focus:border-pw-primary'>
+                              {FLEXIBLE_FEATURES.filter(
+                                (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
+                              ).map((feat: any) => (
+                                <option key={feat.id} value={feat.id} className='bg-[#0c0d1c]'>
+                                  {feat.label} (${feat.monthly}/mo)
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              size='sm'
+                              onClick={() => {
+                                setSelectedTierId('flexible');
+                                setIsModalOpen(true);
+                              }}
+                              disabled={
+                                FLEXIBLE_FEATURES.filter(
+                                  (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
+                                ).length === 0
+                              }
+                              className='btn-primary h-8 text-[10px] font-bold px-3 shrink-0'>
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                   {/* CTA */}
                   <Button
                     disabled={isCurrent}
@@ -655,7 +630,7 @@ export default function PricingPage() {
                       setIsModalOpen(true);
                     }}
                     className={cn(
-                      'w-full h-11 font-bold text-sm gap-2 transition-all relative',
+                      'w-full h-11 font-bold text-sm gap-2 transition-all relative mt-auto',
                       isCurrent ?
                         'bg-white/10 text-pw-muted cursor-default border border-white/10'
                       : isPopular ? 'btn-primary shadow-xl shadow-pw-primary/20'
@@ -891,18 +866,6 @@ export default function PricingPage() {
                     </div>
                   )}
 
-                {billingCycle === 'yearly' &&
-                  displayMonthlyPrice &&
-                  displayYearlyPrice && (
-                    <div className='text-center mt-2.5'>
-                      <span className='text-[10px] text-pw-success font-black uppercase tracking-wider block'>
-                        Discount Applied
-                      </span>
-                      <span className='text-xs text-pw-muted block'>
-                        Save ${formatCurrencyAmount(savings)} compared to monthly billing
-                      </span>
-                    </div>
-                  )}
               </div>
 
               {selectedTierId === 'flexible' && (

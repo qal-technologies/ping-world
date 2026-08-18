@@ -1,7 +1,7 @@
 export interface SearchPageItem {
   id: string;
   title: string;
-  category: 'Tools' | 'Pages' | 'Features' | 'Developer';
+  category: 'Tool' | 'Page' | 'Feature' | 'Developer';
   description: string;
   keywords: string[];
   href: string;
@@ -13,7 +13,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'pdf-tool',
     title: 'PDF & Word Studio',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Convert PDF to Word, Word to PDF, Excel to PDF, merge documents, and build books.',
     keywords: ['pdf', 'word', 'doc', 'docx', 'convert', 'merge', 'book', 'creator', 'manuscript', 'excel', 'sheets', 'spreadsheet', 'txt'],
     href: '/tools/pdf',
@@ -21,7 +21,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'book-creator',
     title: 'Book Creator (Text to PDF)',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Structure chapters, pages, custom title styles, footnotes, image palettes, and live pagination.',
     keywords: ['book', 'creator', 'pdf', 'chapters', 'pages', 'write', 'editor', 'publish', 'manuscript', 'footnotes', 'palette'],
     href: '/tools/pdf?tab=text-to-pdf',
@@ -29,7 +29,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'pdf-conversion',
     title: 'Universal Document Converter',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Convert between PDF, Word, Excel, TXT, and Image formats.',
     keywords: ['convert', 'conversion', 'word to pdf', 'pdf to word', 'excel to pdf', 'csv', 'sheets'],
     href: '/tools/pdf?tab=conversion',
@@ -37,7 +37,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'quizzable',
     title: 'Quizzable (Quiz & Survey Builder)',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Create interactive progressive assessments, surveys, form questionnaires, with branching logic.',
     keywords: ['quiz', 'survey', 'form', 'assessment', 'branching', 'test', 'exam', 'questions', 'scores', 'quizzable'],
     href: '/quiz',
@@ -45,7 +45,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'composer',
     title: 'Post Composer & Canvas',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Compose and format social posts with live previews, canvas builder, AI copywriting, and publishing.',
     keywords: ['composer', 'social', 'post', 'canvas', 'instagram', 'twitter', 'x', 'facebook', 'linkedin', 'caption', 'publish'],
     href: '/composer',
@@ -53,7 +53,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'anonlink',
     title: 'AnonLink (Anonymous Messages)',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Send and receive secure anonymous feedback, confessions, and questions with public boards.',
     keywords: ['anonymous', 'message', 'anonlink', 'inbox', 'confession', 'secret', 'feedback', 'private'],
     href: '/message',
@@ -61,7 +61,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'text-editor',
     title: 'Rich Text Editor',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Format rich documents, export HTML/Markdown, generate clean typography.',
     keywords: ['editor', 'text', 'markdown', 'write', 'typography', 'draft', 'richtext'],
     href: '/editor',
@@ -69,7 +69,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'image-toolkit',
     title: 'Image Toolkit',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Resize, crop, filter, and optimize images directly in your browser.',
     keywords: ['image', 'photo', 'picture', 'crop', 'resize', 'filter', 'toolkit', 'graphics'],
     href: '/image',
@@ -77,7 +77,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'url-shortener',
     title: 'URL Shortener',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Shorten links, generate QR codes, and track click analytics.',
     keywords: ['url', 'shortener', 'link', 'qr', 'analytics', 'clicks', 'short link'],
     href: '/tools/url-shortener',
@@ -85,7 +85,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'calculator',
     title: 'Smart Calculator & Math Studio',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Scientific calculator, unit converter, tip calculator, and math formula workspace.',
     keywords: ['calculator', 'math', 'calc', 'scientific', 'convert', 'tip', 'units'],
     href: '/tools/calculator',
@@ -93,7 +93,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'qr-code',
     title: 'QR Code Generator',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Generate customizable, high-resolution QR codes with custom styling.',
     keywords: ['qr', 'qrcode', 'barcode', 'scan', 'generator'],
     href: '/tools/qr-code',
@@ -101,7 +101,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'password-gen',
     title: 'Password Generator',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Generate secure, cryptographically random passwords and passphrases.',
     keywords: ['password', 'generator', 'security', 'secure', 'passphrase'],
     href: '/tools/password-gen',
@@ -109,7 +109,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'colors',
     title: 'Color Palette Studio',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Generate color palettes, extract colors from images, and test contrast accessibility.',
     keywords: ['color', 'palette', 'contrast', 'hex', 'rgb', 'hsl', 'gradient'],
     href: '/tools/colors',
@@ -117,7 +117,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'json-formatter',
     title: 'JSON Formatter & Validator',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Format, validate, beautify, and inspect JSON payloads.',
     keywords: ['json', 'formatter', 'validator', 'beautify', 'syntax', 'debug'],
     href: '/tools/json-formatter',
@@ -125,7 +125,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'markdown-preview',
     title: 'Markdown Live Editor',
-    category: 'Tools',
+    category: 'Tool',
     description: 'Write Markdown with real-time GitHub-flavored live previews and table tools.',
     keywords: ['markdown', 'md', 'preview', 'gfm', 'readme'],
     href: '/tools/markdown',
@@ -135,7 +135,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'browse-tools',
     title: 'Browse All Tools',
-    category: 'Pages',
+    category: 'Page',
     description: 'Explore the complete directory of productivity, utility, and creative tools.',
     keywords: ['tools', 'all', 'directory', 'catalog', 'browse', 'list'],
     href: '/tools',
@@ -143,7 +143,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'dashboard',
     title: 'User Dashboard',
-    category: 'Pages',
+    category: 'Page',
     description: 'View metrics, recent activity, quizzes, messages, and saved content.',
     keywords: ['dashboard', 'home', 'account', 'stats', 'analytics', 'activity', 'overview'],
     href: '/dashboard',
@@ -151,15 +151,15 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'pricing',
     title: 'Pricing & Plans',
-    category: 'Pages',
+    category: 'Page',
     description: 'Upgrade plans: Free, Flexible Tool Licenses, Standard, and Pro.',
-    keywords: ['pricing', 'plans', 'pro', 'upgrade', 'billing', 'subscription', 'flexible', 'license', 'cost'],
+    keywords: ['pricing', 'plans', 'pro', 'upgrade', 'billing', 'subscription', 'flexible', 'license', 'cost', 'payment'],
     href: '/pricing',
   },
   {
     id: 'settings',
     title: 'Account & App Settings',
-    category: 'Pages',
+    category: 'Page',
     description: 'Manage account profile, security, app preferences, offline cache, and logout.',
     keywords: ['settings', 'account', 'profile', 'security', 'preferences', 'cache', 'logout', 'password'],
     href: '/settings',
@@ -175,7 +175,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
   {
     id: 'documentation',
     title: 'Documentation & Guides',
-    category: 'Pages',
+    category: 'Page',
     description: 'Complete user guides and tutorials for all Ping World utilities.',
     keywords: ['docs', 'help', 'guide', 'tutorial', 'manual', 'how to'],
     href: '/docs',

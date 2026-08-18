@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function SettingsPage() {
-  const { user, profile, refresh, signOut, premiumTier, isPremium } = useAppContext();
+  const { user, username, refresh, premiumTier, isPremium } = useAppContext();
   const router = useRouter();
   const { showAlert, showConfirm, showPrompt } = useAppModal();
 
@@ -62,7 +62,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      setDisplayName(profile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '');
+      setDisplayName(user.user_metadata?.full_name || username || user.email?.split('@')[0] || '');
       setEmail(user.email || '');
     }
 
@@ -76,7 +76,7 @@ export default function SettingsPage() {
     } catch {
       // ignore
     }
-  }, [user, profile]);
+  }, [user, username]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,7 +198,8 @@ export default function SettingsPage() {
       if (user?.id) {
         await supabase.from('profiles').delete().eq('id', user.id);
       }
-      await signOut();
+      await supabase.auth.signOut();
+      await refresh();
       toast.dismiss();
       toast.success('Your account has been deleted.');
       router.push('/');
@@ -216,7 +217,8 @@ export default function SettingsPage() {
 
     if (!confirmed) return;
 
-    await signOut();
+    await supabase.auth.signOut();
+    await refresh();
     toast.success('Logged out successfully.');
     router.push('/');
   };

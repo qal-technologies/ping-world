@@ -267,7 +267,7 @@ export function CanvasBuilder() {
             while (n--) u8arr[n] = bstr.charCodeAt(n);
             blob = new Blob([u8arr], { type: mime });
           } catch (e) {
-            toast.error('Download failed — could not capture canvas blob');
+            toast.error('Download failed - could not capture canvas blob');
             setDownloading(false);
             return;
           }
@@ -294,7 +294,7 @@ export function CanvasBuilder() {
       }, 'image/png');
     } catch (err) {
       console.error(err);
-      toast.error('Download failed — try again');
+      toast.error('Download failed - try again');
       setDownloading(false);
     }
   };

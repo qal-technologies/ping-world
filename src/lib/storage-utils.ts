@@ -195,7 +195,6 @@ async function syncFromRemote(
     if (type !== 'quiz' && !session) return;
 
     // Projection map: avoid fetching entire table width for list syncs
-    // jules edit: Selected correct columns for quizzes table to avoid bad requests
     const projections: Record<StorageItem['type'], string> = {
       quiz: 'id,user_id,title,description,type,updated_at,expires_at',
       message: 'id,recipient_id,content,is_seen,created_at,expires_at',
@@ -503,6 +502,20 @@ export const HybridStorage = {
     }
 
     return true;
+  },
+
+  /**
+   * Manually trigger a push of all unsynced local items across all categories.
+   */
+  async syncPending() {
+    const types: StorageItem['type'][] = ['quiz', 'message', 'document', 'post', 'link', 'games'];
+    for (const t of types) {
+      try {
+        await pushUnsyncedItems(t);
+      } catch (err) {
+        console.warn(`[HybridStorage] Sync failed for type ${t}:`, err);
+      }
+    }
   },
 
   /**

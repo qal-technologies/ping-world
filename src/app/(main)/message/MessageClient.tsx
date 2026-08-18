@@ -152,17 +152,24 @@ export default function MessageLandingPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { error } = await supabase
+      // 1. Update profiles table with verified columns
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           custom_question: messageTitle.trim() || null,
-          custom_link_id: linkId.trim() || null,
           message_expiry_days: expiryDays,
           is_public_inbox: isPublicInbox,
         })
         .eq('id', user.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // 2. Persist custom link ID into user auth metadata & local storage
+      await supabase.auth.updateUser({
+        data: { custom_link_id: linkId.trim() || null },
+      });
+      localStorage.setItem('pw_anon_custom_link_id', linkId.trim());
+
       toast.success('Inbox configurations saved successfully!');
     } catch (err: any) {
       console.error('Failed to save settings:', err);

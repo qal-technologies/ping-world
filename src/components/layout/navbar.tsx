@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  Zap,
   Wrench,
   LayoutDashboard,
   Menu,
@@ -18,9 +17,10 @@ import {
   Brain,
   Code,
   Search,
-  ArrowRight,
-  ExternalLink,
-  Sparkles,
+  SearchIcon,
+  ChevronRight,
+  Layout,
+  Code2,
 } from 'lucide-react';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -68,7 +68,6 @@ const toolLinks = [
   },
 ];
 
-
 export const Navbar = () => {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -79,6 +78,9 @@ export const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  const [searchInput, openSearchInput] = useState(false);
+
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
 
@@ -122,7 +124,12 @@ export const Navbar = () => {
     { href: '/tools', label: 'Browse Tools', icon: Wrench },
     { href: '/api', label: 'Developer APIs', icon: Code },
     { href: '/quiz', label: 'Quiz', icon: Brain },
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, isLogged: isLoggedIn },
+    {
+      href: '/dashboard',
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      isLogged: isLoggedIn,
+    },
   ];
 
   useEffect(() => {
@@ -140,7 +147,7 @@ export const Navbar = () => {
   return (
     <header className='fixed top-0 left-0 right-0 z-50'>
       {/* Main Navbar Bar */}
-      <nav className='mx-auto w-[100%] flex items-center justify-between px-6 py-3.5 nav-glass border-b border-white/5'>
+      <nav className='mx-auto w-[100%] flex items-center justify-between px-6 py-5 nav-glass'>
         {/* Logo */}
         <Link
           href='/'
@@ -153,7 +160,7 @@ export const Navbar = () => {
             className='h-9 w-9 object-fit'
           />
 
-          <span className='text-lg font-bold font-display tracking-tight text-pw-text group-hover:text-pw-primary transition-colors duration-300'>
+          <span className='text-lg sm:text-xl font-bold font-display tracking-tight text-pw-text group-hover:text-pw-primary transition-colors duration-300'>
             Ping World
           </span>
         </Link>
@@ -167,7 +174,7 @@ export const Navbar = () => {
             <DropdownMenuTrigger>
               <div
                 className={cn(
-                  'flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all hover:bg-white/5 cursor-pointer',
+                  'flex items-center gap-2 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all hover:bg-white/5 cursor-pointer',
                   toolLinks.some((l) => pathname === l.href) ?
                     'text-pw-primary bg-pw-primary/5'
                   : 'hover:text-pw-text text-pw-muted',
@@ -214,7 +221,7 @@ export const Navbar = () => {
           </DropdownMenu>
 
           {navLinks
-            .filter((n) => (n.isLogged === undefined || n.isLogged == true))
+            .filter((n) => n.isLogged === undefined || n.isLogged == true)
             .map((link) => {
               const isActive =
                 pathname === link?.href ||
@@ -224,10 +231,10 @@ export const Navbar = () => {
                   key={link?.href}
                   href={link?.href}
                   className={cn(
-                    'relative px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors duration-200',
+                    'relative px-3.5 py-1.5 lg:text-xs xl:text-sm font-semibold rounded-lg text-pw-text transition-colors duration-200 li-glass',
                     isActive ?
                       'text-pw-cyan bg-pw-cyan/5'
-                    : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
+                    : 'hover:text-pw-cyan hover:bg-white/2',
                   )}>
                   {link?.label}
                 </Link>
@@ -237,13 +244,29 @@ export const Navbar = () => {
 
         {/* Right section */}
         <div className='flex items-center gap-3'>
+          <button
+            onClick={() => openSearchInput(!searchInput)}
+            aria-label='Toggle Search'
+            className={cn(
+              'hidden sm:flex h-9 w-9 items-center justify-center rounded-lg hover:text-pw-text',
+              searchInput ? 'text-pw-text' : 'text-pw-muted',
+            )}>
+            <SearchIcon className='h-6 w-6' />
+          </button>
+
           {isLoggedIn ?
             pathname !== '/dashboard' ?
               <Link
                 href={'/dashboard'}
-                className={cn('hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20')}>
+                className={cn(
+                  'hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20',
+                )}>
                 Dashboard
-            </Link> : <div className='hidden md:inline-flex btn-primary text-sm px-10 py-2 opacity-0'>Dashboard</div>
+              </Link>
+            : <div className='hidden md:inline-flex btn-primary text-sm px-10 py-2 opacity-0'>
+                Dashboard
+              </div>
+
           : !session && (
               <Link
                 href='/login'
@@ -252,6 +275,7 @@ export const Navbar = () => {
               </Link>
             )
           }
+
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label='Toggle menu'
@@ -264,104 +288,107 @@ export const Navbar = () => {
       </nav>
 
       {/* Desktop Search Attachment Bar (Separated below header, aligned right) */}
-      <div className='hidden lg:flex justify-end px-6 pt-2 pb-1 pointer-events-none'>
-        <div
-          ref={searchContainerRef}
-          className='relative pointer-events-auto w-80'>
-          <div className='flex items-center gap-2 bg-[#0c0d1c]/90 border border-white/10 px-3 py-1.5 rounded-full shadow-xl backdrop-blur-md focus-within:border-pw-primary/60 transition-all'>
-            <Search className='h-3.5 w-3.5 text-pw-muted shrink-0' />
-            <input
-              type='text'
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setIsSearchOpen(true);
-              }}
-              onFocus={() => setIsSearchOpen(true)}
-              placeholder='Search tools, pages (e.g. pdf, word, pricing)...'
-              className='bg-transparent border-none text-xs text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
-            />
-            {searchQuery && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setIsSearchOpen(false);
+      {searchInput && (
+        <div className='hidden lg:flex justify-end px-2 pt-2 pointer-events-none'>
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            ref={searchContainerRef}
+            className='relative pointer-events-auto w-90'>
+            <div className='flex items-center gap-2 bg-[#0c0d1c]/40 border border-white/5 p-1 px-4 rounded-2xl shadow-xl focus-within:border-pw-primary/50 transition-all bkblur'>
+              <Search className='h-4 w-4 text-pw-muted shrink-0' />
+              <input
+                type='text'
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
                 }}
-                className='text-pw-muted hover:text-white'>
-                <X className='h-3 w-3' />
-              </button>
-            )}
-          </div>
-
-          {/* Absolute floating search results list */}
-          {isSearchOpen && debouncedQuery && (
-            <div className='absolute right-0 top-full mt-2 w-96 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl z-50 max-h-[380px] overflow-y-auto custom-scrollbar p-2'>
-              <div className='px-3 py-1 text-[9px] font-black uppercase tracking-wider text-pw-muted flex items-center justify-between'>
-                <span>Matching Results</span>
-                <span className='font-mono text-pw-primary'>{searchResults.length} found</span>
-              </div>
-
-              {searchResults.length > 0 ? (
-                <div className='space-y-1 mt-1'>
-                  {searchResults.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      onClick={() => {
-                        setIsSearchOpen(false);
-                        setSearchQuery('');
-                      }}
-                      className='p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/5 flex items-start gap-2.5 transition-all group block'>
-                      <div className='p-2 rounded-lg bg-pw-primary/10 text-pw-primary shrink-0 mt-0.5 group-hover:scale-105 transition-transform'>
-                        <Search className='h-3.5 w-3.5' />
-                      </div>
-                      <div className='flex-1 min-w-0'>
-                        <div className='flex items-center justify-between gap-1'>
-                          <span className='text-xs font-bold text-pw-text group-hover:text-pw-primary truncate'>
-                            {item.title}
-                          </span>
-                          <span className='text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-pw-muted font-bold'>
-                            {item.category}
-                          </span>
-                        </div>
-                        <p className='text-[10px] text-pw-muted mt-0.5 line-clamp-1 leading-relaxed'>
-                          {item.description}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className='py-6 text-center text-xs text-pw-muted'>
-                  No tools or pages matched &quot;{debouncedQuery}&quot;
-                </div>
+                onFocus={() => setIsSearchOpen(true)}
+                placeholder='Search tools, pages...'
+                className='bg-transparent border-none h-8 no-outline text-sm text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchOpen(false);
+                  }}
+                  className='text-pw-muted hover:text-white'>
+                  <X className='h-5 w-5' />
+                </button>
               )}
             </div>
-          )}
+
+            {/* Absolute floating search results list */}
+            {isSearchOpen && debouncedQuery && (
+              <div className='absolute right-0 top-full mt-1 w-110 bg-[#0c0d1c]/60 bkblur border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl z-50 max-h-[380px] overflow-y-auto custom-scrollbar p-1 gap-0.5'>
+                {searchResults.length > 0 ?
+                  <div className='space-y-1'>
+                    {searchResults.map((item) => (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        onClick={() => {
+                          setIsSearchOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className='p-1 px-1.5 rounded-xl hover:bg-white/2 border border-transparent hover:border-white/1 flex items-center gap-2 transition-all group block'>
+                        <div className='p-1 rounded-lg bg-pw-primary/10 text-pw-primary shrink-0 group-hover:scale-105 transition-transform flex align-center justify-center h-full'>
+                          {item.category === 'Page' ?
+                            <Layout className='h-5 w-5' />
+                          : item.category === 'Tool' ?
+                            <Wrench className='h-5 w-5' />
+                          : item.category === 'Developer' ?
+                            <Code2 className='h-5 w-5' />
+                          : <Search className='h-5 w-5' />}
+                        </div>
+                        <div className='flex-1 min-w-0'>
+                          <div className='flex items-center justify-between gap-1'>
+                            <span className='text-xs font-bold text-pw-text truncate'>
+                              {item.title}
+                            </span>
+                            <span className='text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-pw-muted font-bold'>
+                              {item.category}
+                            </span>
+                          </div>
+                          <p className='text-[10px] text-pw-muted mt-0.5 line-clamp-1 leading-relaxed'>
+                            {item.description}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                : <div className='py-6 text-center text-xs text-pw-muted'>
+                    No tools or pages matched &quot;{debouncedQuery}&quot;
+                  </div>
+                }
+              </div>
+            )}
+          </motion.div>
         </div>
-      </div>
+      )}
 
       {/* Mobile Menu */}
       {mobileOpen && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto', overflow: 'hidden' }}
+          animate={{ opacity: 1, height: 'auto', overflowY: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          className='lg:hidden border-t border-white/5 nav-glass'
+          className='lg:hidden border-t border-white/5 min-h-screen relative'
           style={{ backdropFilter: 'brightness(50%) blur(12px)' }}>
           <div className='flex flex-col gap-1 px-6 py-6'>
-            {/* Mobile Search Bar - Top of listings, w-full */}
             <div
               ref={mobileSearchRef}
               className='relative w-full mb-4'>
-              <div className='flex items-center gap-2 bg-[#0c0d1c] border border-white/10 px-3.5 py-2.5 rounded-xl shadow-lg focus-within:border-pw-primary'>
+              <div className='flex items-center gap-2 bg-[#0c0d1c]/50 bkblur border border-white/5 px-4 py-3 rounded-xl shadow-lg focus-within:border-pw-primary/80'>
                 <Search className='h-4 w-4 text-pw-muted shrink-0' />
                 <input
                   type='text'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder='Search tools, pages (pdf, word, pricing)...'
-                  className='bg-transparent border-none text-xs text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
+                  placeholder='Search tools, pages...'
+                  className='bg-transparent border-none no-outline text-sm text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')}>
@@ -372,29 +399,33 @@ export const Navbar = () => {
 
               {/* Mobile search results dropdown */}
               {debouncedQuery && (
-                <div className='absolute left-0 right-0 top-full mt-2 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto p-2'>
-                  {searchResults.length > 0 ? (
+                <div className='absolute left-0 right-0 top-full mt-1 bg-pw-surface/90 bkblur border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-70 overflow-y-auto p-1.5 gap-1'>
+                  {searchResults.length > 0 ?
                     searchResults.map((item) => (
                       <Link
+                        title={item.description}
                         key={item.id}
                         href={item.href}
                         onClick={() => {
                           setMobileOpen(false);
                           setSearchQuery('');
                         }}
-                        className='p-2 rounded-xl hover:bg-white/5 flex items-center justify-between text-xs text-pw-text'>
+                        className='p-1 rounded-lg hover:bg-white/5 flex items-center justify-between text-xs text-pw-text'>
                         <div>
-                          <span className='font-bold text-pw-primary block'>{item.title}</span>
-                          <span className='text-[10px] text-pw-muted line-clamp-1'>{item.description}</span>
+                          <span className='font-bold text-pw-primary block'>
+                            {item.title}
+                          </span>
+                          <span className='text-[10px] text-pw-muted line-clamp-1'>
+                            {item.description}
+                          </span>
                         </div>
-                        <ArrowRight className='h-3.5 w-3.5 text-pw-muted shrink-0' />
+                        <ChevronRight className='h-3.5 w-3.5 text-pw-muted shrink-0' />
                       </Link>
                     ))
-                  ) : (
-                    <div className='p-3 text-center text-xs text-pw-muted'>
+                  : <div className='p-3 text-center text-xs text-pw-muted'>
                       No results found
                     </div>
-                  )}
+                  }
                 </div>
               )}
             </div>
@@ -411,9 +442,9 @@ export const Navbar = () => {
                     href={link?.href as any}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors',
+                      'flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
                       isActive ?
-                        'text-pw-cyan bg-pw-cyan/10'
+                        'text-pw-cyan bg-pw-cyan/10 nav-glass bkblur'
                       : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
                     )}>
                     {link && 'icon' in link && (
@@ -424,7 +455,7 @@ export const Navbar = () => {
                 );
               })}
 
-            <div className='px-3 py-1 mt-6 text-[14px] font-bold uppercase tracking-widest text-pw-cyan'>
+            <div className='px-3 mt-5 text-[14px] font-bold uppercase tracking-widest text-pw-cyan'>
               UTILITY
             </div>
             {[...toolLinks].map((link) => {
@@ -436,7 +467,7 @@ export const Navbar = () => {
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors',
+                    'flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
                     isActive ?
                       'text-pw-cyan bg-pw-cyan/10'
                     : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
@@ -447,22 +478,24 @@ export const Navbar = () => {
               );
             })}
 
-            {isLoggedIn && pathname !== '/dashboard' ?
-              <Link
-                href='/dashboard'
-                onClick={() => setMobileOpen(false)}
-                className='btn-ghost text-sm text-center mt-4 h-12'>
-                Dashboard
-              </Link>
-            : !session && (
+            <div className='w-full pt-1 flex-1 flex items-center justify-center'>
+              {isLoggedIn && pathname !== '/dashboard' ?
                 <Link
-                  href='/login'
+                  href='/dashboard'
                   onClick={() => setMobileOpen(false)}
-                  className='btn-primary text-sm text-center mt-4 h-12'>
-                  Sign In
+                  className='btn-ghost text-sm text-center mt-4 h-12 flex-1'>
+                  Dashboard
                 </Link>
-              )
-            }
+              : !session && (
+                  <Link
+                    href='/login'
+                    onClick={() => setMobileOpen(false)}
+                    className='btn-primary text-sm text-center mt-4 h-12 flex-1'>
+                    Sign In
+                  </Link>
+                )
+              }
+            </div>
           </div>
         </motion.div>
       )}

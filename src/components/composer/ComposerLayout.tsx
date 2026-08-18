@@ -126,8 +126,8 @@ export function ComposerLayout() {
         body: JSON.stringify({
           content: state.baseContent,
           platforms: state.selectedPlatforms,
-          hashtags: state.hashtags,
-          mediaUrls: state.mediaFiles?.map((f: any) => f.url || f.preview).filter(Boolean) || [],
+          hashtags: state.tags?.map((t) => t.tag) || [],
+          mediaUrls: state.mediaAssets?.map((f) => f.previewUrl).filter(Boolean) || [],
           canvasBlobBase64: state.canvasBackground || undefined,
         }),
       });

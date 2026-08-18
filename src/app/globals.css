@@ -235,7 +235,7 @@ pre {
 .nav-glass {
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  box-shadow: isnset 0px 0px 18px rgb(58, 58, 58, 0.2);
+  box-shadow: inset 0px 0px 18px rgb(58, 58, 58, 0.1);
 }
 
 .liq-glass {

@@ -91,6 +91,7 @@ export default function PublicInboxForm({ profile, username }: Props) {
     custom_question: 'Send me an anonymous question or confession!',
   };
 
+  const customQuestionQuery = getParam('question');
   const activePromptQuestion = customQuestionQuery || resolvedProfile.custom_question;
   const activePromptText =
     activePromptQuestion ?
@@ -203,7 +204,7 @@ export default function PublicInboxForm({ profile, username }: Props) {
             100% Anonymous
           </div>
           <h1 className='text-3xl sm:text-4xl font-extrabold font-display mb-3'>
-            Message <span className='gradient-text'>@{profile.username}</span>
+            Message <span className='gradient-text'>@{resolvedProfile.username}</span>
           </h1>
           <p className='text-sm text-pw-muted max-w-sm mx-auto leading-relaxed'>
             {activePromptText}

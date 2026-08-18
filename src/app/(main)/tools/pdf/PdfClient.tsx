@@ -2493,7 +2493,7 @@ export default function PdfToolStudioPage() {
                 }
 
                 const mergedBytes = await mergedPdf.save();
-                const blob = new Blob([mergedBytes], {
+                const blob = new Blob([mergedBytes as any], {
                   type: 'application/pdf',
                 });
                 const { saveAs } = await import('file-saver');
