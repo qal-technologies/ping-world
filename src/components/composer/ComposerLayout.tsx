@@ -18,6 +18,7 @@ import {
   Wifi,
   Star,
   CheckCircle,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useComposer } from '@/lib/composer/useComposerStore';
@@ -39,6 +40,7 @@ import { CanvasBuilder } from './CanvasBuilder';
 import { LivePreview } from './LivePreview';
 import { SavePreviewPanel } from './SavePreviewPanel';
 import { InstagramCanvasSettings } from './InstagramCanvasSettings';
+import { PostHistoryPanel } from './PostHistoryPanel';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
@@ -50,6 +52,7 @@ type ToolTab =
   | 'ai_context'
   | 'media'
   | 'canvas'
+  | 'history'
   | 'save';
 
 interface TabDef {
@@ -62,6 +65,7 @@ interface TabDef {
 
 const TOOL_TABS: TabDef[] = [
   { id: 'analysis', label: 'Analysis', icon: BarChart2 },
+  { id: 'history', label: 'History', icon: History },
   { id: 'tags', label: 'Tags', icon: Hash },
   { id: 'ai', label: 'AI Write', icon: Sparkles, onlineOnly: true },
   { id: 'translate', label: 'Translate', icon: Languages, onlineOnly: true },
@@ -74,6 +78,8 @@ function ToolPanel({ activeTab }: { activeTab: ToolTab }) {
   switch (activeTab) {
     case 'analysis':
       return <TextAnalysisPanel />;
+    case 'history':
+      return <PostHistoryPanel />;
     case 'tags':
       return <TagsHashtagsPanel />;
     case 'ai':
@@ -105,33 +111,44 @@ export function ComposerLayout() {
       return toast.error('Please write some content before attempting to post!');
     }
 
+    if (!state.selectedPlatforms || state.selectedPlatforms.length === 0) {
+      return toast.error('Please select at least one social media platform.');
+    }
+
     setIsPosting(true);
     const toastId = toast.loading('Connecting and dispatching to selected social API gateways...');
 
-    // Simulate API posting with standard structures
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    /*
-     * // jules edit: UNCOMMENT OR CONFIGURE BELOW WHEN SOCIAL API CREDENTIALS AND SCOPES ARE PROVISIONED
-     * const publishSocialPayload = async (content: string, platforms: string[]) => {
-     *   const res = await fetch('/api/social/publish', {
-     *     method: 'POST',
-     *     headers: { 'Content-Type': 'application/json' },
-     *     body: JSON.stringify({ content, platforms, timestamp: new Date().toISOString() })
-     *   });
-     *   return res.json();
-     * };
-     */
-
     try {
-      // Sanitize the content to avoid injections or platform errors
+      // 1. Dispatch to social publishing API
+      const res = await fetch('/api/social/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: state.baseContent,
+          platforms: state.selectedPlatforms,
+          hashtags: state.hashtags,
+          mediaUrls: state.mediaFiles?.map((f: any) => f.url || f.preview).filter(Boolean) || [],
+          canvasBlobBase64: state.canvasBackground || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        toast.dismiss(toastId);
+        const errorMsg =
+          data.results?.find((r: any) => r.error)?.error ||
+          data.error ||
+          'Failed to publish to social media.';
+        return toast.error(errorMsg);
+      }
+
+      // 2. Save composed history log to Supabase or localStorage
       const sanitizedBody = sanitizeInput(state.baseContent);
 
       if (user) {
-        // Save composed history log to Supabase (gated by tier)
-        const maxHistory = premiumTier === 'free' || premiumTier === 'flexible' ? 2 : 50;
+        const maxHistory = premiumTier === 'free' || premiumTier === 'flexible' ? 5 : 50;
 
-        // Fetch user's existing history
         const { data: profile } = await supabase
           .from('profiles')
           .select('composer_history')
@@ -139,12 +156,6 @@ export function ComposerLayout() {
           .single();
 
         let history = Array.isArray(profile?.composer_history) ? profile.composer_history : [];
-        if (history.length >= maxHistory) {
-          toast.dismiss(toastId);
-          setIsPosting(false);
-          return toast.error(`Your subscription tier (${premiumTier.toUpperCase()}) allows a maximum of ${maxHistory} history items. Please upgrade to save more.`);
-        }
-
         const newLog = {
           id: `post-${Date.now()}`,
           content: sanitizedBody,
@@ -153,13 +164,13 @@ export function ComposerLayout() {
         };
 
         history.unshift(newLog);
+        if (history.length > maxHistory) history = history.slice(0, maxHistory);
 
         await supabase
           .from('profiles')
           .update({ composer_history: history })
           .eq('id', user.id);
       } else {
-        // Save history log to localStorage fallback
         const cached = localStorage.getItem('pw_composer_history') || '[]';
         const list = JSON.parse(cached);
         list.unshift({
@@ -172,10 +183,17 @@ export function ComposerLayout() {
       }
 
       toast.dismiss(toastId);
-      toast.success('🎉 Successfully posted and saved to draft history!');
+      if (data.sandbox) {
+        toast.info(
+          '🎉 Post verified & simulated in Sandbox mode! (Add social API keys in .env for live posting)',
+          { duration: 6000 }
+        );
+      } else {
+        toast.success('🎉 Successfully published to all selected social platforms!');
+      }
     } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error('Failed to post or save history: ' + err.message);
+      toast.error('Failed to post: ' + (err?.message || 'Please try again.'));
     } finally {
       setIsPosting(false);
     }

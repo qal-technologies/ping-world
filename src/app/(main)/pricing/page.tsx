@@ -13,11 +13,16 @@ import {
   Brain,
   MessageCircle,
   FileText,
+  Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { PREMIUM_TIERS, type PremiumTier, FLEXIBLE_FEATURES } from '@/lib/config/premium';
+import {
+  PREMIUM_TIERS,
+  type PremiumTier,
+  FLEXIBLE_FEATURES,
+} from '@/lib/config/premium';
 import { useAppContext } from '@/context/AppContext';
 import { COMPANY } from '@/lib/config/company';
 import { useState, useEffect } from 'react';
@@ -101,7 +106,8 @@ const TOOL_BENEFITS = [
     icon: Brain,
     textColor: 'text-pw-primary',
     free: 'Create 5 quizzes with up to 4 options/question.',
-    premium: 'Unlock unlimited questions, more than 4 options, full responsive background images, local logo uploads, and 30-day lifespans.'
+    premium:
+      'Unlock unlimited questions, more than 4 options, full responsive background images, local logo uploads, and 30-day lifespans.',
   },
   {
     id: 'composer',
@@ -109,7 +115,8 @@ const TOOL_BENEFITS = [
     icon: Sparkles,
     textColor: 'text-pw-secondary',
     free: 'Basic writing with platform previews.',
-    premium: 'Unlock AI suggestions, translation, branding overlays, draggable logos, and unlimited post draft history syncing.'
+    premium:
+      'Unlock AI suggestions, translation, branding overlays, draggable logos, and unlimited post draft history syncing.',
   },
   {
     id: 'anonlink',
@@ -117,7 +124,8 @@ const TOOL_BENEFITS = [
     icon: MessageCircle,
     textColor: 'text-pw-success',
     free: 'Standard inbox, 2-day lifespan limit.',
-    premium: 'Custom link-id alias, personalized questions, 30-day lifespan, and guest-read Public Message Boards.'
+    premium:
+      'Custom link-id alias, personalized questions, 30-day lifespan, and guest-read Public Message Boards.',
   },
   {
     id: 'pdf-tools',
@@ -125,21 +133,26 @@ const TOOL_BENEFITS = [
     icon: FileText,
     textColor: 'text-pw-warning',
     free: 'Basic document compilation.',
-    premium: 'Chapter-to-page book flow, automatic metrics, title & footer editing, and true textual stream extraction converters.'
-  }
+    premium:
+      'Chapter-to-page book flow, automatic metrics, title & footer editing, and true textual stream extraction converters.',
+  },
 ];
 
 export default function PricingPage() {
   const { premiumTier, refresh, user } = useAppContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTierId, setSelectedTierId] = useState<PremiumTier | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [selectedTierId, setSelectedTierId] = useState<PremiumTier | null>(
+    null,
+  );
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>(
+    'monthly',
+  );
   const [isSimulating, setIsSimulating] = useState(false);
 
-  const [selectedFlexibleToolId, setSelectedFlexibleToolId] = useState<string>('all');
+  const [selectedFlexibleToolId, setSelectedFlexibleToolId] =
+    useState<string>('all');
 
-  
   const [currency, setCurrency] = useState('USD');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -167,9 +180,24 @@ export default function PricingPage() {
         try {
           const locale = navigator.language || 'en-US';
           const localeMap: Record<string, string> = {
-            'GB': 'GBP', 'DE': 'EUR', 'FR': 'EUR', 'IT': 'EUR', 'ES': 'EUR', 'NL': 'EUR',
-            'JP': 'JPY', 'CA': 'CAD', 'AU': 'AUD', 'CH': 'CHF', 'CN': 'CNY', 'IN': 'INR',
-            'KR': 'KRW', 'NZ': 'NZD', 'BR': 'BRL', 'MX': 'MXN', 'ZA': 'ZAR', 'NG': 'NGN'
+            GB: 'GBP',
+            DE: 'EUR',
+            FR: 'EUR',
+            IT: 'EUR',
+            ES: 'EUR',
+            NL: 'EUR',
+            JP: 'JPY',
+            CA: 'CAD',
+            AU: 'AUD',
+            CH: 'CHF',
+            CN: 'CNY',
+            IN: 'INR',
+            KR: 'KRW',
+            NZ: 'NZD',
+            BR: 'BRL',
+            MX: 'MXN',
+            ZA: 'ZAR',
+            NG: 'NGN',
           };
           const countryCode = locale.split('-')[1]?.toUpperCase();
           if (countryCode && localeMap[countryCode]) {
@@ -180,7 +208,10 @@ export default function PricingPage() {
         }
 
         // Compare and resolve currency code
-        const resolvedCurrency = ipCurrency && ipCurrency !== 'USD' ? ipCurrency : (localeCurrency !== 'USD' ? localeCurrency : 'USD');
+        const resolvedCurrency =
+          ipCurrency && ipCurrency !== 'USD' ? ipCurrency
+          : localeCurrency !== 'USD' ? localeCurrency
+          : 'USD';
         setCurrency(resolvedCurrency);
 
         if (resolvedCurrency && resolvedCurrency !== 'USD') {
@@ -200,19 +231,31 @@ export default function PricingPage() {
   }, []);
 
   const selectedTier = selectedTierId ? PREMIUM_TIERS[selectedTierId] : null;
-  const selectedFlexTool = FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId);
+  const selectedFlexTool = FLEXIBLE_FEATURES.find(
+    (f: any) => f.id === selectedFlexibleToolId,
+  );
 
-  const displayMonthly = selectedTierId === 'flexible' && selectedFlexTool
-    ? selectedFlexTool.monthly
+  const displayMonthly =
+    selectedTierId === 'flexible' && selectedFlexTool ?
+      selectedFlexTool.monthly
     : selectedTier?.price.monthly;
 
-  const displayYearly = selectedTierId === 'flexible' && selectedFlexTool
-    ? selectedFlexTool.yearly
+  const displayYearly =
+    selectedTierId === 'flexible' && selectedFlexTool ?
+      selectedFlexTool.yearly
     : selectedTier?.price.yearly;
 
-  const activeFlexFeature = FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId) || FLEXIBLE_FEATURES[0];
-  const displayMonthlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.monthly : (selectedTier?.price.monthly || 0);
-  const displayYearlyPrice = selectedTierId === 'flexible' ? activeFlexFeature.yearly : (selectedTier?.price.yearly || 0);
+  const activeFlexFeature =
+    FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId) ||
+    FLEXIBLE_FEATURES[0];
+  const displayMonthlyPrice =
+    selectedTierId === 'flexible' ?
+      activeFlexFeature.monthly
+    : selectedTier?.price.monthly || 0;
+  const displayYearlyPrice =
+    selectedTierId === 'flexible' ?
+      activeFlexFeature.yearly
+    : selectedTier?.price.yearly || 0;
   const savings = Math.round(displayMonthlyPrice * 12 - displayYearlyPrice);
 
   // jules edit: Secure payment gateway checkout routing with Stripe and Sandbox fallbacks
@@ -220,7 +263,9 @@ export default function PricingPage() {
     if (!selectedTierId || !selectedTier) return;
 
     if (!user) {
-      toast.error('Authentication Required: Please register or log in first to purchase a premium plan!');
+      toast.error(
+        'Authentication Required: Please register or log in first to purchase a premium plan!',
+      );
       return;
     }
 
@@ -228,7 +273,8 @@ export default function PricingPage() {
     toast.loading(`Connecting to Checkout Gateway...`);
 
     try {
-      const targetPrice = billingCycle === 'monthly' ? displayMonthlyPrice : displayYearlyPrice;
+      const targetPrice =
+        billingCycle === 'monthly' ? displayMonthlyPrice : displayYearlyPrice;
 
       // Invoke server-side checkout session creation
       const res = await fetch('/api/checkout/session', {
@@ -237,9 +283,10 @@ export default function PricingPage() {
         body: JSON.stringify({
           tier: selectedTierId,
           billingCycle,
-          selectedFlexibleToolId: selectedTierId === 'flexible' ? selectedFlexibleToolId : 'all',
-          price: targetPrice
-        })
+          selectedFlexibleToolId:
+            selectedTierId === 'flexible' ? selectedFlexibleToolId : 'all',
+          price: targetPrice,
+        }),
       });
 
       const sessionData = await res.json();
@@ -254,13 +301,16 @@ export default function PricingPage() {
 
       // If Stripe secret key is not set, fall back to simulated sandbox upgrade
       toast.dismiss();
-      toast.loading(`Running simulated sandbox checkout upgrade for ${selectedTier.label}...`);
+      toast.loading(
+        `Running simulated sandbox checkout upgrade for ${selectedTier.label}...`,
+      );
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const { error } = await supabase.auth.updateUser({
         data: {
           tier: selectedTierId,
-          purchased_tools: selectedTierId === 'flexible' ? [selectedFlexibleToolId] : ['all']
+          purchased_tools:
+            selectedTierId === 'flexible' ? [selectedFlexibleToolId] : ['all'],
         },
       });
 
@@ -270,14 +320,45 @@ export default function PricingPage() {
       await refresh();
 
       toast.dismiss();
-      toast.success(`🎉 Sandbox Upgrade Success! Your plan was upgraded to ${selectedTier.label} successfully!`);
-      setIsModalOpen(false);
+      toast.success(
+        `🎉 Sandbox Upgrade Success! Your plan was upgraded to ${selectedTier.label} successfully!`,
+      );
     } catch (err: any) {
       toast.dismiss();
-      toast.error(`Payment failed: ${err?.message || "Please try again."}`);
+      toast.error(`Payment failed: ${err?.message || 'Please try again.'}`);
     } finally {
       setIsSimulating(false);
     }
+  };
+
+  const handleDowngradeToFree = async () => {
+    if (!user) {
+      toast.error('Please log in first to manage your subscription.');
+      return;
+    }
+    try {
+      toast.loading('Switching to Free Plan...');
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          tier: 'free',
+          purchased_tools: [],
+        },
+      });
+      if (error) throw error;
+      await refresh();
+      toast.dismiss();
+      toast.success('Switched back to Free plan successfully.');
+    } catch (err: any) {
+      toast.dismiss();
+      toast.error('Failed to change plan: ' + (err?.message || 'Please try again.'));
+    }
+  };
+
+  const formatCurrencyAmount = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
   };
 
   return (
@@ -301,6 +382,72 @@ export default function PricingPage() {
             {COMPANY.name} utilities.
           </p>
         </div>
+
+        {/* Active Flexible Subscriptions & Purchased Tools */}
+        {user &&
+          ((user.user_metadata?.purchased_tools &&
+            user.user_metadata.purchased_tools.length > 0) ||
+            premiumTier === 'flexible' ||
+            premiumTier === 'standard' ||
+            premiumTier === 'pro') && (
+            <Card className='p-6 mb-12 bg-pw-primary/5 border border-pw-primary/20 rounded-2xl space-y-4'>
+              <div className='flex items-center justify-between flex-wrap gap-2'>
+                <div className='flex items-center gap-2'>
+                  <Crown className='h-5 w-5 text-pw-warning' />
+                  <h3 className='text-lg font-bold font-display text-white'>
+                    My Active Subscriptions & Purchased Tools
+                  </h3>
+                </div>
+                <Button
+                  onClick={() => {
+                    setSelectedTierId('flexible');
+                    setIsModalOpen(true);
+                  }}
+                  size='sm'
+                  className='btn-primary h-8 text-xs font-bold gap-1.5'>
+                  <Plus className='h-3.5 w-3.5' /> Add Flexible Tools
+                </Button>
+              </div>
+              <p className='text-xs text-pw-muted'>
+                Current active plan:{' '}
+                <span className='font-bold text-pw-primary uppercase'>
+                  {premiumTier}
+                </span>
+                . Below are your tool licenses:
+              </p>
+              <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3'>
+                {FLEXIBLE_FEATURES.map((tool: any) => {
+                  const purchasedList =
+                    user?.user_metadata?.purchased_tools || [];
+                  const isPurchased =
+                    purchasedList.includes('all') ||
+                    purchasedList.includes(tool.id) ||
+                    premiumTier === 'pro' ||
+                    premiumTier === 'standard';
+                  return (
+                    <div
+                      key={tool.id}
+                      className={cn(
+                        'p-3 rounded-xl border text-xs flex items-center justify-between',
+                        isPurchased ?
+                          'bg-pw-success/10 border-pw-success/30 text-pw-success font-bold'
+                        : 'bg-white/5 border-white/10 text-pw-muted opacity-60',
+                      )}>
+                      <span>{tool.label}</span>
+                      {isPurchased ?
+                        <span className='text-[10px] bg-pw-success/20 px-2 py-0.5 rounded-full font-mono uppercase'>
+                          Active
+                        </span>
+                      : <span className='text-[10px] text-pw-muted font-mono'>
+                          Not Active
+                        </span>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
         {/* Tier Cards */}
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20'>
@@ -370,12 +517,15 @@ export default function PricingPage() {
                       </div>
                     }
 
-                    
-                    {isOnline && exchangeRate && currency !== 'USD' && tier.price.monthly !== null && (
-                      <p className='text-xs text-pw-success font-bold font-mono mt-1'>
-                        ~ {(tier.price.monthly * exchangeRate).toFixed(2)} {currency} / month
-                      </p>
-                    )}
+                    {isOnline &&
+                      exchangeRate &&
+                      currency !== 'USD' &&
+                      tier.price.monthly !== null && (
+                        <p className='text-xs text-pw-success font-bold font-mono mt-1'>
+                          ~ {(tier.price.monthly * exchangeRate).toFixed(2)}{' '}
+                          {currency} / month
+                        </p>
+                      )}
 
                     {tier.price.yearly && (
                       <p className='text-[11px] text-pw-muted mt-2.5'>
@@ -497,6 +647,10 @@ export default function PricingPage() {
                   <Button
                     disabled={isCurrent}
                     onClick={() => {
+                      if (tierId === 'free' && premiumTier !== 'free') {
+                        handleDowngradeToFree();
+                        return;
+                      }
                       setSelectedTierId(tierId);
                       setIsModalOpen(true);
                     }}
@@ -510,6 +664,8 @@ export default function PricingPage() {
                     )}>
                     {isCurrent ?
                       'Current Plan'
+                    : tierId === 'free' ?
+                      'Go Free'
                     : tierId === 'pro' ?
                       <>
                         Become Pro
@@ -526,26 +682,36 @@ export default function PricingPage() {
           })}
         </div>
 
-        
         <div className='mb-20 space-y-8'>
           <h2 className='text-3xl font-extrabold font-display text-center'>
             Plan Benefits <span className='gradient-text'>per Tool.</span>
           </h2>
           <p className='text-center text-pw-muted text-sm max-w-xl mx-auto'>
-            Review exactly what each subscription tier unlocks across our core utilities.
+            Review exactly what each subscription tier unlocks across our core
+            utilities.
           </p>
 
           <div className='grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto'>
             {TOOL_BENEFITS.map((tool) => {
               const ToolIcon = tool.icon;
               return (
-                <Card key={tool.id} className='p-6 bg-white/[0.01] border border-white/5 space-y-2 rounded-2xl hover:border-white/10 transition-all'>
-                  <h4 className={cn('font-bold text-sm flex items-center gap-1.5', tool.textColor)}>
+                <Card
+                  key={tool.id}
+                  className='p-6 bg-white/[0.01] border border-white/5 space-y-2 rounded-2xl hover:border-white/10 transition-all'>
+                  <h4
+                    className={cn(
+                      'font-bold text-sm flex items-center gap-1.5',
+                      tool.textColor,
+                    )}>
                     <ToolIcon className='h-4 w-4' /> {tool.title}
                   </h4>
                   <p className='text-xs text-pw-muted leading-relaxed'>
-                    <span className='font-bold text-white'>Free:</span> {tool.free} <br />
-                    <span className={cn('font-bold', tool.textColor)}>Premium:</span> {tool.premium}
+                    <span className='font-bold text-white'>Free:</span>{' '}
+                    {tool.free} <br />
+                    <span className={cn('font-bold', tool.textColor)}>
+                      Premium:
+                    </span>{' '}
+                    {tool.premium}
                   </p>
                 </Card>
               );
@@ -674,9 +840,9 @@ export default function PricingPage() {
                     onClick={() => setBillingCycle('yearly')}
                     className={cn(
                       'flex-1 py-2 text-center text-base font-semibold rounded-full transition-all flex items-center h-10 justify-center gap-1.5',
-                      billingCycle === 'yearly' ?
-                        `text-black shadow-xl`
-                      : 'text-pw-muted hover:text-pw-text',
+                      billingCycle === 'yearly' ? `text-black shadow-xl` : (
+                        'text-pw-muted hover:text-pw-text'
+                      ),
                     )}
                     style={{
                       backgroundColor: `${billingCycle === 'yearly' ? selectedTier.color : ''}`,
@@ -705,22 +871,25 @@ export default function PricingPage() {
                   </span>
                   <span className='text-3xl font-extrabold font-display text-white block'>
                     {billingCycle === 'monthly' ?
-                      `$${displayMonthlyPrice}/mo`
-                    : `$${displayYearlyPrice}/yr`}
+                      `$${formatCurrencyAmount(displayMonthlyPrice)}/mo`
+                    : `$${formatCurrencyAmount(displayYearlyPrice)}/yr`}
                   </span>
                 </div>
 
-                
-                {isOnline && exchangeRate && currency !== 'USD' && displayMonthlyPrice && (
-                  <div className='mt-1.5'>
-                    <span className='text-xs text-pw-success font-bold font-mono block'>
-                      ~ {billingCycle === 'monthly'
-                        ? `${(displayMonthlyPrice * exchangeRate).toFixed(2)} ${currency} / month`
-                        : `${(displayYearlyPrice * exchangeRate).toFixed(2)} ${currency} / year`
-                      }
-                    </span>
-                  </div>
-                )}
+                {isOnline &&
+                  exchangeRate &&
+                  currency !== 'USD' &&
+                  displayMonthlyPrice && (
+                    <div className='mt-1.5'>
+                      <span className='text-xs text-pw-success font-bold font-mono block'>
+                        ~{' '}
+                        {billingCycle === 'monthly' ?
+                          `${formatCurrencyAmount(displayMonthlyPrice * exchangeRate)} ${currency} / month`
+                        : `${formatCurrencyAmount(displayYearlyPrice * exchangeRate)} ${currency} / year`
+                        }
+                      </span>
+                    </div>
+                  )}
 
                 {billingCycle === 'yearly' &&
                   displayMonthlyPrice &&
@@ -730,7 +899,7 @@ export default function PricingPage() {
                         Discount Applied
                       </span>
                       <span className='text-xs text-pw-muted block'>
-                        Save ${savings} compared to monthly
+                        Save ${formatCurrencyAmount(savings)} compared to monthly billing
                       </span>
                     </div>
                   )}
@@ -739,20 +908,27 @@ export default function PricingPage() {
               {selectedTierId === 'flexible' && (
                 <div className='space-y-2 p-4 rounded-xl bg-white/[0.02] border border-white/5'>
                   <label className='text-xs font-bold text-pw-muted uppercase block'>
-                    Select Tool
+                    Choose Flexible Tool to License
                   </label>
                   <select
                     value={selectedFlexibleToolId}
                     onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
                     className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
-                    {FLEXIBLE_FEATURES.map((feat: any) => (
-                      <option
-                        key={feat.id}
-                        value={feat.id}
-                        className='bg-[#0c0d1c] py-2'>
-                        {feat.label}
+                    {FLEXIBLE_FEATURES
+                      .filter((feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id))
+                      .map((feat: any) => (
+                        <option
+                          key={feat.id}
+                          value={feat.id}
+                          className='bg-[#0c0d1c] py-2'>
+                          {feat.label} (${formatCurrencyAmount(feat.monthly)}/mo)
+                        </option>
+                      ))}
+                    {FLEXIBLE_FEATURES.filter((feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)).length === 0 && (
+                      <option value='all' className='bg-[#0c0d1c]'>
+                        All Flexible Tools Already Unlocked
                       </option>
-                    ))}
+                    )}
                   </select>
                   <p className='text-[10px] text-pw-muted leading-relaxed mt-1'>
                     The flexible plan allows you to pay only for the tools you
@@ -780,7 +956,7 @@ export default function PricingPage() {
                   onClick={handleCheckout}
                   disabled={isSimulating}
                   className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5'>
-                  {isSimulating ? 'Processing payment...' : `Subscribe`}
+                  {isSimulating ? 'Processing...' : `Subscribe`}
                 </button>
               </DialogFooter>
             </div>

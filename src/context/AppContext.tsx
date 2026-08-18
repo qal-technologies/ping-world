@@ -159,7 +159,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isFeatureUnlocked = useCallback((featureId: string): boolean => {
     if (premiumTier === 'pro' || premiumTier === 'standard') return true;
     if (premiumTier === 'flexible') {
-      return purchasedTools.includes('all') || purchasedTools.includes(featureId);
+      if (purchasedTools.includes('all')) return true;
+
+      // Normalize feature aliases
+      const normalizedMap: Record<string, string[]> = {
+        'quizzable': ['quizzable', 'quiz', 'quiz-builder'],
+        'quiz': ['quizzable', 'quiz', 'quiz-builder'],
+        'composer': ['composer', 'creator-hub', 'social-composer'],
+        'creator-hub': ['composer', 'creator-hub'],
+        'anonlink': ['anonlink', 'message', 'anonymous-messages'],
+        'message': ['anonlink', 'message'],
+        'pdf-tools': ['pdf-tools', 'pdf', 'book-creator'],
+        'pdf': ['pdf-tools', 'pdf'],
+      };
+
+      const validAliases = normalizedMap[featureId] || [featureId];
+      return purchasedTools.some((p) => validAliases.includes(p));
     }
     return false;
   }, [premiumTier, purchasedTools]);

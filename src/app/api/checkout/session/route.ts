@@ -1,51 +1,67 @@
-// jules edit: Highly Secure Stripe Checkout Session Gateway with Graceful Sandbox Fallbacks
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
+interface CheckoutBody {
+  tier: string;
+  billingCycle: 'monthly' | 'yearly';
+  selectedFlexibleToolId?: string;
+  price?: number;
+  currency?: string;
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const { tier, billingCycle, selectedFlexibleToolId, price } = await req.json();
+    const body: CheckoutBody = await req.json();
+    const { tier, billingCycle, selectedFlexibleToolId = 'all', price, currency = 'USD' } = body;
 
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (stripeKey) {
-      // Production Stripe Session integration
-      // 1. Initialize Stripe
-      const Stripe = (await import('stripe')).default;
-      const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' as any });
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
-      // 2. Define standard Stripe price/product or create dynamic lines
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: `PingWorld ${tier.toUpperCase()} Plan Subscription`,
-                description: tier === 'flexible' ? `Access to: ${selectedFlexibleToolId}` : `Full access to ${tier} features`,
-              },
-              unit_amount: Math.round(price * 100), // in cents
-            },
-            quantity: 1,
-          },
-        ],
-        mode: 'payment',
-        success_url: `${req.headers.get('origin')}/dashboard?checkout_success=true&tier=${tier}`,
-        cancel_url: `${req.headers.get('origin')}/pricing?checkout_canceled=true`,
+    if (stripeSecretKey) {
+      // Live Stripe Checkout Session Creation via direct HTTP API
+      const params = new URLSearchParams();
+      params.append('payment_method_types[]', 'card');
+      params.append('mode', 'subscription');
+      params.append('success_url', `${req.nextUrl.origin}/pricing?checkout_success=true&tier=${tier}`);
+      params.append('cancel_url', `${req.nextUrl.origin}/pricing?checkout_canceled=true`);
+      params.append('line_items[0][price_data][currency]', currency.toLowerCase());
+      params.append('line_items[0][price_data][product_data][name]', `Ping World ${tier.toUpperCase()} Plan (${selectedFlexibleToolId !== 'all' ? selectedFlexibleToolId : 'All Tools'})`);
+      params.append('line_items[0][price_data][product_data][description]', `${billingCycle.toUpperCase()} subscription to Ping World tools.`);
+      params.append('line_items[0][price_data][unit_amount]', String(Math.round((price || 9.99) * 100)));
+      params.append('line_items[0][price_data][recurring][interval]', billingCycle === 'yearly' ? 'year' : 'month');
+      params.append('line_items[0][quantity]', '1');
+      params.append('metadata[tier]', tier);
+      params.append('metadata[selectedFlexibleToolId]', selectedFlexibleToolId);
+      params.append('metadata[billingCycle]', billingCycle);
+
+      const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${stripeSecretKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
       });
+
+      const session = await stripeRes.json();
+
+      if (!stripeRes.ok) {
+        throw new Error(session.error?.message || 'Failed to initialize Stripe checkout session.');
+      }
 
       return NextResponse.json({ success: true, url: session.url });
-    } else {
-      // Graceful Sandbox Fallback for off-line or test setups
-      return NextResponse.json({
-        success: true,
-        mode: 'sandbox_fallback',
-        url: null,
-        message: 'Stripe Secret API Key is not configured in process.env yet. Processing instant secure upgrade via Sandbox Payment Simulation...',
-      });
     }
+
+    // Sandbox Simulated Fallback (No live Stripe key set)
+    return NextResponse.json({
+      success: true,
+      sandbox: true,
+      url: null,
+      message: 'Simulated Sandbox Checkout mode. Provide STRIPE_SECRET_KEY in environment variables for live billing.',
+    });
   } catch (err: any) {
-    console.error('[Stripe Session] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[/api/checkout/session] Error:', err);
+    return NextResponse.json(
+      { success: false, error: err?.message || 'Failed to initialize payment gateway.' },
+      { status: 500 }
+    );
   }
 }

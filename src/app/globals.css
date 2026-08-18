@@ -831,7 +831,6 @@ pre {
   display: flex;
   overflow-x: auto;
   gap: 1rem;
-  padding-bottom: 0.5rem;
   scrollbar-width: none;
 }
 .scrollable-row::-webkit-scrollbar {

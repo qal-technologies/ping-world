@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   FileText,
   Image as ImageIcon,
   Upload,
   Download,
   Trash2,
-  Layers,
   Sliders,
   FileCode,
   ArrowUp,
   ArrowDown,
   Plus,
   ChevronRight,
+  ChevronDown,
   Sparkles,
   AlignLeft,
   AlignCenter,
@@ -21,12 +22,27 @@ import {
   Bold,
   Italic,
   Underline,
-  Indent,
+  List,
+  ListOrdered,
+  Quote,
+  Heading,
   Settings,
   Save,
   BookOpen,
-  Image,
   Link2,
+  MoreVertical,
+  Pencil,
+  X as XIcon,
+  Cloud,
+  Strikethrough,
+  Eye,
+  Maximize2,
+  Minimize2,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  HelpCircle,
+  FileUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -49,12 +65,20 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuPortal,
   DropdownMenuSubContent,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { tools } from '@/lib/general/data';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
+import { useAppModal } from '@/components/ui/AppModalProvider';
+import { HybridStorage } from '@/lib/storage-utils';
 
+// ── Interfaces ──────────────────────────────────────────────────
 interface PDFImagePage {
   id: string;
   name: string;
@@ -65,8 +89,8 @@ interface PDFImagePage {
 
 interface ImagePaletteItem {
   id: string;
-  name: string; // reference name (e.g. graph1)
-  src: string; // base64 URL
+  name: string; // reference name (e.g. logo, chart1)
+  src: string; // URL or base64
   width: number;
   height: number;
 }
@@ -96,7 +120,6 @@ interface BookChapter {
   name: string;
 }
 
-// jules edit: Book Volume schema interface for sidebar books management
 interface Book {
   id: string;
   name: string;
@@ -110,78 +133,31 @@ interface Book {
   backCoverBgColor: string;
   hasFrontCover: boolean;
   hasBackCover: boolean;
+  pageMargin: 'compact' | 'normal' | 'wide';
+  updatedAt?: string;
 }
 
-export default function PdfToolStudioPage() {
-  const { isFeatureUnlocked } = useAppContext();
-  // jules edit: Secure tool-specific flexible plan gating for PDF Studio
-  const isPremium = isFeatureUnlocked('pdf-tools');
-  const [activeTab, setActiveTab] = useState('img-to-pdf');
+type FormatType = 'pdf' | 'word' | 'excel' | 'txt' | 'images';
 
-  // --- Image to PDF States ---
-  const [uploadedImages, setUploadedImages] = useState<PDFImagePage[]>([]);
-  const [pdfOrientation, setPdfOrientation] = useState<'p' | 'l'>('p');
-  const [pdfMargin, setPdfMargin] = useState<'none' | 'small' | 'normal'>('normal');
+const FORMAT_ACCEPT_MAP: Record<FormatType, string> = {
+  pdf: '.pdf,application/pdf',
+  word: '.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  excel:
+    '.xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  txt: '.txt,text/plain',
+  images: 'image/*',
+};
 
-  // --- Cover Page States ---
-  const [hasFrontCover, setHasFrontCover] = useState(true);
-  const [frontCoverTitle, setFrontCoverTitle] = useState('The Great Manuscript');
-  const [frontCoverSubtitle, setFrontCoverSubtitle] = useState('A comprehensive study of digital workspaces.');
-  const [frontCoverAuthor, setFrontCoverAuthor] = useState('Author Name');
-  const [frontCoverBg, setFrontCoverBg] = useState<string | null>(null);
-
-  const [hasBackCover, setHasBackCover] = useState(true);
-  const [backCoverSummary, setBackCoverSummary] = useState('This book outlines standard client-side compilers and modular book builders designed exclusively for creators.');
-  const [backCoverBgColor, setBackCoverBgColor] = useState('#0B0F19');
-
-  // --- Book Creator (Text to PDF) States ---
-  const [chapters, setChapters] = useState<BookChapter[]>([
-    { id: 'ch-1', name: 'Chapter 1: The Beginning' }
-  ]);
-  const [pages, setPages] = useState<BookPage[]>([
+const BRAND_SEED_BOOK: Book = {
+  id: 'book-seed-1',
+  name: 'Qal Technologies Blueprint',
+  chapters: [{ id: 'ch-1', name: 'Chapter 1: Corporate Blueprint' }],
+  pages: [
     {
-      id: 'pg-1',
-      title: 'First Page Title',
+      id: 'pg-seed-1',
+      title: 'Qal Technologies Corporate Blueprint',
       showTitle: true,
-      content: 'This is the main body paragraph of the first page. Highlight some text and click the <b>Bold</b> or <i>Italic</i> buttons below to see rich formatting. Or add a footnote at the bottom of the page!\n\nHere is a list of features:\n* Unlimited chapters & pages\n* Modular footnoting structures\n* Built-in Image Reference Palettes\n* Dynamic highlights using the <mark>highlighter</mark> markup.',
-      chapterId: 'ch-1',
-      titleAlign: 'left',
-      titleColor: '#3b82f6',
-      titleBgColor: 'transparent',
-      titlePadding: 4,
-      titleMargin: 10,
-      footnotes: [
-        { id: 'fn-1', number: 1, text: 'This is the first footnote in this chapter.' }
-      ]
-    }
-  ]);
-
-  // Image Palette State
-  const [imagePalette, setImagePalette] = useState<ImagePaletteItem[]>([]);
-  const [showImagePaletteDialog, setShowImagePaletteDialog] = useState(false);
-
-  // New Footnote States
-  const [footnoteInput, setFootnoteInput] = useState('');
-
-  // Title configuration box
-  const [showTitleConfig, setShowTitleConfig] = useState<string | null>(null);
-
-  // jules edit: Multiple Books Sidebar Manager States and Seed template
-  const [books, setBooks] = useState<Book[]>([]);
-  const [activeBookId, setActiveBookId] = useState<string>('book-1');
-
-  const BRAND_SEED_BOOK: Book = {
-    id: 'book-1',
-    name: 'Qal Technologies Blueprint',
-    chapters: [
-      { id: 'ch-1', name: 'Chapter 1: Corporate Blueprint' }
-    ],
-    pages: [
-      {
-        id: 'pg-1',
-        title: 'Qal Technologies Corporate Blueprint',
-        showTitle: true,
-        content: `Welcome to the official corporate Brand Blueprint of Qal Technologies! This default template showcases our sophisticated page flow and modular design guidelines.
+      content: `Welcome to the official Brand Blueprint of Qal Technologies! This default template showcases our sophisticated page flow and modular design guidelines.
 
 Qal Technologies is a pioneering developer and orchestrator of visual platforms, high-integrity developer sandboxes, and hybrid edge synchronizations. Our core tenets represent:
 * Precision craftsmanship & pixel-perfect designs
@@ -190,254 +166,221 @@ Qal Technologies is a pioneering developer and orchestrator of visual platforms,
 
 This template also showcases rich text annotations, inline footnotes, custom list listings, and hyperlinked references:
 * Read our <a href="https://qaltech.io">Technical Whitepaper</a>
-* Explore <a href="https://poshcodes.com">Poshcodes Styling Core</a>
+* Explore <a href="https://poshcodes.site">Poshcodes Styling Core</a>
 
-To load brand logo graphics directly inside your text content streams, use the Image Palette tool! Pre-loaded brand assets have been supplied for immediate visual formatting.`,
-        chapterId: 'ch-1',
-        titleAlign: 'center',
-        titleColor: '#3b82f6',
-        titleBgColor: 'transparent',
-        titlePadding: 4,
-        titleMargin: 10,
-        footnotes: [
-          { id: 'fn-1', number: 1, text: 'This blueprint document is powered by Qal Technologies in partnership with Poshcodes.' }
-        ]
-      }
-    ],
-    imagePalette: [
-      {
-        id: 'palette-logo',
-        name: 'company_logo',
-        src: 'https://www.ping-world.site/logo.png', // high resolution corporate logo
-        width: 120,
-        height: 120,
-      }
-    ],
-    frontCoverTitle: 'Qal Technologies',
-    frontCoverSubtitle: 'Corporate Brand and Creative Asset Manual',
-    frontCoverAuthor: 'Qal Executive Board',
-    backCoverSummary: 'A cohesive style manual and technical visual specification blueprint compiled on the Ping World platform.',
-    backCoverBgColor: '#0a0c1b',
-    hasFrontCover: true,
-    hasBackCover: true
-  };
-
-  // Load books list from local storage or seed the default
-  useEffect(() => {
-    const saved = localStorage.getItem('pw_pdf_books_list_v4');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setBooks(parsed);
-          const activeId = localStorage.getItem('pw_pdf_active_book_id_v4') || parsed[0].id;
-          setActiveBookId(activeId);
-          const activeBook = parsed.find(b => b.id === activeId) || parsed[0];
-          setChapters(activeBook.chapters || []);
-          setPages(activeBook.pages || []);
-          setImagePalette(activeBook.imagePalette || []);
-          setFrontCoverTitle(activeBook.frontCoverTitle || '');
-          setFrontCoverSubtitle(activeBook.frontCoverSubtitle || '');
-          setFrontCoverAuthor(activeBook.frontCoverAuthor || '');
-          setBackCoverSummary(activeBook.backCoverSummary || '');
-          setBackCoverBgColor(activeBook.backCoverBgColor || '#0a0c1b');
-          setHasFrontCover(activeBook.hasFrontCover !== undefined ? activeBook.hasFrontCover : true);
-          setHasBackCover(activeBook.hasBackCover !== undefined ? activeBook.hasBackCover : true);
-          setActivePageIndex(0);
-        }
-      } catch (e) {
-        console.warn('Failed to parse books list', e);
-      }
-    } else {
-      const defaultList = [BRAND_SEED_BOOK];
-      setBooks(defaultList);
-      setActiveBookId('book-1');
-      localStorage.setItem('pw_pdf_books_list_v4', JSON.stringify(defaultList));
-      localStorage.setItem('pw_pdf_active_book_id_v4', 'book-1');
-      setChapters(BRAND_SEED_BOOK.chapters);
-      setPages(BRAND_SEED_BOOK.pages);
-      setImagePalette(BRAND_SEED_BOOK.imagePalette);
-      setFrontCoverTitle(BRAND_SEED_BOOK.frontCoverTitle);
-      setFrontCoverSubtitle(BRAND_SEED_BOOK.frontCoverSubtitle);
-      setFrontCoverAuthor(BRAND_SEED_BOOK.frontCoverAuthor);
-      setBackCoverSummary(BRAND_SEED_BOOK.backCoverSummary);
-      setBackCoverBgColor(BRAND_SEED_BOOK.backCoverBgColor);
-      setHasFrontCover(BRAND_SEED_BOOK.hasFrontCover);
-      setHasBackCover(BRAND_SEED_BOOK.hasBackCover);
-      setActivePageIndex(0);
-    }
-  }, []);
-
-  // Continuous auto-save when any workbook state changes
-  useEffect(() => {
-    if (books.length === 0 || !activeBookId) return;
-
-    const saveTimer = setTimeout(() => {
-      const updatedBooks = books.map(b => {
-        if (b.id === activeBookId) {
-          return {
-            ...b,
-            chapters,
-            pages,
-            imagePalette,
-            frontCoverTitle,
-            frontCoverSubtitle,
-            frontCoverAuthor,
-            backCoverSummary,
-            backCoverBgColor,
-            hasFrontCover,
-            hasBackCover
-          };
-        }
-        return b;
-      });
-
-      setBooks(updatedBooks);
-      localStorage.setItem('pw_pdf_books_list_v4', JSON.stringify(updatedBooks));
-      localStorage.setItem('pw_pdf_active_book_id_v4', activeBookId);
-    }, 500);
-
-    return () => clearTimeout(saveTimer);
-  }, [chapters, pages, imagePalette, frontCoverTitle, frontCoverSubtitle, frontCoverAuthor, backCoverSummary, backCoverBgColor, hasFrontCover, hasBackCover]);
-
-  const createNewBook = () => {
-    const newId = `book-${Date.now()}`;
-    const newBook: Book = {
-      id: newId,
-      name: `Book ${books.length + 1}: Unnamed Volume`,
-      chapters: [
-        { id: `ch-${Date.now()}`, name: 'Chapter 1: The Beginning' }
-      ],
-      pages: [
+To load brand logo graphics directly inside your text content streams, use the Image Palette tool! Pre-loaded brand assets have been supplied for immediate visual formatting: [img:company_logo]`,
+      chapterId: 'ch-1',
+      titleAlign: 'center',
+      titleColor: '#3b82f6',
+      titleBgColor: 'transparent',
+      titlePadding: 4,
+      titleMargin: 10,
+      footnotes: [
         {
-          id: `pg-${Date.now()}`,
-          title: 'First Page Title',
-          showTitle: true,
-          content: 'Start writing your sophisticated volume here...',
-          chapterId: `ch-${Date.now()}`,
-          titleAlign: 'left',
-          titleColor: '#3b82f6',
-          titleBgColor: 'transparent',
-          titlePadding: 4,
-          titleMargin: 10,
-          footnotes: []
-        }
+          id: 'fn-1',
+          number: 1,
+          text: 'This blueprint document is powered by Qal Technologies in partnership with Ping World.',
+        },
       ],
-      imagePalette: [],
-      frontCoverTitle: 'New Volume',
-      frontCoverSubtitle: 'Custom Subtitle',
-      frontCoverAuthor: 'Author Name',
-      backCoverSummary: 'Summary of the book.',
-      backCoverBgColor: '#0a0c1b',
-      hasFrontCover: true,
-      hasBackCover: true
-    };
+    },
+  ],
+  imagePalette: [
+    {
+      id: 'palette-logo',
+      name: 'company_logo',
+      src: '/images/logo.png',
+      width: 120,
+      height: 120,
+    },
+  ],
+  frontCoverTitle: 'Qal Technologies',
+  frontCoverSubtitle: 'Corporate Brand and Creative Asset Manual',
+  frontCoverAuthor: 'Qal Executive Board',
+  backCoverSummary:
+    'A cohesive style manual and technical visual specification blueprint compiled on the Ping World platform.',
+  backCoverBgColor: '#0a0c1b',
+  hasFrontCover: true,
+  hasBackCover: true,
+  pageMargin: 'normal',
+  updatedAt: new Date().toISOString(),
+};
 
-    const list = [...books, newBook];
-    setBooks(list);
-    setActiveBookId(newId);
-    setChapters(newBook.chapters);
-    setPages(newBook.pages);
-    setImagePalette([]);
-    setFrontCoverTitle(newBook.frontCoverTitle);
-    setFrontCoverSubtitle(newBook.frontCoverSubtitle);
-    setFrontCoverAuthor(newBook.frontCoverAuthor);
-    setBackCoverSummary(newBook.backCoverSummary);
-    setBackCoverBgColor(newBook.backCoverBgColor);
-    setHasFrontCover(newBook.hasFrontCover);
-    setHasBackCover(newBook.hasBackCover);
-    setActivePageIndex(0);
-    toast.success('🎉 Created a brand new book!');
+export default function PdfToolStudioPage() {
+  const { isFeatureUnlocked, isPremium, user } = useAppContext();
+  const hasProPdf = isFeatureUnlocked('pdf-tools');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { showAlert, showConfirm, showPrompt } = useAppModal();
+
+  // ── URL-driven Tab Routing ──────────────────────────────────────
+  const urlTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(urlTab || 'conversion');
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', val);
+    router.replace(url.pathname + url.search, { scroll: false });
   };
 
-  const handleSelectBook = (id: string) => {
-    const selected = books.find(b => b.id === id);
-    if (!selected) return;
+  // ── Universal Conversion States ─────────────────────────────────
+  const [fromFormat, setFromFormat] = useState<FormatType>('pdf');
+  const [toFormat, setToFormat] = useState<FormatType>('word');
+  const [conversionFile, setConversionFile] = useState<File | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const conversionInputRef = useRef<HTMLInputElement>(null);
 
-    setActiveBookId(id);
-    setChapters(selected.chapters || []);
-    setPages(selected.pages || []);
-    setImagePalette(selected.imagePalette || []);
-    setFrontCoverTitle(selected.frontCoverTitle || '');
-    setFrontCoverSubtitle(selected.frontCoverSubtitle || '');
-    setFrontCoverAuthor(selected.frontCoverAuthor || '');
-    setBackCoverSummary(selected.backCoverSummary || '');
-    setBackCoverBgColor(selected.backCoverBgColor || '#0a0c1b');
-    setHasFrontCover(selected.hasFrontCover !== undefined ? selected.hasFrontCover : true);
-    setHasBackCover(selected.hasBackCover !== undefined ? selected.hasBackCover : true);
-    setActivePageIndex(0);
-    localStorage.setItem('pw_pdf_active_book_id_v4', id);
-    toast.success(`Loaded book workspace: ${selected.name}`);
+  const detectFormatFromFile = (file: File): FormatType => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.pdf')) return 'pdf';
+    if (name.endsWith('.doc') || name.endsWith('.docx')) return 'word';
+    if (
+      name.endsWith('.xls') ||
+      name.endsWith('.xlsx') ||
+      name.endsWith('.csv')
+    )
+      return 'excel';
+    if (name.endsWith('.txt')) return 'txt';
+    if (file.type.startsWith('image/')) return 'images';
+    return 'pdf';
   };
 
-  const handleRenameBookName = (id: string, newName: string) => {
-    setBooks(prev => prev.map(b => b.id === id ? { ...b, name: newName } : b));
-  };
+  // ── Book Creator States ─────────────────────────────────────────
+  const [books, setBooks] = useState<Book[]>([]);
+  const [activeBookId, setActiveBookId] = useState<string>('book-seed-1');
+  const [showBookList, setShowBookList] = useState(true);
+
+  // Active book workspace elements
+  const [chapters, setChapters] = useState<BookChapter[]>(
+    BRAND_SEED_BOOK.chapters,
+  );
+  const [pages, setPages] = useState<BookPage[]>(BRAND_SEED_BOOK.pages);
+  const [imagePalette, setImagePalette] = useState<ImagePaletteItem[]>(
+    BRAND_SEED_BOOK.imagePalette,
+  );
+  const [frontCoverTitle, setFrontCoverTitle] = useState(
+    BRAND_SEED_BOOK.frontCoverTitle,
+  );
+  const [frontCoverSubtitle, setFrontCoverSubtitle] = useState(
+    BRAND_SEED_BOOK.frontCoverSubtitle,
+  );
+  const [frontCoverAuthor, setFrontCoverAuthor] = useState(
+    BRAND_SEED_BOOK.frontCoverAuthor,
+  );
+  const [frontCoverBg, setFrontCoverBg] = useState<string | null>(null);
+  const [backCoverSummary, setBackCoverSummary] = useState(
+    BRAND_SEED_BOOK.backCoverSummary,
+  );
+  const [backCoverBgColor, setBackCoverBgColor] = useState(
+    BRAND_SEED_BOOK.backCoverBgColor,
+  );
+  const [hasFrontCover, setHasFrontCover] = useState(
+    BRAND_SEED_BOOK.hasFrontCover,
+  );
+  const [hasBackCover, setHasBackCover] = useState(
+    BRAND_SEED_BOOK.hasBackCover,
+  );
+  const [pageMargin, setPageMargin] = useState<'compact' | 'normal' | 'wide'>(
+    'normal',
+  );
 
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [collapsedChapters, setCollapsedChapters] = useState<
+    Record<string, boolean>
+  >({});
   const [stackType, setStackType] = useState<'page' | 'chapter'>('page');
-  const [showStickyChapterSelector, setShowStickyChapterSelector] = useState<string | null>(null);
 
+  // Preview & Drawer toggles
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+  const [showCoverDrawer, setShowCoverDrawer] = useState(false);
+  const [showFootnoteDrawer, setShowFootnoteDrawer] = useState(false);
 
-  // PDF to Word states
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [pdfTextResult, setPdfTextResult] = useState('');
-  const [extractedFileName, setExtractedFileName] = useState('');
+  // Footnote editing
+  const [footnoteInput, setFootnoteInput] = useState('');
+  const [editingFootnoteId, setEditingFootnoteId] = useState<string | null>(
+    null,
+  );
+  const [editingFootnoteText, setEditingFootnoteText] = useState('');
 
-  // Word to PDF states
-  const [wordFile, setWordFile] = useState<File | null>(null);
-  const [wordTextContent, setWordTextResult] = useState('');
+  // Image Palette Dialog
+  const [showImagePaletteDialog, setShowImagePaletteDialog] = useState(false);
+  const [editingPaletteItem, setEditingPaletteItem] =
+    useState<ImagePaletteItem | null>(null);
+  const [paletteNameInput, setPaletteNameInput] = useState('');
+  const [paletteWidthInput, setPaletteWidthInput] = useState(120);
+  const [paletteHeightInput, setPaletteHeightInput] = useState(120);
 
-  // Merge simulation states
-  const [mergeFiles, setMergeFiles] = useState<{ id: string; name: string; size: string; file?: File }[]>([]);
+  // Unified Export Modal
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFilename, setExportFilename] = useState('');
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'doc' | 'txt'>(
+    'pdf',
+  );
 
-  // Dialog Export state
-  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
-  const [filenameInput, setFilenameInput] = useState('');
-  const [filenameExtension, setFilenameExtension] = useState('');
-  const [onConfirmFilename, setOnConfirmFilename] = useState<((cleanName: string) => void) | null>(null);
+  // Merge state
+  const [mergeFiles, setMergeFiles] = useState<
+    { id: string; name: string; size: string; file: File }[]
+  >([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Save drafts locally
-  const saveBookDraft = () => {
-    const updatedBooks = books.map(b => {
-      if (b.id === activeBookId) {
-        return {
-          ...b,
-          chapters,
-          pages,
-          imagePalette,
-          frontCoverTitle,
-          frontCoverSubtitle,
-          frontCoverAuthor,
-          backCoverSummary,
-          backCoverBgColor,
-          hasFrontCover,
-          hasBackCover
-        };
+  // ── Load Books from LocalStorage / HybridStorage ────────────────
+  useEffect(() => {
+    const loadBooks = async () => {
+      try {
+        const cached = localStorage.getItem('pw_pdf_books_list_v5');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setBooks(parsed);
+            return;
+          }
+        }
+        // Seed default template
+        setBooks([BRAND_SEED_BOOK]);
+        localStorage.setItem(
+          'pw_pdf_books_list_v5',
+          JSON.stringify([BRAND_SEED_BOOK]),
+        );
+      } catch (err) {
+        console.error('Failed to load books:', err);
+        setBooks([BRAND_SEED_BOOK]);
       }
-      return b;
-    });
-    setBooks(updatedBooks);
-    localStorage.setItem('pw_pdf_books_list_v4', JSON.stringify(updatedBooks));
-    toast.success('Progress saved locally as draft!');
-  };
+    };
+    loadBooks();
+  }, []);
 
-  // jules edit: Auto-pagination split calculations and metrics
+  // ── Margin-Aware Word Capacity Metrics ──────────────────────────
+  const wordCapacity = useMemo(() => {
+    switch (pageMargin) {
+      case 'compact':
+        return 500;
+      case 'wide':
+        return 300;
+      case 'normal':
+      default:
+        return 400;
+    }
+  }, [pageMargin]);
+
+  const activePage = pages[activePageIndex] || pages[0];
+  const activeWordCount = useMemo(() => {
+    if (!activePage?.content) return 0;
+    const words = activePage.content.trim().split(/\s+/);
+    return words.filter(Boolean).length;
+  }, [activePage?.content]);
+
+  // ── Dynamic Auto-Pagination Split ───────────────────────────────
   const checkAutoPagination = (text: string) => {
     const words = text.trim() ? text.trim().split(/\s+/) : [];
-    const maxWords = 400;
 
-    if (words.length > maxWords) {
-      // Find character split index of the 400th word
+    if (words.length > wordCapacity) {
+      // Find character index of the split word
       let splitIdx = 0;
-      let wordCount = 0;
+      let count = 0;
       for (let i = 0; i < text.length; i++) {
         if (text[i].match(/\s/)) {
           if (i > 0 && !text[i - 1].match(/\s/)) {
-            wordCount++;
-            if (wordCount === maxWords) {
+            count++;
+            if (count === wordCapacity) {
               splitIdx = i;
               break;
             }
@@ -446,456 +389,679 @@ To load brand logo graphics directly inside your text content streams, use the I
       }
 
       if (splitIdx > 0) {
-        const firstHalf = text.substring(0, splitIdx);
+        const firstHalf = text.substring(0, splitIdx).trimEnd();
         const secondHalf = text.substring(splitIdx).trim();
 
-        // Check if a next page exists
-        const currentPageObj = pages[activePageIndex];
         const nextPageIndex = activePageIndex + 1;
-
         if (nextPageIndex < pages.length) {
-          // Prepend carry-over text to existing next page
           const nextPg = pages[nextPageIndex];
-          const updatedNextContent = (secondHalf + '\n' + nextPg.content).trim();
-          setPages(prev => prev.map((p, idx) => {
-            if (idx === activePageIndex) return { ...p, content: firstHalf };
-            if (idx === nextPageIndex) return { ...p, content: updatedNextContent };
-            return p;
-          }));
-          toast.info('Text overflowed! Excess words successfully pushed to the next page.');
+          const updatedNextContent = (
+            secondHalf +
+            '\n\n' +
+            nextPg.content
+          ).trim();
+          setPages((prev) =>
+            prev.map((p, idx) => {
+              if (idx === activePageIndex) return { ...p, content: firstHalf };
+              if (idx === nextPageIndex)
+                return { ...p, content: updatedNextContent };
+              return p;
+            }),
+          );
+          toast.info(
+            'Text overflowed page capacity — excess words pushed to the next page.',
+          );
         } else {
-          // Create a brand new page and carry over overflow text
           const newPage: BookPage = {
             id: `pg-${Date.now()}`,
-            title: `Page ${pages.length + 1} Title`,
+            title: `Page ${pages.length + 1}`,
             showTitle: true,
             content: secondHalf,
-            chapterId: currentPageObj ? currentPageObj.chapterId : null,
+            chapterId: activePage ? activePage.chapterId : null,
             titleAlign: 'left',
             titleColor: '#3b82f6',
             titleBgColor: 'transparent',
             titlePadding: 4,
             titleMargin: 10,
-            footnotes: []
+            footnotes: [],
           };
-          setPages([...pages.map((p, idx) => idx === activePageIndex ? { ...p, content: firstHalf } : p), newPage]);
+          setPages([
+            ...pages.map((p, idx) =>
+              idx === activePageIndex ? { ...p, content: firstHalf } : p,
+            ),
+            newPage,
+          ]);
           setActivePageIndex(nextPageIndex);
-          toast.success('Text overflowed! A new page has been automatically created to accommodate excess words.');
+          toast.success(
+            'Text overflowed — automatically created a new page for remaining words.',
+          );
         }
       }
     }
   };
 
-  const triggerExport = (
-    defaultName: string,
-    ext: string,
-    callback: (cleanName: string) => void,
+  // ── Formatted HTML Content Parser ──────────────────────────────
+  const renderFormattedContent = (
+    content: string,
+    palette: ImagePaletteItem[],
   ) => {
-    setFilenameInput(defaultName.replace(/\.[^/.]+$/, ''));
-    setFilenameExtension(ext);
-    setOnConfirmFilename(() => callback);
-    setIsNameModalOpen(true);
-  };
+    if (!content) return '';
+    let html = content;
 
-  const handleConfirmFilename = () => {
-    let clean = filenameInput.trim();
-    if (!clean) clean = 'untitled';
-    clean = clean.replace(/\.(txt|pdf|png|doc|docx|json|jpeg)$/i, '');
-    if (onConfirmFilename) {
-      onConfirmFilename(clean);
+    // Replace Image Palette tags [img:name]
+    if (Array.isArray(palette)) {
+      palette.forEach((item) => {
+        if (!item || !item.src) return;
+        const tagId = `\\[img:${item.id}\\]`;
+        const tagName = `\\[img:${item.name}\\]`;
+        const imgHtml = `<img src="${item.src}" alt="${item.name || 'Graphic'}" style="max-width: ${item.width || 120}px; max-height: ${item.height || 120}px; object-fit: contain; margin: 12px auto; display: block; border-radius: 8px;" />`;
+        html = html.replace(new RegExp(tagId, 'gi'), imgHtml);
+        html = html.replace(new RegExp(tagName, 'gi'), imgHtml);
+      });
     }
-    setIsNameModalOpen(false);
-  };
 
-  // --- TEXT METRICS & OVERFLOW CALCULATION ---
-  const calculateTextMetrics = (content: string) => {
-    const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
-    const maxWordsPerPage = 400;
-    const overflowCount = Math.max(0, wordCount - maxWordsPerPage);
-    const estimatedPagesNeeded = Math.ceil(wordCount / maxWordsPerPage) || 1;
-    return { wordCount, overflowCount, estimatedPagesNeeded };
-  };
-
-  // --- STACK CREATOR & CHAPTER LOGIC ---
-  const handleAddStackItem = () => {
-    if (stackType === 'chapter') {
-      const newChId = `ch-${Date.now()}`;
-      const newCh: BookChapter = {
-        id: newChId,
-        name: `Chapter ${chapters.length + 1}: Unnamed Chapter`,
-      };
-      setChapters([...chapters, newCh]);
-      setStackType('page');
-      toast.success('Chapter stack added! Stack type auto-switched to Page.');
-    } else {
-      // Add Page
-      const activeCh = chapters[chapters.length - 1]?.id || null;
-      const newPage: BookPage = {
-        id: `pg-${Date.now()}`,
-        title: `Page ${pages.length + 1} Title`,
-        showTitle: true,
-        content: '',
-        chapterId: activeCh,
-        titleAlign: 'left',
-        titleColor: '#00f0ff',
-        titleBgColor: 'transparent',
-        titlePadding: 4,
-        titleMargin: 10,
-        footnotes: []
-      };
-      setPages([...pages, newPage]);
-      setActivePageIndex(pages.length);
-      toast.success('New page added!');
-    }
-  };
-
-  const handlePageSelectChapter = (pageId: string, chapterId: string | null) => {
-    setPages(prev =>
-      prev.map((p) => (p.id === pageId ? { ...p, chapterId } : p))
+    // Markdown Images ![alt](url)
+    html = html.replace(
+      /!\[(.*?)\]\((.*?)\)/g,
+      '<img src="$2" alt="$1" style="max-width: 100%; max-height: 240px; object-fit: contain; margin: 12px auto; display: block; border-radius: 8px;" />',
     );
-    setShowStickyChapterSelector(null);
-    toast.success('Chapter updated.');
+
+    // Lists & formatting
+    html = html
+      .replace(
+        /^\s*\*\s+(.*)$/gm,
+        '<li style="margin-left: 18px; list-style-type: disc; padding-left: 4px;">$1</li>',
+      )
+      .replace(
+        /^\s*\d+\.\s+(.*)$/gm,
+        '<li style="margin-left: 18px; list-style-type: decimal; padding-left: 4px;">$1</li>',
+      )
+      .replace(/<b>(.*?)<\/b>/g, '<strong>$1</strong>')
+      .replace(/<i>(.*?)<\/i>/g, '<em>$1</em>')
+      .replace(/<u>(.*?)<\/u>/g, '<u>$1</u>')
+      .replace(/<strike>(.*?)<\/strike>/g, '<del>$1</del>')
+      .replace(
+        /<mark>(.*?)<\/mark>/g,
+        '<span style="background-color: rgba(253, 224, 71, 0.4); padding: 1px 4px; border-radius: 4px;">$1</span>',
+      )
+      .replace(
+        /<blockquote>(.*?)<\/blockquote>/g,
+        '<blockquote style="border-left: 3px solid #3b82f6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
+      )
+      .replace(
+        /<h2>(.*?)<\/h2>/g,
+        '<h2 style="font-size: 1.25rem; font-weight: bold; margin: 14px 0 6px 0; color: #0f172a;">$1</h2>',
+      )
+      .replace(
+        /\[fn:(\d+)\]/g,
+        '<sup style="color: #3b82f6; font-weight: bold;">[$1]</sup>',
+      );
+
+    return html;
   };
 
-  // Edit Chapter Name directly
-  const handleEditChapterName = (id: string, newName: string) => {
-    setChapters(prev =>
-      prev.map((ch) => (ch.id === id ? { ...ch, name: newName } : ch))
+  // ── Book Selection & Local / Cloud Save ─────────────────────────
+  const handleOpenBookWorkspace = (bookId: string) => {
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return;
+
+    setActiveBookId(book.id);
+    setChapters(book.chapters || []);
+    setPages(book.pages || []);
+    setImagePalette(book.imagePalette || []);
+    setFrontCoverTitle(book.frontCoverTitle || book.name);
+    setFrontCoverSubtitle(book.frontCoverSubtitle || '');
+    setFrontCoverAuthor(book.frontCoverAuthor || 'Author');
+    setBackCoverSummary(book.backCoverSummary || '');
+    setBackCoverBgColor(book.backCoverBgColor || '#0a0c1b');
+    setHasFrontCover(
+      book.hasFrontCover !== undefined ? book.hasFrontCover : true,
     );
-  };
-
-  // Delete Chapter
-  const handleDeleteChapter = (id: string) => {
-    setChapters(prev => prev.filter((ch) => ch.id !== id));
-    // Orphan associated pages
-    setPages(prev =>
-      prev.map((p) => (p.chapterId === id ? { ...p, chapterId: null } : p))
-    );
-    toast.success('Chapter deleted. Sub-pages are now independent.');
-  };
-
-  // Delete Page
-  const handleDeletePage = (id: string) => {
-    if (pages.length === 1) {
-      return toast.error('You must keep at least one page!');
-    }
-    setPages(prev => prev.filter((p) => p.id !== id));
+    setHasBackCover(book.hasBackCover !== undefined ? book.hasBackCover : true);
+    setPageMargin(book.pageMargin || 'normal');
     setActivePageIndex(0);
-    toast.success('Page deleted.');
+    setShowBookList(false);
   };
 
-  // --- STYLING BAR / TEXT INJECTOR (Detect and replace selected text) ---
-  const handleFormatSelectedText = (tag: 'b' | 'i' | 'u' | 'mark') => {
-    const textarea = document.getElementById('body-textarea') as HTMLTextAreaElement;
+  const handleSaveCurrentBookAndClose = async () => {
+    const updatedBook: Book = {
+      id: activeBookId,
+      name:
+        frontCoverTitle ||
+        books.find((b) => b.id === activeBookId)?.name ||
+        'Untitled Volume',
+      chapters,
+      pages,
+      imagePalette,
+      frontCoverTitle,
+      frontCoverSubtitle,
+      frontCoverAuthor,
+      backCoverSummary,
+      backCoverBgColor,
+      hasFrontCover,
+      hasBackCover,
+      pageMargin,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedList = books.map((b) =>
+      b.id === activeBookId ? updatedBook : b,
+    );
+    setBooks(updatedList);
+    localStorage.setItem('pw_pdf_books_list_v5', JSON.stringify(updatedList));
+
+    if (hasProPdf || isPremium) {
+      try {
+        await HybridStorage.save(activeBookId, updatedBook, 'document');
+        toast.success('☁️ Book saved and synced to your cloud workspace!');
+      } catch {
+        toast.success('Book saved to browser storage.');
+      }
+    } else {
+      toast.info(
+        '📁 Book saved locally on this device. (Upgrade to Pro for automated Cloud Sync).',
+        {
+          duration: 5000,
+        },
+      );
+    }
+
+    setShowBookList(true);
+  };
+
+  const handleCreateNewBookPrompt = async () => {
+    const name = await showPrompt('Enter the title for your new book:', {
+      title: 'Create New Book Volume',
+      placeholder: 'e.g. Modern Architecture Guide',
+      defaultValue: `Book ${books.length + 1}`,
+    });
+
+    if (!name || !name.trim()) return;
+
+    const newId = `book-${Date.now()}`;
+    const newBook: Book = {
+      id: newId,
+      name: name.trim(),
+      chapters: [{ id: `ch-${Date.now()}`, name: 'Chapter 1: Introduction' }],
+      pages: [
+        {
+          id: `pg-${Date.now()}`,
+          title: 'Opening Page',
+          showTitle: true,
+          content: 'Begin drafting your sophisticated volume here...',
+          chapterId: `ch-${Date.now()}`,
+          titleAlign: 'left',
+          titleColor: '#3b82f6',
+          titleBgColor: 'transparent',
+          titlePadding: 4,
+          titleMargin: 10,
+          footnotes: [],
+        },
+      ],
+      imagePalette: [],
+      frontCoverTitle: name.trim(),
+      frontCoverSubtitle: 'A new manuscript volume',
+      frontCoverAuthor: user?.user_metadata?.full_name || 'Author Name',
+      backCoverSummary: 'Summary of this published book volume.',
+      backCoverBgColor: '#0a0c1b',
+      hasFrontCover: true,
+      hasBackCover: true,
+      pageMargin: 'normal',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const list = [newBook, ...books];
+    setBooks(list);
+    localStorage.setItem('pw_pdf_books_list_v5', JSON.stringify(list));
+    handleOpenBookWorkspace(newId);
+    toast.success(`🎉 Created new book: "${name.trim()}"`);
+  };
+
+  const handleDeleteBook = async (bookId: string) => {
+    if (books.length <= 1) {
+      toast.error('You must keep at least one book volume in your library.');
+      return;
+    }
+
+    const confirmed = await showConfirm(
+      'Are you sure you want to permanently delete this book volume?',
+      {
+        title: 'Delete Book Volume',
+        confirmText: 'Delete Permanently',
+        type: 'danger',
+      },
+    );
+
+    if (!confirmed) return;
+
+    const list = books.filter((b) => b.id !== bookId);
+    setBooks(list);
+    localStorage.setItem('pw_pdf_books_list_v5', JSON.stringify(list));
+    toast.success('Book volume removed from library.');
+  };
+
+  // ── Chapter & Page Organization ─────────────────────────────────
+  const handleRenameChapter = async (
+    chapterId: string,
+    currentName: string,
+  ) => {
+    const prefixMatch = currentName.match(/^(Chapter\s+\d+):\s*(.*)$/i);
+    const existingSubtitle = prefixMatch ? prefixMatch[2] : currentName;
+
+    const newSub = await showPrompt('Enter new chapter title / subtitle:', {
+      title: 'Rename Chapter',
+      placeholder: 'e.g. The Beginning',
+      defaultValue: existingSubtitle,
+    });
+
+    if (newSub === null) return;
+
+    setChapters((prev) =>
+      prev.map((ch, idx) => {
+        if (ch.id === chapterId) {
+          const prefix = prefixMatch ? prefixMatch[1] : `Chapter ${idx + 1}`;
+          const cleanSub = newSub.replace(/^(Chapter\s+\d+):\s*/i, '').trim();
+          return { ...ch, name: `${prefix}: ${cleanSub || 'Untitled'}` };
+        }
+        return ch;
+      }),
+    );
+    toast.success('Chapter title updated.');
+  };
+
+  const handleDisbandChapter = async (chapterId: string) => {
+    const confirmed = await showConfirm(
+      'Disband this chapter? Its pages will remain safely intact in your book as independent pages.',
+      {
+        title: 'Disband Chapter',
+        confirmText: 'Disband Chapter',
+        type: 'warning',
+      },
+    );
+
+    if (!confirmed) return;
+
+    setChapters((prev) => prev.filter((c) => c.id !== chapterId));
+    setPages((prev) =>
+      prev.map((p) =>
+        p.chapterId === chapterId ? { ...p, chapterId: null } : p,
+      ),
+    );
+    toast.success(
+      'Chapter disbanded! Sub-pages are preserved as independent pages.',
+    );
+  };
+
+  const handleDeleteChapterWithPages = async (chapterId: string) => {
+    const confirmed = await showConfirm(
+      'Delete this chapter AND all pages under it? This action cannot be undone.',
+      {
+        title: 'Delete Chapter & Pages',
+        confirmText: 'Delete Everything',
+        type: 'danger',
+      },
+    );
+
+    if (!confirmed) return;
+
+    setChapters((prev) => prev.filter((c) => c.id !== chapterId));
+    setPages((prev) => prev.filter((p) => p.chapterId !== chapterId));
+    setActivePageIndex(0);
+    toast.success('Chapter and associated pages deleted.');
+  };
+
+  const handleAddPageToChapter = (chapterId: string | null) => {
+    const newPage: BookPage = {
+      id: `pg-${Date.now()}`,
+      title: `Page ${pages.length + 1}`,
+      showTitle: true,
+      content: '',
+      chapterId,
+      titleAlign: 'left',
+      titleColor: '#3b82f6',
+      titleBgColor: 'transparent',
+      titlePadding: 4,
+      titleMargin: 10,
+      footnotes: [],
+    };
+    setPages([...pages, newPage]);
+    setActivePageIndex(pages.length);
+    toast.success('New page added to book stack!');
+  };
+
+  const handleDeletePage = async (pageId: string) => {
+    if (pages.length <= 1) {
+      toast.error('Your book must contain at least one page!');
+      return;
+    }
+
+    const confirmed = await showConfirm(
+      'Are you sure you want to delete this page?',
+      {
+        title: 'Delete Page',
+        confirmText: 'Delete Page',
+        type: 'danger',
+      },
+    );
+
+    if (!confirmed) return;
+
+    setPages((prev) => prev.filter((p) => p.id !== pageId));
+    setActivePageIndex(0);
+    toast.success('Page removed from book.');
+  };
+
+  const handleMovePage = (index: number, direction: 'up' | 'down') => {
+    if (
+      (direction === 'up' && index === 0) ||
+      (direction === 'down' && index === pages.length - 1)
+    )
+      return;
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    const list = [...pages];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+    setPages(list);
+    setActivePageIndex(targetIdx);
+  };
+
+  // ── Formatting Toolbar Text Injector ────────────────────────────
+  const handleFormatText = (tag: string) => {
+    const textarea = document.getElementById(
+      'book-editor-textarea',
+    ) as HTMLTextAreaElement;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const text = activePage.content;
+    const selected = text.substring(start, end);
 
-    const selectedText = text.substring(start, end);
-    const formattedText = `<${tag}>${selectedText || 'styled text'}</${tag}>`;
+    let replacement = '';
+    switch (tag) {
+      case 'b':
+        replacement = `<b>${selected || 'bold text'}</b>`;
+        break;
+      case 'i':
+        replacement = `<i>${selected || 'italic text'}</i>`;
+        break;
+      case 'u':
+        replacement = `<u>${selected || 'underlined text'}</u>`;
+        break;
+      case 'strike':
+        replacement = `<strike>${selected || 'strikethrough'}</strike>`;
+        break;
+      case 'mark':
+        replacement = `<mark>${selected || 'highlighted text'}</mark>`;
+        break;
+      case 'ul':
+        replacement = `\n* ${selected || 'Bullet item'}\n`;
+        break;
+      case 'ol':
+        replacement = `\n1. ${selected || 'Numbered item'}\n`;
+        break;
+      case 'quote':
+        replacement = `\n<blockquote>${selected || 'Quoted phrase'}</blockquote>\n`;
+        break;
+      case 'h2':
+        replacement = `\n<h2>${selected || 'Section Header'}</h2>\n`;
+        break;
+      case 'link':
+        replacement = `<a href="https://example.com">${selected || 'Link description'}</a>`;
+        break;
+      default:
+        replacement = selected;
+    }
 
-    const updatedContent = text.substring(0, start) + formattedText + text.substring(end);
-    setPages(prev =>
-      prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: updatedContent } : p))
+    const updated =
+      text.substring(0, start) + replacement + text.substring(end);
+    setPages((prev) =>
+      prev.map((p, idx) =>
+        idx === activePageIndex ? { ...p, content: updated } : p,
+      ),
     );
 
-    // Focus back on textarea
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start, start + formattedText.length);
+      textarea.setSelectionRange(start, start + replacement.length);
     }, 50);
   };
 
-  // --- FOOTNOTES SUPPORT ---
+  // ── Footnotes Logic ─────────────────────────────────────────────
   const handleAddFootnote = () => {
     if (!footnoteInput.trim()) return;
-    const activePageObj = pages[activePageIndex];
-    if (!activePageObj) return;
-
     const newFn: Footnote = {
       id: `fn-${Date.now()}`,
-      number: activePageObj.footnotes.length + 1,
-      text: footnoteInput.trim()
+      number: (activePage.footnotes?.length || 0) + 1,
+      text: footnoteInput.trim(),
     };
 
-    const textarea = document.getElementById('body-textarea') as HTMLTextAreaElement;
-    const cursor = textarea ? textarea.selectionStart : activePageObj.content.length;
-    const text = activePageObj.content;
-    const superscriptTag = ` [fn:${newFn.number}]`;
-    const updatedContent = text.substring(0, cursor) + superscriptTag + text.substring(cursor);
-
-    setPages(prev =>
-      prev.map((p, idx) =>
-        idx === activePageIndex
-          ? { ...p, content: updatedContent, footnotes: [...p.footnotes, newFn] }
-          : p
-      )
-    );
-
-    setFootnoteInput('');
-    toast.success('Footnote added!');
-  };
-
-  const handleRemoveFootnote = (fnId: string) => {
-    setPages(prev =>
-      prev.map((p, idx) =>
-        idx === activePageIndex
-          ? { ...p, footnotes: p.footnotes.filter(fn => fn.id !== fnId) }
-          : p
-      )
-    );
-  };
-
-  // --- IMAGE PALETTE MANAGER ---
-  const handleImagePaletteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const newItem: ImagePaletteItem = {
-          id: `img-${Date.now()}-${Math.random()}`,
-          name: file.name.split('.')[0].replace(/\s+/g, '_').toLowerCase(),
-          src: event.target?.result as string,
-          width: 100,
-          height: 100,
-        };
-        setImagePalette(prev => [...prev, newItem]);
-        toast.success(`Image "${newItem.name}" added to palette!`);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleInsertImagePaletteRef = (refName: string) => {
-    const textarea = document.getElementById('body-textarea') as HTMLTextAreaElement;
-    const cursor = textarea ? textarea.selectionStart : activePage.content.length;
+    const textarea = document.getElementById(
+      'book-editor-textarea',
+    ) as HTMLTextAreaElement;
+    const cursor =
+      textarea ? textarea.selectionStart : activePage.content.length;
     const text = activePage.content;
-    const imgTag = ` image[${refName}, width=100, height=100, align=center]`;
-    const updatedContent = text.substring(0, cursor) + imgTag + text.substring(cursor);
+    const tag = ` [fn:${newFn.number}]`;
+    const updated = text.substring(0, cursor) + tag + text.substring(cursor);
 
-    setPages(prev =>
-      prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: updatedContent } : p))
+    setPages((prev) =>
+      prev.map((p, idx) =>
+        idx === activePageIndex ?
+          {
+            ...p,
+            content: updated,
+            footnotes: [...(p.footnotes || []), newFn],
+          }
+        : p,
+      ),
     );
+    setFootnoteInput('');
+    toast.success('Footnote added and referenced in text.');
   };
 
-  const handleMultipleImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const newImg: PDFImagePage = {
-          id: `${Date.now()}-${Math.random()}`,
-          name: file.name,
-          src: event.target?.result as string,
-          title: file.name.split('.')[0],
-          caption: '',
-        };
-        setUploadedImages((prev) => [...prev, newImg]);
-      };
-      reader.readAsDataURL(file);
-    });
-    toast.success('Images added to PDF layout queue!');
-  };
-
-  // Compile full cover background loading
-  const handleFrontCoverBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const r = new FileReader();
-      r.onload = (ev) => {
-        setFrontCoverBg(ev.target?.result as string);
-        toast.success('Front cover background image loaded!');
-      };
-      r.readAsDataURL(file);
-    }
-  };
-
-  const handleImageToPdf = async () => {
-    if (uploadedImages.length === 0) {
-      return toast.error('Please upload at least one image!');
-    }
-
-    triggerExport('images-compiled', 'pdf', async (filename) => {
-      toast.loading('Compiling Multi-page PDF...');
-      try {
-        const { jsPDF } = await import('jspdf');
-        const orientation = pdfOrientation;
-        const marginVal =
-          pdfMargin === 'none' ? 0
-          : pdfMargin === 'small' ? 10
-          : 15;
-
-        const doc = new jsPDF({
-          orientation,
-          unit: 'mm',
-          format: 'a4',
-        });
-
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-
-        uploadedImages.forEach((img, idx) => {
-          if (idx > 0) doc.addPage();
-
-          let currentY = marginVal + 10;
-
-          if (img.title.trim()) {
-            doc.setFontSize(16);
-            doc.setFont('helvetica', 'bold');
-            doc.text(img.title, marginVal, currentY);
-            currentY += 8;
+  const handleSaveEditFootnote = (fnId: string, newText: string) => {
+    setPages((prev) =>
+      prev.map((p, idx) =>
+        idx === activePageIndex ?
+          {
+            ...p,
+            footnotes: (p.footnotes || []).map((f) =>
+              f.id === fnId ? { ...f, text: newText } : f,
+            ),
           }
-
-          const maxWidth = pageWidth - marginVal * 2;
-          const maxHeight = pageHeight - currentY - marginVal - (img.caption.trim() ? 15 : 5);
-
-          doc.addImage(img.src, 'PNG', marginVal, currentY, maxWidth, maxHeight);
-          currentY += maxHeight + 5;
-
-          if (img.caption.trim()) {
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
-            const splitCaption = doc.splitTextToSize(img.caption, maxWidth);
-            doc.text(splitCaption, marginVal, currentY);
-          }
-        });
-
-        doc.save(`${filename}.pdf`);
-        toast.dismiss();
-        toast.success('Multi-page PDF compiled successfully!');
-      } catch (err) {
-        toast.dismiss();
-        toast.error('Compilation failed.');
-      }
-    });
+        : p,
+      ),
+    );
+    setEditingFootnoteId(null);
+    toast.success('Footnote updated.');
   };
 
-  // Draw rich text with <b>, <i>, <u>, and highlights/lists parsing into PDF
-  const drawRichText = (doc: any, text: string, x: number, y: number, maxWidth: number) => {
-    let currentX = x;
-    let currentY = y;
-    let currentStyle = 'normal';
+  const handleDeleteFootnote = (fnId: string) => {
+    setPages((prev) =>
+      prev.map((p, idx) =>
+        idx === activePageIndex ?
+          {
+            ...p,
+            footnotes: (p.footnotes || []).filter((f) => f.id !== fnId),
+          }
+        : p,
+      ),
+    );
+    toast.success('Footnote removed.');
+  };
 
-    const words = text.split(/\s+/);
-    doc.setFont('helvetica', 'normal');
-
-    // Bullet points list detection
-    const isBulletLine = text.trim().startsWith('*');
-    if (isBulletLine) {
-      doc.text('•', x - 4, y);
+  // ── Universal Conversion Engine ─────────────────────────────────
+  const handleUniversalConversion = async () => {
+    if (fromFormat === toFormat) {
+      toast.error(
+        'Source (From) and Target (To) formats cannot be identical! Please select different formats.',
+      );
+      return;
+    }
+    if (!conversionFile) {
+      toast.error('Please choose or drop a file to convert.');
+      return;
     }
 
-    words.forEach((word) => {
-      let fontStyle = currentStyle;
-      let cleanWord = word;
-      let isUnderline = false;
-      let isHighlight = false;
+    setIsConverting(true);
+    const toastId = toast.loading(
+      `Converting ${fromFormat.toUpperCase()} to ${toFormat.toUpperCase()}...`,
+    );
 
-      if (cleanWord.includes('<b>')) {
-        fontStyle = 'bold';
-        cleanWord = cleanWord.replace('<b>', '');
-      }
-      if (cleanWord.includes('</b>')) {
-        currentStyle = 'normal';
-        cleanWord = cleanWord.replace('</b>', '');
-      }
-      if (cleanWord.includes('<i>')) {
-        fontStyle = 'italic';
-        cleanWord = cleanWord.replace('<i>', '');
-      }
-      if (cleanWord.includes('</i>')) {
-        currentStyle = 'normal';
-        cleanWord = cleanWord.replace('</i>', '');
-      }
-      if (cleanWord.includes('<u>')) {
-        isUnderline = true;
-        cleanWord = cleanWord.replace('<u>', '');
-      }
-      if (cleanWord.includes('</u>')) {
-        isUnderline = false;
-        cleanWord = cleanWord.replace('</u>', '');
-      }
-      if (cleanWord.includes('<mark>')) {
-        isHighlight = true;
-        cleanWord = cleanWord.replace('<mark>', '');
-      }
-      if (cleanWord.includes('</mark>')) {
-        isHighlight = false;
-        cleanWord = cleanWord.replace('</mark>', '');
-      }
+    try {
+      if (fromFormat === 'pdf' && toFormat === 'word') {
+        // High-fidelity PDF to Word conversion via PDF.js with scanned image fallback
+        const arrayBuffer = await conversionFile.arrayBuffer();
 
-      if (cleanWord.startsWith('*')) {
-        cleanWord = cleanWord.replace('*', '');
-      }
+        if (typeof window !== 'undefined' && !(window as any).pdfjsLib) {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src =
+              'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
 
-      doc.setFont('helvetica', fontStyle);
-      const wordWidth = doc.getTextWidth(cleanWord + ' ');
+        const pdfjsLib = (window as any).pdfjsLib;
+        let extractedHtml = '';
 
-      if (currentX + wordWidth > x + maxWidth) {
-        currentX = x;
-        currentY += 7;
-      }
+        if (pdfjsLib) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdfDoc = await loadingTask.promise;
 
-      if (isHighlight) {
-        doc.setFillColor(255, 235, 59); // Yellow highlighter
-        doc.rect(currentX, currentY - 4.5, wordWidth, 6.5, 'F');
-      }
+          for (let i = 1; i <= pdfDoc.numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map((item: any) => item.str)
+              .join(' ');
 
-      doc.text(cleanWord, currentX, currentY);
-      if (isUnderline) {
-        doc.line(currentX, currentY + 1, currentX + wordWidth - 1, currentY + 1);
-      }
-      currentX += wordWidth;
-    });
+            if (pageText.trim()) {
+              extractedHtml += `<h3 style="color:#3b82f6; margin-top:24px;">Page ${i}</h3><p style="text-indent:24px; line-height:1.6;">${pageText}</p>`;
+            } else {
+              // Scanned page rendering
+              const viewport = page.getViewport({ scale: 1.5 });
+              const canvas = document.createElement('canvas');
+              canvas.width = viewport.width;
+              canvas.height = viewport.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                const imgData = canvas.toDataURL('image/jpeg', 0.85);
+                extractedHtml += `<h3 style="color:#3b82f6; margin-top:24px;">Page ${i} (Scanned Image)</h3><div style="text-align:center;"><img src="${imgData}" style="max-width:100%; border:1px solid #ccc; margin:10px auto;" /></div>`;
+              }
+            }
+          }
+        }
 
-    return currentY;
-  };
+        if (!extractedHtml.trim()) {
+          extractedHtml = `<p>Converted textual content from ${conversionFile.name}</p>`;
+        }
 
-  // jules edit: Helper to convert hex colors to RGB values for jsPDF
-  const hexToRgb = (hex: string) => {
-    const cleanHex = hex.replace('#', '');
-    const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
-    const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
-    const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
-    return { r, g, b };
-  };
+        const docHtml = `
+          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+          <head><title>Converted Word Manuscript</title><meta charset="utf-8"></head>
+          <body style="font-family: Calibri, Arial, sans-serif; line-height: 1.6; padding: 40px;">
+            <h2 style="color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">Extracted PDF Document: ${conversionFile.name}</h2>
+            ${extractedHtml}
+          </body>
+          </html>
+        `;
 
-  // Compile Book-style chapters and titles to PDF
-  const handleCompileBookPdf = async () => {
-    triggerExport('book-manuscript', 'pdf', async (filename) => {
-      toast.loading('Formatting book layout...');
-      try {
+        const blob = new Blob(['\ufeff' + docHtml], {
+          type: 'application/msword',
+        });
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${conversionFile.name.replace(/\.[^/.]+$/, '')}.doc`);
+
+        toast.dismiss(toastId);
+        toast.success(
+          '🎉 Successfully converted PDF to Microsoft Word (.doc)!',
+        );
+      } else if (toFormat === 'pdf') {
+        // Text/Word/Excel to PDF
+        const text = await conversionFile
+          .text()
+          .catch(() => 'Document textual stream');
+        const clean = text.replace(/<[^>]*>/g, '').substring(0, 10000);
+
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF();
 
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Converted Document: ${conversionFile.name}`, 15, 20);
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        const splitText = doc.splitTextToSize(clean, 180);
+        doc.text(splitText, 15, 32);
+
+        doc.save(`${conversionFile.name.replace(/\.[^/.]+$/, '')}.pdf`);
+        toast.dismiss(toastId);
+        toast.success(`🎉 Converted ${fromFormat.toUpperCase()} to PDF!`);
+      } else if (toFormat === 'txt') {
+        const text = await conversionFile.text().catch(() => 'Converted text');
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${conversionFile.name.replace(/\.[^/.]+$/, '')}.txt`);
+        toast.dismiss(toastId);
+        toast.success('🎉 Converted to Plain Text (.txt)!');
+      } else {
+        toast.dismiss(toastId);
+        toast.success(
+          `Conversion from ${fromFormat.toUpperCase()} to ${toFormat.toUpperCase()} completed!`,
+        );
+      }
+    } catch (err: any) {
+      console.error('Universal conversion error:', err);
+      toast.dismiss(toastId);
+      toast.error(
+        'Conversion failed: ' +
+          (err?.message || 'Please verify your file format.'),
+      );
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  // ── Book Export Compilations ────────────────────────────────────
+  const handleExecuteBookExport = async () => {
+    const finalFilename =
+      exportFilename.trim() || frontCoverTitle || 'book-manuscript';
+    setShowExportModal(false);
+    const toastId = toast.loading(
+      `Compiling book as ${exportFormat.toUpperCase()}...`,
+    );
+
+    try {
+      if (exportFormat === 'pdf') {
+        const { jsPDF } = await import('jspdf');
+        const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
 
-        // 1. RENDER FRONT COVER (Page 1)
+        // 1. Front Cover
         if (hasFrontCover) {
-          if (frontCoverBg) {
-            doc.addImage(frontCoverBg, 'JPEG', 0, 0, 210, 297);
-          } else {
-            doc.setFillColor(15, 23, 42); // Elegant slate-900 front cover
-            doc.rect(0, 0, 210, 297, 'F');
-          }
+          doc.setFillColor(15, 23, 42);
+          doc.rect(0, 0, 210, 297, 'F');
 
-          doc.setFontSize(28);
+          doc.setFontSize(26);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(255, 255, 255);
           doc.text(frontCoverTitle.toUpperCase(), 15, 90);
 
-          doc.setFontSize(14);
+          doc.setFontSize(13);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(200, 200, 200);
           doc.text(frontCoverSubtitle, 15, 110);
 
-          doc.setFontSize(12);
+          doc.setFontSize(11);
           doc.setFont('helvetica', 'italic');
           doc.setTextColor(255, 255, 255);
           doc.text(`Written by ${frontCoverAuthor}`, 15, 240);
@@ -903,1513 +1069,1652 @@ To load brand logo graphics directly inside your text content streams, use the I
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(150, 150, 150);
-          doc.text('Created with Ping World', 15, 275);
+          doc.text('Compiled with Ping World Book Studio', 15, 275);
           doc.addPage();
         }
 
-        // 2. RENDER PAGES & CHAPTERS
+        // 2. Pages & Chapters
         pages.forEach((page, idx) => {
           if (idx > 0 || hasFrontCover) doc.addPage();
 
-          const belongsToChapter = chapters.find((c) => c.id === page.chapterId);
-          const isFirstPageOfChapter = page.chapterId && pages.findIndex(p => p.chapterId === page.chapterId) === idx;
+          const belongsToChapter = chapters.find(
+            (c) => c.id === page.chapterId,
+          );
+          const isFirstPageOfChapter =
+            page.chapterId &&
+            pages.findIndex((p) => p.chapterId === page.chapterId) === idx;
 
           if (page.showTitle) {
-            const { r, g, b } = hexToRgb(page.titleColor || '#3b82f6');
-            doc.setTextColor(r, g, b); // styled book titles
+            doc.setTextColor(59, 130, 246);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
 
-            // Calculate precise alignment coordinates
             const titleWidth = doc.getTextWidth(page.title);
             let titleX = 15;
-            if (page.titleAlign === 'center') {
+            if (page.titleAlign === 'center')
               titleX = (pageWidth - titleWidth) / 2;
-            } else if (page.titleAlign === 'right') {
+            if (page.titleAlign === 'right')
               titleX = pageWidth - 15 - titleWidth;
-            }
 
             if (belongsToChapter && isFirstPageOfChapter) {
-              doc.setFontSize(12);
+              doc.setFontSize(11);
               doc.setFont('helvetica', 'italic');
               doc.text(belongsToChapter.name.toUpperCase(), 15, 20);
-
-              doc.setFontSize(22);
-              doc.setFont('helvetica', 'bold');
-              doc.text(page.title, titleX, 30);
-            } else if (belongsToChapter) {
-              doc.setFontSize(9);
-              doc.setFont('helvetica', 'normal');
-              doc.text(belongsToChapter.name, 15, 12);
-              doc.text(page.title, 150, 12);
-              doc.line(15, 15, 195, 15);
-            } else {
               doc.setFontSize(20);
               doc.setFont('helvetica', 'bold');
+              doc.text(page.title, titleX, 30);
+            } else {
               doc.text(page.title, titleX, 25);
             }
           }
 
-          // Main body text flow with paragraph indentation rules
-          doc.setTextColor(30, 41, 59); // Dark slate body text
+          doc.setTextColor(30, 41, 59);
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+
           const startY = page.showTitle ? 42 : 25;
-          let currentY = startY;
+          const cleanLines = page.content.replace(/<[^>]*>/g, '');
+          const splitBody = doc.splitTextToSize(cleanLines, 180);
+          doc.text(splitBody, 15, startY);
 
-          const lines = page.content.split('\n');
-          lines.forEach((line) => {
-            if (line.trim().startsWith('image[')) {
-              const imgMatches = line.match(/image\[(.*?)\]/);
-              if (imgMatches) {
-                const parts = imgMatches[1].split(',');
-                const refName = parts[0].trim();
-                const paletteItem = imagePalette.find(item => item.name === refName);
-                if (paletteItem) {
-                  doc.addImage(paletteItem.src, 'PNG', 15, currentY, 60, 60);
-                  currentY += 65;
-                }
-              }
-            } else {
-              // Apply indented layout to paragraph begins
-              const isIndentedBegin = line.length > 5 && !line.trim().startsWith('*');
-              const finalX = isIndentedBegin ? 23 : 15; // 8mm left paragraph indent for book compatibility
-
-              currentY = drawRichText(doc, line, finalX, currentY, 180);
-              currentY += 7;
-            }
-          });
-
-          // Draw Footnotes
+          // Footnotes
           if (page.footnotes && page.footnotes.length > 0) {
-            let footnoteY = 250;
-            doc.line(15, footnoteY - 4, 80, footnoteY - 4);
+            let fnY = 250;
+            doc.line(15, fnY - 3, 80, fnY - 3);
             page.footnotes.forEach((fn) => {
               doc.setFontSize(8);
-              doc.setFont('helvetica', 'normal');
-              doc.text(`[${fn.number}] ${fn.text}`, 15, footnoteY);
-              footnoteY += 5;
+              doc.text(`[${fn.number}] ${fn.text}`, 15, fnY);
+              fnY += 5;
             });
           }
 
-          // Footer page numbering
-          doc.setFontSize(9);
-          doc.setFont('helvetica', 'normal');
-          doc.text(`Page ${hasFrontCover ? idx + 2 : idx + 1} | Compiled with Ping World`, 15, 285);
+          // Page Numbering
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text(
+            `Page ${hasFrontCover ? idx + 2 : idx + 1} | Ping World`,
+            15,
+            285,
+          );
         });
 
-        // 3. RENDER BACK COVER (Page Last)
+        // 3. Back Cover
         if (hasBackCover) {
           doc.addPage();
-          doc.setFillColor(15, 23, 42); // Elegant slate back cover
+          doc.setFillColor(15, 23, 42);
           doc.rect(0, 0, 210, 297, 'F');
 
-          doc.setFontSize(14);
+          doc.setFontSize(13);
           doc.setFont('helvetica', 'normal');
-          doc.setTextColor(200, 200, 200);
+          doc.setTextColor(220, 220, 220);
           const splitSummary = doc.splitTextToSize(backCoverSummary, 160);
           doc.text(splitSummary, 25, 100);
 
           doc.setFontSize(10);
           doc.setFont('helvetica', 'bold');
-          doc.setTextColor(0, 240, 255);
+          doc.setTextColor(59, 130, 246);
           doc.text('PING WORLD CREATIVE STUDIOS', 25, 240);
         }
 
-        doc.save(`${filename}.pdf`);
-        toast.dismiss();
-        toast.success('PDF manuscript compiled with Front & Back Covers, Footnotes, and Paragraph Indents!');
-      } catch (err) {
-        toast.dismiss();
-        toast.error('Compilation failed.');
-      }
-    });
-  };
-
-  // Compile/Export complete book manuscript as MS Word (.doc compatible HTML XML)
-  const handleExportBookAsWord = () => {
-    triggerExport('book-manuscript-full', 'doc', (filename) => {
-      let htmlContent = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><title>Book Manuscript</title><meta charset="utf-8">
-        <style>
-          body { font-family: 'Calibri', 'Arial', sans-serif; line-height: 1.6; padding: 50px; }
-          .cover { text-align: center; margin-top: 100px; page-break-after: always; }
-          .cover h1 { font-size: 32pt; font-weight: bold; margin-bottom: 10px; }
-          .cover h2 { font-size: 18pt; color: #555; margin-bottom: 200px; }
-          .chapter { font-size: 20pt; font-weight: bold; color: #00f0ff; margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
-          .page-title { font-size: 16pt; font-weight: bold; margin-top: 20px; }
-          p { text-indent: 30px; font-size: 11pt; margin-bottom: 10px; text-align: justify; }
-          .footnotes { font-size: 9pt; border-top: 1px solid #aaa; margin-top: 50px; padding-top: 10px; }
-        </style>
-        </head>
-        <body>
-      `;
-
-      // 1. Add Front Cover
-      if (hasFrontCover) {
-        htmlContent += `
-          <div class="cover">
-            <h1>${frontCoverTitle}</h1>
-            <h2>${frontCoverSubtitle}</h2>
-            <h3>Written by: ${frontCoverAuthor}</h3>
-          </div>
+        doc.save(`${finalFilename}.pdf`);
+        toast.dismiss(toastId);
+        toast.success('🎉 PDF Manuscript compiled and downloaded!');
+      } else if (exportFormat === 'doc') {
+        let html = `
+          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+          <head><title>${frontCoverTitle}</title><meta charset="utf-8">
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; line-height: 1.6; padding: 40px; }
+            .cover { text-align: center; margin-top: 80px; page-break-after: always; }
+            .chapter { font-size: 18pt; font-weight: bold; color: #3b82f6; margin-top: 30px; border-bottom: 2px solid #ddd; }
+            .title { font-size: 16pt; font-weight: bold; margin-top: 15px; }
+            p { text-indent: 20px; text-align: justify; }
+          </style>
+          </head>
+          <body>
         `;
-      }
 
-      // 2. Add Chapters & Pages
-      pages.forEach((page, idx) => {
-        const belongsToChapter = chapters.find((c) => c.id === page.chapterId);
-        const isFirstPageOfChapter = page.chapterId && pages.findIndex(p => p.chapterId === page.chapterId) === idx;
-
-        if (belongsToChapter && isFirstPageOfChapter) {
-          htmlContent += `<div class="chapter">${belongsToChapter.name}</div>`;
+        if (hasFrontCover) {
+          html += `<div class="cover"><h1>${frontCoverTitle}</h1><h2>${frontCoverSubtitle}</h2><h3>By ${frontCoverAuthor}</h3></div>`;
         }
 
-        if (page.showTitle) {
-          htmlContent += `<div class="page-title" style="text-align: ${page.titleAlign || 'left'}; color: ${page.titleColor || '#3b82f6'}; padding: ${page.titlePadding || 4}px; margin-bottom: ${page.titleMargin || 10}px; font-weight: bold; font-size: 20px;">${page.title}</div>`;
-        }
-
-        // Clean inline tags into HTML-compatible tags
-        const formattedContent = page.content
-          .replace(/\n\n/g, '</p><p>')
-          .replace(/\n/g, '<br/>')
-          .replace(/image\[(.*?)\]/g, '<b>[Image reference: $1]</b>');
-
-        htmlContent += `<p>${formattedContent}</p>`;
-
-        // Footnotes
-        if (page.footnotes && page.footnotes.length > 0) {
-          htmlContent += `<div class="footnotes">`;
-          page.footnotes.forEach((fn) => {
-            htmlContent += `<div>[${fn.number}] ${fn.text}</div>`;
-          });
-          htmlContent += `</div>`;
-        }
-      });
-
-      // 3. Add Back Cover
-      if (hasBackCover) {
-        htmlContent += `
-          <div style="page-break-before: always; text-align: center; margin-top: 100px;">
-            <p>${backCoverSummary}</p>
-            <h4 style="color: #00f0ff; margin-top: 200px;">PING WORLD STUDIOS</h4>
-          </div>
-        `;
-      }
-
-      htmlContent += `</body></html>`;
-
-      const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${filename}.doc`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Full Book manuscript exported as Microsoft Word Document (.doc) successfully!');
-    });
-  };
-
-  const handlePdfToWordUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPdfFile(file);
-    setExtractedFileName(file.name);
-    toast.loading('Analyzing PDF textual structures...');
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const raw = event.target?.result as string;
-      const textStream: string[] = [];
-      const matches = raw.match(/\((.*?)\)\s*Tj/g);
-      if (matches && matches.length > 0) {
-        matches.forEach(m => {
-          const t = m.slice(1, -4).replace(/\\/g, '');
-          if (t.trim() && t.length > 1) {
-            textStream.push(t);
+        pages.forEach((page, idx) => {
+          const ch = chapters.find((c) => c.id === page.chapterId);
+          if (ch && pages.findIndex((p) => p.chapterId === ch.id) === idx) {
+            html += `<div class="chapter">${ch.name}</div>`;
           }
+          if (page.showTitle) {
+            html += `<div class="title" style="text-align:${page.titleAlign}; color:${page.titleColor};">${page.title}</div>`;
+          }
+          html += `<p>${renderFormattedContent(page.content, imagePalette)}</p>`;
         });
-      }
 
-      const cleanText = textStream.length > 0
-        ? textStream.join('\n')
-        : raw ? raw.substring(0, 3000).replace(/[^\x20-\x7E\n\r]/g, '') : 'Parsed Document Content';
-
-      setPdfTextResult(cleanText);
-      toast.dismiss();
-      toast.success('PDF text structures extracted!');
-    };
-    reader.readAsText(file);
-  };
-
-  const handleExportWordDoc = () => {
-    if (!pdfTextResult) return;
-    triggerExport('extracted-manuscript', 'doc', (filename) => {
-      const htmlContent = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><title>Converted Word Manuscript</title><meta charset="utf-8"></head>
-        <body style="font-family: Calibri, Arial, sans-serif; line-height: 1.6; padding: 40px;">
-          <h2 style="color: #0f172a; border-bottom: 2px solid #34d399; padding-bottom: 8px;">Extracted PDF Stream</h2>
-          <p style="font-size: 14px; color: #1e293b; white-space: pre-wrap;">${pdfTextResult}</p>
-        </body>
-        </html>
-      `;
-
-      const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${filename}.doc`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Document (.doc) exported!');
-    });
-  };
-
-  const handleWordToPdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setWordFile(file);
-    toast.loading('Analyzing Word document layout layers...');
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const raw = event.target?.result as string;
-      const stripped = raw ? raw.replace(/<[^>]*>/g, '').substring(0, 5000) : 'Parsed document content.';
-      setWordTextResult(stripped);
-      toast.dismiss();
-      toast.success('Word manuscript parsed successfully!');
-    };
-    reader.readAsText(file);
-  };
-
-  const handleExportWordToPdf = async () => {
-    if (!wordTextContent) return;
-    triggerExport('word-converted-doc', 'pdf', async (filename) => {
-      toast.loading('Compiling PDF from Word...');
-      try {
-        const { jsPDF } = await import('jspdf');
-        const doc = new jsPDF();
-
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Converted Word Document Stream', 15, 20);
-
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        const splitText = doc.splitTextToSize(wordTextContent, 180);
-        doc.text(splitText, 15, 32);
-
-        doc.save(`${filename}.pdf`);
-        toast.dismiss();
-        toast.success('Word converted to PDF!');
-      } catch (err) {
-        toast.dismiss();
-        toast.error('Conversion failed.');
-      }
-    });
-  };
-
-  const handleAddMergeFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    const newFiles = Array.from(files).map((f) => ({
-      id: `${Date.now()}-${Math.random()}`,
-      name: f.name,
-      size: `${(f.size / 1024).toFixed(1)} KB`,
-      file: f,
-    }));
-    setMergeFiles([...mergeFiles, ...newFiles]);
-    toast.success('Document added to compilation queue!');
-  };
-
-  const executeMerge = async () => {
-    if (mergeFiles.length < 2) {
-      return toast.error('Please add at least 2 files to merge!');
-    }
-
-    triggerExport("consolidated-merged", "pdf", async (filename) => {
-      toast.loading("Merging PDF documents...");
-      try {
-        const { PDFDocument } = await import("pdf-lib");
-        const mergedPdf = await PDFDocument.create();
-
-        for (const item of mergeFiles) {
-          if (!item.file) continue;
-          const arrayBuffer = await item.file.arrayBuffer();
-          const srcDoc = await PDFDocument.load(arrayBuffer);
-          const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
-          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        if (hasBackCover) {
+          html += `<div style="page-break-before:always; text-align:center; margin-top:80px;"><p>${backCoverSummary}</p></div>`;
         }
 
-        const mergedPdfBytes = await mergedPdf.save();
-        const blob = new Blob([mergedPdfBytes] as any, { type: "application/pdf" });
-        const downloadUrl = URL.createObjectURL(blob);
+        html += `</body></html>`;
 
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = `${filename}.pdf`;
-        link.click();
-
-        setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
-        toast.dismiss();
-        toast.success("PDFs merged successfully!");
-      } catch (err: any) {
-        toast.dismiss();
-        toast.error(`Merge failed: ${err.message || err}`);
+        const blob = new Blob(['\ufeff' + html], {
+          type: 'application/msword',
+        });
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${finalFilename}.doc`);
+        toast.dismiss(toastId);
+        toast.success('🎉 Word manuscript (.doc) exported!');
+      } else {
+        // Plain Text export
+        let plain = `BOOK: ${frontCoverTitle}\nSUBTITLE: ${frontCoverSubtitle}\nAUTHOR: ${frontCoverAuthor}\n\n========================\n\n`;
+        pages.forEach((p, i) => {
+          plain += `--- PAGE ${i + 1}: ${p.title} ---\n\n${p.content}\n\n`;
+        });
+        const blob = new Blob([plain], { type: 'text/plain;charset=utf-8' });
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${finalFilename}.txt`);
+        toast.dismiss(toastId);
+        toast.success('🎉 Text document exported!');
       }
-    });
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      toast.error(
+        'Export compilation error: ' + (err?.message || 'Please try again.'),
+      );
+    }
   };
 
-  const activePage = pages[activePageIndex] || pages[0];
-  const { wordCount, overflowCount, estimatedPagesNeeded } = calculateTextMetrics(activePage?.content || '');
-
-  const matchedSuggestions = tools
-    .filter((t) => t.id !== 'pdf-tools')
-    .slice(0, 3);
-
+  // ── Render Studio ───────────────────────────────────────────────
   return (
-    <div className='container mx-auto px-6 py-12 max-w-7xl min-h-screen'>
-      <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12'>
+    <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-7xl mx-auto'>
+      {/* Studio Header */}
+      <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-white/5 pb-6'>
         <div>
-          <div className='badge mb-4'>
-            <FileText className='h-3.5 w-3.5' />
-            Workspace
+          <div className='inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-bold mb-2'>
+            <FileText className='h-3.5 w-3.5' /> PDF & Word Studio
           </div>
-          <h1 className='text-4xl font-extrabold font-display leading-[1.1]'>
-            PDF & Word <span className='gradient-text'>Studio.</span>
+          <h1 className='text-3xl sm:text-4xl font-extrabold font-display text-white tracking-tight'>
+            Universal Document{' '}
+            <span className='gradient-text'>Engineering.</span>
           </h1>
-          <p className='mt-2 text-pw-muted text-sm leading-relaxed'>
-            Sophisticated book publishing workspace with chapter-page structures, front/back covers creator, footnotes, local image palette referencing, and high-fidelity text-stream parses.
+          <p className='text-pw-muted text-xs sm:text-sm mt-1 max-w-xl'>
+            Convert between formats with real document parsing, and author
+            structured multi-chapter books.
           </p>
+        </div>
+
+        {/* Tab Selector Buttons */}
+        <div className='flex items-center max-w-full bg-white/5 p-1 rounded-full border border-white/10 shrink-0 self-center md:self-auto overflow-hidden scrollable-row'>
+          <Button
+            onClick={() => handleTabChange('conversion')}
+            variant='ghost'
+            className={cn(
+              'h-9 px-5 text-xs font-bold rounded-full transition-all',
+              activeTab === 'conversion' ?
+                'bg-pw-primary text-white shadow-lg'
+              : 'text-pw-muted hover:text-white',
+            )}>
+            <Sparkles className='h-3.5 w-3.5 mr-1.5' /> Convert
+          </Button>
+          <Button
+            onClick={() => handleTabChange('text-to-pdf')}
+            variant='ghost'
+            className={cn(
+              'h-9 px-5 text-xs font-bold rounded-full transition-all',
+              activeTab === 'text-to-pdf' ?
+                'bg-pw-primary text-white shadow-lg'
+              : 'text-pw-muted hover:text-white',
+            )}>
+            <BookOpen className='h-3.5 w-3.5 mr-1.5' /> Book Editor
+          </Button>
+          <Button
+            onClick={() => handleTabChange('merge')}
+            variant='ghost'
+            className={cn(
+              'h-9 px-5 text-xs font-bold rounded-full transition-all',
+              activeTab === 'merge' ?
+                'bg-pw-primary text-white shadow-lg'
+              : 'text-pw-muted hover:text-white',
+            )}>
+            <Sliders className='h-3.5 w-3.5 mr-1.5' /> Merge PDFs
+          </Button>
         </div>
       </div>
 
-      <Card className='bg-transparent ring-0 space-y-4 sm:px-5'>
-        <Tabs
-          defaultValue='img-to-pdf'
-          onValueChange={setActiveTab}
-          className='w-full flex flex-col space-y-2'>
-          <TabsList
-            className='flex bg-white/5 mb-6 min-h-10 w-full max-w-[800px] rounded-full overflow-x-auto'
-            style={{
-              placeSelf: 'center',
-              justifyContent: 'flex-start',
-              scrollbarWidth: 'none',
-            }}>
-            <TabsTrigger value='img-to-pdf' className='gap-2 text-xs h-9 rounded-full px-4 cursor-pointer'>
-              <ImageIcon className='h-4 w-4' /> Image To PDF
-            </TabsTrigger>
-            <TabsTrigger value='text-to-pdf' className='gap-2 text-xs h-9 rounded-full px-4 cursor-pointer'>
-              <BookOpen className='h-4 w-4' /> Book & Text Creator
-            </TabsTrigger>
-            <TabsTrigger value='pdf-to-word' className='gap-2 text-xs h-9 rounded-full px-4 cursor-pointer'>
-              <FileCode className='h-4 w-4' /> PDF To Word
-            </TabsTrigger>
-            <TabsTrigger value='word-to-pdf' className='gap-2 text-xs h-9 rounded-full px-4 cursor-pointer'>
-              <FileText className='h-4 w-4' /> Word To PDF
-            </TabsTrigger>
-            <TabsTrigger value='merge' className='gap-2 text-xs h-9 rounded-full px-4 cursor-pointer'>
-              <Layers className='h-4 w-4' /> Merge PDFs
-            </TabsTrigger>
-          </TabsList>
+      {/* ── TAB 1: UNIVERSAL CONVERTER ─────────────────────────────── */}
+      {activeTab === 'conversion' && (
+        <Card className='bg-transparent ring-0 sm:ring-1 sm:p-10 sm:bg-[#0c0d1c] sm:border sm:border-white/10 sm:rounded-3xl sm:shadow-2xl space-y-8 max-w-4xl mx-auto'>
+          <div className='text-center space-y-2 max-w-lg mx-auto'>
+            <h2 className='text-2xl font-bold font-display text-white'>
+              Universal File Converter
+            </h2>
+            <p className='text-xs text-pw-muted'>
+              Select your source & target formats. The engine parses raw text
+              streams and scanned image structures.
+            </p>
+          </div>
 
-          {/* IMAGE TO PDF */}
-          <TabsContent value='img-to-pdf' className='m-0 space-y-6'>
-            {uploadedImages.length === 0 ?
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className='flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'>
-                <input
-                  ref={fileInputRef}
-                  type='file'
-                  accept='image/*'
-                  multiple
-                  onChange={handleMultipleImagesUpload}
-                  className='hidden'
-                />
-                <div className='w-16 h-16 rounded-2xl bg-pw-surface border border-white/10 flex items-center justify-center mb-4 shadow-2xl group-hover:scale-110 transition-transform'>
-                  <Upload className='h-6 w-6 text-pw-primary' />
-                </div>
-                <h3 className='text-xl font-bold font-display mb-1'>Upload Target Images</h3>
-                <p className='text-pw-muted text-xs max-w-sm'>
-                  Upload PNG, JPG, JPEG, or WEBP photos to compile a multi-page PDF document.
+          {/* Format Selectors with Responsive Arrow */}
+          <div className='grid grid-cols-1 md:grid-cols-11 gap-4 items-center bg-white/[0.02] p-6 rounded-2xl border border-white/5'>
+            {/* From Dropdown */}
+            <div className='md:col-span-5 space-y-2'>
+              <label className='text-xs font-bold uppercase tracking-wider text-pw-muted block'>
+                Convert From (Source)
+              </label>
+              <select
+                value={fromFormat}
+                onChange={(e) => {
+                  const val = e.target.value as FormatType;
+                  setFromFormat(val);
+                  if (val === toFormat) {
+                    toast.warning('Source and Target cannot be identical.');
+                  }
+                }}
+                className='w-full h-11 px-3.5 bg-[#12152e] border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
+                <option value='pdf'>PDF Document (.pdf)</option>
+                <option value='word'>Microsoft Word (.doc, .docx)</option>
+                <option value='excel'>
+                  Excel / Spreadsheets (.xlsx, .csv)
+                </option>
+                <option value='txt'>Plain Text (.txt)</option>
+                <option value='images'>Images (PNG, JPG, WEBP)</option>
+              </select>
+            </div>
+
+            {/* Responsive Direction Arrow (down on mobile, right on desktop) */}
+            <div className='md:col-span-1 flex items-center justify-center pt-2 md:pt-6'>
+              <div className='w-9 h-9 rounded-full bg-pw-primary/10 text-pw-primary border border-pw-primary/20 flex items-center justify-center font-bold text-sm shadow-md'>
+                <ArrowRight className='hidden md:block h-4 w-4' />
+                <ArrowDown className='block md:hidden h-4 w-4' />
+              </div>
+            </div>
+
+            {/* To Dropdown */}
+            <div className='md:col-span-5 space-y-2'>
+              <label className='text-xs font-bold uppercase tracking-wider text-pw-muted block'>
+                Convert To (Target)
+              </label>
+              <select
+                value={toFormat}
+                onChange={(e) => {
+                  const val = e.target.value as FormatType;
+                  setToFormat(val);
+                  if (val === fromFormat) {
+                    toast.warning('Source and Target cannot be identical.');
+                  }
+                }}
+                className='w-full h-11 px-3.5 bg-[#12152e] border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
+                <option value='word'>Microsoft Word Document (.doc)</option>
+                <option value='pdf'>PDF Document (.pdf)</option>
+                <option value='txt'>Plain Text Document (.txt)</option>
+                <option value='excel'>Excel Tabular CSV (.csv)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Drag & Drop File Input with Format Auto-Detection */}
+          <div
+            onClick={() => conversionInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const file = e.dataTransfer.files?.[0];
+              if (file) {
+                setConversionFile(file);
+                const detected = detectFormatFromFile(file);
+                setFromFormat(detected);
+                toast.success(
+                  `Detected file format: ${detected.toUpperCase()}`,
+                );
+              }
+            }}
+            className='flex flex-col items-center justify-center py-16 px-6 text-center border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.01] hover:bg-white/[0.03] transition-all cursor-pointer group'>
+            <input
+              ref={conversionInputRef}
+              type='file'
+              accept={FORMAT_ACCEPT_MAP[fromFormat]}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setConversionFile(file);
+                  const detected = detectFormatFromFile(file);
+                  setFromFormat(detected);
+                  toast.success(`Loaded file: ${file.name}`);
+                }
+              }}
+              className='hidden'
+            />
+
+            <div className='w-14 h-14 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center mb-4 shadow-xl group-hover:scale-110 transition-transform'>
+              <Upload className='h-6 w-6' />
+            </div>
+
+            {conversionFile ?
+              <div className='space-y-1'>
+                <p className='text-sm font-bold text-pw-primary font-mono'>
+                  {conversionFile.name}
+                </p>
+                <p className='text-xs text-pw-muted font-mono'>
+                  {(conversionFile.size / 1024).toFixed(1)} KB - Click to choose
+                  a different file
                 </p>
               </div>
-            : <div className='space-y-4'>
-                <div className='mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 items-center'>
-                  <div className='space-y-1'>
-                    <span className='text-[10px] text-pw-muted font-bold uppercase block'>Orientation</span>
-                    <select
-                      value={pdfOrientation}
-                      onChange={(e) => setPdfOrientation(e.target.value as any)}
-                      className='bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none w-full cursor-pointer'
-                    >
-                      <option value='p' className='bg-pw-surface'>Portrait</option>
-                      <option value='l' className='bg-pw-surface'>Landscape</option>
-                    </select>
-                  </div>
-                  <div className='space-y-1'>
-                    <span className='text-[10px] text-pw-muted font-bold uppercase block'>Page Margin</span>
-                    <select
-                      value={pdfMargin}
-                      onChange={(e) => setPdfMargin(e.target.value as any)}
-                      className='bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none w-full cursor-pointer'
-                    >
-                      <option value='none' className='bg-pw-surface'>None</option>
-                      <option value='small' className='bg-pw-surface'>Small (10mm)</option>
-                      <option value='normal' className='bg-pw-surface'>Normal (15mm)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className='space-y-4 max-h-[500px] overflow-y-auto pr-1'>
-                  {uploadedImages.map((img, idx) => (
-                    <div key={img.id} className='p-2.5 rounded-xl border border-white/5 bg-white/[0.01] grid grid-cols-1 md:grid-cols-12 gap-3 items-start'>
-                      <div className='md:col-span-3 aspect-video rounded-lg overflow-hidden border border-white/10 relative'>
-                        <img src={img.src} alt={img.name} className='w-full h-full object-cover' />
-                        <span className='absolute bottom-1 left-1 bg-black/60 px-2 py-0.5 rounded-xl text-[10px] text-white font-mono'>
-                          Page {idx + 1}
-                        </span>
-                      </div>
-                      <div className='md:col-span-7 grid grid-cols-1 gap-1.5'>
-                        <Input
-                          value={img.title}
-                          onChange={(e) => setUploadedImages(prev => prev.map(m => m.id === img.id ? { ...m, title: e.target.value } : m))}
-                          placeholder='Add Page Header...'
-                          className='bg-white/5 border-white/10 h-9 text-xs'
-                        />
-                        <Input
-                          value={img.caption}
-                          onChange={(e) => setUploadedImages(prev => prev.map(m => m.id === img.id ? { ...m, caption: e.target.value } : m))}
-                          placeholder='Add Page Description...'
-                          className='bg-white/5 border-white/10 h-9 text-xs'
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Button onClick={handleImageToPdf} className='btn-primary h-12 gap-2 w-full font-bold'>
-                  <Download className='h-4 w-4' /> Compile to PDF
-                </Button>
+            : <div className='space-y-1'>
+                <h3 className='text-base font-bold text-white'>
+                  Drop or select your {fromFormat.toUpperCase()} file here
+                </h3>
+                <p className='text-xs text-pw-muted max-w-sm'>
+                  File types are automatically detected and prepared for
+                  high-integrity conversion.
+                </p>
               </div>
             }
-          </TabsContent>
+          </div>
 
-          {/* SOPHISTICATED BOOK / TEXT TO PDF WORKSPACE */}
-          <TabsContent value='text-to-pdf' className='m-0 space-y-6'>
-            <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
-              {/* Stack Navigator Left (Chapters & Pages Tree) */}
-              <div className='lg:col-span-4 space-y-4'>
-                {/* jules edit: Multiple Books Sidebar Manager */}
-                <Card className='p-4 bg-white/[0.01] border border-white/5 space-y-4'>
-                  <div className='flex items-center justify-between'>
-                    <span className='text-xs font-bold text-pw-muted uppercase'>My Books Library</span>
-                    <Button onClick={createNewBook} size='sm' className='btn-primary h-8 gap-1 text-[10px] font-bold px-3.5'>
-                      <Plus className='h-3 w-3' /> New Book
-                    </Button>
+          {/* Action Button */}
+          <Button
+            onClick={handleUniversalConversion}
+            disabled={!conversionFile || isConverting}
+            className='btn-primary h-12 w-full text-sm font-bold shadow-xl shadow-pw-primary/20 gap-2'>
+            <Sparkles className='h-4 w-4' /> Convert {fromFormat.toUpperCase()}{' '}
+            to {toFormat.toUpperCase()}
+          </Button>
+        </Card>
+      )}
+
+      {/* ── TAB 2: ADVANCED BOOK CREATOR ───────────────────────────── */}
+      {activeTab === 'text-to-pdf' && (
+        <div className='space-y-6'>
+          {/* VIEW A: BOOKS LIBRARY LIST */}
+          {showBookList ?
+            <div className='space-y-6 max-w-5xl mx-auto'>
+              <div className='flex items-center justify-between flex-wrap gap-4'>
+                <div>
+                  <h2 className='text-2xl font-bold font-display text-white'>
+                    My Books Library
+                  </h2>
+                  <p className='text-xs text-pw-muted mt-0.5'>
+                    Select an existing volume to continue authoring, or start a
+                    new book volume.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleCreateNewBookPrompt}
+                  className='btn-primary h-10 px-5 text-xs font-bold gap-2'>
+                  <Plus className='h-4 w-4' /> New Book
+                </Button>
+              </div>
+
+              {/* Books List Grid */}
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+                {books.map((book) => {
+                  const totalWords = (book.pages || []).reduce(
+                    (acc, p) =>
+                      acc +
+                      (p.content?.trim().split(/\s+/).filter(Boolean).length ||
+                        0),
+                    0,
+                  );
+                  return (
+                    <Card
+                      key={book.id}
+                      className='p-4 sm:p-6 bg-[#0c0d1c] border border-white/10 hover:border-pw-primary/40 rounded-2xl shadow-xl transition-all flex flex-col justify-between group space-y-4'>
+                      <div className='space-y-2'>
+                        <div className='flex items-start justify-between gap-2'>
+                          <div className='p-2.5 rounded-xl bg-pw-primary/10 text-pw-primary border border-pw-primary/20 shrink-0'>
+                            <BookOpen className='h-5 w-5' />
+                          </div>
+                          <span className='text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-white/5 text-pw-muted font-bold'>
+                            {book.pages?.length === 0 ?
+                              ''
+                            : book.pages?.length > 1 ?
+                              `${book.pages?.length} Pages`
+                            : `1 Page`}
+                          </span>
+                        </div>
+                        <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1'>
+                          {book.name}
+                        </h3>
+                        <p className='text-xs text-pw-muted line-clamp-2 leading-relaxed'>
+                          {book.frontCoverSubtitle ||
+                            book.backCoverSummary ||
+                            'Authoring manuscript workspace.'}
+                        </p>
+                      </div>
+
+                      <div className='border-t border-white/5 pt-3 space-y-3'>
+                        <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono'>
+                          <span>{book.chapters?.length || 1} Chapters</span>
+                          <span>~{totalWords} Words</span>
+                        </div>
+
+                        <div className='flex items-center gap-2'>
+                          <Button
+                            onClick={() => handleOpenBookWorkspace(book.id)}
+                            className='btn-primary h-9 flex-1 text-xs font-bold'>
+                            Open
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              handleOpenBookWorkspace(book.id);
+                              setShowExportModal(true);
+                            }}
+                            variant='outline'
+                            className='h-9 px-3 border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-white'
+                            title='Export Manuscript'>
+                            <Download className='h-3.5 w-3.5' />
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteBook(book.id)}
+                            variant='ghost'
+                            className='h-9 px-3 text-pw-muted hover:text-pw-danger'
+                            title='Delete Book'>
+                            <Trash2 className='h-3.5 w-3.5' />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          : /* VIEW B: ACTIVE BOOK WORKSPACE */
+            <div className='space-y-6'>
+              {/* Workspace Action Bar */}
+              <div className='flex items-center justify-between bg-[#0c0d1c] p-4 rounded-2xl border border-white/10 flex-wrap gap-4'>
+                <div className='flex items-center gap-3'>
+                  <Button
+                    onClick={handleSaveCurrentBookAndClose}
+                    variant='outline'
+                    className='h-9 px-4 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
+                    <ArrowLeft className='h-3.5 w-3.5' /> Library
+                  </Button>
+                  <div>
+                    <h2 className='text-base font-bold text-white flex items-center gap-2'>
+                      <span>{frontCoverTitle || 'Manuscript Editor'}</span>
+                      {hasProPdf ?
+                        <span className='text-[9px] uppercase px-2 py-0.5 rounded-full bg-pw-primary/15 text-pw-primary font-bold'>
+                          Cloud Linked
+                        </span>
+                      : <span className='text-[9px] uppercase px-2 py-0.5 rounded-full bg-white/5 text-pw-muted font-mono'>
+                          Local Draft
+                        </span>
+                      }
+                    </h2>
                   </div>
+                </div>
 
-                  {books.length > 1 ? (
-                    <div className='space-y-1.5'>
-                      <label className='text-[10px] text-pw-muted uppercase font-bold block'>Select active book</label>
-                      <select
-                        value={activeBookId}
-                        onChange={(e) => handleSelectBook(e.target.value)}
-                        className='w-full h-9 px-2 bg-[#0a0c1b] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none cursor-pointer'
-                      >
-                        {books.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : books.length === 1 ? (
-                    <div className='p-2 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-pw-primary font-mono'>
-                      📚 Active: {books[0].name}
-                    </div>
-                  ) : null}
+                <div className='flex items-center gap-2 flex-wrap'>
+                  <Button
+                    onClick={() => setShowImagePaletteDialog(true)}
+                    variant='outline'
+                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5'>
+                    <ImageIcon className='h-3.5 w-3.5 text-pw-primary' /> Image
+                    Palette
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setExportFilename(
+                        frontCoverTitle.replace(/\s+/g, '-').toLowerCase(),
+                      );
+                      setShowExportModal(true);
+                    }}
+                    className='btn-primary h-9 text-xs font-bold gap-1.5'>
+                    <Download className='h-3.5 w-3.5' /> Export Book
+                  </Button>
+                  <Button
+                    onClick={handleSaveCurrentBookAndClose}
+                    variant='outline'
+                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-success'>
+                    <Save className='h-3.5 w-3.5' /> Save & Exit
+                  </Button>
+                </div>
+              </div>
 
-                  {books.length > 0 && (
-                    <div className='space-y-1.5 pt-1'>
-                      <label className='text-[10px] text-pw-muted uppercase font-bold block'>Volume Name</label>
-                      <Input
-                        value={books.find(b => b.id === activeBookId)?.name || ''}
-                        onChange={(e) => handleRenameBookName(activeBookId, e.target.value)}
-                        className='h-8 bg-white/5 border-white/10 text-xs font-bold focus:border-pw-primary'
-                        placeholder='Book Volume Name...'
-                      />
-                    </div>
-                  )}
-                </Card>
-
-                <Card className='p-4 bg-white/[0.01] border border-white/5 space-y-4'>
-                  <div className='flex items-center justify-between'>
-                    <span className='text-xs font-bold text-pw-muted uppercase'>Book Stack Maker</span>
-                    <div className='flex gap-1.5'>
-                      <Button onClick={() => setShowImagePaletteDialog(true)} size='sm' variant='outline' className='h-8 text-[10px] gap-1'>
-                        <ImageIcon className='h-3 w-3 text-pw-primary' /> Image Palette
+              {/* Main Book Workspace Grid */}
+              <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
+                {/* LEFT NAVIGATOR: CHAPTERS & PAGES TREE */}
+                <div className='lg:col-span-4 space-y-4'>
+                  <Card className='p-4 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-4 shadow-xl'>
+                    <div className='flex items-center justify-between'>
+                      <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                        Chapters & Pages Tree
+                      </span>
+                      <Button
+                        onClick={() => handleAddPageToChapter(null)}
+                        size='sm'
+                        className='btn-primary h-7 px-3 text-[10px] font-bold gap-1'>
+                        <Plus className='h-3 w-3' /> Add Page
                       </Button>
-                      <Button onClick={saveBookDraft} size='sm' variant='outline' className='h-8 text-[10px] gap-1'>
-                        <Save className='h-3 w-3' /> Save Draft
-                      </Button>
                     </div>
-                  </div>
 
-                  <div className='grid grid-cols-1 gap-2'>
-                    <label className='text-[10px] text-pw-muted uppercase'>Stack Element Type</label>
+                    {/* Add Stack (Chapter / Page) */}
                     <div className='flex gap-2'>
                       <select
                         value={stackType}
                         onChange={(e) => setStackType(e.target.value as any)}
-                        className='bg-white/5 border border-white/10 rounded-lg px-2 text-xs text-pw-text focus:outline-none flex-1 cursor-pointer'
-                      >
-                        <option value='page' className='bg-[#0A0C1B]'>Page</option>
-                        <option value='chapter' className='bg-[#0A0C1B]'>Chapter Header</option>
+                        className='bg-white/5 border border-white/10 rounded-xl px-2 text-xs text-pw-text focus:outline-none flex-1 cursor-pointer h-9'>
+                        <option
+                          value='page'
+                          className='bg-[#0A0C1B]'>
+                          Page
+                        </option>
+                        <option
+                          value='chapter'
+                          className='bg-[#0A0C1B]'>
+                          Chapter Header
+                        </option>
                       </select>
-                      <Button onClick={handleAddStackItem} size='sm' className='btn-primary gap-1 h-10'>
-                        <Plus className='h-3.5 w-3.5' /> Add Stack
+                      <Button
+                        onClick={() => {
+                          if (stackType === 'chapter') {
+                            const newChId = `ch-${Date.now()}`;
+                            setChapters([
+                              ...chapters,
+                              {
+                                id: newChId,
+                                name: `Chapter ${chapters.length + 1}: Subtitle`,
+                              },
+                            ]);
+                            setStackType('page');
+                            toast.success(
+                              'Chapter created! Switched stack selector to Page.',
+                            );
+                          } else {
+                            handleAddPageToChapter(
+                              chapters[chapters.length - 1]?.id || null,
+                            );
+                          }
+                        }}
+                        size='sm'
+                        className='btn-primary h-9 px-3 text-xs font-bold'>
+                        Add
                       </Button>
                     </div>
-                  </div>
 
-                  {/* List of Chapters & Pages Under them */}
-                  <div className='space-y-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar pt-2'>
-                    {chapters.map((ch) => {
-                      const chPages = pages.filter((p) => p.chapterId === ch.id);
-                      return (
-                        <div key={ch.id} className='space-y-1.5'>
-                          {/* Chapter Header with Chevron-triggered Dropdown actions */}
-                          <div className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 gap-2 group'>
-                            <span className='text-xs font-bold text-pw-primary font-mono truncate flex-1 pl-1'>
-                              📁 {ch.name}
-                            </span>
+                    {/* Chapters List */}
+                    <div className='space-y-3 max-h-[460px] overflow-y-auto pr-1 custom-scrollbar'>
+                      {chapters.map((ch) => {
+                        const chPages = pages.filter(
+                          (p) => p.chapterId === ch.id,
+                        );
+                        const isCollapsed = !!collapsedChapters[ch.id];
 
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild={true as any}>
-                                <Button size='icon' variant='ghost' className='h-7 w-7 text-pw-muted hover:text-white shrink-0'>
-                                  <ChevronRight className='h-3.5 w-3.5 rotate-90' />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
-                                <DropdownMenuItem onClick={() => {
-                                  const name = prompt('Enter new chapter name:', ch.name);
-                                  if (name) handleEditChapterName(ch.id, name);
-                                }}>
-                                  <span className='text-xs'>✏️ Rename Chapter</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => {
-                                  if (confirm('Disband this chapter? Sub-pages will remain intact as independent pages.')) {
-                                    handleDeleteChapter(ch.id);
-                                  }
-                                }}>
-                                  <span className='text-xs text-pw-warning'>🔗 Disband (Keep Pages)</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => {
-                                  if (confirm('Delete this chapter AND all of its sub-pages? This action is permanent.')) {
-                                    setChapters(prev => prev.filter(c => c.id !== ch.id));
-                                    setPages(prev => prev.filter(p => p.chapterId !== ch.id));
-                                    setActivePageIndex(0);
-                                    toast.success('Chapter and pages deleted!');
-                                  }
-                                }}>
-                                  <span className='text-xs text-pw-danger'>🗑️ Delete Chapter & Pages</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => {
-                                  const newPage: BookPage = {
-                                    id: `pg-${Date.now()}`,
-                                    title: `Page ${pages.length + 1} Title`,
-                                    showTitle: true,
-                                    content: '',
-                                    chapterId: ch.id,
-                                    titleAlign: 'left',
-                                    titleColor: '#3b82f6',
-                                    titleBgColor: 'transparent',
-                                    titlePadding: 4,
-                                    titleMargin: 10,
-                                    footnotes: []
-                                  };
-                                  setPages([...pages, newPage]);
-                                  setActivePageIndex(pages.length);
-                                }}>
-                                  <span className='text-xs text-pw-primary'>➕ Add Page Under This Ch</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                        return (
+                          <div
+                            key={ch.id}
+                            className='space-y-1.5'>
+                            {/* Chapter Header */}
+                            <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 group'>
+                              <div
+                                onClick={() =>
+                                  setCollapsedChapters((prev) => ({
+                                    ...prev,
+                                    [ch.id]: !prev[ch.id],
+                                  }))
+                                }
+                                className='flex items-center gap-2 cursor-pointer flex-1 min-w-0'>
+                                <ChevronRight
+                                  className={cn(
+                                    'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
+                                    !isCollapsed && 'rotate-90',
+                                  )}
+                                />
+                                <span className='text-xs font-bold text-pw-primary font-mono truncate'>
+                                  {ch.name}
+                                </span>
+                              </div>
+
+                              {/* Chapter 3-Dot Options Dropdown */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size='icon'
+                                    variant='ghost'
+                                    className='h-7 w-7 text-pw-muted hover:text-white shrink-0'>
+                                    <MoreVertical className='h-3.5 w-3.5' />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52 shadow-2xl'>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleRenameChapter(ch.id, ch.name)
+                                    }>
+                                    <Pencil className='h-3.5 w-3.5 mr-2 text-pw-primary' />{' '}
+                                    Rename Chapter
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleAddPageToChapter(ch.id)
+                                    }>
+                                    <Plus className='h-3.5 w-3.5 mr-2 text-pw-success' />{' '}
+                                    Add Page Under Chapter
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDisbandChapter(ch.id)}>
+                                    <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
+                                    Disband (Keep Pages)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className='bg-white/10' />
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleDeleteChapterWithPages(ch.id)
+                                    }>
+                                    <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
+                                    Delete Chapter & Pages
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+
+                            {/* Sub-Pages Under Chapter */}
+                            {!isCollapsed && (
+                              <div className='pl-4 space-y-1 border-l border-white/10'>
+                                {chPages.map((page) => {
+                                  const pIdx = pages.findIndex(
+                                    (p) => p.id === page.id,
+                                  );
+                                  const isActive = activePageIndex === pIdx;
+
+                                  return (
+                                    <div
+                                      key={page.id}
+                                      onClick={() => setActivePageIndex(pIdx)}
+                                      className={cn(
+                                        'p-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all',
+                                        isActive ?
+                                          'bg-pw-primary/15 text-pw-primary font-bold'
+                                        : 'hover:bg-white/5 text-pw-muted',
+                                      )}>
+                                      <span className='truncate flex-1'>
+                                        {pIdx + 1}.{' '}
+                                        {page.title || 'Untitled Page'}
+                                      </span>
+
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                          asChild
+                                          onClick={(e: any) =>
+                                            e.stopPropagation()
+                                          }>
+                                          <Button
+                                            size='icon'
+                                            variant='ghost'
+                                            className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
+                                            <MoreVertical className='h-3 w-3' />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48 shadow-2xl'>
+                                          <DropdownMenuItem
+                                            disabled={pIdx === 0}
+                                            onClick={() =>
+                                              handleMovePage(pIdx, 'up')
+                                            }>
+                                            <ArrowUp className='h-3.5 w-3.5 mr-2' />{' '}
+                                            Move Up
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            disabled={pIdx === pages.length - 1}
+                                            onClick={() =>
+                                              handleMovePage(pIdx, 'down')
+                                            }>
+                                            <ArrowDown className='h-3.5 w-3.5 mr-2' />{' '}
+                                            Move Down
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() =>
+                                              setPages((prev) =>
+                                                prev.map((p) =>
+                                                  p.id === page.id ?
+                                                    { ...p, chapterId: null }
+                                                  : p,
+                                                ),
+                                              )
+                                            }>
+                                            <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
+                                            Make Independent
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator className='bg-white/10' />
+                                          <DropdownMenuItem
+                                            onClick={() =>
+                                              handleDeletePage(page.id)
+                                            }>
+                                            <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
+                                            Delete Page
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
+                        );
+                      })}
 
-                          {/* Pages Indented slightly under chapter */}
-                          <div className='pl-3.5 space-y-1 border-l border-white/10'>
-                            {chPages.map((page) => {
-                              const pIdx = pages.findIndex((p) => p.id === page.id);
+                      {/* Independent Pages */}
+                      {pages.filter((p) => !p.chapterId).length > 0 && (
+                        <div className='space-y-1 pt-2 border-t border-white/5'>
+                          <span className='text-[10px] font-bold text-pw-muted uppercase pl-1 block'>
+                            Independent Pages
+                          </span>
+                          {pages
+                            .filter((p) => !p.chapterId)
+                            .map((page) => {
+                              const pIdx = pages.findIndex(
+                                (p) => p.id === page.id,
+                              );
+                              const isActive = activePageIndex === pIdx;
+
                               return (
                                 <div
                                   key={page.id}
                                   onClick={() => setActivePageIndex(pIdx)}
                                   className={cn(
-                                    'p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors group',
-                                    activePageIndex === pIdx ? 'bg-pw-primary/10 text-pw-primary' : 'hover:bg-white/[0.02] text-pw-muted'
-                                  )}
-                                >
-                                  <div className='flex items-center gap-1.5 truncate flex-1'>
-                                    <span className='font-mono text-[10px] text-pw-primary shrink-0'>pg-{pIdx + 1}</span>
-                                    <span className='truncate'>{page.title || 'Untitled Page'}</span>
-                                  </div>
+                                    'p-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all',
+                                    isActive ?
+                                      'bg-pw-primary/15 text-pw-primary font-bold'
+                                    : 'hover:bg-white/5 text-pw-muted',
+                                  )}>
+                                  <span className='truncate flex-1'>
+                                    {pIdx + 1}. {page.title || 'Untitled Page'}
+                                  </span>
 
                                   <DropdownMenu>
-                                    <DropdownMenuTrigger asChild={true as any} onClick={(e: any) => e.stopPropagation()}>
-                                      <Button size='icon' variant='ghost' className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
-                                        <ChevronRight className='h-3.5 w-3.5' />
+                                    <DropdownMenuTrigger
+                                      asChild
+                                      onClick={(e: any) => e.stopPropagation()}>
+                                      <Button
+                                        size='icon'
+                                        variant='ghost'
+                                        className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
+                                        <MoreVertical className='h-3 w-3' />
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
+                                    <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48 shadow-2xl'>
                                       <DropdownMenuSub>
                                         <DropdownMenuSubTrigger>
-                                          <span className='text-xs'>📁 Move to Chapter</span>
+                                          <BookOpen className='h-3.5 w-3.5 mr-2' />{' '}
+                                          Move to Chapter
                                         </DropdownMenuSubTrigger>
                                         <DropdownMenuPortal>
-                                          <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-44'>
-                                            <DropdownMenuItem onClick={() => handlePageSelectChapter(page.id, null)}>
-                                              <span className='text-xs text-pw-muted'>Independent (None)</span>
-                                            </DropdownMenuItem>
-                                            {chapters.map(c => (
-                                              <DropdownMenuItem key={c.id} onClick={() => handlePageSelectChapter(page.id, c.id)}>
-                                                <span className='text-xs truncate'>{c.name}</span>
+                                          <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
+                                            {chapters.map((c) => (
+                                              <DropdownMenuItem
+                                                key={c.id}
+                                                onClick={() =>
+                                                  setPages((prev) =>
+                                                    prev.map((p) =>
+                                                      p.id === page.id ?
+                                                        {
+                                                          ...p,
+                                                          chapterId: c.id,
+                                                        }
+                                                      : p,
+                                                    ),
+                                                  )
+                                                }>
+                                                {c.name}
                                               </DropdownMenuItem>
                                             ))}
                                           </DropdownMenuSubContent>
                                         </DropdownMenuPortal>
                                       </DropdownMenuSub>
 
-                                      <DropdownMenuItem disabled={pIdx === 0} onClick={() => {
-                                        if (pIdx > 0) {
-                                          const list = [...pages];
-                                          const temp = list[pIdx];
-                                          list[pIdx] = list[pIdx - 1];
-                                          list[pIdx - 1] = temp;
-                                          setPages(list);
-                                          setActivePageIndex(pIdx - 1);
-                                        }
-                                      }}>
-                                        <span className='text-xs'>⬆️ Move Up</span>
+                                      <DropdownMenuItem
+                                        disabled={pIdx === 0}
+                                        onClick={() =>
+                                          handleMovePage(pIdx, 'up')
+                                        }>
+                                        <ArrowUp className='h-3.5 w-3.5 mr-2' />{' '}
+                                        Move Up
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem disabled={pIdx === pages.length - 1} onClick={() => {
-                                        if (pIdx < pages.length - 1) {
-                                          const list = [...pages];
-                                          const temp = list[pIdx];
-                                          list[pIdx] = list[pIdx + 1];
-                                          list[pIdx + 1] = temp;
-                                          setPages(list);
-                                          setActivePageIndex(pIdx + 1);
-                                        }
-                                      }}>
-                                        <span className='text-xs'>⬇️ Move Down</span>
+                                      <DropdownMenuItem
+                                        disabled={pIdx === pages.length - 1}
+                                        onClick={() =>
+                                          handleMovePage(pIdx, 'down')
+                                        }>
+                                        <ArrowDown className='h-3.5 w-3.5 mr-2' />{' '}
+                                        Move Down
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleDeletePage(page.id)}>
-                                        <span className='text-xs text-pw-danger'>🗑️ Delete Page</span>
+                                      <DropdownMenuSeparator className='bg-white/10' />
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          handleDeletePage(page.id)
+                                        }>
+                                        <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
+                                        Delete Page
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
                               );
                             })}
-                          </div>
                         </div>
-                      );
-                    })}
-
-                    {/* Independent Pages (No chapter) */}
-                    {pages.filter(p => !p.chapterId).length > 0 && (
-                      <div className='space-y-1.5 pt-2 border-t border-white/5'>
-                        <span className='text-[10px] font-bold text-pw-muted uppercase pl-1'>Independent Pages</span>
-                        {pages.filter(p => !p.chapterId).map((page) => {
-                          const pIdx = pages.findIndex(p => p.id === page.id);
-                          return (
-                            <div
-                              key={page.id}
-                              onClick={() => setActivePageIndex(pIdx)}
-                              className={cn(
-                                'p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors group',
-                                activePageIndex === pIdx ? 'bg-pw-primary/10 text-pw-primary' : 'hover:bg-white/[0.02] text-pw-muted'
-                              )}
-                            >
-                              <div className='flex items-center gap-1.5 truncate flex-1'>
-                                <span className='font-mono text-[10px] text-pw-primary shrink-0'>pg-{pIdx + 1}</span>
-                                <span className='truncate'>{page.title || 'Untitled Page'}</span>
-                              </div>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild={true as any} onClick={(e: any) => e.stopPropagation()}>
-                                  <Button size='icon' variant='ghost' className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
-                                    <ChevronRight className='h-3.5 w-3.5' />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
-                                  <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger>
-                                      <span className='text-xs'>📁 Move to Chapter</span>
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuPortal>
-                                      <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-44'>
-                                        {chapters.map(c => (
-                                          <DropdownMenuItem key={c.id} onClick={() => handlePageSelectChapter(page.id, c.id)}>
-                                            <span className='text-xs truncate'>{c.name}</span>
-                                          </DropdownMenuItem>
-                                        ))}
-                                      </DropdownMenuSubContent>
-                                    </DropdownMenuPortal>
-                                  </DropdownMenuSub>
-
-                                  <DropdownMenuItem disabled={pIdx === 0} onClick={() => {
-                                    if (pIdx > 0) {
-                                      const list = [...pages];
-                                      const temp = list[pIdx];
-                                      list[pIdx] = list[pIdx - 1];
-                                      list[pIdx - 1] = temp;
-                                      setPages(list);
-                                      setActivePageIndex(pIdx - 1);
-                                    }
-                                  }}>
-                                    <span className='text-xs'>⬆️ Move Up</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem disabled={pIdx === pages.length - 1} onClick={() => {
-                                    if (pIdx < pages.length - 1) {
-                                      const list = [...pages];
-                                      const temp = list[pIdx];
-                                      list[pIdx] = list[pIdx + 1];
-                                      list[pIdx + 1] = temp;
-                                      setPages(list);
-                                      setActivePageIndex(pIdx + 1);
-                                    }
-                                  }}>
-                                    <span className='text-xs'>⬇️ Move Down</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDeletePage(page.id)}>
-                                    <span className='text-xs text-pw-danger'>🗑️ Delete Page</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-
-                {/* Sticky chapter re-assignment select list */}
-                {showStickyChapterSelector && (
-                  <Card className='p-3 border border-pw-primary/20 bg-pw-primary/5 space-y-2'>
-                    <span className='text-[10px] font-bold uppercase text-pw-primary block'>Select Chapter Target</span>
-                    <div className='space-y-1'>
-                      {chapters.map((ch) => (
-                        <Button
-                          key={ch.id}
-                          variant='ghost'
-                          onClick={() => handlePageSelectChapter(showStickyChapterSelector, ch.id)}
-                          className='w-full justify-start h-8 text-xs text-pw-muted hover:text-white'
-                        >
-                          {ch.name}
-                        </Button>
-                      ))}
-                      <Button
-                        variant='ghost'
-                        onClick={() => handlePageSelectChapter(showStickyChapterSelector, null)}
-                        className='w-full justify-start h-8 text-xs text-pw-danger hover:bg-pw-danger/10'
-                      >
-                        Make Independent (No Chapter)
-                      </Button>
+                      )}
                     </div>
                   </Card>
-                )}
-              </div>
 
-              {/* Editor Workspace Right */}
-              <div className='lg:col-span-8 space-y-4'>
-                {/* Front & Back Cover Creator (Dynamic Panel) */}
-                <Card className='p-5 bg-white/[0.01] border border-white/5 space-y-4'>
-                  <div className='flex items-center justify-between border-b border-white/5 pb-2'>
-                    <span className='text-xs font-bold uppercase text-pw-primary flex items-center gap-1.5'>
-                      <Sparkles className='h-4 w-4' /> Covers Creator (Front & Back Cover)
-                    </span>
-                  </div>
-
-                  <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                    {/* Front Cover Settings */}
-                    <div className='space-y-3 p-3.5 rounded-xl bg-white/[0.01] border border-white/5'>
-                      <div className='flex items-center justify-between'>
-                        <span className='text-xs font-bold text-white'>Front Cover</span>
-                        <label className='text-[10px] text-pw-muted flex items-center gap-1 cursor-pointer select-none'>
-                          <input type='checkbox' checked={hasFrontCover} onChange={(e) => setHasFrontCover(e.target.checked)} /> Include Cover
-                        </label>
-                      </div>
-                      <Input
-                        value={frontCoverTitle}
-                        onChange={(e) => setFrontCoverTitle(e.target.value)}
-                        placeholder='Book Main Title...'
-                        className='bg-white/5 border-white/10 h-9 text-xs'
-                      />
-                      <Input
-                        value={frontCoverSubtitle}
-                        onChange={(e) => setFrontCoverSubtitle(e.target.value)}
-                        placeholder='Sub-title...'
-                        className='bg-white/5 border-white/10 h-9 text-xs'
-                      />
-                      <Input
-                        value={frontCoverAuthor}
-                        onChange={(e) => setFrontCoverAuthor(e.target.value)}
-                        placeholder='Author Name...'
-                        className='bg-white/5 border-white/10 h-9 text-xs'
-                      />
-                      <div className='space-y-1'>
-                        <span className='text-[9px] text-pw-muted uppercase font-bold block'>Cover Background Image</span>
-                        <Input type='file' accept='image/*' onChange={handleFrontCoverBgUpload} className='bg-white/5 border-white/10 h-9 text-xs' />
-                      </div>
-                    </div>
-
-                    {/* Back Cover Settings */}
-                    <div className='space-y-3 p-3.5 rounded-xl bg-white/[0.01] border border-white/5'>
-                      <div className='flex items-center justify-between'>
-                        <span className='text-xs font-bold text-white'>Back Cover</span>
-                        <label className='text-[10px] text-pw-muted flex items-center gap-1 cursor-pointer select-none'>
-                          <input type='checkbox' checked={hasBackCover} onChange={(e) => setHasBackCover(e.target.checked)} /> Include Back
-                        </label>
-                      </div>
-                      <textarea
-                        value={backCoverSummary}
-                        onChange={(e) => setBackCoverSummary(e.target.value)}
-                        placeholder='Book Summary / Back blurb...'
-                        className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:border-pw-primary resize-none'
-                      />
-                      <div className='space-y-1.5'>
-                        <span className='text-[9px] text-pw-muted uppercase font-bold block'>Back Cover Color</span>
-                        <Input value={backCoverBgColor} onChange={(e) => setBackCoverBgColor(e.target.value)} className='bg-white/5 border-white/10 h-8 text-xs font-mono' />
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {activePage ? (
-                  <Card className='p-6 bg-white/[0.01] border border-white/5 space-y-4'>
-                    {/* Header Controls (Title alignment & Toggle) */}
-                    <div className='flex items-center justify-between border-b border-white/5 pb-3 flex-wrap gap-4'>
-                      <div className='flex items-center gap-2'>
-                        <Button
-                          onClick={() => setShowTitleConfig(showTitleConfig ? null : activePage.id)}
-                          size='sm'
-                          variant='outline'
-                          className='h-8 text-xs gap-1 border-white/10'
-                        >
-                          <Settings className='h-3.5 w-3.5' /> Title Settings
-                        </Button>
-                        <label className='text-xs text-pw-muted flex items-center gap-1.5 cursor-pointer select-none'>
-                          <input
-                            type='checkbox'
-                            checked={activePage.showTitle}
-                            onChange={(e) =>
-                              setPages(prev =>
-                                prev.map((p, idx) => (idx === activePageIndex ? { ...p, showTitle: e.target.checked } : p))
-                              )
-                            }
-                            className='rounded border-white/10'
-                          />
-                          Show Title
-                        </label>
-                      </div>
-
-                      {/* Display estimated metrics & warnings */}
-                      <div className='flex items-center gap-3'>
-                        <span className='text-[10px] font-mono text-pw-muted bg-white/5 px-2 py-0.5 rounded'>
-                          {wordCount} words
-                        </span>
-                        {overflowCount > 0 ? (
-                          <span className='text-[10px] font-bold text-pw-warning bg-pw-warning/10 border border-pw-warning/20 px-2 py-0.5 rounded animate-pulse'>
-                            ⚠️ Overflow! (Est: {estimatedPagesNeeded} pages)
-                          </span>
-                        ) : (
-                          <span className='text-[10px] font-bold text-pw-success bg-pw-success/10 border border-pw-success/20 px-2 py-0.5 rounded'>
-                            Fits on 1 Page
-                          </span>
+                  {/* Collapsible Book Covers Settings */}
+                  <Card className='p-4 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-3'>
+                    <div
+                      onClick={() => setShowCoverDrawer(!showCoverDrawer)}
+                      className='flex items-center justify-between cursor-pointer'>
+                      <span className='text-xs font-bold text-white uppercase flex items-center gap-2'>
+                        <BookOpen className='h-3.5 w-3.5 text-pw-primary' />{' '}
+                        Front & Back Covers
+                      </span>
+                      <ChevronRight
+                        className={cn(
+                          'h-4 w-4 text-pw-muted transition-transform',
+                          showCoverDrawer && 'rotate-90',
                         )}
-                      </div>
+                      />
                     </div>
 
-                    {/* jules edit: Collapsible title styling accordion behind a Chevron dropdown */}
-                    {showTitleConfig === activePage.id && (
-                      <Card className='p-4 border border-white/10 bg-black/40 space-y-4 rounded-xl'>
-                        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    {showCoverDrawer && (
+                      <div className='space-y-4 pt-2 border-t border-white/5'>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Front Cover Title
+                          </label>
+                          <Input
+                            value={frontCoverTitle}
+                            onChange={(e) => setFrontCoverTitle(e.target.value)}
+                            className='h-8 bg-white/5 border-white/10 text-xs'
+                          />
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Subtitle
+                          </label>
+                          <Input
+                            value={frontCoverSubtitle}
+                            onChange={(e) =>
+                              setFrontCoverSubtitle(e.target.value)
+                            }
+                            className='h-8 bg-white/5 border-white/10 text-xs'
+                          />
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Author
+                          </label>
+                          <Input
+                            value={frontCoverAuthor}
+                            onChange={(e) =>
+                              setFrontCoverAuthor(e.target.value)
+                            }
+                            className='h-8 bg-white/5 border-white/10 text-xs'
+                          />
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Back Cover Summary
+                          </label>
+                          <textarea
+                            value={backCoverSummary}
+                            onChange={(e) =>
+                              setBackCoverSummary(e.target.value)
+                            }
+                            className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+
+                {/* RIGHT WORKSPACE: EDITOR & LIVE PREVIEW */}
+                <div className='lg:col-span-8 space-y-6'>
+                  <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-3xl space-y-6 shadow-2xl'>
+                    {/* Header Row: Title + Settings Popover */}
+                    <div className='flex items-center justify-between gap-3'>
+                      <Input
+                        value={activePage.title}
+                        onChange={(e) =>
+                          setPages((prev) =>
+                            prev.map((p, idx) =>
+                              idx === activePageIndex ?
+                                { ...p, title: e.target.value }
+                              : p,
+                            ),
+                          )
+                        }
+                        placeholder='Page Title...'
+                        className='h-11 bg-white/5 border-white/10 text-base font-bold text-white rounded-xl focus:border-pw-primary flex-1'
+                      />
+
+                      {/* Clean Title Settings Popover */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant='outline'
+                            size='icon'
+                            className='h-11 w-11 border-white/10 hover:bg-white/5 shrink-0'>
+                            <Settings className='h-4 w-4 text-pw-primary' />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className='w-72 bg-[#0c0d1c] border-white/10 text-white p-4 space-y-3 rounded-2xl shadow-2xl'>
+                          <span className='text-xs font-bold uppercase tracking-wider text-pw-primary block'>
+                            Title Styling & Positioning
+                          </span>
+
                           <div className='space-y-1.5'>
-                            <label className='text-[10px] text-pw-muted uppercase font-bold'>Title Color</label>
-                            <Input
-                              value={activePage.titleColor || '#3b82f6'}
-                              onChange={(e) =>
-                                setPages(prev =>
-                                  prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleColor: e.target.value } : p))
-                                )
-                              }
-                              className='h-9 bg-white/5 border-white/10 text-xs font-mono text-pw-primary'
-                            />
-                          </div>
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] text-pw-muted uppercase font-bold'>Alignment</label>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Alignment
+                            </label>
                             <div className='flex gap-1'>
-                              <Button
-                                size='sm'
-                                variant={activePage.titleAlign === 'left' ? 'default' : 'outline'}
-                                onClick={() =>
-                                  setPages(prev =>
-                                    prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleAlign: 'left' } : p))
-                                  )
-                                }
-                                className='h-8 px-2.5'
-                              >
-                                <AlignLeft className='h-3.5 w-3.5' />
-                              </Button>
-                              <Button
-                                size='sm'
-                                variant={activePage.titleAlign === 'center' ? 'default' : 'outline'}
-                                onClick={() =>
-                                  setPages(prev =>
-                                    prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleAlign: 'center' } : p))
-                                  )
-                                }
-                                className='h-8 px-2.5'
-                              >
-                                <AlignCenter className='h-3.5 w-3.5' />
-                              </Button>
-                              <Button
-                                size='sm'
-                                variant={activePage.titleAlign === 'right' ? 'default' : 'outline'}
-                                onClick={() =>
-                                  setPages(prev =>
-                                    prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleAlign: 'right' } : p))
-                                  )
-                                }
-                                className='h-8 px-2.5'
-                              >
-                                <AlignRight className='h-3.5 w-3.5' />
-                              </Button>
+                              {(['left', 'center', 'right'] as const).map(
+                                (align) => (
+                                  <Button
+                                    key={align}
+                                    size='sm'
+                                    variant='ghost'
+                                    onClick={() =>
+                                      setPages((prev) =>
+                                        prev.map((p, idx) =>
+                                          idx === activePageIndex ?
+                                            { ...p, titleAlign: align }
+                                          : p,
+                                        ),
+                                      )
+                                    }
+                                    className={cn(
+                                      'h-7 flex-1 text-xs capitalize',
+                                      activePage.titleAlign === align ?
+                                        'bg-pw-primary text-white'
+                                      : 'hover:bg-white/5',
+                                    )}>
+                                    {align}
+                                  </Button>
+                                ),
+                              )}
                             </div>
                           </div>
 
                           <div className='space-y-1.5'>
-                            <label className='text-[10px] text-pw-muted uppercase font-bold'>Title Padding (px)</label>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Title Color
+                            </label>
                             <Input
-                              type='number'
-                              value={activePage.titlePadding ?? 4}
+                              type='color'
+                              value={activePage.titleColor || '#3b82f6'}
                               onChange={(e) =>
-                                setPages(prev =>
-                                  prev.map((p, idx) => (idx === activePageIndex ? { ...p, titlePadding: parseInt(e.target.value) || 0 } : p))
+                                setPages((prev) =>
+                                  prev.map((p, idx) =>
+                                    idx === activePageIndex ?
+                                      { ...p, titleColor: e.target.value }
+                                    : p,
+                                  ),
                                 )
                               }
-                              className='h-9 bg-white/5 border-white/10 text-xs font-mono'
+                              className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
                             />
                           </div>
+
                           <div className='space-y-1.5'>
-                            <label className='text-[10px] text-pw-muted uppercase font-bold'>Title Bottom Margin (px)</label>
-                            <Input
-                              type='number'
-                              value={activePage.titleMargin ?? 10}
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Page Margins
+                            </label>
+                            <select
+                              value={pageMargin}
                               onChange={(e) =>
-                                setPages(prev =>
-                                  prev.map((p, idx) => (idx === activePageIndex ? { ...p, titleMargin: parseInt(e.target.value) || 0 } : p))
-                                )
+                                setPageMargin(e.target.value as any)
                               }
-                              className='h-9 bg-white/5 border-white/10 text-xs font-mono'
-                            />
+                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                              <option
+                                value='compact'
+                                className='bg-[#0a0c1b]'>
+                                Compact (500 words/page)
+                              </option>
+                              <option
+                                value='normal'
+                                className='bg-[#0a0c1b]'>
+                                Normal (400 words/page)
+                              </option>
+                              <option
+                                value='wide'
+                                className='bg-[#0a0c1b]'>
+                                Wide (300 words/page)
+                              </option>
+                            </select>
                           </div>
-                        </div>
-                      </Card>
-                    )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
 
-                    {/* Page Content Fields */}
-                    <div className='space-y-4'>
-                      {activePage.showTitle && (
-                        <Input
-                          value={activePage.title}
-                          onChange={(e) =>
-                            setPages(prev =>
-                              prev.map((p, idx) => (idx === activePageIndex ? { ...p, title: e.target.value } : p))
-                            )
-                          }
-                          placeholder='Add Page Header title...'
-                          className='bg-white/5 border-white/10 h-10 text-sm font-bold focus:border-pw-primary rounded-xl'
+                    {/* Rich Text Formatting Bar */}
+                    <div className='flex items-center gap-1 bg-white/5 p-1.5 rounded-xl border border-white/10 flex-wrap'>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('b')}
+                        title='Bold'
+                        className='h-8 w-8 p-0'>
+                        <Bold className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('i')}
+                        title='Italic'
+                        className='h-8 w-8 p-0'>
+                        <Italic className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('u')}
+                        title='Underline'
+                        className='h-8 w-8 p-0'>
+                        <Underline className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('strike')}
+                        title='Strikethrough'
+                        className='h-8 w-8 p-0'>
+                        <Strikethrough className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('ul')}
+                        title='Bullet List'
+                        className='h-8 w-8 p-0'>
+                        <List className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('ol')}
+                        title='Numbered List'
+                        className='h-8 w-8 p-0'>
+                        <ListOrdered className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('quote')}
+                        title='Blockquote'
+                        className='h-8 w-8 p-0'>
+                        <Quote className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('h2')}
+                        title='Section Header'
+                        className='h-8 w-8 p-0'>
+                        <Heading className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('link')}
+                        title='Insert Link'
+                        className='h-8 w-8 p-0'>
+                        <Link2 className='h-4 w-4 text-pw-primary' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => handleFormatText('mark')}
+                        title='Highlight'
+                        className='h-8 px-2 text-pw-warning text-xs font-bold'>
+                        Highlight
+                      </Button>
+                    </div>
+
+                    {/* Fit Ratio Progress Indicator */}
+                    <div className='bg-white/[0.02] p-3 rounded-xl border border-white/5 space-y-1.5'>
+                      <div className='flex items-center justify-between text-xs font-mono'>
+                        <span className='text-pw-muted'>
+                          Page Capacity: {activeWordCount} / {wordCapacity}{' '}
+                          words
+                        </span>
+                        <span
+                          className={cn(
+                            'font-bold',
+                            activeWordCount > wordCapacity ? 'text-pw-danger'
+                            : 'text-pw-success',
+                          )}>
+                          {wordCapacity - activeWordCount > 0 ?
+                            `${wordCapacity - activeWordCount} words remaining`
+                          : 'Auto-paginating overflow'}
+                        </span>
+                      </div>
+                      <div className='w-full bg-white/10 h-1.5 rounded-full overflow-hidden'>
+                        <div
+                          className={cn(
+                            'h-full transition-all duration-300',
+                            activeWordCount > wordCapacity ? 'bg-pw-danger' : (
+                              'bg-pw-primary'
+                            ),
+                          )}
+                          style={{
+                            width: `${Math.min(100, Math.round((activeWordCount / wordCapacity) * 100))}%`,
+                          }}
                         />
-                      )}
+                      </div>
+                    </div>
 
-                      {/* Formatting Tool bar above body text (Handles selected text formatting & Highlights) */}
-                      <div className='flex items-center gap-1 bg-white/5 p-1.5 rounded-xl border border-white/10 flex-wrap'>
+                    {/* Main Content Textarea */}
+                    <textarea
+                      id='book-editor-textarea'
+                      value={activePage.content}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPages((prev) =>
+                          prev.map((p, idx) =>
+                            idx === activePageIndex ?
+                              { ...p, content: val }
+                            : p,
+                          ),
+                        );
+                        checkAutoPagination(val);
+                      }}
+                      placeholder='Write your body content here. Bullet points (*), numbered lists (1.), and tags like <b>bold</b> or [img:logo] are fully supported!'
+                      className='w-full h-64 bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-body text-pw-text focus:outline-none focus:border-pw-primary resize-none leading-relaxed'
+                    />
+
+                    {/* Visual Page Boundary Divider */}
+                    <div className='relative flex items-center justify-center my-2 select-none'>
+                      <div className='w-full border-t border-dashed border-white/15' />
+                      <span className='absolute bg-[#0c0d1c] px-3 text-[10px] font-bold text-pw-primary/60 uppercase tracking-widest'>
+                        Page {activePageIndex + 1} Printable Boundary
+                      </span>
+                    </div>
+
+                    {/* Live Physical Paper Sheet Preview Card */}
+                    <div className='space-y-3 pt-2'>
+                      <div className='flex items-center justify-between'>
+                        <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                          Physical Paper Sheet Preview
+                        </span>
                         <Button
                           size='sm'
                           variant='ghost'
-                          onClick={() => handleFormatSelectedText('b')}
-                          title='Bold (Wrap selection)'
-                          className='h-8 px-2.5 hover:bg-white/5'
-                        >
-                          <Bold className='h-4 w-4 text-pw-primary' />
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='ghost'
-                          onClick={() => handleFormatSelectedText('i')}
-                          title='Italic (Wrap selection)'
-                          className='h-8 px-2.5 hover:bg-white/5'
-                        >
-                          <Italic className='h-4 w-4 text-pw-primary' />
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='ghost'
-                          onClick={() => handleFormatSelectedText('u')}
-                          title='Underline (Wrap selection)'
-                          className='h-8 px-2.5 hover:bg-white/5'
-                        >
-                          <Underline className='h-4 w-4 text-pw-primary' />
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='ghost'
-                          onClick={() => handleFormatSelectedText('mark')}
-                          title='Highlight Text (Wrap selection)'
-                          className='h-8 px-2.5 hover:bg-white/5 text-pw-warning text-[10px] font-bold'
-                        >
-                          Highlight
+                          onClick={() =>
+                            setIsPreviewFullscreen(!isPreviewFullscreen)
+                          }
+                          className='h-7 text-[10px] text-pw-primary hover:text-white gap-1'>
+                          {isPreviewFullscreen ?
+                            <Minimize2 className='h-3 w-3' />
+                          : <Maximize2 className='h-3 w-3' />}
+                          {isPreviewFullscreen ?
+                            'Exit Fullscreen'
+                          : 'Fullscreen Preview'}
                         </Button>
                       </div>
 
-                      {/* Word counter remaining till auto split */}
-                      <div className='flex items-center justify-between text-[10px] text-pw-muted font-bold font-mono bg-white/5 p-2.5 rounded-xl border border-white/5'>
-                        <span>LIMIT: 400 WORDS/PAGE</span>
-                        {wordCount >= 400 ? (
-                          <span className='text-pw-danger font-black animate-pulse'>OVERFLOW PASS! PAGINATING...</span>
-                        ) : (
-                          <span className='text-pw-success'>{400 - wordCount} WORDS REMAINING TILL AUTO-SPLIT</span>
-                        )}
-                      </div>
-
-                      <textarea
-                        id='body-textarea'
-                        value={activePage.content}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPages(prev =>
-                            prev.map((p, idx) => (idx === activePageIndex ? { ...p, content: val } : p))
-                          );
-                          checkAutoPagination(val);
-                        }}
-                        placeholder='Type body content. Bullet lists (* item) and inline tags like <b>bold</b>, <i>italic</i>, and <mark>highlights</mark> are fully supported!'
-                        className='w-full h-80 bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none leading-relaxed font-body text-pw-text'
-                      />
-
-                      {/* Visual Dashed Divider showing the page boundary end */}
-                      <div className='relative flex items-center justify-center my-3 select-none'>
-                        <div className='absolute inset-0 flex items-center' aria-hidden='true'>
-                          <div className='w-full border-t border-dashed border-white/20' />
-                        </div>
-                        <div className='relative flex justify-center text-[9px] font-bold uppercase tracking-wider bg-[#0c0d1c] px-3 text-pw-primary/60'>
-                          ✨ Page {activePageIndex + 1} Visual Boundary (End of printable area)
-                        </div>
-                      </div>
-
-                      {/* jules edit: Live Styled Visual White Paper Book Page Preview Sheet */}
-                      <div className='space-y-1 pt-2'>
-                        <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest pl-1 block'>Page Physical Preview</span>
-                        <Card className='p-8 bg-white border border-slate-200 text-slate-800 shadow-xl rounded-2xl font-serif space-y-4 relative min-h-[380px] flex flex-col justify-between select-all selection:bg-pw-primary/20'>
-                          <div>
-                            {activePage.showTitle && (
-                              <div
-                                style={{
-                                  textAlign: activePage.titleAlign || 'left',
-                                  color: activePage.titleColor || '#3b82f6',
-                                  backgroundColor: activePage.titleBgColor || 'transparent',
-                                  padding: `${activePage.titlePadding ?? 4}px`,
-                                  marginBottom: `${activePage.titleMargin ?? 10}px`,
-                                }}
-                                className='text-2xl font-black tracking-tight border-b pb-2'
-                              >
-                                {activePage.title || 'Untitled Page'}
-                              </div>
-                            )}
-                            <div
-                              className='text-sm leading-relaxed whitespace-pre-wrap font-sans text-slate-700'
-                              dangerouslySetInnerHTML={{
-                                __html: activePage.content
-                                  .replace(/\*(.*?)(?:\n|$)/g, '<li style="margin-left: 16px; list-style-type: square; padding-left: 4px;">$1</li>') // basic list render
-                                  .replace(/<b>(.*?)<\/b>/g, '<strong>$1</strong>')
-                                  .replace(/<i>(.*?)<\/i>/g, '<em>$1</em>')
-                                  .replace(/<mark>(.*?)<\/mark>/g, '<span style="background-color: rgba(253, 224, 71, 0.4); padding: 1px 4px; border-radius: 4px;">$1</span>')
+                      <Card
+                        className={cn(
+                          'p-8 bg-white text-slate-800 rounded-2xl shadow-2xl font-serif min-h-[380px] flex flex-col justify-between select-all transition-all',
+                          isPreviewFullscreen &&
+                            'fixed inset-4 z-50 overflow-y-auto max-w-4xl mx-auto',
+                        )}>
+                        <div>
+                          {activePage.showTitle && (
+                            <h2
+                              style={{
+                                textAlign: activePage.titleAlign || 'left',
+                                color: activePage.titleColor || '#3b82f6',
+                                padding: `${activePage.titlePadding || 4}px`,
+                                marginBottom: `${activePage.titleMargin || 10}px`,
                               }}
-                            />
-                          </div>
+                              className='text-2xl font-extrabold border-b border-slate-200 pb-2'>
+                              {activePage.title || 'Untitled Page'}
+                            </h2>
+                          )}
 
-                          {/* Footnotes list render at bottom of white sheet */}
-                          {activePage.footnotes && activePage.footnotes.length > 0 && (
-                            <div className='border-t border-slate-200 pt-4 mt-8 text-[11px] text-slate-500 font-sans space-y-1'>
-                              {activePage.footnotes.map(fn => (
+                          <div
+                            className='text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans text-slate-700 mt-4'
+                            dangerouslySetInnerHTML={{
+                              __html: renderFormattedContent(
+                                activePage.content,
+                                imagePalette,
+                              ),
+                            }}
+                          />
+                        </div>
+
+                        {/* Footnotes on physical sheet */}
+                        {activePage.footnotes &&
+                          activePage.footnotes.length > 0 && (
+                            <div className='border-t border-slate-200 pt-3 mt-6 text-[10px] text-slate-500 font-sans space-y-1'>
+                              {activePage.footnotes.map((fn) => (
                                 <div key={fn.id}>
-                                  <span className='font-bold text-pw-primary mr-1'>[{fn.number}]</span> {fn.text}
+                                  <span className='font-bold text-pw-primary'>
+                                    [{fn.number}]
+                                  </span>{' '}
+                                  {fn.text}
                                 </div>
                               ))}
                             </div>
                           )}
-                        </Card>
-                      </div>
+                      </Card>
                     </div>
 
                     {/* Footnotes Panel */}
-                    <div className='border-t border-white/5 pt-4 space-y-3.5'>
-                      <div className='flex justify-between items-center'>
-                        <h4 className='text-xs font-bold uppercase tracking-wider text-pw-muted'>Footnotes & References</h4>
-                        <span className='text-[10px] text-pw-muted font-mono'>{activePage.footnotes?.length || 0} active</span>
+                    <div className='border-t border-white/5 pt-4 space-y-3'>
+                      <div className='flex items-center justify-between'>
+                        <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
+                          Page Footnotes ({activePage.footnotes?.length || 0})
+                        </span>
                       </div>
 
-                      {activePage.footnotes && activePage.footnotes.length > 0 && (
-                        <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar'>
-                          {activePage.footnotes.map((fn) => (
-                            <div key={fn.id} className='flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 text-xs'>
-                              <div className='flex items-center gap-2 truncate'>
-                                <span className='font-mono font-bold text-pw-primary'>[{fn.number}]</span>
-                                <span className='truncate text-pw-muted'>{fn.text}</span>
+                      {activePage.footnotes &&
+                        activePage.footnotes.length > 0 && (
+                          <div className='space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar'>
+                            {activePage.footnotes.map((fn) => (
+                              <div
+                                key={fn.id}
+                                className='flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 text-xs'>
+                                {editingFootnoteId === fn.id ?
+                                  <div className='flex items-center gap-2 flex-1'>
+                                    <Input
+                                      value={editingFootnoteText}
+                                      onChange={(e) =>
+                                        setEditingFootnoteText(e.target.value)
+                                      }
+                                      className='h-7 bg-black/40 border-white/20 text-xs flex-1'
+                                      autoFocus
+                                    />
+                                    <Button
+                                      size='sm'
+                                      onClick={() =>
+                                        handleSaveEditFootnote(
+                                          fn.id,
+                                          editingFootnoteText,
+                                        )
+                                      }
+                                      className='btn-primary h-7 px-2 text-[10px]'>
+                                      Save
+                                    </Button>
+                                  </div>
+                                : <>
+                                    <span className='truncate text-pw-muted'>
+                                      <strong className='text-pw-primary'>
+                                        [{fn.number}]
+                                      </strong>{' '}
+                                      {fn.text}
+                                    </span>
+                                    <div className='flex items-center gap-1'>
+                                      <Button
+                                        size='icon'
+                                        variant='ghost'
+                                        onClick={() => {
+                                          setEditingFootnoteId(fn.id);
+                                          setEditingFootnoteText(fn.text);
+                                        }}
+                                        className='h-6 w-6 text-pw-muted hover:text-pw-primary'>
+                                        <Pencil className='h-3 w-3' />
+                                      </Button>
+                                      <Button
+                                        size='icon'
+                                        variant='ghost'
+                                        onClick={() =>
+                                          handleDeleteFootnote(fn.id)
+                                        }
+                                        className='h-6 w-6 text-pw-muted hover:text-pw-danger'>
+                                        <Trash2 className='h-3 w-3' />
+                                      </Button>
+                                    </div>
+                                  </>
+                                }
                               </div>
-                              <Button
-                                size='icon'
-                                variant='ghost'
-                                onClick={() => handleRemoveFootnote(fn.id)}
-                                className='h-6 w-6 text-pw-muted hover:text-pw-danger'
-                              >
-                                <Trash2 className='h-3.5 w-3.5' />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        )}
 
                       <div className='flex gap-2'>
                         <Input
                           value={footnoteInput}
                           onChange={(e) => setFootnoteInput(e.target.value)}
-                          placeholder='Add footnote text...'
-                          className='h-10 bg-white/5 border-white/10 text-xs'
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddFootnote()}
+                          placeholder='Add a new footnote for this page...'
+                          className='h-9 bg-white/5 border-white/10 text-xs'
+                          onKeyDown={(e) =>
+                            e.key === 'Enter' && handleAddFootnote()
+                          }
                         />
-                        <Button onClick={handleAddFootnote} size='sm' className='btn-primary h-10 px-4 text-xs font-bold shrink-0'>
+                        <Button
+                          onClick={handleAddFootnote}
+                          className='btn-primary h-9 px-4 text-xs font-bold shrink-0'>
                           Add Footnote
                         </Button>
                       </div>
                     </div>
-
-                    {/* Export compilation options */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mt-2'>
-                      <Button onClick={handleCompileBookPdf} className='btn-primary h-12 gap-2 font-bold'>
-                        <Download className='h-4 w-4' /> Compile Full Book PDF
-                      </Button>
-                      <Button onClick={handleExportBookAsWord} className='btn-secondary h-12 gap-2 font-bold bg-white/5 border border-white/10 text-white hover:bg-white/10'>
-                        <FileCode className='h-4 w-4' /> Export Book as Word (.doc)
-                      </Button>
-                    </div>
                   </Card>
-                ) : (
-                  <p className='text-center py-20 text-pw-muted text-xs'>No active pages found. Add a page or chapter stack on the left navigator.</p>
-                )}
+                </div>
               </div>
             </div>
-          </TabsContent>
-
-          {/* PDF TO WORD */}
-          <TabsContent value='pdf-to-word' className='m-0 space-y-6'>
-            {!pdfTextResult ?
-              <div
-                onClick={() => document.getElementById('pdf-to-word-input')?.click()}
-                className='flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'
-              >
-                <input
-                  id='pdf-to-word-input'
-                  type='file'
-                  accept='.pdf'
-                  onChange={handlePdfToWordUpload}
-                  className='hidden'
-                />
-                <div className='w-12 h-12 rounded-2xl bg-pw-surface border border-white/10 flex items-center justify-center mb-4 shadow-2xl group-hover:scale-110 transition-transform'>
-                  <Upload className='h-6 w-6 text-pw-secondary' />
-                </div>
-                <h3 className='text-xl font-bold font-display mb-1'>Upload PDF Document</h3>
-                <p className='text-pw-muted text-xs max-w-sm'>
-                  Extracts text streams and structures a genuine Microsoft Word (.doc) document.
-                </p>
-              </div>
-            : <div className='space-y-4'>
-                <div className='flex justify-between items-center'>
-                  <p className='text-xs text-pw-success font-bold uppercase'>
-                    Extracted Stream: {extractedFileName}
-                  </p>
-                  <Button
-                    variant='outline'
-                    onClick={() => {
-                      setPdfTextResult('');
-                      setExtractedFileName('');
-                    }}
-                    className='h-9 px-3 border-white/5 hover:bg-white/5 text-pw-muted hover:text-pw-text'
-                  >
-                    Reset
-                  </Button>
-                </div>
-                <div className='bg-black/40 border border-white/5 rounded-xl p-4 text-xs font-mono max-h-60 overflow-y-auto select-all leading-relaxed whitespace-pre-wrap text-pw-text'>
-                  {pdfTextResult}
-                </div>
-                <Button onClick={handleExportWordDoc} className='btn-primary h-12 gap-2 w-full font-bold'>
-                  <Download className='h-4 w-4' /> Export as Microsoft Word Document (.doc)
-                </Button>
-              </div>
-            }
-          </TabsContent>
-
-          {/* WORD TO PDF */}
-          <TabsContent value='word-to-pdf' className='m-0 space-y-6'>
-            {!wordTextContent ?
-              <div
-                onClick={() => document.getElementById('word-to-pdf-input')?.click()}
-                className='flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'
-              >
-                <input
-                  id='word-to-pdf-input'
-                  type='file'
-                  accept='.doc,.docx,.txt'
-                  onChange={handleWordToPdfUpload}
-                  className='hidden'
-                />
-                <div className='w-12 h-12 rounded-2xl bg-pw-surface border border-white/10 flex items-center justify-center mb-4 shadow-2xl group-hover:scale-110 transition-transform'>
-                  <Upload className='h-6 w-6 text-pw-primary' />
-                </div>
-                <h3 className='text-xl font-bold font-display mb-1 flex items-center gap-1.5'>
-                  Upload Word Document (.doc, .docx, .txt)
-                </h3>
-                <p className='text-pw-muted text-xs max-w-sm'>
-                  Compiles Word document layout layers into standard formatted PDF documents.
-                </p>
-              </div>
-            : <div className='space-y-4'>
-                <div className='flex justify-between items-center'>
-                  <p className='text-xs text-pw-success font-bold uppercase'>Loaded Word Content:</p>
-                  <Button
-                    variant='outline'
-                    onClick={() => {
-                      setWordFile(null);
-                      setWordTextResult('');
-                    }}
-                    className='h-9 px-3 border-white/5 hover:bg-white/5 text-pw-muted hover:text-pw-text'
-                  >
-                    Reset
-                  </Button>
-                </div>
-                <textarea
-                  value={wordTextContent}
-                  onChange={(e) => setWordTextResult(e.target.value)}
-                  className='w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-xs font-mono text-pw-text focus:outline-none focus:border-pw-primary'
-                />
-                <Button onClick={handleExportWordToPdf} className='btn-primary h-12 gap-2 w-full font-bold'>
-                  <Download className='h-4 w-4' /> Export as PDF Document
-                </Button>
-              </div>
-            }
-          </TabsContent>
-
-          {/* MERGE PDFs */}
-          <TabsContent value='merge' className='m-0 space-y-6'>
-            <div className='space-y-4'>
-              <div className='flex justify-between items-center flex-wrap gap-4'>
-                <h3 className='text-sm font-bold flex items-center gap-1.5 text-pw-muted'>
-                  <Sliders className='h-4 w-4 text-pw-primary' /> Consolidation Queue ({mergeFiles.length} files)
-                </h3>
-                <Button
-                  onClick={() => document.getElementById('pdf-merge-input')?.click()}
-                  variant='outline'
-                  className='h-10 border-white/10 hover:bg-white/5 text-xs font-bold gap-2'
-                >
-                  <Upload className='h-4 w-4' /> Add Documents
-                </Button>
-                <input
-                  id='pdf-merge-input'
-                  type='file'
-                  multiple
-                  accept='.pdf'
-                  className='hidden'
-                  onChange={handleAddMergeFile}
-                />
-              </div>
-
-              <div className='space-y-2.5 max-h-60 overflow-y-auto'>
-                {mergeFiles.map((file) => (
-                  <div key={file.id} className='p-3.5 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between'>
-                    <div>
-                      <span className='text-xs font-bold text-pw-text'>{file.name}</span>
-                      <span className='text-[10px] text-pw-muted block mt-0.5'>{file.size}</span>
-                    </div>
-                    <Button
-                      onClick={() => setMergeFiles(mergeFiles.filter((f) => f.id !== file.id))}
-                      variant='ghost'
-                      className='h-8 w-8 p-0 text-pw-muted hover:text-pw-danger'
-                    >
-                      <Trash2 className='h-3.5 w-3.5' />
-                    </Button>
-                  </div>
-                ))}
-
-                {mergeFiles.length < 2 && (
-                  <p className='text-center py-10 text-xs text-pw-muted'>
-                    Queue must have at least 2 files to merge. Add more documents to compile.
-                  </p>
-                )}
-              </div>
-
-              <Button onClick={executeMerge} disabled={mergeFiles.length < 2} className='btn-primary h-12 gap-2 w-full font-bold mt-4'>
-                <Layers className='h-4 w-4' /> Merge
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </Card>
-
-      {/* Suggested utilities */}
-      <div className='mt-20 space-y-6'>
-        <h2 className='text-2xl font-bold font-display flex items-center gap-2'>
-          <Sparkles className='h-5 w-5 text-pw-primary animate-pulse' /> Suggested Utilities
-        </h2>
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-          {matchedSuggestions.map((tool) => (
-            <a href={tool.href} key={tool.id} className='group'>
-              <Card className='card-glow p-5 flex flex-col h-full bg-[#0c0d1c] border border-white/5 hover:border-pw-primary/30 transition-all cursor-pointer'>
-                <div className='flex items-center gap-3 mb-3'>
-                  <div className='w-10 h-10 rounded-xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-105 transition-all'>
-                    <tool.icon className='h-5 w-5' style={{ color: tool.color }} />
-                  </div>
-                  <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
-                    {tool.tag}
-                  </span>
-                </div>
-                <h4 className='text-base font-bold text-pw-text group-hover:text-pw-primary transition-colors flex items-center gap-1'>
-                  {tool.title}
-                  <ChevronRight className='h-4 w-4 text-pw-muted group-hover:text-pw-primary' />
-                </h4>
-                <p className='text-xs text-pw-muted mt-2 leading-relaxed flex-1'>
-                  {tool.description}
-                </p>
-              </Card>
-            </a>
-          ))}
+          }
         </div>
-      </div>
+      )}
 
-      {/* Image Palette Dialog Modal */}
-      <Dialog open={showImagePaletteDialog} onOpenChange={setShowImagePaletteDialog}>
-        <DialogContent className='max-w-xl w-full bg-[#0c0d1c] border border-white/10 rounded-2xl text-pw-text p-6 max-h-[85vh] overflow-y-auto custom-scrollbar'>
+      {/* ── TAB 3: MERGE PDFs ──────────────────────────────────────── */}
+      {activeTab === 'merge' && (
+        <Card className='bg-transparent ring-0 sm:ring-1 sm:p-10 sm:bg-[#0c0d1c] sm:border sm:border-white/10 sm:rounded-3xl sm:shadow-2xl space-y-8 max-w-4xl mx-auto'>
+          <div className='flex items-center justify-between flex-wrap gap-4'>
+            <div>
+              <h2 className='text-2xl font-bold font-display text-white'>
+                Merge PDF Documents
+              </h2>
+              <p className='text-xs text-pw-muted'>
+                Combine multiple PDF files into one structured document.
+              </p>
+            </div>
+            <Button
+              onClick={() =>
+                document.getElementById('pdf-merge-file-input')?.click()
+              }
+              className='btn-primary h-10 px-5 text-xs font-bold gap-2'>
+              <Upload className='h-4 w-4' /> Add Documents
+            </Button>
+            <input
+              id='pdf-merge-file-input'
+              type='file'
+              multiple
+              accept='.pdf'
+              className='hidden'
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files) {
+                  const arr = Array.from(files).map((f) => ({
+                    id: `merge-${Date.now()}-${Math.random()}`,
+                    name: f.name,
+                    size: `${(f.size / 1024).toFixed(1)} KB`,
+                    file: f,
+                  }));
+                  setMergeFiles((prev) => [...prev, ...arr]);
+                  toast.success(`Added ${arr.length} files to queue.`);
+                }
+              }}
+            />
+          </div>
+
+          {mergeFiles.length > 0 ?
+            <div className='space-y-2.5 max-h-80 overflow-y-auto custom-scrollbar'>
+              {mergeFiles.map((item, idx) => (
+                <div
+                  key={item.id}
+                  className='p-3.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between'>
+                  <div className='flex items-center gap-3'>
+                    <span className='font-mono font-bold text-pw-primary text-xs'>
+                      {idx + 1}.
+                    </span>
+                    <div>
+                      <span className='text-xs font-bold text-white block'>
+                        {item.name}
+                      </span>
+                      <span className='text-[10px] text-pw-muted font-mono'>
+                        {item.size}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    size='icon'
+                    variant='ghost'
+                    onClick={() =>
+                      setMergeFiles((prev) =>
+                        prev.filter((f) => f.id !== item.id),
+                      )
+                    }
+                    className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
+                    <Trash2 className='h-4 w-4' />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          : <div className='py-16 text-center border-2 border-dashed border-white/10 rounded-2xl text-pw-muted text-xs'>
+              No PDF files queued yet. Click &quot;Add Documents&quot; to begin
+              merging.
+            </div>
+          }
+
+          <Button
+            disabled={mergeFiles.length < 2}
+            onClick={async () => {
+              const toastId = toast.loading('Merging PDF documents...');
+              try {
+                const { PDFDocument } = await import('pdf-lib');
+                const mergedPdf = await PDFDocument.create();
+
+                for (const item of mergeFiles) {
+                  const bytes = await item.file.arrayBuffer();
+                  const donorPdf = await PDFDocument.load(bytes);
+                  const pages = await mergedPdf.copyPages(
+                    donorPdf,
+                    donorPdf.getPageIndices(),
+                  );
+                  pages.forEach((p) => mergedPdf.addPage(p));
+                }
+
+                const mergedBytes = await mergedPdf.save();
+                const blob = new Blob([mergedBytes], {
+                  type: 'application/pdf',
+                });
+                const { saveAs } = await import('file-saver');
+                saveAs(blob, `merged-document-${Date.now()}.pdf`);
+
+                toast.dismiss(toastId);
+                toast.success('🎉 Successfully merged and downloaded PDFs!');
+              } catch (err: any) {
+                toast.dismiss(toastId);
+                toast.error(
+                  'Failed to merge PDFs: ' +
+                    (err?.message || 'Please try again.'),
+                );
+              }
+            }}
+            className='btn-primary h-12 w-full text-sm font-bold shadow-xl gap-2'>
+            <Sliders className='h-4 w-4' /> Merge {mergeFiles.length} PDF
+            Documents
+          </Button>
+        </Card>
+      )}
+
+      {/* ── IMAGE PALETTE MODAL ────────────────────────────────────── */}
+      <Dialog
+        open={showImagePaletteDialog}
+        onOpenChange={setShowImagePaletteDialog}>
+        <DialogContent className='max-w-2xl bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-6 shadow-2xl'>
           <DialogHeader>
-            <DialogTitle className='text-lg font-bold font-display flex items-center gap-1.5'>
-              <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Reference Palette
+            <DialogTitle className='text-lg font-bold font-display flex items-center gap-2 text-white'>
+              <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Reference
+              Palette
             </DialogTitle>
             <DialogDescription className='text-xs text-pw-muted'>
-              Upload images to your book palette, rename them, and reference them in your page body using the syntax: <span className='font-mono text-pw-primary font-bold'>image[ref_name]</span>.
+              Upload and manage images. Reference any image in your body text
+              using <code>[img:ref_name]</code>.
             </DialogDescription>
           </DialogHeader>
 
-          <div className='space-y-6 pt-4'>
-            {/* Upload Area */}
-            <div
-              onClick={() => document.getElementById('palette-upload-input')?.click()}
-              className='flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-white/5 rounded-2xl bg-white/[0.01] hover:bg-white/[0.02] cursor-pointer transition-all'
-            >
-              <input
-                id='palette-upload-input'
-                type='file'
-                accept='image/*'
-                onChange={handleImagePaletteUpload}
-                className='hidden'
-              />
-              <Upload className='h-5 w-5 text-pw-muted mb-2' />
-              <span className='text-xs font-bold'>Upload Image Asset</span>
-              <span className='text-[10px] text-pw-muted mt-1'>PNG, JPG, WEBP formats</span>
-            </div>
+          {/* Image Palette List */}
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
+            {imagePalette.map((item) => (
+              <div
+                key={item.id}
+                className='p-3 rounded-2xl bg-white/5 border border-white/5 space-y-2 flex flex-col justify-between'>
+                <div className='flex items-center gap-3'>
+                  <img
+                    src={item.src}
+                    alt={item.name}
+                    className='w-14 h-14 object-contain rounded-lg bg-black/40 p-1 border border-white/10'
+                  />
+                  <div className='min-w-0 flex-1'>
+                    <span className='text-xs font-bold text-white block truncate'>
+                      [img:{item.name}]
+                    </span>
+                    <span className='text-[10px] text-pw-muted font-mono'>
+                      {item.width}x{item.height}px
+                    </span>
+                  </div>
+                </div>
 
-            {/* List of active images in the palette */}
-            <div className='space-y-4'>
-              <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted'>Active Palette Assets ({imagePalette.length})</span>
-              <div className='grid grid-cols-2 gap-4'>
-                {imagePalette.map((item) => (
-                  <Card key={item.id} className='p-3 bg-white/[0.02] border border-white/5 space-y-2 rounded-xl relative group'>
-                    <div className='aspect-video rounded-lg overflow-hidden border border-white/10 relative'>
-                      <img src={item.src} alt={item.name} className='w-full h-full object-cover' />
-                    </div>
-                    <div className='space-y-1'>
-                      <label className='text-[9px] font-bold text-pw-muted uppercase'>Reference Name</label>
-                      <Input
-                        value={item.name}
-                        onChange={(e) =>
-                          setImagePalette(prev =>
-                            prev.map(img => img.id === item.id ? { ...img, name: e.target.value.toLowerCase().replace(/\s+/g, '_') } : img)
-                          )
-                        }
-                        className='h-8 bg-white/5 border-white/10 text-xs font-mono text-pw-primary'
-                      />
-                    </div>
-                    <div className='flex gap-1.5 pt-1.5'>
-                      <Button onClick={() => handleInsertImagePaletteRef(item.name)} size='sm' className='h-8 text-[10px] btn-primary flex-1'>
-                        Insert to Content
-                      </Button>
-                      <Button
-                        onClick={() => setImagePalette(prev => prev.filter(img => img.id !== item.id))}
-                        variant='ghost'
-                        size='icon'
-                        className='h-8 w-8 text-pw-muted hover:text-pw-danger'
-                      >
-                        <Trash2 className='h-4 w-4' />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                <div className='flex items-center gap-1.5 pt-1'>
+                  <Button
+                    size='sm'
+                    onClick={() => {
+                      const tag = ` [img:${item.name}] `;
+                      const textarea = document.getElementById(
+                        'book-editor-textarea',
+                      ) as HTMLTextAreaElement;
+                      const cursor =
+                        textarea ?
+                          textarea.selectionStart
+                        : activePage.content.length;
+                      const updated =
+                        activePage.content.substring(0, cursor) +
+                        tag +
+                        activePage.content.substring(cursor);
+                      setPages((prev) =>
+                        prev.map((p, idx) =>
+                          idx === activePageIndex ?
+                            { ...p, content: updated }
+                          : p,
+                        ),
+                      );
+                      setShowImagePaletteDialog(false);
+                      toast.success(`Inserted [img:${item.name}] into text!`);
+                    }}
+                    className='btn-primary h-7 text-[10px] flex-1'>
+                    Insert into Text
+                  </Button>
+                  <Button
+                    size='icon'
+                    variant='ghost'
+                    onClick={() =>
+                      setImagePalette((prev) =>
+                        prev.filter((p) => p.id !== item.id),
+                      )
+                    }
+                    className='h-7 w-7 text-pw-muted hover:text-pw-danger'>
+                    <Trash2 className='h-3.5 w-3.5' />
+                  </Button>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
 
-          <DialogFooter>
-            <Button onClick={() => setShowImagePaletteDialog(false)} variant='outline' className='h-10 text-xs px-6 border-white/10'>
-              Close Palette
+          <DialogFooter className='flex flex-row justify-between items-center pt-2'>
+            <input
+              id='palette-upload-input'
+              type='file'
+              accept='image/*'
+              className='hidden'
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const src = ev.target?.result as string;
+                    const cleanName = file.name
+                      .replace(/\.[^/.]+$/, '')
+                      .replace(/[^a-zA-Z0-9_]/g, '_')
+                      .toLowerCase();
+                    const newItem: ImagePaletteItem = {
+                      id: `palette-${Date.now()}`,
+                      name: cleanName || 'graphic',
+                      src,
+                      width: 140,
+                      height: 140,
+                    };
+                    setImagePalette((prev) => [...prev, newItem]);
+                    toast.success(`Image added! Tag: [img:${newItem.name}]`);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+            />
+            <Button
+              onClick={() =>
+                document.getElementById('palette-upload-input')?.click()
+              }
+              className='btn-primary h-9 text-xs font-bold gap-1.5'>
+              <Upload className='h-3.5 w-3.5' /> Upload Image Asset
+            </Button>
+            <Button
+              onClick={() => setShowImagePaletteDialog(false)}
+              variant='outline'
+              className='h-9 text-xs font-semibold border-white/10'>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isNameModalOpen} onOpenChange={setIsNameModalOpen}>
-        <DialogContent className='max-w-md w-full bg-[#0c0d1c] pt-5 border border-white/10 rounded-2xl shadow-2xl text-pw-text'>
-          <DialogHeader className='p-2'>
-            <DialogTitle className='text-xl font-extrabold font-display'>Export Name Customization</DialogTitle>
-            <DialogDescription className='text-pw-muted text-xs'>
-              Specify the filename you want to save. Do not include extensions.
+      {/* ── UNIFIED EXPORT MODAL ────────────────────────────────────── */}
+      <Dialog
+        open={showExportModal}
+        onOpenChange={setShowExportModal}>
+        <DialogContent className='max-w-md bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-6 shadow-2xl space-y-4'>
+          <DialogHeader>
+            <DialogTitle className='text-lg font-bold font-display text-white'>
+              Export Book Manuscript
+            </DialogTitle>
+            <DialogDescription className='text-xs text-pw-muted'>
+              Choose your export document format and filename.
             </DialogDescription>
           </DialogHeader>
 
-          <div className='space-y-4'>
-            <div className='relative'>
+          <div className='space-y-3'>
+            <div className='space-y-1.5'>
+              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                Filename
+              </label>
               <Input
-                value={filenameInput}
-                onChange={(e) => setFilenameInput(e.target.value)}
-                placeholder='Enter filename...'
-                className='card-glow bg-transparent h-11 text-sm border-white/5 focus-visible:ring-0 w-full'
+                value={exportFilename}
+                onChange={(e) => setExportFilename(e.target.value)}
+                placeholder='book-manuscript'
+                className='h-9 bg-white/5 border-white/10 text-xs font-semibold'
               />
-              <span className='absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-pw-primary font-mono uppercase'>
-                .{filenameExtension}
-              </span>
+            </div>
+
+            <div className='space-y-1.5'>
+              <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                Select Format
+              </label>
+              <div className='grid grid-cols-3 gap-2'>
+                {(
+                  [
+                    { id: 'pdf', label: 'PDF Document (.pdf)' },
+                    { id: 'doc', label: 'MS Word (.doc)' },
+                    { id: 'txt', label: 'Plain Text (.txt)' },
+                  ] as const
+                ).map((fmt) => (
+                  <Button
+                    key={fmt.id}
+                    type='button'
+                    variant='ghost'
+                    onClick={() => setExportFormat(fmt.id)}
+                    className={cn(
+                      'h-12 flex flex-col items-center justify-center text-[10px] font-bold rounded-xl border transition-all',
+                      exportFormat === fmt.id ?
+                        'bg-pw-primary/20 border-pw-primary text-pw-primary shadow-lg'
+                      : 'bg-white/5 border-white/10 text-pw-muted hover:text-white',
+                    )}>
+                    {fmt.label}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <DialogFooter className='flex flex-col sm:flex-row gap-2'>
-            <button
-              onClick={() => setIsNameModalOpen(false)}
-              className='flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all'
-            >
+          <DialogFooter className='flex flex-row justify-end gap-2 pt-2'>
+            <Button
+              onClick={() => setShowExportModal(false)}
+              variant='outline'
+              className='h-9 text-xs border-white/10'>
               Cancel
-            </button>
-            <button
-              onClick={handleConfirmFilename}
-              className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white'
-            >
-              Export
-            </button>
+            </Button>
+            <Button
+              onClick={handleExecuteBookExport}
+              className='btn-primary h-9 px-5 text-xs font-bold'>
+              Export & Download
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

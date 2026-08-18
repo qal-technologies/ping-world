@@ -17,8 +17,12 @@ import {
   Pencil,
   Brain,
   Code,
+  Search,
+  ArrowRight,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -28,7 +32,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
-import {useAppContext} from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
+import { SEARCH_INDEX, SearchPageItem } from '@/lib/general/search-data';
 
 const toolLinks = [
   {
@@ -68,8 +73,50 @@ export const Navbar = () => {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState<any | null>();
-  const {isLoggedIn } = useAppContext();
-  
+  const { isLoggedIn } = useAppContext();
+
+  // Search Bar States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim().toLowerCase());
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const searchResults = useMemo(() => {
+    if (!debouncedQuery) return [];
+    return SEARCH_INDEX.filter((item) => {
+      const matchTitle = item.title.toLowerCase().includes(debouncedQuery);
+      const matchDesc = item.description.toLowerCase().includes(debouncedQuery);
+      const matchKeywords = item.keywords.some((k) =>
+        k.toLowerCase().includes(debouncedQuery),
+      );
+      return matchTitle || matchDesc || matchKeywords;
+    }).slice(0, 6);
+  }, [debouncedQuery]);
+
+  // Click outside to close search dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(e.target as Node) &&
+        mobileSearchRef.current &&
+        !mobileSearchRef.current.contains(e.target as Node)
+      ) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const navLinks = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/tools', label: 'Browse Tools', icon: Wrench },
@@ -91,8 +138,9 @@ export const Navbar = () => {
   }, []);
 
   return (
-    <header className='fixed top-0 left-0 right-0 z-50 border-bb border-cyan/5 h-[11vh] mb-50'>
-      <nav className='mx-auto w-[100%] flex items-center justify-between px-6 py-4 nav-glass'>
+    <header className='fixed top-0 left-0 right-0 z-50'>
+      {/* Main Navbar Bar */}
+      <nav className='mx-auto w-[100%] flex items-center justify-between px-6 py-3.5 nav-glass border-b border-white/5'>
         {/* Logo */}
         <Link
           href='/'
@@ -102,7 +150,7 @@ export const Navbar = () => {
             height={40}
             src='/images/logo.png'
             alt='Ping World Logo'
-            className='h-15 w-15 object-fit'
+            className='h-9 w-9 object-fit'
           />
 
           <span className='text-lg font-bold font-display tracking-tight text-pw-text group-hover:text-pw-primary transition-colors duration-300'>
@@ -113,18 +161,18 @@ export const Navbar = () => {
         {/* Desktop Nav */}
         <div
           className='hidden items-center gap-2 lg:flex shrink-0'
-          style={{ minWidth: '60%', width: 'auto', justifyContent: 'center' }}>
+          style={{ minWidth: '55%', width: 'auto', justifyContent: 'center' }}>
           {/* Tools Dropdown */}
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger>
               <div
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all hover:bg-white/5',
+                  'flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all hover:bg-white/5 cursor-pointer',
                   toolLinks.some((l) => pathname === l.href) ?
                     'text-pw-primary bg-pw-primary/5'
-                  : 'hover:text-pw-text',
+                  : 'hover:text-pw-text text-pw-muted',
                 )}>
-                <Wrench className='h-4 w-4' />
+                <Wrench className='h-3.5 w-3.5' />
                 Tools
                 <ChevronDown className='h-3 w-3 opacity-50' />
               </div>
@@ -132,7 +180,7 @@ export const Navbar = () => {
             <DropdownMenuContent
               align='start'
               className='w-64 p-2 bg-pw-surface border-white/10 glass shadow-2xl'>
-              <div className='px-2 py-2 mb-1 text-[10px] font-bold uppercase tracking-widest text'>
+              <div className='px-2 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
                 Utility Suite
               </div>
               {toolLinks.map((tool) => {
@@ -146,9 +194,9 @@ export const Navbar = () => {
                     href={tool.href}>
                     <Link
                       href={tool.href}
-                      className='flex flex-col gap-0.2 p-1 transition-all cursor-pointer group'>
-                      <div className='flex items-center gap-2 font-medium text-pw-text group-hover:text-pw-primary'>
-                        <tool.icon className='h-4 w-4' />
+                      className='flex flex-col gap-0.5 p-1 transition-all cursor-pointer group'>
+                      <div className='flex items-center gap-2 font-medium text-xs text-pw-text group-hover:text-pw-primary'>
+                        <tool.icon className='h-3.5 w-3.5' />
                         {tool.label}
                       </div>
                       <span
@@ -176,10 +224,10 @@ export const Navbar = () => {
                   key={link?.href}
                   href={link?.href}
                   className={cn(
-                    'relative px-5 py-2 text-sm font-medium rounded-lg transition-colors duration-200 li-glass',
+                    'relative px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors duration-200',
                     isActive ?
                       'text-pw-cyan bg-pw-cyan/5'
-                    : 'text-pw-mutded hover:text-pw-text hover:bg-white/5',
+                    : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
                   )}>
                   {link?.label}
                 </Link>
@@ -189,17 +237,17 @@ export const Navbar = () => {
 
         {/* Right section */}
         <div className='flex items-center gap-3'>
-          {isLoggedIn ? pathname !== '/dashboard' ?
-            <Link
-              href={'/dashboard'}
-              className={cn('hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20')}>
-              Dashboard
+          {isLoggedIn ?
+            pathname !== '/dashboard' ?
+              <Link
+                href={'/dashboard'}
+                className={cn('hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20')}>
+                Dashboard
             </Link> : <div className='hidden md:inline-flex btn-primary text-sm px-10 py-2 opacity-0'>Dashboard</div>
           : !session && (
               <Link
                 href='/login'
-                target='_blank'
-                className='hidden md:inline-flex btn-primary text-sm px-10 py-2 shadow-lg shadow-pw-primary/20'>
+                className='hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20'>
                 Sign In
               </Link>
             )
@@ -215,6 +263,84 @@ export const Navbar = () => {
         </div>
       </nav>
 
+      {/* Desktop Search Attachment Bar (Separated below header, aligned right) */}
+      <div className='hidden lg:flex justify-end px-6 pt-2 pb-1 pointer-events-none'>
+        <div
+          ref={searchContainerRef}
+          className='relative pointer-events-auto w-80'>
+          <div className='flex items-center gap-2 bg-[#0c0d1c]/90 border border-white/10 px-3 py-1.5 rounded-full shadow-xl backdrop-blur-md focus-within:border-pw-primary/60 transition-all'>
+            <Search className='h-3.5 w-3.5 text-pw-muted shrink-0' />
+            <input
+              type='text'
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              placeholder='Search tools, pages (e.g. pdf, word, pricing)...'
+              className='bg-transparent border-none text-xs text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setIsSearchOpen(false);
+                }}
+                className='text-pw-muted hover:text-white'>
+                <X className='h-3 w-3' />
+              </button>
+            )}
+          </div>
+
+          {/* Absolute floating search results list */}
+          {isSearchOpen && debouncedQuery && (
+            <div className='absolute right-0 top-full mt-2 w-96 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl z-50 max-h-[380px] overflow-y-auto custom-scrollbar p-2'>
+              <div className='px-3 py-1 text-[9px] font-black uppercase tracking-wider text-pw-muted flex items-center justify-between'>
+                <span>Matching Results</span>
+                <span className='font-mono text-pw-primary'>{searchResults.length} found</span>
+              </div>
+
+              {searchResults.length > 0 ? (
+                <div className='space-y-1 mt-1'>
+                  {searchResults.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className='p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/5 flex items-start gap-2.5 transition-all group block'>
+                      <div className='p-2 rounded-lg bg-pw-primary/10 text-pw-primary shrink-0 mt-0.5 group-hover:scale-105 transition-transform'>
+                        <Search className='h-3.5 w-3.5' />
+                      </div>
+                      <div className='flex-1 min-w-0'>
+                        <div className='flex items-center justify-between gap-1'>
+                          <span className='text-xs font-bold text-pw-text group-hover:text-pw-primary truncate'>
+                            {item.title}
+                          </span>
+                          <span className='text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-pw-muted font-bold'>
+                            {item.category}
+                          </span>
+                        </div>
+                        <p className='text-[10px] text-pw-muted mt-0.5 line-clamp-1 leading-relaxed'>
+                          {item.description}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className='py-6 text-center text-xs text-pw-muted'>
+                  No tools or pages matched &quot;{debouncedQuery}&quot;
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Mobile Menu */}
       {mobileOpen && (
         <motion.div
@@ -224,6 +350,55 @@ export const Navbar = () => {
           className='lg:hidden border-t border-white/5 nav-glass'
           style={{ backdropFilter: 'brightness(50%) blur(12px)' }}>
           <div className='flex flex-col gap-1 px-6 py-6'>
+            {/* Mobile Search Bar - Top of listings, w-full */}
+            <div
+              ref={mobileSearchRef}
+              className='relative w-full mb-4'>
+              <div className='flex items-center gap-2 bg-[#0c0d1c] border border-white/10 px-3.5 py-2.5 rounded-xl shadow-lg focus-within:border-pw-primary'>
+                <Search className='h-4 w-4 text-pw-muted shrink-0' />
+                <input
+                  type='text'
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder='Search tools, pages (pdf, word, pricing)...'
+                  className='bg-transparent border-none text-xs text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')}>
+                    <X className='h-3.5 w-3.5 text-pw-muted' />
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile search results dropdown */}
+              {debouncedQuery && (
+                <div className='absolute left-0 right-0 top-full mt-2 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto p-2'>
+                  {searchResults.length > 0 ? (
+                    searchResults.map((item) => (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        onClick={() => {
+                          setMobileOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className='p-2 rounded-xl hover:bg-white/5 flex items-center justify-between text-xs text-pw-text'>
+                        <div>
+                          <span className='font-bold text-pw-primary block'>{item.title}</span>
+                          <span className='text-[10px] text-pw-muted line-clamp-1'>{item.description}</span>
+                        </div>
+                        <ArrowRight className='h-3.5 w-3.5 text-pw-muted shrink-0' />
+                      </Link>
+                    ))
+                  ) : (
+                    <div className='p-3 text-center text-xs text-pw-muted'>
+                      No results found
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {[...navLinks]
               .filter((n) => n.isLogged !== true)
               .map((link) => {
@@ -276,7 +451,6 @@ export const Navbar = () => {
               <Link
                 href='/dashboard'
                 onClick={() => setMobileOpen(false)}
-                target='_blank'
                 className='btn-ghost text-sm text-center mt-4 h-12'>
                 Dashboard
               </Link>
@@ -284,7 +458,6 @@ export const Navbar = () => {
                 <Link
                   href='/login'
                   onClick={() => setMobileOpen(false)}
-                  target='_blank'
                   className='btn-primary text-sm text-center mt-4 h-12'>
                   Sign In
                 </Link>

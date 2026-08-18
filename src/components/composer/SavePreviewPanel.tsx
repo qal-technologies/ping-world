@@ -57,11 +57,12 @@ export function SavePreviewPanel() {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(previewRef.current, {
-        scale: 1.5,
+        scale: 2,
         backgroundColor: '#02040f',
         logging: false,
         useCORS: true,
-        allowTaint: true
+        allowTaint: false,
+        imageTimeout: 5000,
       });
 
       const ctx = canvas.getContext('2d');
@@ -79,32 +80,68 @@ export function SavePreviewPanel() {
         ctx.fillText('pingwrld.com', canvas.width - 118, canvas.height - 12);
       }
 
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          toast.error('Failed to capture preview blob.');
-          setIsCapturing(false);
-          return;
-        }
+      const handleCapturedBlob = (blob: Blob) => {
         const downloadUrl = URL.createObjectURL(blob);
         setPreviewBlob(downloadUrl);
         setRawBlob(blob);
-        toast.success('Preview captured!');
+        toast.success('Preview captured successfully!');
         setIsCapturing(false);
+      };
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          handleCapturedBlob(blob);
+        } else {
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            const arr = dataUrl.split(',');
+            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+              u8arr[n] = bstr.charCodeAt(n);
+            }
+            const fallbackBlob = new Blob([u8arr], { type: mime });
+            handleCapturedBlob(fallbackBlob);
+          } catch (err) {
+            console.error('Blob conversion error:', err);
+            toast.error('Could not export image. Please try again.');
+            setIsCapturing(false);
+          }
+        }
       }, 'image/png');
     } catch (e) {
-      toast.error('Failed to capture preview.');
+      console.error('Capture error:', e);
+      toast.error('Failed to capture preview image.');
       setIsCapturing(false);
     }
   };
 
   const downloadPreview = async () => {
-    if (!rawBlob) return;
+    if (!rawBlob) {
+      toast.error('No preview captured yet. Click "Capture Preview Image" first.');
+      return;
+    }
     try {
       const { saveAs } = await import('file-saver');
       saveAs(rawBlob, `pingworld-post-preview-${Date.now()}.png`);
-      toast.success('Preview saved!');
+      toast.success('Preview image saved to your device!');
     } catch (e) {
-      toast.error('Failed to save preview blob.');
+      // Fallback link trigger
+      try {
+        const url = URL.createObjectURL(rawBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pingworld-post-preview-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        toast.success('Preview saved to your device!');
+      } catch (err) {
+        toast.error('Failed to save preview image.');
+      }
     }
   };
 

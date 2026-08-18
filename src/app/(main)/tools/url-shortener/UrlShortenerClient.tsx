@@ -24,8 +24,9 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '@/lib/supabase';
+import { HybridStorage } from '@/lib/storage-utils';
 import { useAppContext } from '@/context/AppContext';
-import { formatDate } from '@/lib/utils'; 
+import { formatDate } from '@/lib/utils';
 
 interface ClickLog {
   clicked_at: string;
@@ -53,28 +54,16 @@ export default function UrlShortenerPage() {
   const [result, setResult] = useState<ShortLink | null>(null);
   const [copied, setCopied] = useState(false);
   const [linksList, setLinksList] = useState<ShortLink[]>([]);
-  const [selectedLinkAnalytics, setSelectedLinkAnalytics] = useState<ShortLink | null>(null);
+  const [selectedLinkAnalytics, setSelectedLinkAnalytics] =
+    useState<ShortLink | null>(null);
 
-  // Load user's links
+  // Load user's links via HybridStorage
   const fetchUserLinks = async () => {
-    if (!user) {
-      // Offline / unauthenticated fallback: load from localStorage
-      const cached = localStorage.getItem('pw_short_links');
-      if (cached) {
-        setLinksList(JSON.parse(cached));
-      }
-      return;
-    }
     try {
-      const { data, error } = await supabase
-        .from('short_links')
-        .select('*')
-        .eq('creator_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setLinksList(data);
-      }
+      const initial = await HybridStorage.getAll('link', (fresh) => {
+        setLinksList(fresh || []);
+      });
+      setLinksList(initial || []);
     } catch (err) {
       console.error(err);
     }
@@ -82,7 +71,7 @@ export default function UrlShortenerPage() {
 
   useEffect(() => {
     fetchUserLinks();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleShorten = async (e: React.FormEvent) => {
@@ -96,14 +85,17 @@ export default function UrlShortenerPage() {
 
     setIsShortening(true);
 
-    const linkId = customSuffix.trim()
-      ? customSuffix.trim().replace(/[^a-zA-Z0-9-_]/g, '')
+    const linkId =
+      customSuffix.trim() ?
+        customSuffix.trim().replace(/[^a-zA-Z0-9-_]/g, '')
       : Math.random().toString(36).substring(2, 8);
 
     // Validate custom suffix (premium only check)
     if (customSuffix.trim() && !isPremium) {
       setIsShortening(false);
-      return toast.error('Custom link aliases are exclusive to Premium users! Please upgrade to continue.');
+      return toast.error(
+        'Custom link aliases are exclusive to Premium users! Please upgrade to continue.',
+      );
     }
 
     let expiresAt: string | null = null;
@@ -122,42 +114,42 @@ export default function UrlShortenerPage() {
       created_at: new Date().toISOString(),
     };
 
-    if (user) {
-      // Save to Supabase
-      const { error } = await supabase
-        .from('short_links')
-        .insert({
+    try {
+      await HybridStorage.save(
+        linkId,
+        {
           id: linkId,
-          creator_id: user.id,
+          creator_id: user?.id || 'anon',
           original_url: targetUrl,
+          originalUrl: targetUrl,
           expires_at: expiresAt,
           clicks: 0,
           clicks_data: [],
-        });
+          created_at: new Date().toISOString(),
+        },
+        'link',
+      );
 
-      if (error) {
-        setIsShortening(false);
-        return toast.error('Alias already taken or failed to shorten: ' + error.message);
+      setResult(newLink);
+      fetchUserLinks();
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        toast.info('Saved locally - will sync when back online');
+      } else {
+        toast.success('Link shortened successfully!');
       }
-    } else {
-      // Save to LocalStorage fallback
-      const cached = localStorage.getItem('pw_short_links');
-      const list = cached ? JSON.parse(cached) : [];
-      list.unshift(newLink);
-      localStorage.setItem('pw_short_links', JSON.stringify(list));
+    } catch (err: any) {
+      toast.error('Failed to shorten link: ' + (err.message || err));
+    } finally {
+      setIsShortening(false);
+      setUrl('');
+      setCustomSuffix('');
+      setExpiryDays('');
     }
-
-    setResult(newLink);
-    fetchUserLinks();
-    setIsShortening(false);
-    toast.success('Link shortened successfully!');
-    setUrl('');
-    setCustomSuffix('');
-    setExpiryDays('');
   };
 
   const copyToClipboard = (shortId: string) => {
-    const domain = typeof window !== 'undefined' ? window.location.origin : 'pingworld.site';
+    const domain =
+      typeof window !== 'undefined' ? window.location.origin : 'pingworld.site';
     const shortUrl = `${domain}/s/${shortId}`;
     navigator.clipboard.writeText(shortUrl);
     setCopied(true);
@@ -166,20 +158,16 @@ export default function UrlShortenerPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (user) {
-      await supabase.from('short_links').delete().eq('id', id);
-    } else {
-      const cached = localStorage.getItem('pw_short_links');
-      if (cached) {
-        const filtered = JSON.parse(cached).filter((l: any) => l.id !== id);
-        localStorage.setItem('pw_short_links', JSON.stringify(filtered));
+    try {
+      await HybridStorage.delete(id, 'link');
+      toast.success('Short link removed.');
+      if (selectedLinkAnalytics?.id === id) {
+        setSelectedLinkAnalytics(null);
       }
+      fetchUserLinks();
+    } catch {
+      toast.error('Failed to delete short link.');
     }
-    toast.success('Short link removed.');
-    if (selectedLinkAnalytics?.id === id) {
-      setSelectedLinkAnalytics(null);
-    }
-    fetchUserLinks();
   };
 
   // Helper to format date nicely (dayName, day, month, year)
@@ -208,7 +196,8 @@ export default function UrlShortenerPage() {
           URL <span className='gradient-text'>Shortener & Analytics.</span>
         </h1>
         <p className='max-w-xl text-pw-muted text-sm leading-relaxed'>
-          Transform long, complex URLs into neat redirection links. Monitor click performance, and analyze referrer networks.
+          Transform long, complex URLs into neat redirection links. Monitor
+          click performance, and analyze referrer networks.
         </p>
       </div>
 
@@ -216,10 +205,16 @@ export default function UrlShortenerPage() {
         {/* Creator Panel */}
         <div className='lg:col-span-5 space-y-6'>
           <Card className='card-glow p-6 space-y-4'>
-            <h3 className='font-bold text-md border-b border-white/5 pb-2'>Create Branded Link</h3>
-            <form onSubmit={handleShorten} className='space-y-4'>
+            <h3 className='font-bold text-md border-b border-white/5 pb-2'>
+              Create Branded Link
+            </h3>
+            <form
+              onSubmit={handleShorten}
+              className='space-y-4'>
               <div className='space-y-1.5'>
-                <label className='text-xs font-bold text-pw-muted uppercase'>Destination URL</label>
+                <label className='text-xs font-bold text-pw-muted uppercase'>
+                  Destination URL
+                </label>
                 <div className='relative'>
                   <LinkIcon className='absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pw-muted' />
                   <Input
@@ -248,16 +243,33 @@ export default function UrlShortenerPage() {
                   />
                 </div>
                 <div className='space-y-1.5'>
-                  <label className='text-xs font-bold text-pw-muted uppercase'>Expiry (Days)</label>
+                  <label className='text-xs font-bold text-pw-muted uppercase'>
+                    Expiry (Days)
+                  </label>
                   <select
                     value={expiryDays}
                     onChange={(e) => setExpiryDays(e.target.value)}
-                    className='w-full h-11 rounded-xl bg-white/5 border border-white/10 px-3 text-xs focus:outline-none focus:border-pw-primary text-pw-muted'
-                  >
-                    <option value='' className='bg-[#0A0C1B]'>Never Expire</option>
-                    <option value='1' className='bg-[#0A0C1B]'>1 Day</option>
-                    <option value='7' className='bg-[#0A0C1B]'>7 Days</option>
-                    <option value='30' className='bg-[#0A0C1B]'>30 Days</option>
+                    className='w-full h-11 rounded-xl bg-white/5 border border-white/10 px-3 text-xs focus:outline-none focus:border-pw-primary text-pw-muted'>
+                    <option
+                      value=''
+                      className='bg-[#0A0C1B]'>
+                      Never Expire
+                    </option>
+                    <option
+                      value='1'
+                      className='bg-[#0A0C1B]'>
+                      1 Day
+                    </option>
+                    <option
+                      value='7'
+                      className='bg-[#0A0C1B]'>
+                      7 Days
+                    </option>
+                    <option
+                      value='30'
+                      className='bg-[#0A0C1B]'>
+                      30 Days
+                    </option>
                   </select>
                 </div>
               </div>
@@ -265,8 +277,7 @@ export default function UrlShortenerPage() {
               <Button
                 type='submit'
                 disabled={isShortening || !url}
-                className='btn-primary h-11 w-full rounded-xl font-bold gap-2'
-              >
+                className='btn-primary h-11 w-full rounded-xl font-bold gap-2'>
                 {isShortening ?
                   <div className='h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin' />
                 : <>
@@ -283,22 +294,27 @@ export default function UrlShortenerPage() {
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-              >
+                exit={{ opacity: 0, y: -15 }}>
                 <Card className='p-6 border-pw-primary/20 bg-pw-primary/5 space-y-4'>
                   <div>
-                    <h4 className='text-xs font-bold text-pw-primary uppercase tracking-widest'>Redirection URL</h4>
+                    <h4 className='text-xs font-bold text-pw-primary uppercase tracking-widest'>
+                      Redirection URL
+                    </h4>
                     <div className='flex items-center gap-2 mt-2 bg-black/40 p-3 rounded-xl border border-pw-primary/20'>
                       <span className='text-sm font-bold text-white truncate flex-1 font-mono'>
-                        {typeof window !== 'undefined' ? window.location.origin : 'pingworld.site'}/s/{result.id}
+                        {typeof window !== 'undefined' ?
+                          window.location.origin
+                        : 'pingworld.site'}
+                        /s/{result.id}
                       </span>
                       <Button
                         size='icon'
                         variant='ghost'
                         onClick={() => copyToClipboard(result.id)}
-                        className='h-8 w-8 text-pw-primary hover:bg-pw-primary/10'
-                      >
-                        {copied ? <Check className='h-4 w-4' /> : <Copy className='h-4 w-4' />}
+                        className='h-8 w-8 text-pw-primary hover:bg-pw-primary/10'>
+                        {copied ?
+                          <Check className='h-4 w-4' />
+                        : <Copy className='h-4 w-4' />}
                       </Button>
                     </div>
                   </div>
@@ -320,7 +336,9 @@ export default function UrlShortenerPage() {
           <Card className='card-glow p-6 space-y-4'>
             <div className='flex justify-between items-center border-b border-white/5 pb-2'>
               <h3 className='font-bold text-md'>Your Shortened Links</h3>
-              <span className='text-xs font-mono text-pw-muted'>{linksList.length} total</span>
+              <span className='text-xs font-mono text-pw-muted'>
+                {linksList.length} total
+              </span>
             </div>
 
             <div className='space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar'>
@@ -329,13 +347,18 @@ export default function UrlShortenerPage() {
                   key={link.id}
                   onClick={() => setSelectedLinkAnalytics(link)}
                   className={`p-3.5 rounded-xl border border-white/5 hover:border-pw-primary/20 cursor-pointer transition-all flex items-center justify-between ${
-                    selectedLinkAnalytics?.id === link.id ? 'bg-pw-primary/5 border-pw-primary/30' : 'bg-white/[0.01]'
-                  }`}
-                >
+                    selectedLinkAnalytics?.id === link.id ?
+                      'bg-pw-primary/5 border-pw-primary/30'
+                    : 'bg-white/[0.01]'
+                  }`}>
                   <div className='space-y-1 max-w-[80%]'>
                     <div className='flex items-center gap-2'>
-                      <span className='font-bold text-sm text-white font-mono'>/s/{link.id}</span>
-                      <span className='text-[10px] text-pw-muted truncate max-w-xs' title={link.original_url}>
+                      <span className='font-bold text-sm text-white font-mono'>
+                        /s/{link.id}
+                      </span>
+                      <span
+                        className='text-[10px] text-pw-muted truncate max-w-xs'
+                        title={link.original_url}>
                         &rarr; {link.original_url}
                       </span>
                     </div>
@@ -354,8 +377,7 @@ export default function UrlShortenerPage() {
                         e.stopPropagation();
                         handleDelete(link.id);
                       }}
-                      className='h-8 w-8 text-pw-muted hover:text-pw-danger'
-                    >
+                      className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
                       <Trash2 className='h-3.5 w-3.5' />
                     </Button>
                   </div>
@@ -364,7 +386,8 @@ export default function UrlShortenerPage() {
 
               {linksList.length === 0 && (
                 <p className='text-center py-10 text-xs text-pw-muted'>
-                  No shortened links created yet. Paste a link above to get started!
+                  No shortened links created yet. Paste a link above to get
+                  started!
                 </p>
               )}
             </div>
@@ -375,15 +398,18 @@ export default function UrlShortenerPage() {
             <Card className='card-glow p-6 space-y-6'>
               <div className='flex justify-between items-start border-b border-white/5 pb-2'>
                 <div>
-                  <h4 className='font-bold text-sm text-pw-primary'>Redirection Analytics: /s/{selectedLinkAnalytics.id}</h4>
-                  <p className='text-xs text-pw-muted mt-1 truncate max-w-lg'>Target: {selectedLinkAnalytics.original_url}</p>
+                  <h4 className='font-bold text-sm text-pw-primary'>
+                    Redirection Analytics: /s/{selectedLinkAnalytics.id}
+                  </h4>
+                  <p className='text-xs text-pw-muted mt-1 truncate max-w-lg'>
+                    Target: {selectedLinkAnalytics.original_url}
+                  </p>
                 </div>
                 <Button
                   size='sm'
                   variant='outline'
                   onClick={() => copyToClipboard(selectedLinkAnalytics.id)}
-                  className='h-8 text-[11px] gap-1'
-                >
+                  className='h-8 text-[11px] gap-1'>
                   <Share2 className='h-3 w-3' /> Share
                 </Button>
               </div>
@@ -391,30 +417,43 @@ export default function UrlShortenerPage() {
               {/* Top stats summary */}
               <div className='grid grid-cols-3 gap-4'>
                 <div className='bg-white/5 border border-white/5 p-4 rounded-xl text-center'>
-                  <span className='text-pw-muted text-[10px] uppercase font-bold block mb-1'>Total Clicks</span>
-                  <span className='text-lg font-bold font-mono text-pw-primary'>{selectedLinkAnalytics.clicks || 0}</span>
+                  <span className='text-pw-muted text-[10px] uppercase font-bold block mb-1'>
+                    Total Clicks
+                  </span>
+                  <span className='text-lg font-bold font-mono text-pw-primary'>
+                    {selectedLinkAnalytics.clicks || 0}
+                  </span>
                 </div>
                 <div className='bg-white/5 border border-white/5 p-4 rounded-xl text-center relative overflow-hidden group'>
-                  <span className='text-pw-muted text-[10px] uppercase font-bold block mb-1'>Primary Region</span>
+                  <span className='text-pw-muted text-[10px] uppercase font-bold block mb-1'>
+                    Primary Region
+                  </span>
                   {isPremium ?
                     <span className='text-sm font-bold truncate block'>
                       {selectedLinkAnalytics.clicks_data?.[0]?.country || 'N/A'}
                     </span>
                   : <div className='flex flex-col items-center justify-center gap-0.5 mt-0.5'>
                       <Crown className='h-3.5 w-3.5 text-amber-500' />
-                      <span className='text-[9px] text-amber-500 font-bold'>PRO</span>
+                      <span className='text-[9px] text-amber-500 font-bold'>
+                        PRO
+                      </span>
                     </div>
                   }
                 </div>
                 <div className='bg-white/5 border border-white/5 p-4 rounded-xl text-center relative overflow-hidden group'>
-                  <span className='text-pw-muted text-[10px] uppercase font-bold block mb-1'>Best Referrer</span>
+                  <span className='text-pw-muted text-[10px] uppercase font-bold block mb-1'>
+                    Best Referrer
+                  </span>
                   {isPremium ?
                     <span className='text-sm font-bold truncate block'>
-                      {selectedLinkAnalytics.clicks_data?.[0]?.referrer || 'N/A'}
+                      {selectedLinkAnalytics.clicks_data?.[0]?.referrer ||
+                        'N/A'}
                     </span>
                   : <div className='flex flex-col items-center justify-center gap-0.5 mt-0.5'>
                       <Crown className='h-3.5 w-3.5 text-amber-500' />
-                      <span className='text-[9px] text-amber-500 font-bold'>PRO</span>
+                      <span className='text-[9px] text-amber-500 font-bold'>
+                        PRO
+                      </span>
                     </div>
                   }
                 </div>
@@ -423,7 +462,9 @@ export default function UrlShortenerPage() {
               {/* Detailed Click History Table (Premium Only) */}
               <div className='space-y-2.5'>
                 <div className='flex items-center justify-between'>
-                  <h4 className='text-xs font-bold text-pw-muted uppercase'>Geographic Click Logs</h4>
+                  <h4 className='text-xs font-bold text-pw-muted uppercase'>
+                    Geographic Click Logs
+                  </h4>
                   {!isPremium && (
                     <span className='badge-premium flex items-center gap-1 text-[9px]'>
                       <Crown className='h-2.5 w-2.5' /> Premium Only
@@ -442,21 +483,38 @@ export default function UrlShortenerPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedLinkAnalytics.clicks_data && selectedLinkAnalytics.clicks_data.length > 0 ?
-                          selectedLinkAnalytics.clicks_data.map((click, idx) => (
-                            <tr key={idx} className='border-b border-white/5 last:border-0 hover:bg-white/[0.02]'>
-                              <td className='p-2.5 font-mono text-[11px]'>{formatNiceDate(click.clicked_at)}</td>
-                              <td className='p-2.5 flex items-center gap-1.5'>
-                                <Globe className='h-3.5 w-3.5 text-pw-primary' />
-                                <span>{click.country} ({click.city})</span>
-                              </td>
-                              <td className='p-2.5 text-pw-muted truncate max-w-[120px]' title={click.referrer}>
-                                {click.referrer}
-                              </td>
-                            </tr>
-                          ))
+                        {(
+                          selectedLinkAnalytics.clicks_data &&
+                          selectedLinkAnalytics.clicks_data.length > 0
+                        ) ?
+                          selectedLinkAnalytics.clicks_data.map(
+                            (click, idx) => (
+                              <tr
+                                key={idx}
+                                className='border-b border-white/5 last:border-0 hover:bg-white/[0.02]'>
+                                <td className='p-2.5 font-mono text-[11px]'>
+                                  {formatNiceDate(click.clicked_at)}
+                                </td>
+                                <td className='p-2.5 flex items-center gap-1.5'>
+                                  <Globe className='h-3.5 w-3.5 text-pw-primary' />
+                                  <span>
+                                    {click.country} ({click.city})
+                                  </span>
+                                </td>
+                                <td
+                                  className='p-2.5 text-pw-muted truncate max-w-[120px]'
+                                  title={click.referrer}>
+                                  {click.referrer}
+                                </td>
+                              </tr>
+                            ),
+                          )
                         : <tr>
-                            <td colSpan={3} className='p-8 text-center text-pw-muted text-xs'>No clicks recorded yet.</td>
+                            <td
+                              colSpan={3}
+                              className='p-8 text-center text-pw-muted text-xs'>
+                              No clicks recorded yet.
+                            </td>
                           </tr>
                         }
                       </tbody>
@@ -474,14 +532,17 @@ export default function UrlShortenerPage() {
                       <div className='h-9 w-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-1'>
                         <Crown className='h-4.5 w-4.5 text-amber-500' />
                       </div>
-                      <p className='text-xs font-bold text-white'>Unlock Geographic & Referrer Logs</p>
+                      <p className='text-xs font-bold text-white'>
+                        Unlock Geographic & Referrer Logs
+                      </p>
                       <p className='text-[10px] text-pw-muted max-w-sm mx-auto leading-relaxed'>
-                        Standard, Pro, and Flexible plan accounts unlock complete visitor details including precise geographical locations, referrers, and device breakdowns.
+                        Standard, Pro, and Flexible plan accounts unlock
+                        complete visitor details including precise geographical
+                        locations, referrers, and device breakdowns.
                       </p>
                       <Button
-                        onClick={() => window.location.href = '/pricing'}
-                        className='btn-premium h-8 text-[11px] px-4 rounded-full font-bold'
-                      >
+                        onClick={() => (window.location.href = '/pricing')}
+                        className='btn-premium h-8 text-[11px] px-4 rounded-full font-bold'>
                         Upgrade to Premium
                       </Button>
                     </div>

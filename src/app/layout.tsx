@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 import { fontDisplay, fontBody, fontMono } from '@/lib/fonts';
 import { AppProvider } from '@/context/AppContext';
+import { AppModalProvider } from '@/components/ui/AppModalProvider';
 import { ComposerProvider } from '@/lib/composer/useComposerStore';
 import './globals.css';
 
@@ -127,7 +128,9 @@ export default function RootLayout({
       </head>
       <body className='min-h-dvh flex flex-col antialiased'>
         <AppProvider>
-          <ComposerProvider>{children}</ComposerProvider>
+          <AppModalProvider>
+            <ComposerProvider>{children}</ComposerProvider>
+          </AppModalProvider>
         </AppProvider>
         <Toaster
           position='bottom-right'

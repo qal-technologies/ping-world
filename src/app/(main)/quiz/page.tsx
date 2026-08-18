@@ -133,6 +133,7 @@ export interface Quiz {
   title: string;
   description: string;
   type: 'quiz' | 'survey';
+  surveyType?: 'research' | 'form'; // research = branching/page-by-page; form = scroll-all, no branching
   questions: Question[];
   canGoBack?: boolean;
   showScore?: boolean;
@@ -158,7 +159,6 @@ export interface Quiz {
   expires_at?: string; // ISO date — max 3 days from creation, cleaned by cron
   quizScroll?: boolean;
   quizLayout?: string;
-  surveyType?: string;
   branding?: {
     image?: string;
     opacity?: number;
@@ -275,7 +275,9 @@ const QuizBuilder = ({
 
   const addQuestion = (category?: string) => {
     if (editedQuiz.questions.length >= 10 && premiumTier === 'free') {
-      return toast.error('Free tier accounts are capped at a maximum of 10 questions per quiz! Please upgrade to add more.');
+      return toast.error(
+        'Free tier accounts are capped at a maximum of 10 questions per quiz! Please upgrade to add more.',
+      );
     }
 
     const qId = Math.random().toString(36).substr(2, 9);
@@ -522,7 +524,11 @@ const QuizBuilder = ({
                         <Button
                           variant='ghost'
                           onClick={() =>
-                            setEditedQuiz({ ...editedQuiz, type: 'survey', surveyType: 'research' })
+                            setEditedQuiz({
+                              ...editedQuiz,
+                              type: 'survey',
+                              surveyType: 'research',
+                            })
                           }
                           className={cn(
                             'flex-1 h-9 rounded-full transition-all',
@@ -538,25 +544,45 @@ const QuizBuilder = ({
                     {editedQuiz.type === 'survey' && (
                       <div className='space-y-2'>
                         <label className='text-xs font-bold text-pw-muted uppercase tracking-widest block'>
-                          Survey Purpose / Style
+                          Survey Style
                         </label>
                         <select
                           value={editedQuiz.surveyType || 'research'}
                           onChange={(e) => {
-                            const val = e.target.value;
+                            const val = e.target.value as 'research' | 'form';
+                            const isForm = val === 'form';
                             setEditedQuiz({
                               ...editedQuiz,
                               surveyType: val,
-                              quizLayout: val === 'form' ? 'scroll' : 'single',
-                              quizScroll: val === 'form',
+                              // Form forces scroll-all; research keeps current or defaults to single
+                              quizLayout:
+                                isForm ? 'scroll'
+                                : editedQuiz.quizLayout === 'scroll' ? 'single'
+                                : editedQuiz.quizLayout,
+                              quizScroll: isForm,
                             });
-                            toast.success(`Survey style set to: ${val.toUpperCase()}`);
+                            toast.success(
+                              `Survey style set to ${isForm ? 'Form (Scroll All enforced)' : 'Research (Branching enabled)'}`,
+                            );
                           }}
-                          className='w-full h-10 rounded-xl bg-white/5 border border-white/10 px-3 text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
-                        >
-                          <option value='research' className='bg-[#0A0C1B]'>Research (Logical Branching, Page-by-Page)</option>
-                          <option value='form' className='bg-[#0A0C1B]'>Form / Feedback (Scroll-All, No Branching)</option>
+                          className='w-full h-10 rounded-xl bg-white/5 border border-white/10 px-3 text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
+                          <option
+                            value='research'
+                            className='bg-[#0A0C1B]'>
+                            Research — Logical Branching, Page-by-Page
+                          </option>
+                          <option
+                            value='form'
+                            className='bg-[#0A0C1B]'>
+                            Form / Feedback — Scroll All (Branching Disabled)
+                          </option>
                         </select>
+                        {editedQuiz.surveyType === 'form' && (
+                          <p className='text-[10px] text-pw-warning ml-1 mt-1'>
+                            ⚠ Form type locks layout to Scroll All. Branching
+                            is disabled.
+                          </p>
+                        )}
                       </div>
                     )}
                     <div className='space-y-2'>
@@ -1162,24 +1188,66 @@ const QuizBuilder = ({
                       <div className='flex flex-col gap-4 pt-2'>
                         <QuizSettingItem
                           label='Quiz Layout Presentation'
-                          description='Select how questions are rendered visually: Scroll All (continuous), Scroll Show (add next on-response), or Single Show (page-by-page).'>
-                          <select
-                            value={editedQuiz.quizLayout || (editedQuiz.quizScroll ? 'scroll' : 'single')}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                quizLayout: val,
-                                quizScroll: val !== 'single',
-                              });
-                              toast.success(`Layout changed to: ${val.toUpperCase().replace('_', ' ')}`);
-                            }}
-                            className='bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none cursor-pointer'
-                          >
-                            <option value='single' className='bg-[#0A0C1B]'>Single Show (Standard)</option>
-                            <option value='scroll' className='bg-[#0A0C1B]'>Scroll All (Continuous)</option>
-                            <option value='scroll_show' className='bg-[#0A0C1B]'>Scroll Show (On Response)</option>
-                          </select>
+                          description={
+                            editedQuiz.surveyType === 'form' ?
+                              'Form type is locked to Scroll All, all other layouts are disabled.'
+                            : editedQuiz.quizScroll ?
+                              'Branching is only available in Single Show (Progressive) mode.'
+                            : 'Select how questions are rendered visually: Single Show (page-by-page), Scroll All (continuous), or Scroll Show (add next on-response).'
+
+                          }>
+                          <div className='flex flex-col gap-1'>
+                            <select
+                              value={
+                                editedQuiz.quizLayout ||
+                                (editedQuiz.quizScroll ? 'scroll' : 'single')
+                              }
+                              disabled={editedQuiz.surveyType === 'form'}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  quizLayout: val,
+                                  quizScroll: val !== 'single',
+                                });
+                                toast.success(
+                                  `Layout changed to: ${val.toUpperCase().replace('_', ' ')}`,
+                                );
+                              }}
+                              className={cn(
+                                'bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none cursor-pointer',
+                                editedQuiz.surveyType === 'form' &&
+                                  'opacity-40 cursor-not-allowed',
+                              )}>
+                              <option
+                                value='single'
+                                className='bg-[#0A0C1B]'>
+                                Single Show - Progressive (Branching Enabled)
+                              </option>
+                              <option
+                                value='scroll'
+                                className='bg-[#0A0C1B]'
+                                disabled={
+                                  editedQuiz.surveyType === 'form' ?
+                                    false
+                                  : false
+                                }>
+                                Scroll All - Continuous (Branching Disabled)
+                              </option>
+                              <option
+                                value='scroll_show'
+                                className='bg-[#0A0C1B]'>
+                                Scroll Show - On Response (Branching Disabled)
+                              </option>
+                            </select>
+                            {editedQuiz.quizScroll &&
+                              editedQuiz.surveyType !== 'form' && (
+                                <p className='text-[10px] text-pw-muted ml-1'>
+                                  💡 Switch to Single Show to enable logical
+                                  branching on questions and options.
+                                </p>
+                              )}
+                          </div>
                         </QuizSettingItem>
 
                         <div className='space-y-4 mt-4 border-t border-white/5 pt-4'>
@@ -1539,155 +1607,174 @@ const QuizBuilder = ({
                         </div>
 
                         {/* Question-level routing dropdown */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger>
+                        {(editedQuiz.quizScroll ||
+                          editedQuiz.quizLayout === 'scroll' ||
+                          editedQuiz.quizLayout === 'scroll_show' ||
+                          editedQuiz.surveyType === 'form') ? (
+                          <div className='relative group'>
                             <Button
                               variant='ghost'
                               size='sm'
-                              className={cn(
-                                'h-6 text-[10px] gap-1 px-2',
-                                (
-                                  editedQuiz.questions[currentStep].skipTo ||
-                                    editedQuiz.questions[currentStep].skipToCat
-                                ) ?
-                                  'text-pw-warning hover:text-pw-warning/80'
-                                : 'text-pw-muted hover:text-pw-primary',
-                              )}>
-                              {editedQuiz.questions[currentStep].skipToCat ?
-                                `↪ Group: ${editedQuiz.questions[currentStep].skipToCat}`
-                              : (
-                                editedQuiz.questions[currentStep].skipTo ===
-                                'end'
-                              ) ?
-                                '⛔ Ends Here'
-                              : editedQuiz.questions[currentStep].skipTo ?
-                                `↪ Q${editedQuiz.questions.findIndex((q) => q.id === editedQuiz.questions[currentStep].skipTo) + 1}`
-                              : 'Next →'}
+                              disabled
+                              className='h-6 text-[10px] gap-1 px-2 text-pw-muted opacity-40 cursor-not-allowed'>
+                              Next →
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 max-h-[280px] overflow-y-auto'>
-                            <div className='px-2 pt-1.5 pb-0.5'>
-                              <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
-                                After this question…
-                              </p>
+                            <div className='absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-[#0E1026] border border-white/10 text-[9px] text-white px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none'>
+                              Branching logic is exclusive to Progressive Single-Show mode
                             </div>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                const cur = {
-                                  ...editedQuiz.questions[currentStep],
-                                };
-                                delete cur.skipTo;
-                                delete (cur as any).skipToCat;
-                                updateQuestion(currentStep, cur);
-                              }}>
-                              <span className='text-xs text-pw-muted'>
-                                ↩ Default (Next in order)
-                              </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                const cur = {
-                                  ...editedQuiz.questions[currentStep],
-                                };
-                                delete (cur as any).skipToCat;
-                                updateQuestion(currentStep, {
-                                  ...cur,
-                                  skipTo: 'end',
-                                });
-                              }}>
-                              <span className='text-xs text-pw-danger'>
-                                ⛔ Finish Assessment
-                              </span>
-                            </DropdownMenuItem>
-
-                            {editedQuiz.questions.filter(
-                              (q) =>
-                                q.id !== editedQuiz.questions[currentStep].id,
-                            ).length > 0 && (
-                              <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                          </div>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger>
+                              <Button
+                                variant='ghost'
+                                size='sm'
+                                className={cn(
+                                  'h-6 text-[10px] gap-1 px-2',
+                                  (
+                                    editedQuiz.questions[currentStep].skipTo ||
+                                    editedQuiz.questions[currentStep].skipToCat
+                                  ) ?
+                                    'text-pw-warning hover:text-pw-warning/80'
+                                    : 'text-pw-muted hover:text-pw-primary',
+                                )}>
+                                {editedQuiz.questions[currentStep].skipToCat ?
+                                  `↪ Group: ${editedQuiz.questions[currentStep].skipToCat}`
+                                  : (
+                                    editedQuiz.questions[currentStep].skipTo ===
+                                    'end'
+                                  ) ?
+                                    '⛔ Ends Here'
+                                    : editedQuiz.questions[currentStep].skipTo ?
+                                      `↪ Q${editedQuiz.questions.findIndex((q) => q.id === editedQuiz.questions[currentStep].skipTo) + 1}`
+                                      : 'Next →'}
+                              </Button>
+                            </DropdownMenuTrigger>
+                        
+                            <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 max-h-[280px] overflow-y-auto'>
+                              <div className='px-2 pt-1.5 pb-0.5'>
                                 <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
-                                  Jump to Specific Question
+                                  After this question…
                                 </p>
                               </div>
-                            )}
-                            {editedQuiz.questions
-                              .filter(
-                                (q) =>
-                                  q.id !== editedQuiz.questions[currentStep].id,
-                              )
-                              .map((q) => (
-                                <DropdownMenuItem
-                                  key={q.id}
-                                  className={'cursor-pointer'}
-                                  onClick={() => {
-                                    const cur = {
-                                      ...editedQuiz.questions[currentStep],
-                                    };
-                                    delete (cur as any).skipToCat;
-                                    updateQuestion(currentStep, {
-                                      ...cur,
-                                      skipTo: q.id,
-                                    });
-                                  }}>
-                                  <span className='text-xs'>
-                                    Q{editedQuiz.questions.indexOf(q) + 1}{' '}
-                                    {q.text.slice(0, 18)}
-                                  </span>
-                                </DropdownMenuItem>
-                              ))}
-
-                            {Array.from(
-                              new Set(
-                                editedQuiz.questions
-                                  .filter(
-                                    (q) =>
-                                      (q as any).category &&
-                                      q.id !==
-                                        editedQuiz.questions[currentStep].id,
-                                  )
-                                  .map((q) => (q as any).category as string),
-                              ),
-                            ).length > 0 && (
-                              <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
-                                <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
-                                  Jump to Group (sequential flow)
-                                </p>
-                              </div>
-                            )}
-                            {Array.from(
-                              new Set(
-                                editedQuiz.questions
-                                  .filter(
-                                    (q) =>
-                                      (q as any).category &&
-                                      q.id !==
-                                        editedQuiz.questions[currentStep].id,
-                                  )
-                                  .map((q) => (q as any).category as string),
-                              ),
-                            ).map((cat) => (
                               <DropdownMenuItem
-                                key={`cat-${cat}`}
                                 onClick={() => {
                                   const cur = {
                                     ...editedQuiz.questions[currentStep],
                                   };
                                   delete cur.skipTo;
-                                  updateQuestion(currentStep, {
-                                    ...cur,
-                                    skipToCat: cat,
-                                  } as any);
+                                  delete (cur as any).skipToCat;
+                                  updateQuestion(currentStep, cur);
                                 }}>
-                                <span className='text-xs flex items-center gap-1.5'>
-                                  <span className='px-1.5 py-0.5 bg-pw-primary/15 text-pw-primary rounded text-[8px] font-bold uppercase'>
-                                    {cat}
-                                  </span>
-                                  Start this group
+                                <span className='text-xs text-pw-muted'>
+                                  ↩ Default (Next in order)
                                 </span>
                               </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const cur = {
+                                    ...editedQuiz.questions[currentStep],
+                                  };
+                                  delete (cur as any).skipToCat;
+                                  updateQuestion(currentStep, {
+                                    ...cur,
+                                    skipTo: 'end',
+                                  });
+                                }}>
+                                <span className='text-xs text-pw-danger'>
+                                  ⛔ Finish Assessment
+                                </span>
+                              </DropdownMenuItem>
+
+                              {editedQuiz.questions.filter(
+                                (q) =>
+                                  q.id !== editedQuiz.questions[currentStep].id,
+                              ).length > 0 && (
+                                  <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                                    <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                      Jump to Specific Question
+                                    </p>
+                                  </div>
+                                )}
+                              {editedQuiz.questions
+                                .filter(
+                                  (q) =>
+                                    q.id !== editedQuiz.questions[currentStep].id,
+                                )
+                                .map((q) => (
+                                  <DropdownMenuItem
+                                    key={q.id}
+                                    className={'cursor-pointer'}
+                                    onClick={() => {
+                                      const cur = {
+                                        ...editedQuiz.questions[currentStep],
+                                      };
+                                      delete (cur as any).skipToCat;
+                                      updateQuestion(currentStep, {
+                                        ...cur,
+                                        skipTo: q.id,
+                                      });
+                                    }}>
+                                    <span className='text-xs'>
+                                      Q{editedQuiz.questions.indexOf(q) + 1}{' '}
+                                      {q.text.slice(0, 18)}
+                                    </span>
+                                  </DropdownMenuItem>
+                                ))}
+
+                              {Array.from(
+                                new Set(
+                                  editedQuiz.questions
+                                    .filter(
+                                      (q) =>
+                                        (q as any).category &&
+                                        q.id !==
+                                        editedQuiz.questions[currentStep].id,
+                                    )
+                                    .map((q) => (q as any).category as string),
+                                ),
+                              ).length > 0 && (
+                                  <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                                    <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                      Jump to Group (sequential flow)
+                                    </p>
+                                  </div>
+                                )}
+                              {Array.from(
+                                new Set(
+                                  editedQuiz.questions
+                                    .filter(
+                                      (q) =>
+                                        (q as any).category &&
+                                        q.id !==
+                                        editedQuiz.questions[currentStep].id,
+                                    )
+                                    .map((q) => (q as any).category as string),
+                                ),
+                              ).map((cat) => (
+                                <DropdownMenuItem
+                                  key={`cat-${cat}`}
+                                  onClick={() => {
+                                    const cur = {
+                                      ...editedQuiz.questions[currentStep],
+                                    };
+                                    delete cur.skipTo;
+                                    updateQuestion(currentStep, {
+                                      ...cur,
+                                      skipToCat: cat,
+                                    } as any);
+                                  }}>
+                                  <span className='text-xs flex items-center gap-1.5'>
+                                    <span className='px-1.5 py-0.5 bg-pw-primary/15 text-pw-primary rounded text-[8px] font-bold uppercase'>
+                                      {cat}
+                                    </span>
+                                    Start this group
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1989,172 +2076,118 @@ const QuizBuilder = ({
 
                                   <div className='flex items-center gap-1 shrink-0'>
                                     {/* Branching Logic for Option */}
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger>
+                                    {(editedQuiz.quizScroll ||
+                                      editedQuiz.quizLayout === 'scroll' ||
+                                      editedQuiz.quizLayout === 'scroll_show' ||
+                                      editedQuiz.surveyType === 'form') ? (
+                                      <div className='relative group'>
                                         <Button
                                           variant='ghost'
                                           size='sm'
-                                          className={cn(
-                                            'h-7 px-2 text-[10px] gap-1 transition-all',
-                                            opt.skipTo || opt.skipToCat ?
-                                              'bg-pw-warning/10 text-pw-warning border-pw-warning/20'
-                                            : 'md:opacity-0 opacity-100 group-hover:opacity-100 md:group-hover:opacity-100 group-active:opacity-100 text-pw-muted hover:text-pw-primary',
-                                          )}>
-                                          {opt.skipTo || opt.skipToCat ?
-                                            <>
-                                              <Share2 size={10} />
-                                              {opt.skipToCat ?
-                                                `To Grp: ${opt.skipToCat}`
-                                              : opt.skipTo === 'end' ?
-                                                'Finish Assessment'
-                                              : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
-                                              }
-                                            </>
-                                          : <>
-                                              <Share2 size={10} /> Branch
-                                            </>
-                                          }
+                                          disabled
+                                          className='h-7 px-2 text-[10px] gap-1 text-pw-muted opacity-40 cursor-not-allowed'>
+                                          <Share2 size={10} /> Branch
                                         </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-56'>
-                                        <div className='px-2 py-1.5 border-b border-white/5'>
-                                          <p className='text-[10px] font-black uppercase text-pw-muted tracking-widest'>
-                                            Route this answer to:
-                                          </p>
+                                        <div className='absolute bottom-full right-0 mb-1 hidden group-hover:block bg-[#0E1026] border border-white/10 text-[9px] text-white px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none'>
+                                          Branching logic is exclusive to Progressive Single-Show mode
                                         </div>
-                                        <DropdownMenuItem
-                                          onClick={() => {
-                                            const newOpts = [
-                                              ...(editedQuiz.questions[
-                                                currentStep
-                                              ].options as QuizOption[]),
-                                            ];
-                                            const o = { ...newOpts[idx] };
-                                            delete o.skipTo;
-                                            delete o.skipToCat;
-                                            newOpts[idx] = o;
-                                            updateQuestion(currentStep, {
-                                              ...editedQuiz.questions[
-                                                currentStep
-                                              ],
-                                              options: newOpts,
-                                            });
-                                          }}>
-                                          <span className='text-xs text-pw-muted italic'>
-                                            Default (Next Question)
-                                          </span>
-                                        </DropdownMenuItem>
+                                      </div>
+                                    ) : (
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger>
+                                          <Button
+                                            variant='ghost'
+                                            size='sm'
+                                            className={cn(
+                                              'h-7 px-2 text-[10px] gap-1 transition-all',
+                                              opt.skipTo || opt.skipToCat ?
+                                                'bg-pw-warning/10 text-pw-warning border-pw-warning/20'
+                                              : 'md:opacity-0 opacity-100 group-hover:opacity-100 md:group-hover:opacity-100 group-active:opacity-100 text-pw-muted hover:text-pw-primary',
+                                            )}>
+                                            {opt.skipTo || opt.skipToCat ?
+                                              <>
+                                                <Share2 size={10} />
+                                                {opt.skipToCat ?
+                                                  `To Grp: ${opt.skipToCat}`
+                                                : opt.skipTo === 'end' ?
+                                                  'Finish Assessment'
+                                                : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
+                                                }
+                                              </>
+                                            : <>
+                                                <Share2 size={10} /> Branch
+                                              </>
+                                            }
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-56'>
+                                          <div className='px-2 py-1.5 border-b border-white/5'>
+                                            <p className='text-[10px] font-black uppercase text-pw-muted tracking-widest'>
+                                              Route this answer to:
+                                            </p>
+                                          </div>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              const newOpts = [
+                                                ...(editedQuiz.questions[
+                                                  currentStep
+                                                ].options as QuizOption[]),
+                                              ];
+                                              const o = { ...newOpts[idx] };
+                                              delete o.skipTo;
+                                              delete o.skipToCat;
+                                              newOpts[idx] = o;
+                                              updateQuestion(currentStep, {
+                                                ...editedQuiz.questions[
+                                                  currentStep
+                                                ],
+                                                options: newOpts,
+                                              });
+                                            }}>
+                                            <span className='text-xs text-pw-muted italic'>
+                                              Default (Next Question)
+                                            </span>
+                                          </DropdownMenuItem>
 
-                                        <DropdownMenuItem
-                                          onClick={() => {
-                                            const newOpts = [
-                                              ...(editedQuiz.questions[
-                                                currentStep
-                                              ].options as QuizOption[]),
-                                            ];
-                                            const o = { ...newOpts[idx] };
-                                            o.skipTo = 'end';
-                                            delete o.skipToCat;
-                                            newOpts[idx] = o;
-                                            updateQuestion(currentStep, {
-                                              ...editedQuiz.questions[
-                                                currentStep
-                                              ],
-                                              options: newOpts,
-                                            });
-                                          }}>
-                                          <span className='text-xs text-pw-danger'>
-                                            ⛔ Finish Assessment
-                                          </span>
-                                        </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              const newOpts = [
+                                                ...(editedQuiz.questions[
+                                                  currentStep
+                                                ].options as QuizOption[]),
+                                              ];
+                                              const o = { ...newOpts[idx] };
+                                              o.skipTo = 'end';
+                                              delete o.skipToCat;
+                                              newOpts[idx] = o;
+                                              updateQuestion(currentStep, {
+                                                ...editedQuiz.questions[
+                                                  currentStep
+                                                ],
+                                                options: newOpts,
+                                              });
+                                            }}>
+                                            <span className='text-xs text-pw-danger'>
+                                              ⛔ Finish Assessment
+                                            </span>
+                                          </DropdownMenuItem>
 
-                                        <div className='px-2 pt-2 pb-1'>
-                                          <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
-                                            Specific Questions
-                                          </p>
-                                        </div>
+                                          <div className='px-2 pt-2 pb-1'>
+                                            <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
+                                              Specific Questions
+                                            </p>
+                                          </div>
 
-                                        {editedQuiz.questions
-                                          .filter(
-                                            (q) =>
-                                              q.id !==
-                                              editedQuiz.questions[currentStep]
-                                                .id,
-                                          )
-                                          .map((q) => (
-                                            <DropdownMenuItem
-                                              key={q.id}
-                                              onClick={() => {
-                                                const newOpts = [
-                                                  ...(editedQuiz.questions[
-                                                    currentStep
-                                                  ].options as QuizOption[]),
-                                                ];
-                                                newOpts[idx] = {
-                                                  ...newOpts[idx],
-                                                  skipTo: q.id,
-                                                  skipToCat: undefined,
-                                                };
-                                                updateQuestion(currentStep, {
-                                                  ...editedQuiz.questions[
-                                                    currentStep
-                                                  ],
-                                                  options: newOpts,
-                                                });
-                                              }}>
-                                              <span className='text-xs'>
-                                                Q
-                                                {editedQuiz.questions.indexOf(
-                                                  q,
-                                                ) + 1}{' '}
-                                                {q.text.slice(0, 18)}
-                                              </span>
-                                            </DropdownMenuItem>
-                                          ))}
-
-                                        {Array.from(
-                                          new Set(
-                                            editedQuiz.questions
-                                              .filter(
-                                                (q) =>
-                                                  (q as any).category &&
-                                                  q.id !==
-                                                    editedQuiz.questions[
-                                                      currentStep
-                                                    ].id,
-                                              )
-                                              .map(
-                                                (q) =>
-                                                  (q as any).category as string,
-                                              ),
-                                          ),
-                                        ).length > 0 && (
-                                          <>
-                                            <div className='px-2 pt-2 pb-1 border-t border-white/5'>
-                                              <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
-                                                Jump to Group
-                                              </p>
-                                            </div>
-                                            {Array.from(
-                                              new Set(
-                                                editedQuiz.questions
-                                                  .filter(
-                                                    (q) =>
-                                                      (q as any).category &&
-                                                      q.id !==
-                                                        editedQuiz.questions[
-                                                          currentStep
-                                                        ].id,
-                                                  )
-                                                  .map(
-                                                    (q) =>
-                                                      (q as any)
-                                                        .category as string,
-                                                  ),
-                                              ),
-                                            ).map((cat) => (
+                                          {editedQuiz.questions
+                                            .filter(
+                                              (q) =>
+                                                q.id !==
+                                                editedQuiz.questions[currentStep]
+                                                  .id,
+                                            )
+                                            .map((q) => (
                                               <DropdownMenuItem
-                                                key={`cat-opt-${cat}`}
+                                                key={q.id}
                                                 onClick={() => {
                                                   const newOpts = [
                                                     ...(editedQuiz.questions[
@@ -2163,8 +2196,8 @@ const QuizBuilder = ({
                                                   ];
                                                   newOpts[idx] = {
                                                     ...newOpts[idx],
-                                                    skipToCat: cat,
-                                                    skipTo: undefined,
+                                                    skipTo: q.id,
+                                                    skipToCat: undefined,
                                                   };
                                                   updateQuestion(currentStep, {
                                                     ...editedQuiz.questions[
@@ -2173,15 +2206,87 @@ const QuizBuilder = ({
                                                     options: newOpts,
                                                   });
                                                 }}>
-                                                <span className='text-[10px] font-bold uppercase'>
-                                                  {cat}
+                                                <span className='text-xs'>
+                                                  Q
+                                                  {editedQuiz.questions.indexOf(
+                                                    q,
+                                                  ) + 1}{' '}
+                                                  {q.text.slice(0, 18)}
                                                 </span>
                                               </DropdownMenuItem>
                                             ))}
-                                          </>
-                                        )}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
+
+                                          {Array.from(
+                                            new Set(
+                                              editedQuiz.questions
+                                                .filter(
+                                                  (q) =>
+                                                    (q as any).category &&
+                                                    q.id !==
+                                                      editedQuiz.questions[
+                                                        currentStep
+                                                      ].id,
+                                                )
+                                                .map(
+                                                  (q) =>
+                                                    (q as any).category as string,
+                                                ),
+                                            ),
+                                          ).length > 0 && (
+                                            <>
+                                              <div className='px-2 pt-2 pb-1 border-t border-white/5'>
+                                                <p className='text-[8px] font-bold uppercase text-pw-primary/60'>
+                                                  Jump to Group
+                                                </p>
+                                              </div>
+                                              {Array.from(
+                                                new Set(
+                                                  editedQuiz.questions
+                                                    .filter(
+                                                      (q) =>
+                                                        (q as any).category &&
+                                                        q.id !==
+                                                          editedQuiz.questions[
+                                                            currentStep
+                                                          ].id,
+                                                    )
+                                                    .map(
+                                                      (q) =>
+                                                        (q as any)
+                                                          .category as string,
+                                                    ),
+                                                ),
+                                              ).map((cat) => (
+                                                <DropdownMenuItem
+                                                  key={`cat-opt-${cat}`}
+                                                  onClick={() => {
+                                                    const newOpts = [
+                                                      ...(editedQuiz.questions[
+                                                        currentStep
+                                                      ].options as QuizOption[]),
+                                                    ];
+                                                    newOpts[idx] = {
+                                                      ...newOpts[idx],
+                                                      skipToCat: cat,
+                                                      skipTo: undefined,
+                                                    };
+                                                    updateQuestion(currentStep, {
+                                                      ...editedQuiz.questions[
+                                                        currentStep
+                                                      ],
+                                                      options: newOpts,
+                                                    });
+                                                  }}>
+                                                  <span className='text-[10px] font-bold uppercase'>
+                                                    {cat}
+                                                  </span>
+                                                </DropdownMenuItem>
+                                              ))}
+                                            </>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    )}
 
                                     <Button
                                       variant='ghost'
@@ -2209,8 +2314,14 @@ const QuizBuilder = ({
                           variant='outline'
                           size='sm'
                           onClick={() => {
-                            if (editedQuiz.questions[currentStep].options.length >= 4 && premiumTier === 'free') {
-                              return toast.error('Free tier accounts are capped at a maximum of 4 options per question! Please upgrade to add more.');
+                            if (
+                              editedQuiz.questions[currentStep].options
+                                .length >= 4 &&
+                              premiumTier === 'free'
+                            ) {
+                              return toast.error(
+                                'Free tier accounts are capped at a maximum of 4 options per question! Please upgrade to add more.',
+                              );
                             }
 
                             const newId = `${editedQuiz.questions[currentStep].id}-opt-${editedQuiz.questions[currentStep].options.length}`;

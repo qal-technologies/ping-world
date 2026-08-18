@@ -75,7 +75,9 @@ export default function MessageLandingPage() {
 
           const { data: profile } = await supabase
             .from('profiles')
-            .select('username, display_name, is_public_inbox, custom_question, custom_link_id, message_expiry_days')
+            .select(
+              'username, display_name, is_public_inbox, custom_question, custom_link_id, message_expiry_days',
+            )
             .eq('id', user.id)
             .single();
 
@@ -98,29 +100,25 @@ export default function MessageLandingPage() {
 
         if (!userId) return;
 
-        // Fetch messages from Supabase
-        const { data: remoteMsgs, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('recipient_id', userId)
-          .order('created_at', { ascending: false });
+        const formatMsgs = (list: any[]): MessageRow[] =>
+          (list || []).map((m: any) => ({
+            id: m.id,
+            content: m.content || '',
+            isSeen: !!(m.is_seen || m.isSeen),
+            timestamp: m.created_at || m.timestamp || new Date().toISOString(),
+            expires_at: m.expires_at,
+            sender_country: m.sender_country || 'Unknown',
+            sender_timezone: m.sender_timezone || 'Local',
+            pre_reply: m.pre_reply,
+          }));
 
-        if (error) throw error;
-
-        const formatted: MessageRow[] = (remoteMsgs || []).map((m: any) => ({
-          id: m.id,
-          content: m.content,
-          isSeen: !!m.is_seen,
-          timestamp: m.created_at,
-          expires_at: m.expires_at,
-          sender_country: m.sender_country || 'Unknown',
-          sender_timezone: m.sender_timezone || 'Local',
-          pre_reply: m.pre_reply,
-        }));
-
-        setMessages(formatted);
+        // Fetch messages via HybridStorage (instant local + background sync)
+        const initial = await HybridStorage.getAll('message', (fresh) => {
+          setMessages(formatMsgs(fresh));
+        });
+        setMessages(formatMsgs(initial));
       } catch (err) {
-        console.error('Failed to load messages from Supabase:', err);
+        console.error('Failed to load messages:', err);
       } finally {
         setLoading(false);
       }
@@ -149,7 +147,9 @@ export default function MessageLandingPage() {
 
     setSavingSettings(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
       const { error } = await supabase
@@ -174,11 +174,14 @@ export default function MessageLandingPage() {
 
   const markAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_seen: true })
-        .eq('id', id);
-      if (error) throw error;
+      const target = messages.find((m) => m.id === id);
+      if (target) {
+        await HybridStorage.save(
+          id,
+          { ...target, isSeen: true, is_seen: true },
+          'message',
+        );
+      }
       setMessages(
         messages.map((m) => (m.id === id ? { ...m, isSeen: true } : m)),
       );
@@ -189,8 +192,7 @@ export default function MessageLandingPage() {
 
   const deleteMessage = async (id: string) => {
     try {
-      const { error } = await supabase.from('messages').delete().eq('id', id);
-      if (error) throw error;
+      await HybridStorage.delete(id, 'message');
       setMessages(messages.filter((m) => m.id !== id));
       toast.success('Secret message deleted');
     } catch {

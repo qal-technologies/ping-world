@@ -47,7 +47,7 @@ import React from 'react';
 import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
-import {useAppContext} from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -357,8 +357,8 @@ const Calculator = () => {
 };
 
 export default function PublicQuizTaker() {
-  const {setHideNavbar, setHideFooter, setPaddingTop} = usePageLayout();
-  const {isLoggedIn} = useAppContext()
+  const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
+  const { isLoggedIn } = useAppContext();
   setHideNavbar(true);
   setHideFooter(true);
   setPaddingTop('pt-0');
@@ -599,8 +599,7 @@ export default function PublicQuizTaker() {
         }
       }
       setLoading(false);
-      if(quiz?.title)
-        document.title = `${capFirst(quiz.title)} | Ping World`;
+      if (quiz?.title) document.title = `${capFirst(quiz.title)} | Ping World`;
     };
     loadQuiz();
   }, [quizId]);
@@ -986,11 +985,69 @@ export default function PublicQuizTaker() {
     }
   };
 
-  const proceedToNext = (latestAnswers?: any[]) => {
+  // Proceed to the next question, taking logical branching configuration into account
+  const proceedToNext = (latestAnswers?: any[], chosenOptionVal?: string | null) => {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
+    const q = activeQuestions[currentQuestion];
     let nextIdx = currentQuestion + 1;
+    const isScrollLayout = !!(quiz?.quizScroll || quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
+
+    // Apply logical branching (skipTo / skipToCat targets on both options and questions) for progressive layouts
+    if (q && !isScrollLayout) {
+      let branchTarget: string | undefined = undefined;
+      let branchCat: string | undefined = undefined;
+
+      // Option-level branching
+      if (q.type !== 'checkbox' && q.type !== 'input') {
+        const currentChoice = chosenOptionVal !== undefined ? chosenOptionVal : selectedOption;
+
+        if (currentChoice !== null && currentChoice !== undefined) {
+          const currentOpts = shuffledOptions[q.id] || q.options || [];
+          const foundOpt = currentOpts.find((opt: any, oIdx: number) => {
+            if (opt && typeof opt === 'object') {
+              return opt.id === currentChoice || String(oIdx) === String(currentChoice) || opt.text === currentChoice;
+            }
+            return String(oIdx) === String(currentChoice) || String(opt) === String(currentChoice);
+          });
+
+          if (foundOpt && typeof foundOpt === 'object') {
+            if (foundOpt.skipTo) branchTarget = foundOpt.skipTo;
+            if (foundOpt.skipToCat) branchCat = foundOpt.skipToCat;
+          }
+        }
+      }
+
+      // Question-level branching fallback
+      if (!branchTarget && !branchCat) {
+        if (q.skipTo) branchTarget = q.skipTo;
+        if (q.skipToCat) branchCat = q.skipToCat;
+      }
+
+      if (branchTarget === 'end') {
+        finalizeQuiz(answersToSave);
+        return;
+      } else if (branchTarget) {
+        const targetIdx = activeQuestions.findIndex(
+          (quest) => quest.id === branchTarget,
+        );
+        if (targetIdx !== -1) {
+          nextIdx = targetIdx;
+        }
+      } else if (branchCat) {
+        const targetIdx = activeQuestions.findIndex(
+          (quest) =>
+            quest.category &&
+            quest.category.trim().toLowerCase() ===
+              branchCat!.trim().toLowerCase(),
+        );
+        if (targetIdx !== -1) {
+          nextIdx = targetIdx;
+        }
+      }
+    }
+
     const nextQ = activeQuestions[nextIdx];
 
     if (!nextQ) {
@@ -1025,52 +1082,58 @@ export default function PublicQuizTaker() {
 
   const renderQuestionCard = (quest: Question, index: number) => {
     const isActive = index === currentQuestion;
+    const isScrollLayout = !!(quiz?.quizScroll || quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
 
     // Read selections dynamically from scrollAnswers inside scroll layouts
     const currentOptions = shuffledOptions[quest.id] || quest.options;
 
     const activeSelected =
-      quiz?.quizScroll ? scrollAnswers[quest.id] || null : selectedOption;
+      isScrollLayout ? scrollAnswers[quest.id] || null : selectedOption;
     const activeChecked =
-      quiz?.quizScroll ? scrollAnswers[quest.id] || [] : selectedOptions;
+      isScrollLayout ? scrollAnswers[quest.id] || [] : selectedOptions;
     const activeText =
-      quiz?.quizScroll ? scrollAnswers[quest.id] || '' : content;
+      isScrollLayout ? scrollAnswers[quest.id] || '' : content;
 
     return (
-      
       <Card
         key={quest.id}
         className={cn(
           'sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300',
           !isActive &&
-            quiz?.quizLayout !== 'scroll' &&
+            !isScrollLayout &&
             'opacity-65 pointer-events-none',
         )}>
-        <div className='flex items-center gap-3 mb-4'>
-          <div
-            className={cn(
-              'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner ',
-              quiz?.type === 'quiz' ?
-                'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-              : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
-            )}>
-            {quiz?.type === 'quiz' ?
-              <Brain
-                className='text-pw-primary'
-                size={24}
-              />
-            : <HelpCircle
-                className='text-pw-cyan'
-                size={24}
-              />
-            }
-          </div>
-          <div>
-            <span className='text-[9px] font-black text-pw-muted uppercase block'>
-              Question {index + 1}
-            </span>
-            <h2 className='text-base font-bold text-white'>{quest.text}</h2>
-          </div>
+        <div className='flex items-start gap-3 mb-4'>
+          {isScrollLayout ? (
+            <div className='flex items-baseline gap-2'>
+              <span className='text-pw-primary font-black text-xl select-none shrink-0'>
+                {index + 1}.
+              </span>
+              <h2 className='text-base font-bold text-white'>{quest.text}</h2>
+            </div>
+          ) : (
+            <div className='flex items-center gap-3'>
+              <div
+                className={cn(
+                  'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner',
+                  quiz?.type === 'quiz'
+                    ? 'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+                    : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+                )}>
+                {quiz?.type === 'quiz' ? (
+                  <Brain className='text-pw-primary' size={24} />
+                ) : (
+                  <HelpCircle className='text-pw-cyan' size={24} />
+                )}
+              </div>
+              <div>
+                <span className='text-[9px] font-black text-pw-muted uppercase block'>
+                  Question {index + 1}
+                </span>
+                <h2 className='text-base font-bold text-white'>{quest.text}</h2>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className='space-y-3 mt-2'>
@@ -1682,7 +1745,6 @@ export default function PublicQuizTaker() {
                 </div>
               </div>
             : quiz?.quizScroll && quiz?.quizLayout === 'scroll' ?
-              // jules edit: Scroll All layout (Render all questions at once, remove Next button, enable Finish at end)
               <div className='flex flex-col items-center w-full gap-0'>
                 {activeQuestions.map((quest, idx) =>
                   renderQuestionCard(quest, idx),
