@@ -38,6 +38,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAppModal } from '@/components/ui/AppModalProvider';
 import {
   Dialog,
   DialogContent,
@@ -224,6 +225,7 @@ const QuizBuilder = ({
     return { ...q, correctIndex: plainIndex };
   });
 
+  const { showConfirm } = useAppModal();
   const [editedQuiz, setEditedQuiz] = useState<Quiz>({
     ...quiz,
     questions: decodedQuestions,
@@ -371,7 +373,27 @@ const QuizBuilder = ({
             Cancel
           </Button>
           <Button
-            onClick={() => onSave(editedQuiz)}
+            onClick={async () => {
+              // jules edit: Check for active option or question branching and prompt confirm warning before saving
+              const hasActiveBranching = editedQuiz.questions.some(
+                (q) =>
+                  q.skipTo ||
+                  q.skipToCat ||
+                  q.options.some((o) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
+              );
+              if (hasActiveBranching) {
+                const confirmed = await showConfirm(
+                  'Branching is active on one or more questions. Question order randomization will be restricted to internal category shuffling to preserve valid logical paths. Save quiz now?',
+                  {
+                    title: 'Branching Active Guard',
+                    confirmText: 'Save Quiz with Branching',
+                    type: 'info',
+                  },
+                );
+                if (!confirmed) return;
+              }
+              onSave(editedQuiz);
+            }}
             className='btn-primary h-10 gap-2'>
             <Save className='h-4 w-4' /> Save Quiz
           </Button>
@@ -1064,6 +1086,21 @@ const QuizBuilder = ({
                             {editedQuiz.enforceSecurity ? 'STRICT' : 'STANDARD'}
                           </Button>
                         </QuizSettingItem>
+
+                        {/* jules edit: Display safeguard warning notice if branching is active */}
+                        {editedQuiz.questions.some(
+                          (q) =>
+                            q.skipTo ||
+                            q.skipToCat ||
+                            q.options.some((o) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
+                        ) && (
+                          <div className='p-3 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs rounded-xl flex items-center gap-2 mb-2'>
+                            <AlertTriangle className='h-4 w-4 shrink-0' />
+                            <span>
+                              Branching Active: Question order randomization is restricted to internal category shuffling to maintain valid logical branching paths.
+                            </span>
+                          </div>
+                        )}
 
                         <QuizSettingItem
                           label='Randomization'

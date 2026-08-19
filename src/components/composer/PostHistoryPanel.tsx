@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { History, Edit3, Trash2, LogIn, Clock, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { History, Edit3, Trash2, LogIn, Clock, RefreshCw, ExternalLink } from 'lucide-react';
 import { useComposer } from '@/lib/composer/useComposerStore';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -99,13 +100,22 @@ export function PostHistoryPanel() {
           <History className='h-4 w-4 text-pw-primary' />
           <h3 className='text-sm font-bold text-pw-text'>Previously Made Posts</h3>
         </div>
-        <button
-          onClick={fetchHistory}
-          disabled={loading}
-          className='p-1 text-pw-muted hover:text-pw-text transition-colors'
-          title='Refresh history'>
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className='flex items-center gap-2'>
+          <Link
+            href='/composer/history'
+            className='flex items-center gap-1 text-[11px] font-bold text-pw-primary hover:underline'
+            title='View Dedicated Post History Page'>
+            <span>Full Page</span>
+            <ExternalLink className='h-3 w-3' />
+          </Link>
+          <button
+            onClick={fetchHistory}
+            disabled={loading}
+            className='p-1 text-pw-muted hover:text-pw-text transition-colors'
+            title='Refresh history'>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {history.length === 0 ? (

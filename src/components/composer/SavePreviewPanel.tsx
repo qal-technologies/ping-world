@@ -51,18 +51,36 @@ export function SavePreviewPanel() {
     state.selectedPlatforms[0] ?? 'x',
   );
 
+  // jules edit: Canvas & Non-X Preview Image Capture Fix - Sanitizing backdrop-filter, SVGs & fallback avatars
   const capturePreview = async () => {
     if (!previewRef.current) return;
     setIsCapturing(true);
     try {
+      const targetEl = previewRef.current;
+      // Temporarily disable backdrop-filter on preview elements to avoid html2canvas render glitches
+      const filterEls = targetEl.querySelectorAll('*');
+      const originalFilters: { el: HTMLElement; filter: string }[] = [];
+      filterEls.forEach((node) => {
+        const el = node as HTMLElement;
+        if (el.style && (el.style.backdropFilter || (window.getComputedStyle(el) as any).backdropFilter !== 'none')) {
+          originalFilters.push({ el, filter: el.style.backdropFilter });
+          el.style.backdropFilter = 'none';
+        }
+      });
+
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(previewRef.current, {
+      const canvas = await html2canvas(targetEl, {
         scale: 2,
         backgroundColor: '#02040f',
         logging: false,
         useCORS: true,
-        allowTaint: false,
+        allowTaint: true,
         imageTimeout: 5000,
+      });
+
+      // Restore backdrop filters
+      originalFilters.forEach(({ el, filter }) => {
+        el.style.backdropFilter = filter;
       });
 
       const ctx = canvas.getContext('2d');

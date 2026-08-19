@@ -1036,14 +1036,20 @@ export default function PublicQuizTaker() {
           nextIdx = targetIdx;
         }
       } else if (branchCat) {
-        const targetIdx = activeQuestions.findIndex(
-          (quest) =>
-            quest.category &&
-            quest.category.trim().toLowerCase() ===
-              branchCat!.trim().toLowerCase(),
+        // jules edit: Strict Category Branching Resolution - Jump to first question of category & progress in defined sequence
+        const cleanCat = branchCat.trim().toLowerCase();
+        const catQuestions = activeQuestions.filter(
+          (quest) => quest.category && quest.category.trim().toLowerCase() === cleanCat,
         );
+        const targetIdx = activeQuestions.findIndex(
+          (quest) => quest.category && quest.category.trim().toLowerCase() === cleanCat,
+        );
+
         if (targetIdx !== -1) {
           nextIdx = targetIdx;
+          toast.info(`Branching active: Switched sequence to Category "${catQuestions[0]?.category || branchCat}"`, {
+            duration: 3000,
+          });
         }
       }
     }

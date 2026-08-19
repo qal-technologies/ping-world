@@ -76,16 +76,19 @@ export default function MessageLandingPage() {
           const { data: profile } = await supabase
             .from('profiles')
             .select(
-              'username, display_name, is_public_inbox, custom_question, custom_link_id, message_expiry_days',
+              'username, display_name, is_public_inbox, custom_question, message_expiry_days',
             )
             .eq('id', user.id)
             .single();
+
+          // jules edit: Load custom_link_id safely from auth user metadata or localStorage to prevent PostgREST schema errors
+          const cachedLinkId = user.user_metadata?.custom_link_id || localStorage.getItem('pw_anon_custom_link_id') || '';
+          setLinkId(cachedLinkId);
 
           if (profile) {
             setUsername(profile.username || 'creator');
             setIsPublicInbox(!!profile.is_public_inbox);
             setMessageTitle(profile.custom_question || '');
-            setLinkId(profile.custom_link_id || '');
             if (profile.message_expiry_days) {
               setExpiryDays(profile.message_expiry_days);
             }
