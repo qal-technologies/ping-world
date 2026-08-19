@@ -534,6 +534,14 @@ export default function PublicQuizTaker() {
           setHasAlreadyCompleted(true);
         }
 
+        // jules edit: Check for active branching and restrict randomization to internal category shuffling
+        const hasBranching = migratedQuestions.some(
+          (q) => q.skipTo || q.skipToCat || q.options?.some((o: any) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
+        );
+        if (hasBranching && finalQuiz.randomizeQuestions) {
+          toast.info('Branching Active: Question order shuffling is restricted to internal category blocks.');
+        }
+
         // Shuffle questions
         let questionsToUse = [...migratedQuestions];
         if (finalQuiz.randomizeQuestions) {

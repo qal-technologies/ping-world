@@ -43,6 +43,8 @@ import {
   CheckCircle2,
   HelpCircle,
   FileUp,
+  Undo,
+  Redo,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -535,6 +537,42 @@ export default function PdfToolStudioPage() {
     toast.success(
       `Scanned pages and updated all [img:${oldRef}] references to [img:${newRef}]!`,
     );
+  };
+
+  // jules edit: Step back/forward through change IDs across session history snapshots
+  const [historyPointer, setHistoryPointer] = useState<number>(-1);
+
+  const handleUndo = () => {
+    if (historySnapshots.length === 0) {
+      toast.info('No history checkpoints available.');
+      return;
+    }
+    const currentSession = historySnapshots.find((s) => s.historyId === activeHistoryId) || historySnapshots[0];
+    if (!currentSession || currentSession.changes.length < 2) {
+      toast.info('No previous change in active history session.');
+      return;
+    }
+    const targetIdx = historyPointer === -1 ? currentSession.changes.length - 2 : Math.max(0, historyPointer - 1);
+    setHistoryPointer(targetIdx);
+    const targetChange = currentSession.changes[targetIdx];
+    if (targetChange) {
+      handleRollbackHistoryChange(targetChange);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historySnapshots.length === 0 || historyPointer === -1) {
+      toast.info('No redo steps available.');
+      return;
+    }
+    const currentSession = historySnapshots.find((s) => s.historyId === activeHistoryId) || historySnapshots[0];
+    if (!currentSession) return;
+    const targetIdx = Math.min(currentSession.changes.length - 1, historyPointer + 1);
+    setHistoryPointer(targetIdx);
+    const targetChange = currentSession.changes[targetIdx];
+    if (targetChange) {
+      handleRollbackHistoryChange(targetChange);
+    }
   };
 
   // jules edit: Rollback to specific history change checkpoint
@@ -2402,6 +2440,23 @@ export default function PdfToolStudioPage() {
                       <Button
                         size='sm'
                         variant='ghost'
+                        onClick={handleUndo}
+                        title='Undo Change'
+                        className='h-8 w-8 p-0'>
+                        <Undo className='h-4 w-4 text-pw-muted hover:text-white' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={handleRedo}
+                        title='Redo Change'
+                        className='h-8 w-8 p-0'>
+                        <Redo className='h-4 w-4 text-pw-muted hover:text-white' />
+                      </Button>
+                      <div className='w-px h-5 bg-white/10 mx-1' />
+                      <Button
+                        size='sm'
+                        variant='ghost'
                         onClick={() => handleFormatText('b')}
                         title='Bold'
                         className='h-8 w-8 p-0'>
@@ -2518,6 +2573,10 @@ export default function PdfToolStudioPage() {
                     <textarea
                       id='book-editor-textarea'
                       value={activePage.content}
+                      style={{
+                        fontFamily: fontFamily,
+                        color: bodyColor,
+                      }}
                       onChange={(e) => {
                         const val = e.target.value;
                         setPages((prev) =>
@@ -2530,7 +2589,7 @@ export default function PdfToolStudioPage() {
                         checkAutoPagination(val);
                       }}
                       placeholder='Write your body content here. Bullet points (*), numbered lists (1.), and tags like <b>bold</b> or [img:logo] are fully supported!'
-                      className='w-full h-64 bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-body text-pw-text focus:outline-none focus:border-pw-primary resize-none leading-relaxed'
+                      className='w-full h-64 bg-white/5 border border-white/10 rounded-2xl p-4 text-xs focus:outline-none focus:border-pw-primary resize-none leading-relaxed'
                     />
 
                     {/* Visual Page Boundary Divider */}
@@ -2997,6 +3056,7 @@ export default function PdfToolStudioPage() {
                         setPaletteNameInput(item.name);
                         setPaletteWidthInput(item.width || 120);
                         setPaletteHeightInput(item.height || 120);
+                        setPaletteAltInput(item.altText || '');
                       }}
                       className='h-7 text-[10px] border-white/10'>
                       <Pencil className='h-3 w-3 mr-1' /> Edit
