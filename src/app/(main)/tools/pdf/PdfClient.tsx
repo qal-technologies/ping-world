@@ -2269,8 +2269,10 @@ export default function PdfToolStudioPage() {
                     </div>
                   </Card>
 
+                  <div className='divider my-4 sm:hidden' />
+
                   {/* Collapsible Book Covers Settings */}
-                  <Card className='p-4 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-3'>
+                  <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
                     <div
                       onClick={() => setShowCoverDrawer(!showCoverDrawer)}
                       className='flex items-center justify-between cursor-pointer'>
@@ -2338,8 +2340,8 @@ export default function PdfToolStudioPage() {
                     )}
                   </Card>
 
-{/* Book Global settings */}
-                  <Card className='p-4 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-3'>
+                  {/* Book Global settings */}
+                  <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
                     <div
                       onClick={() => setShowBookSettings(!showBookSettings)}
                       className='flex items-center justify-between cursor-pointer'>
@@ -2540,10 +2542,13 @@ export default function PdfToolStudioPage() {
                 </div>
 
                 {/* RIGHT WORKSPACE: EDITOR & LIVE PREVIEW */}
+
+                <div className='divider my-4 sm:hidden' />
+
                 <div className='lg:col-span-8 space-y-6'>
-                  <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-3xl space-y-6 shadow-2xl'>
+                  <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/10 sm:rounded-3xl sm:space-y-6 sm:shadow-2xl'>
                     {/* Header Row: Title + Settings Popover */}
-                    <div className='flex items-center justify-between gap-3'>
+                    <div className='flex items-center justify-between gap-3 mb-1'>
                       <Input
                         value={activePage.title}
                         onChange={(e) =>
@@ -2558,23 +2563,6 @@ export default function PdfToolStudioPage() {
                         placeholder='Page Title...'
                         className='h-11 bg-white/5 border-white/10 text-base font-bold text-white rounded-xl focus:border-pw-primary flex-1'
                       />
-
-                      {/* Clean Title Settings Popover */}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant='outline'
-                            size='icon'
-                            className='h-11 w-11 border-white/10 hover:bg-white/5 shrink-0'>
-                            <Settings className='h-4 w-4 text-pw-primary' />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent>
-                          <span className='text-xs font-bold uppercase tracking-wider text-pw-primary block'>
-                            Book & Page Settings
-                          </span>
-                        </PopoverContent>
-                      </Popover>
                     </div>
 
                     {/* Rich Text Formatting Bar */}
