@@ -334,7 +334,6 @@ export default function PdfToolStudioPage() {
   const [activeHistoryId, setActiveHistoryId] = useState<string>(
     `sess-${Date.now()}`,
   );
-  const [activeChangeIdx, setActiveChangeIdx] = useState<number>(-1);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const lastHistoryCaptureRef = useRef<number>(0);
 
