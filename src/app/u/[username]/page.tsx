@@ -21,7 +21,7 @@ export default async function PublicInboxPage({ params }: Props) {
   // Look up the recipient
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, subscription_tier')
+    .select('id, username, display_name, avatar_url, subscription_tier, custom_question')
     .eq('username', username)
     .single();
 

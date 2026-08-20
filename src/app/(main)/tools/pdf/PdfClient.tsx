@@ -43,6 +43,8 @@ import {
   CheckCircle2,
   HelpCircle,
   FileUp,
+  Undo,
+  Redo,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -78,7 +80,7 @@ import { useAppContext } from '@/context/AppContext';
 import { useAppModal } from '@/components/ui/AppModalProvider';
 import { HybridStorage } from '@/lib/storage-utils';
 
-// ── Interfaces ──────────────────────────────────────────────────
+// jules edit: Enhanced Interfaces for Book Creator, Palette, Styling, and 2-Tier History Engine
 interface PDFImagePage {
   id: string;
   name: string;
@@ -93,6 +95,21 @@ interface ImagePaletteItem {
   src: string; // URL or base64
   width: number;
   height: number;
+  altText?: string;
+}
+
+interface HistoryChange {
+  changeId: string;
+  timestamp: string;
+  pages: BookPage[];
+  chapters: BookChapter[];
+  wordCount: number;
+}
+
+interface SessionHistorySnapshot {
+  historyId: string;
+  startTime: string;
+  changes: HistoryChange[];
 }
 
 interface Footnote {
@@ -134,6 +151,13 @@ interface Book {
   hasFrontCover: boolean;
   hasBackCover: boolean;
   pageMargin: 'compact' | 'normal' | 'wide';
+  fontFamily?: string;
+  fontSize?: 'small' | 'normal' | 'large' | 'extralarge';
+  orientation?: 'portrait' | 'landscape';
+  paperScheme?: 'white' | 'cream' | 'gray' | 'dark';
+  bodyColor?: string;
+  globalTitleColor?: string;
+  historySnapshots?: SessionHistorySnapshot[];
   updatedAt?: string;
 }
 
@@ -283,6 +307,35 @@ export default function PdfToolStudioPage() {
   const [pageMargin, setPageMargin] = useState<'compact' | 'normal' | 'wide'>(
     'normal',
   );
+  // jules edit: Global Book Settings states
+  const [fontFamily, setFontFamily] = useState<string>(
+    "'Merriweather', 'Georgia', serif",
+  );
+  const [fontSize, setFontSize] = useState<
+    'small' | 'normal' | 'large' | 'extralarge'
+  >('normal');
+  const [paperOrientation, setPaperOrientation] = useState<
+    'portrait' | 'landscape'
+  >('portrait');
+  const [paperScheme, setPaperScheme] = useState<
+    'white' | 'cream' | 'gray' | 'dark'
+  >('white');
+  const [bodyColor, setBodyColor] = useState<string>('#1e293b');
+  const [globalTitleColor, setGlobalTitleColor] = useState<string>('#3b82f6');
+
+  // Overall Multi-Page Book Reader View toggle & zoom
+  const [showOverallBookReader, setShowOverallBookReader] = useState(false);
+  const [readerZoom, setReaderZoom] = useState<number>(100);
+
+  // 2-Tier History Engine states
+  const [historySnapshots, setHistorySnapshots] = useState<
+    SessionHistorySnapshot[]
+  >([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string>(
+    `sess-${Date.now()}`,
+  );
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const lastHistoryCaptureRef = useRef<number>(0);
 
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [collapsedChapters, setCollapsedChapters] = useState<
@@ -309,6 +362,22 @@ export default function PdfToolStudioPage() {
   const [paletteNameInput, setPaletteNameInput] = useState('');
   const [paletteWidthInput, setPaletteWidthInput] = useState(120);
   const [paletteHeightInput, setPaletteHeightInput] = useState(120);
+  const [paletteAltInput, setPaletteAltInput] = useState('');
+
+  // jules edit: Computed Paper Background Color from paperScheme selection
+  const paperBgColor = useMemo(() => {
+    switch (paperScheme) {
+      case 'cream':
+        return '#FAF7EE';
+      case 'gray':
+        return '#F3F4F6';
+      case 'dark':
+        return '#0F172A';
+      case 'white':
+      default:
+        return '#FFFFFF';
+    }
+  }, [paperScheme]);
 
   // Unified Export Modal
   const [showExportModal, setShowExportModal] = useState(false);
@@ -348,18 +417,176 @@ export default function PdfToolStudioPage() {
     loadBooks();
   }, []);
 
-  // ── Margin-Aware Word Capacity Metrics ──────────────────────────
+  // jules edit: Dynamic Word Capacity Matrix based on fontSize, margin & orientation
   const wordCapacity = useMemo(() => {
-    switch (pageMargin) {
-      case 'compact':
-        return 500;
-      case 'wide':
-        return 300;
-      case 'normal':
-      default:
-        return 400;
+    let base = 400;
+    if (pageMargin === 'compact') base = 500;
+    if (pageMargin === 'wide') base = 300;
+
+    if (fontSize === 'small') base = Math.round(base * 1.25);
+    if (fontSize === 'large') base = Math.round(base * 0.85);
+    if (fontSize === 'extralarge') base = Math.round(base * 0.7);
+
+    if (paperOrientation === 'landscape') base = Math.round(base * 1.2);
+
+    return base;
+  }, [pageMargin, fontSize, paperOrientation]);
+
+  // jules edit: Automatic 2-Tier History Snapshot Engine (5-second change batching under session history ID)
+  useEffect(() => {
+    if (showBookList) return;
+    const now = Date.now();
+    // Throttle capture to at most once per second
+    if (now - lastHistoryCaptureRef.current < 1000) return;
+    lastHistoryCaptureRef.current = now;
+
+    const totalWords = pages.reduce(
+      (acc, p) =>
+        acc + (p.content?.trim().split(/\s+/).filter(Boolean).length || 0),
+      0,
+    );
+
+    setHistorySnapshots((prev) => {
+      let currentSession = prev.find((s) => s.historyId === activeHistoryId);
+      if (!currentSession) {
+        currentSession = {
+          historyId: activeHistoryId,
+          startTime: new Date().toISOString(),
+          changes: [],
+        };
+      }
+
+      const lastChange = currentSession.changes[currentSession.changes.length - 1];
+      const changeTime = new Date().getTime();
+
+      // If last change occurred within 5 seconds, batch into it to prevent memory bloat
+      if (
+        lastChange &&
+        changeTime - new Date(lastChange.timestamp).getTime() < 5000
+      ) {
+        const updatedChanges = [...currentSession.changes];
+        updatedChanges[updatedChanges.length - 1] = {
+          ...lastChange,
+          timestamp: new Date().toISOString(),
+          pages: JSON.parse(JSON.stringify(pages)),
+          chapters: JSON.parse(JSON.stringify(chapters)),
+          wordCount: totalWords,
+        };
+        return prev.map((s) =>
+          s.historyId === activeHistoryId
+            ? { ...s, changes: updatedChanges }
+            : s,
+        );
+      }
+
+      // Check if session has 10 changes; if so, trigger a new session history ID
+      if (currentSession.changes.length >= 10) {
+        const newSessId = `sess-${Date.now()}`;
+        setActiveHistoryId(newSessId);
+        const newChange: HistoryChange = {
+          changeId: `chg-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          pages: JSON.parse(JSON.stringify(pages)),
+          chapters: JSON.parse(JSON.stringify(chapters)),
+          wordCount: totalWords,
+        };
+        const newSession: SessionHistorySnapshot = {
+          historyId: newSessId,
+          startTime: new Date().toISOString(),
+          changes: [newChange],
+        };
+        return [newSession, ...prev];
+      }
+
+      const newChange: HistoryChange = {
+        changeId: `chg-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        pages: JSON.parse(JSON.stringify(pages)),
+        chapters: JSON.parse(JSON.stringify(chapters)),
+        wordCount: totalWords,
+      };
+
+      const updatedSession = {
+        ...currentSession,
+        changes: [...currentSession.changes, newChange],
+      };
+
+      return prev.some((s) => s.historyId === activeHistoryId)
+        ? prev.map((s) => (s.historyId === activeHistoryId ? updatedSession : s))
+        : [updatedSession, ...prev];
+    });
+  }, [pages, chapters, showBookList, activeHistoryId]);
+
+  // jules edit: Palette Reference Scanner & Safe Exact Tag Replacer
+  const handleScanAndReplacePaletteReference = (
+    oldRef: string,
+    newRef: string,
+  ) => {
+    if (!oldRef || !newRef || oldRef === newRef) return;
+    const oldTagPattern = new RegExp(`\\[img:${oldRef}\\]`, 'gi');
+    const newTag = `[img:${newRef}]`;
+
+    setPages((prevPages) =>
+      prevPages.map((p) => {
+        if (!p.content) return p;
+        const updatedContent = p.content.replace(oldTagPattern, newTag);
+        return { ...p, content: updatedContent };
+      }),
+    );
+    toast.success(
+      `Scanned pages and updated all [img:${oldRef}] references to [img:${newRef}]!`,
+    );
+  };
+
+  // jules edit: Step back/forward through change IDs across session history snapshots
+  const [historyPointer, setHistoryPointer] = useState<number>(-1);
+
+  const handleUndo = () => {
+    if (historySnapshots.length === 0) {
+      toast.info('No history checkpoints available.');
+      return;
     }
-  }, [pageMargin]);
+    const currentSession = historySnapshots.find((s) => s.historyId === activeHistoryId) || historySnapshots[0];
+    if (!currentSession || currentSession.changes.length < 2) {
+      toast.info('No previous change in active history session.');
+      return;
+    }
+    const targetIdx = historyPointer === -1 ? currentSession.changes.length - 2 : Math.max(0, historyPointer - 1);
+    setHistoryPointer(targetIdx);
+    const targetChange = currentSession.changes[targetIdx];
+    if (targetChange) {
+      handleRollbackHistoryChange(targetChange);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historySnapshots.length === 0 || historyPointer === -1) {
+      toast.info('No redo steps available.');
+      return;
+    }
+    const currentSession = historySnapshots.find((s) => s.historyId === activeHistoryId) || historySnapshots[0];
+    if (!currentSession) return;
+    const targetIdx = Math.min(currentSession.changes.length - 1, historyPointer + 1);
+    setHistoryPointer(targetIdx);
+    const targetChange = currentSession.changes[targetIdx];
+    if (targetChange) {
+      handleRollbackHistoryChange(targetChange);
+    }
+  };
+
+  // jules edit: Rollback to specific history change checkpoint
+  const handleRollbackHistoryChange = (change: HistoryChange) => {
+    setPages(JSON.parse(JSON.stringify(change.pages)));
+    setChapters(JSON.parse(JSON.stringify(change.chapters)));
+    toast.success(`Rolled back to checkpoint from ${new Date(change.timestamp).toLocaleTimeString()}!`);
+  };
+
+  const handleClearHistorySnapshots = () => {
+    setHistorySnapshots([]);
+    const freshSess = `sess-${Date.now()}`;
+    setActiveHistoryId(freshSess);
+    toast.success('History snapshots cleared.');
+  };
 
   const activePage = pages[activePageIndex] || pages[0];
   const activeWordCount = useMemo(() => {
@@ -519,6 +746,13 @@ export default function PdfToolStudioPage() {
     );
     setHasBackCover(book.hasBackCover !== undefined ? book.hasBackCover : true);
     setPageMargin(book.pageMargin || 'normal');
+    setFontFamily(book.fontFamily || "'Merriweather', 'Georgia', serif");
+    setFontSize(book.fontSize || 'normal');
+    setPaperOrientation(book.orientation || 'portrait');
+    setPaperScheme(book.paperScheme || 'white');
+    setBodyColor(book.bodyColor || '#1e293b');
+    setGlobalTitleColor(book.globalTitleColor || '#3b82f6');
+    setHistorySnapshots(book.historySnapshots || []);
     setActivePageIndex(0);
     setShowBookList(false);
   };
@@ -541,6 +775,13 @@ export default function PdfToolStudioPage() {
       hasFrontCover,
       hasBackCover,
       pageMargin,
+      fontFamily,
+      fontSize,
+      orientation: paperOrientation,
+      paperScheme,
+      bodyColor,
+      globalTitleColor,
+      historySnapshots,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1222,6 +1463,71 @@ export default function PdfToolStudioPage() {
     }
   };
 
+  // jules edit: Export Book JSON / .pwbook
+  const handleExportBookJson = async () => {
+    const activeBook: Book = {
+      id: activeBookId,
+      name: frontCoverTitle || 'Untitled Book',
+      chapters,
+      pages,
+      imagePalette,
+      frontCoverTitle,
+      frontCoverSubtitle,
+      frontCoverAuthor,
+      backCoverSummary,
+      backCoverBgColor,
+      hasFrontCover,
+      hasBackCover,
+      pageMargin,
+      fontFamily,
+      fontSize,
+      orientation: paperOrientation,
+      paperScheme,
+      bodyColor,
+      globalTitleColor,
+      historySnapshots,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const jsonStr = JSON.stringify(activeBook, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const { saveAs } = await import('file-saver');
+    const filename = (frontCoverTitle || 'book').replace(/\s+/g, '-').toLowerCase();
+    saveAs(blob, `${filename}.pwbook`);
+    toast.success('🎉 Exported structured manuscript (.pwbook)!');
+  };
+
+  // jules edit: Import Book JSON / .pwbook
+  const handleImportBookJson = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const importedBook = JSON.parse(text) as Book;
+        if (!importedBook || !importedBook.id || !Array.isArray(importedBook.pages)) {
+          throw new Error('Invalid book JSON format.');
+        }
+
+        const newBookId = `book-imported-${Date.now()}`;
+        importedBook.id = newBookId;
+
+        const updatedBooks = [importedBook, ...books];
+        setBooks(updatedBooks);
+        localStorage.setItem('pw_pdf_books_list_v5', JSON.stringify(updatedBooks));
+
+        handleOpenBookWorkspace(newBookId);
+        toast.success(`🎉 Imported manuscript: "${importedBook.name}"`);
+        toast.info(
+          '💡 Reminder: If palette images need updating, import or rename them in Image Palette tab. Palette edits immediately reflect across the manuscript!',
+          { duration: 8000 },
+        );
+      } catch (err: any) {
+        toast.error('Failed to import book: ' + (err?.message || 'Invalid JSON file.'));
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // ── Render Studio ───────────────────────────────────────────────
   return (
     <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-7xl mx-auto'>
@@ -1542,13 +1848,31 @@ export default function PdfToolStudioPage() {
                   </div>
                 </div>
 
+                {/* jules edit: Workspace Action Buttons including Reader Sheet, History, Palette & Global Settings */}
                 <div className='flex items-center gap-2 flex-wrap'>
+                  <Button
+                    onClick={() => setShowOverallBookReader(true)}
+                    variant='outline'
+                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-primary'>
+                    <BookOpen className='h-3.5 w-3.5' /> Reader Sheet
+                  </Button>
+                  <Button
+                    onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
+                    variant='outline'
+                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-muted hover:text-white'>
+                    <Sparkles className='h-3.5 w-3.5 text-pw-warning' /> History
+                  </Button>
                   <Button
                     onClick={() => setShowImagePaletteDialog(true)}
                     variant='outline'
                     className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5'>
-                    <ImageIcon className='h-3.5 w-3.5 text-pw-primary' /> Image
-                    Palette
+                    <ImageIcon className='h-3.5 w-3.5 text-pw-primary' /> Palette
+                  </Button>
+                  <Button
+                    onClick={handleExportBookJson}
+                    variant='outline'
+                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-cyan'>
+                    <FileCode className='h-3.5 w-3.5' /> .pwbook
                   </Button>
                   <Button
                     onClick={() => {
@@ -1558,7 +1882,7 @@ export default function PdfToolStudioPage() {
                       setShowExportModal(true);
                     }}
                     className='btn-primary h-9 text-xs font-bold gap-1.5'>
-                    <Download className='h-3.5 w-3.5' /> Export Book
+                    <Download className='h-3.5 w-3.5' /> Export
                   </Button>
                   <Button
                     onClick={handleSaveCurrentBookAndClose}
@@ -1994,60 +2318,101 @@ export default function PdfToolStudioPage() {
                             <Settings className='h-4 w-4 text-pw-primary' />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className='w-72 bg-[#0c0d1c] border-white/10 text-white p-4 space-y-3 rounded-2xl shadow-2xl'>
+                        <PopoverContent className='w-80 bg-[#0c0d1c] border-white/10 text-white p-4 space-y-3 rounded-2xl shadow-2xl max-h-[480px] overflow-y-auto custom-scrollbar'>
                           <span className='text-xs font-bold uppercase tracking-wider text-pw-primary block'>
-                            Title Styling & Positioning
+                            Global Book & Page Settings
                           </span>
 
                           <div className='space-y-1.5'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Alignment
+                              Font Family (Web-Safe)
+                            </label>
+                            <select
+                              value={fontFamily}
+                              onChange={(e) => setFontFamily(e.target.value)}
+                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                              <option value="'Merriweather', 'Georgia', serif" className='bg-[#0a0c1b]'>Serif (Merriweather / Georgia)</option>
+                              <option value="'Inter', 'Arial', sans-serif" className='bg-[#0a0c1b]'>Sans (Inter / Arial)</option>
+                              <option value="'JetBrains Mono', 'Courier', monospace" className='bg-[#0a0c1b]'>Mono (JetBrains Mono / Courier)</option>
+                              <option value="OpenDyslexic, sans-serif" className='bg-[#0a0c1b]'>OpenDyslexic</option>
+                            </select>
+                          </div>
+
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Font Size
+                            </label>
+                            <select
+                              value={fontSize}
+                              onChange={(e) => setFontSize(e.target.value as any)}
+                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                              <option value='small' className='bg-[#0a0c1b]'>Small (12pt)</option>
+                              <option value='normal' className='bg-[#0a0c1b]'>Normal (14pt)</option>
+                              <option value='large' className='bg-[#0a0c1b]'>Large (16pt)</option>
+                              <option value='extralarge' className='bg-[#0a0c1b]'>Extra Large (18pt)</option>
+                            </select>
+                          </div>
+
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Paper Orientation
                             </label>
                             <div className='flex gap-1'>
-                              {(['left', 'center', 'right'] as const).map(
-                                (align) => (
-                                  <Button
-                                    key={align}
-                                    size='sm'
-                                    variant='ghost'
-                                    onClick={() =>
-                                      setPages((prev) =>
-                                        prev.map((p, idx) =>
-                                          idx === activePageIndex ?
-                                            { ...p, titleAlign: align }
-                                          : p,
-                                        ),
-                                      )
-                                    }
-                                    className={cn(
-                                      'h-7 flex-1 text-xs capitalize',
-                                      activePage.titleAlign === align ?
-                                        'bg-pw-primary text-white'
-                                      : 'hover:bg-white/5',
-                                    )}>
-                                    {align}
-                                  </Button>
-                                ),
-                              )}
+                              {(['portrait', 'landscape'] as const).map((orient) => (
+                                <Button
+                                  key={orient}
+                                  size='sm'
+                                  variant='ghost'
+                                  onClick={() => setPaperOrientation(orient)}
+                                  className={cn(
+                                    'h-7 flex-1 text-xs capitalize',
+                                    paperOrientation === orient ? 'bg-pw-primary text-white' : 'hover:bg-white/5'
+                                  )}>
+                                  {orient}
+                                </Button>
+                              ))}
                             </div>
                           </div>
 
                           <div className='space-y-1.5'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Title Color
+                              Paper Color Scheme
+                            </label>
+                            <select
+                              value={paperScheme}
+                              onChange={(e) => setPaperScheme(e.target.value as any)}
+                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                              <option value='white' className='bg-[#0a0c1b]'>Crisp White (#FFFFFF)</option>
+                              <option value='cream' className='bg-[#0a0c1b]'>Warm Cream (#FAF7EE)</option>
+                              <option value='gray' className='bg-[#0a0c1b]'>Soft Gray (#F3F4F6)</option>
+                              <option value='dark' className='bg-[#0a0c1b]'>Dark Slate (#0F172A)</option>
+                            </select>
+                          </div>
+
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Body Font Color
                             </label>
                             <Input
                               type='color'
-                              value={activePage.titleColor || '#3b82f6'}
-                              onChange={(e) =>
-                                setPages((prev) =>
-                                  prev.map((p, idx) =>
-                                    idx === activePageIndex ?
-                                      { ...p, titleColor: e.target.value }
-                                    : p,
-                                  ),
-                                )
-                              }
+                              value={bodyColor}
+                              onChange={(e) => setBodyColor(e.target.value)}
+                              className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
+                            />
+                          </div>
+
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Global All Titles Color
+                            </label>
+                            <Input
+                              type='color'
+                              value={globalTitleColor}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setGlobalTitleColor(val);
+                                setPages((prev) => prev.map((p) => ({ ...p, titleColor: val })));
+                              }}
                               className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
                             />
                           </div>
@@ -2058,25 +2423,11 @@ export default function PdfToolStudioPage() {
                             </label>
                             <select
                               value={pageMargin}
-                              onChange={(e) =>
-                                setPageMargin(e.target.value as any)
-                              }
+                              onChange={(e) => setPageMargin(e.target.value as any)}
                               className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                              <option
-                                value='compact'
-                                className='bg-[#0a0c1b]'>
-                                Compact (500 words/page)
-                              </option>
-                              <option
-                                value='normal'
-                                className='bg-[#0a0c1b]'>
-                                Normal (400 words/page)
-                              </option>
-                              <option
-                                value='wide'
-                                className='bg-[#0a0c1b]'>
-                                Wide (300 words/page)
-                              </option>
+                              <option value='compact' className='bg-[#0a0c1b]'>Compact (15mm)</option>
+                              <option value='normal' className='bg-[#0a0c1b]'>Normal (25mm)</option>
+                              <option value='wide' className='bg-[#0a0c1b]'>Wide (35mm)</option>
                             </select>
                           </div>
                         </PopoverContent>
@@ -2085,6 +2436,23 @@ export default function PdfToolStudioPage() {
 
                     {/* Rich Text Formatting Bar */}
                     <div className='flex items-center gap-1 bg-white/5 p-1.5 rounded-xl border border-white/10 flex-wrap'>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={handleUndo}
+                        title='Undo Change'
+                        className='h-8 w-8 p-0'>
+                        <Undo className='h-4 w-4 text-pw-muted hover:text-white' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={handleRedo}
+                        title='Redo Change'
+                        className='h-8 w-8 p-0'>
+                        <Redo className='h-4 w-4 text-pw-muted hover:text-white' />
+                      </Button>
+                      <div className='w-px h-5 bg-white/10 mx-1' />
                       <Button
                         size='sm'
                         variant='ghost'
@@ -2204,6 +2572,10 @@ export default function PdfToolStudioPage() {
                     <textarea
                       id='book-editor-textarea'
                       value={activePage.content}
+                      style={{
+                        fontFamily: fontFamily,
+                        color: bodyColor,
+                      }}
                       onChange={(e) => {
                         const val = e.target.value;
                         setPages((prev) =>
@@ -2216,7 +2588,7 @@ export default function PdfToolStudioPage() {
                         checkAutoPagination(val);
                       }}
                       placeholder='Write your body content here. Bullet points (*), numbered lists (1.), and tags like <b>bold</b> or [img:logo] are fully supported!'
-                      className='w-full h-64 bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-body text-pw-text focus:outline-none focus:border-pw-primary resize-none leading-relaxed'
+                      className='w-full h-64 bg-white/5 border border-white/10 rounded-2xl p-4 text-xs focus:outline-none focus:border-pw-primary resize-none leading-relaxed'
                     />
 
                     {/* Visual Page Boundary Divider */}
@@ -2249,9 +2621,15 @@ export default function PdfToolStudioPage() {
                         </Button>
                       </div>
 
+                      {/* jules edit: Apply global paper color scheme, body color & font family directly to sheet preview */}
                       <Card
+                        style={{
+                          backgroundColor: paperBgColor,
+                          color: bodyColor,
+                          fontFamily: fontFamily,
+                        }}
                         className={cn(
-                          'p-8 bg-white text-slate-800 rounded-2xl shadow-2xl font-serif min-h-[380px] flex flex-col justify-between select-all transition-all',
+                          'p-8 rounded-2xl shadow-2xl min-h-[380px] flex flex-col justify-between select-all transition-all border border-slate-200',
                           isPreviewFullscreen &&
                             'fixed inset-4 z-50 overflow-y-auto max-w-4xl mx-auto',
                         )}>
@@ -2260,17 +2638,18 @@ export default function PdfToolStudioPage() {
                             <h2
                               style={{
                                 textAlign: activePage.titleAlign || 'left',
-                                color: activePage.titleColor || '#3b82f6',
+                                color: activePage.titleColor || globalTitleColor || '#3b82f6',
                                 padding: `${activePage.titlePadding || 4}px`,
                                 marginBottom: `${activePage.titleMargin || 10}px`,
                               }}
-                              className='text-2xl font-extrabold border-b border-slate-200 pb-2'>
+                              className='text-2xl font-extrabold border-b border-slate-200/50 pb-2'>
                               {activePage.title || 'Untitled Page'}
                             </h2>
                           )}
 
                           <div
-                            className='text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans text-slate-700 mt-4'
+                            style={{ color: bodyColor }}
+                            className='text-xs sm:text-sm leading-relaxed whitespace-pre-wrap mt-4'
                             dangerouslySetInnerHTML={{
                               __html: renderFormattedContent(
                                 activePage.content,
@@ -2532,72 +2911,171 @@ export default function PdfToolStudioPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Image Palette List */}
-          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
-            {imagePalette.map((item) => (
-              <div
-                key={item.id}
-                className='p-3 rounded-2xl bg-white/5 border border-white/5 space-y-2 flex flex-col justify-between'>
-                <div className='flex items-center gap-3'>
-                  <img
-                    src={item.src}
-                    alt={item.name}
-                    className='w-14 h-14 object-contain rounded-lg bg-black/40 p-1 border border-white/10'
+          {/* jules edit: Image Palette Editing Panel & Auto-Scanning Reference Replacer */}
+          {editingPaletteItem ? (
+            <div className='p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3 my-2'>
+              <span className='text-xs font-bold text-pw-primary uppercase block'>
+                Editing Asset: [img:{editingPaletteItem.name}]
+              </span>
+
+              <div className='grid grid-cols-2 gap-3'>
+                <div className='space-y-1'>
+                  <label className='text-[10px] font-bold text-pw-muted uppercase'>Ref Name</label>
+                  <Input
+                    value={paletteNameInput}
+                    onChange={(e) => setPaletteNameInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'))}
+                    className='h-8 bg-black/40 border-white/10 text-xs font-mono'
                   />
-                  <div className='min-w-0 flex-1'>
-                    <span className='text-xs font-bold text-white block truncate'>
-                      [img:{item.name}]
-                    </span>
-                    <span className='text-[10px] text-pw-muted font-mono'>
-                      {item.width}x{item.height}px
-                    </span>
+                </div>
+                <div className='space-y-1'>
+                  <label className='text-[10px] font-bold text-pw-muted uppercase'>Dimensions (WxH px)</label>
+                  <div className='flex gap-1'>
+                    <Input
+                      type='number'
+                      value={paletteWidthInput}
+                      onChange={(e) => setPaletteWidthInput(Number(e.target.value))}
+                      className='h-8 bg-black/40 border-white/10 text-xs font-mono'
+                    />
+                    <Input
+                      type='number'
+                      value={paletteHeightInput}
+                      onChange={(e) => setPaletteHeightInput(Number(e.target.value))}
+                      className='h-8 bg-black/40 border-white/10 text-xs font-mono'
+                    />
                   </div>
                 </div>
-
-                <div className='flex items-center gap-1.5 pt-1'>
-                  <Button
-                    size='sm'
-                    onClick={() => {
-                      const tag = ` [img:${item.name}] `;
-                      const textarea = document.getElementById(
-                        'book-editor-textarea',
-                      ) as HTMLTextAreaElement;
-                      const cursor =
-                        textarea ?
-                          textarea.selectionStart
-                        : activePage.content.length;
-                      const updated =
-                        activePage.content.substring(0, cursor) +
-                        tag +
-                        activePage.content.substring(cursor);
-                      setPages((prev) =>
-                        prev.map((p, idx) =>
-                          idx === activePageIndex ?
-                            { ...p, content: updated }
-                          : p,
-                        ),
-                      );
-                      setShowImagePaletteDialog(false);
-                      toast.success(`Inserted [img:${item.name}] into text!`);
-                    }}
-                    className='btn-primary h-7 text-[10px] flex-1'>
-                    Insert into Text
-                  </Button>
-                  <Button
-                    size='icon'
-                    variant='ghost'
-                    onClick={() =>
-                      setImagePalette((prev) =>
-                        prev.filter((p) => p.id !== item.id),
-                      )
-                    }
-                    className='h-7 w-7 text-pw-muted hover:text-pw-danger'>
-                    <Trash2 className='h-3.5 w-3.5' />
-                  </Button>
-                </div>
               </div>
-            ))}
-          </div>
+
+              <div className='space-y-1'>
+                <label className='text-[10px] font-bold text-pw-muted uppercase'>Accessibility Alt Text</label>
+                <Input
+                  value={paletteAltInput}
+                  onChange={(e) => setPaletteAltInput(e.target.value)}
+                  placeholder='e.g. Brand Corporate Logo'
+                  className='h-8 bg-black/40 border-white/10 text-xs'
+                />
+              </div>
+
+              <div className='flex justify-end gap-2 pt-2'>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={() => setEditingPaletteItem(null)}
+                  className='h-7 text-xs border-white/10'>
+                  Cancel
+                </Button>
+                <Button
+                  size='sm'
+                  onClick={() => {
+                    const oldName = editingPaletteItem.name;
+                    const newName = paletteNameInput.trim() || oldName;
+
+                    setImagePalette((prev) =>
+                      prev.map((item) =>
+                        item.id === editingPaletteItem.id
+                          ? {
+                              ...item,
+                              name: newName,
+                              width: paletteWidthInput || 120,
+                              height: paletteHeightInput || 120,
+                              altText: paletteAltInput.trim(),
+                            }
+                          : item,
+                      ),
+                    );
+
+                    if (oldName !== newName) {
+                      handleScanAndReplacePaletteReference(oldName, newName);
+                    } else {
+                      toast.success('Palette image properties saved!');
+                    }
+                    setEditingPaletteItem(null);
+                  }}
+                  className='btn-primary h-7 text-xs font-bold'>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
+              {imagePalette.map((item) => (
+                <div
+                  key={item.id}
+                  className='p-3 rounded-2xl bg-white/5 border border-white/5 space-y-2 flex flex-col justify-between'>
+                  <div className='flex items-center gap-3'>
+                    <img
+                      src={item.src}
+                      alt={item.name}
+                      className='w-14 h-14 object-contain rounded-lg bg-black/40 p-1 border border-white/10'
+                    />
+                    <div className='min-w-0 flex-1'>
+                      <span className='text-xs font-bold text-white block truncate'>
+                        [img:{item.name}]
+                      </span>
+                      <span className='text-[10px] text-pw-muted font-mono'>
+                        {item.width}x{item.height}px
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className='flex items-center gap-1.5 pt-1'>
+                    <Button
+                      size='sm'
+                      onClick={() => {
+                        const tag = ` [img:${item.name}] `;
+                        const textarea = document.getElementById(
+                          'book-editor-textarea',
+                        ) as HTMLTextAreaElement;
+                        const cursor =
+                          textarea ?
+                            textarea.selectionStart
+                          : activePage.content.length;
+                        const updated =
+                          activePage.content.substring(0, cursor) +
+                          tag +
+                          activePage.content.substring(cursor);
+                        setPages((prev) =>
+                          prev.map((p, idx) =>
+                            idx === activePageIndex ?
+                              { ...p, content: updated }
+                            : p,
+                          ),
+                        );
+                        setShowImagePaletteDialog(false);
+                        toast.success(`Inserted [img:${item.name}] into text!`);
+                      }}
+                      className='btn-primary h-7 text-[10px] flex-1'>
+                      Insert
+                    </Button>
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      onClick={() => {
+                        setEditingPaletteItem(item);
+                        setPaletteNameInput(item.name);
+                        setPaletteWidthInput(item.width || 120);
+                        setPaletteHeightInput(item.height || 120);
+                        setPaletteAltInput(item.altText || '');
+                      }}
+                      className='h-7 text-[10px] border-white/10'>
+                      <Pencil className='h-3 w-3 mr-1' /> Edit
+                    </Button>
+                    <Button
+                      size='icon'
+                      variant='ghost'
+                      onClick={() =>
+                        setImagePalette((prev) =>
+                          prev.filter((p) => p.id !== item.id),
+                        )
+                      }
+                      className='h-7 w-7 text-pw-muted hover:text-pw-danger'>
+                      <Trash2 className='h-3.5 w-3.5' />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <DialogFooter className='flex flex-row justify-between items-center pt-2'>
             <input
@@ -2718,6 +3196,193 @@ export default function PdfToolStudioPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── OVERALL MULTI-PAGE BOOK READER SHEET MODAL ────────────────── */}
+      <Dialog
+        open={showOverallBookReader}
+        onOpenChange={setShowOverallBookReader}>
+        <DialogContent className='max-w-5xl bg-[#0a0c1b] border-white/10 text-white rounded-3xl p-6 shadow-2xl h-[90vh] flex flex-col justify-between overflow-hidden'>
+          <DialogHeader className='flex flex-row items-center justify-between border-b border-white/10 pb-4'>
+            <div>
+              <DialogTitle className='text-lg font-bold font-display text-white flex items-center gap-2'>
+                <BookOpen className='h-5 w-5 text-pw-primary' /> Overall Multi-Page Book Reader
+              </DialogTitle>
+              <DialogDescription className='text-xs text-pw-muted'>
+                Sequential manuscript inspection mode across all chapters, covers, and pages.
+              </DialogDescription>
+            </div>
+
+            <div className='flex items-center gap-2 pr-6'>
+              <span className='text-xs text-pw-muted font-mono'>Zoom: {readerZoom}%</span>
+              <input
+                type='range'
+                min='60'
+                max='140'
+                value={readerZoom}
+                onChange={(e) => setReaderZoom(Number(e.target.value))}
+                className='w-28 accent-pw-primary cursor-pointer'
+              />
+            </div>
+          </DialogHeader>
+
+          {/* Sequential Grid */}
+          <div className='flex-1 overflow-y-auto p-4 custom-scrollbar space-y-8'>
+            <div
+              style={{ transform: `scale(${readerZoom / 100})`, transformOrigin: 'top center' }}
+              className='grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto transition-transform duration-200'>
+              {/* Front Cover Card */}
+              {hasFrontCover && (
+                <div className='p-8 bg-slate-900 text-white rounded-2xl border border-white/10 shadow-2xl min-h-[420px] flex flex-col justify-between'>
+                  <div className='space-y-4 text-center mt-12'>
+                    <h1 className='text-2xl font-extrabold font-display tracking-tight text-pw-primary'>
+                      {frontCoverTitle}
+                    </h1>
+                    <p className='text-xs text-slate-300 italic'>{frontCoverSubtitle}</p>
+                  </div>
+                  <div className='text-center space-y-1 text-xs text-slate-400 font-mono'>
+                    <p>By {frontCoverAuthor}</p>
+                    <p className='text-[10px] text-slate-500'>PING WORLD PUBLISHING</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Pages Grid */}
+              {pages.map((p, idx) => (
+                <div
+                  key={p.id}
+                  onClick={() => {
+                    setActivePageIndex(idx);
+                    setShowOverallBookReader(false);
+                  }}
+                  style={{
+                    backgroundColor: paperBgColor,
+                    color: bodyColor,
+                    fontFamily: fontFamily,
+                  }}
+                  className='p-8 rounded-2xl border border-slate-200 shadow-2xl min-h-[420px] flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-pw-primary transition-all group relative'>
+                  <span className='absolute top-3 right-4 text-[9px] font-mono text-slate-400 group-hover:text-pw-primary font-bold'>
+                    PAGE {idx + 1}
+                  </span>
+
+                  <div>
+                    {p.showTitle && (
+                      <h2
+                        style={{
+                          textAlign: p.titleAlign || 'left',
+                          color: p.titleColor || globalTitleColor || '#3b82f6',
+                        }}
+                        className='text-xl font-bold border-b border-slate-200/50 pb-2 mb-4'>
+                        {p.title}
+                      </h2>
+                    )}
+                    <div
+                      style={{ color: bodyColor }}
+                      className='text-xs leading-relaxed whitespace-pre-wrap'
+                      dangerouslySetInnerHTML={{
+                        __html: renderFormattedContent(p.content, imagePalette),
+                      }}
+                    />
+                  </div>
+
+                  <div className='text-[9px] font-mono text-slate-400 text-center border-t border-slate-100/50 pt-3'>
+                    Click to jump to page {idx + 1} in editor
+                  </div>
+                </div>
+              ))}
+
+              {/* Back Cover Card */}
+              {hasBackCover && (
+                <div className='p-8 bg-slate-900 text-white rounded-2xl border border-white/10 shadow-2xl min-h-[420px] flex flex-col justify-between text-center'>
+                  <div className='my-auto space-y-3'>
+                    <p className='text-xs leading-relaxed text-slate-300 italic max-w-xs mx-auto'>
+                      &quot;{backCoverSummary}&quot;
+                    </p>
+                  </div>
+                  <div className='text-[10px] font-mono text-slate-500'>
+                    PING WORLD CREATIVE STUDIO
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className='border-t border-white/10 pt-3'>
+            <Button
+              onClick={() => setShowOverallBookReader(false)}
+              className='btn-primary h-9 px-6 text-xs font-bold'>
+              Close Reader Sheet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── STICKY HISTORY DRAWER ────────────────────────────────────── */}
+      {showHistoryDrawer && (
+        <div className='fixed bottom-6 right-6 z-50 w-80 bg-[#0c0d1c] border border-white/15 text-white rounded-3xl p-5 shadow-2xl space-y-4 bkblur-md'>
+          <div className='flex items-center justify-between border-b border-white/10 pb-3'>
+            <div className='flex items-center gap-2'>
+              <Sparkles className='h-4 w-4 text-pw-warning' />
+              <span className='text-xs font-bold uppercase tracking-wider text-white'>
+                Session History Checkpoints
+              </span>
+            </div>
+            <Button
+              size='icon'
+              variant='ghost'
+              onClick={() => setShowHistoryDrawer(false)}
+              className='h-6 w-6 text-pw-muted hover:text-white'>
+              <XIcon className='h-3.5 w-3.5' />
+            </Button>
+          </div>
+
+          <div className='space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1'>
+            {historySnapshots.length === 0 ? (
+              <p className='text-xs text-pw-muted italic text-center py-4'>
+                No history checkpoints recorded yet. Changes in the editor will automatically generate batch snapshots.
+              </p>
+            ) : (
+              historySnapshots.map((sess) => (
+                <div key={sess.historyId} className='space-y-1.5'>
+                  <span className='text-[9px] font-mono text-pw-muted uppercase font-bold block'>
+                    Session {new Date(sess.startTime).toLocaleTimeString()}
+                  </span>
+                  {sess.changes.map((chg) => (
+                    <div
+                      key={chg.changeId}
+                      className='p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-pw-primary/30 flex items-center justify-between transition-all'>
+                      <div>
+                        <span className='text-[10px] font-bold text-white block'>
+                          {new Date(chg.timestamp).toLocaleTimeString()}
+                        </span>
+                        <span className='text-[9px] text-pw-muted font-mono'>
+                          {chg.wordCount} words • {chg.pages?.length || 0} pages
+                        </span>
+                      </div>
+                      <Button
+                        size='sm'
+                        onClick={() => handleRollbackHistoryChange(chg)}
+                        className='btn-primary h-6 px-2.5 text-[9px] font-bold'>
+                        Rollback
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className='border-t border-white/10 pt-3 flex justify-between items-center'>
+            <Button
+              size='sm'
+              variant='ghost'
+              onClick={handleClearHistorySnapshots}
+              className='h-7 text-[10px] text-pw-danger hover:bg-pw-danger/10'>
+              Clear History
+            </Button>
+            <span className='text-[9px] font-mono text-pw-muted'>5m Session Batch</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

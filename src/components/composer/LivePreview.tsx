@@ -21,9 +21,10 @@ import {
 } from 'lucide-react';
 import { XIcon } from '@/components/ui/XIcon';
 import { useComposer } from '@/lib/composer/useComposerStore';
+import { useAppContext } from '@/context/AppContext';
 import { getPlatform } from '@/lib/composer/constants';
 import type { Platform } from '@/lib/composer/types';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { splitTextIntoSlides } from '@/lib/composer/canvas-utils';
 
@@ -65,6 +66,10 @@ function XPreview({
   const views = randomEngagement(85000, 0.3);
 
   const { state } = useComposer();
+  const { user } = useAppContext();
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Display Name';
+  const handleName = (user?.user_metadata?.username || user?.email?.split('@')[0] || 'username').toLowerCase();
   const images = state.mediaAssets;
 
   const handleLike = () => {
@@ -103,10 +108,16 @@ function XPreview({
     >
       {/* Header */}
       <div className='flex items-start gap-3 mb-3'>
-        <div className='h-10 w-10 rounded-full bg-gradient-to-br from-pw-primary to-pw-secondary shrink-0' />
+        <div className='h-10 w-10 rounded-full bg-gradient-to-br from-pw-primary to-pw-secondary shrink-0 overflow-hidden flex items-center justify-center font-bold text-white text-sm'>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+          ) : (
+            displayName[0].toUpperCase()
+          )}
+        </div>
         <div className='flex-1 min-w-0'>
           <div className='flex items-center gap-1 flex-wrap'>
-            <span className={cn('font-bold text-sm', dark ? 'text-white' : 'text-black')}>Display Name</span>
+            <span className={cn('font-bold text-sm', dark ? 'text-white' : 'text-black')}>{displayName}</span>
             <svg
               className='h-4 w-4 text-[#1d9bf0] shrink-0'
               viewBox='0 0 24 24'
@@ -114,7 +125,7 @@ function XPreview({
             >
               <path d='M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91C2.88 9.33 2 10.57 2 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.26 3.91.8c.66 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.33-2.19c1.4.46 2.91.2 3.92-.81s1.26-2.52.8-3.91C21.12 14.67 22.25 13.43 22.25 12z' />
             </svg>
-            <span className='text-[#71767b] text-sm'>@username · 2m</span>
+            <span className='text-[#71767b] text-sm'>@{handleName} · 2m</span>
           </div>
         </div>
         <MoreHorizontal className='h-5 w-5 text-[#71767b] shrink-0' />
@@ -208,6 +219,10 @@ function InstagramPreview({
   const [index, setIndex] = useState(0);
 
   const { state } = useComposer();
+  const { user } = useAppContext();
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User Name';
+  const handleName = (user?.user_metadata?.username || user?.email?.split('@')[0] || 'username').toLowerCase();
   const images = state.mediaAssets;
   const imageCount = images.length;
 
@@ -240,10 +255,16 @@ function InstagramPreview({
       {/* Header */}
       <div className='flex items-center gap-3 p-3 pb-2'>
         <div className='h-8 w-8 rounded-full bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] p-0.5 shrink-0'>
-          <div className='h-full w-full rounded-full bg-gray-200' />
+          <div className='h-full w-full rounded-full bg-gray-200 overflow-hidden flex items-center justify-center font-bold text-black text-[10px]'>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+            ) : (
+              displayName[0].toUpperCase()
+            )}
+          </div>
         </div>
         <div className='flex-1'>
-          <p className='font-semibold text-xs'>username</p>
+          <p className='font-semibold text-xs'>{handleName}</p>
         </div>
         <MoreHorizontal className='h-5 w-5 text-gray-400' />
       </div>
@@ -355,6 +376,9 @@ function FacebookPreview({
   const shares = randomEngagement(88, 0.6);
 
   const { state } = useComposer();
+  const { user } = useAppContext();
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User Name';
   const images = state.mediaAssets;
 
   const handleLike = () => {
@@ -375,11 +399,15 @@ function FacebookPreview({
     >
       {/* Header */}
       <div className='flex items-center gap-3 p-3'>
-        <div className='h-9 w-9 rounded-full bg-[#1877F2] flex items-center justify-center shrink-0'>
-          <span className='text-white font-bold text-sm'>U</span>
+        <div className='h-9 w-9 rounded-full bg-[#1877F2] flex items-center justify-center shrink-0 overflow-hidden font-bold text-white text-sm'>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+          ) : (
+            displayName[0].toUpperCase()
+          )}
         </div>
         <div className='flex-1'>
-          <p className='font-semibold text-sm'>User Name</p>
+          <p className='font-semibold text-sm'>{displayName}</p>
           <div className='flex items-center gap-1 text-[#65676B] text-xs'>
             <span>1 min ago</span>
             <span>·</span>
@@ -473,6 +501,9 @@ function LinkedInPreview({
   const comments = randomEngagement(87, 0.5);
 
   const { state } = useComposer();
+  const { user } = useAppContext();
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User Name';
   const images = state.mediaAssets;
 
   const handleLike = () => {
@@ -493,11 +524,15 @@ function LinkedInPreview({
     >
       {/* Header */}
       <div className='flex items-start gap-3 p-4 pb-3'>
-        <div className='h-12 w-12 rounded-full bg-gradient-to-br from-[#0A66C2] to-[#00A0DC] flex items-center justify-center shrink-0'>
-          <span className='text-white font-bold'>U</span>
+        <div className='h-12 w-12 rounded-full bg-gradient-to-br from-[#0A66C2] to-[#00A0DC] flex items-center justify-center shrink-0 overflow-hidden font-bold text-white text-base'>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+          ) : (
+            displayName[0].toUpperCase()
+          )}
         </div>
         <div className='flex-1'>
-          <p className='font-semibold text-sm'>User Name</p>
+          <p className='font-semibold text-sm'>{displayName}</p>
           <p className='text-[#666666] text-xs'>Headline · 1st</p>
           <div className='flex items-center gap-1 text-[#666666] text-[11px] mt-0.5'>
             <span>1m</span>
@@ -599,6 +634,20 @@ export function LivePreview({
 }) {
   const { state, dispatch, getContentForPlatform } = useComposer();
   const activePlatform = platformOverride ?? state.activeEditorPlatform;
+
+  // jules edit: Live Preview Platform Auto-Switching if current active platform is unselected
+  useEffect(() => {
+    if (
+      !platformOverride &&
+      state.selectedPlatforms.length > 0 &&
+      !state.selectedPlatforms.includes(state.activeEditorPlatform)
+    ) {
+      dispatch({
+        type: 'SET_ACTIVE_EDITOR_PLATFORM',
+        payload: state.selectedPlatforms[0],
+      });
+    }
+  }, [state.selectedPlatforms, state.activeEditorPlatform, platformOverride, dispatch]);
 
   const PreviewComponent = PLATFORM_PREVIEWS[activePlatform];
   const content = getContentForPlatform(activePlatform);

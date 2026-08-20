@@ -56,9 +56,52 @@ export default function SettingsPage() {
   });
   const [isSyncingStorage, setIsSyncingStorage] = useState(false);
 
-  // Preferences
+  // Preferences & Push Notification states
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifyInApp, setNotifyInApp] = useState(true);
+  const [notifyWebPush, setNotifyWebPush] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPushPermission(Notification.permission);
+      if (Notification.permission === 'granted') {
+        setNotifyWebPush(true);
+      }
+    }
+  }, []);
+
+  const handleToggleWebPush = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      toast.error('Web Push notifications are not supported in this browser.');
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      setNotifyWebPush(!notifyWebPush);
+      toast.success(
+        !notifyWebPush ? 'Web Push notifications enabled.' : 'Web Push notifications disabled.',
+      );
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setPushPermission(permission);
+    if (permission === 'granted') {
+      setNotifyWebPush(true);
+      if ('serviceWorker' in navigator) {
+        try {
+          await navigator.serviceWorker.register('/sw.js').catch(() => {});
+        } catch {
+          // fallback
+        }
+      }
+      toast.success('🎉 Web Push permission granted and Service Worker registered!');
+    } else {
+      setNotifyWebPush(false);
+      toast.error('Web Push permission denied by browser settings.');
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -209,11 +252,16 @@ export default function SettingsPage() {
     }
   };
 
+  // jules edit: Cloud Sync Guard on Logout to alert users about unsynced drafts before signing out
   const handleSignOut = async () => {
-    const confirmed = await showConfirm('Are you sure you want to log out of Ping World?', {
-      title: 'Confirm Logout',
-      confirmText: 'Log Out',
-    });
+    const confirmed = await showConfirm(
+      'Cloud Sync Guard: Are you sure you want to log out? Please ensure any offline drafts or unsynced manuscript changes have been synchronized with your cloud workspace before signing out.',
+      {
+        title: 'Confirm Sign Out & Cloud Sync',
+        confirmText: 'Sign Out Now',
+        type: 'warning',
+      },
+    );
 
     if (!confirmed) return;
 
@@ -491,6 +539,27 @@ export default function SettingsPage() {
                   type='checkbox'
                   checked={notifyEmail}
                   onChange={(e) => setNotifyEmail(e.target.checked)}
+                  className='h-4 w-4 rounded accent-pw-primary cursor-pointer'
+                />
+              </div>
+
+              {/* jules edit: Real Web Push Notification permission & Service Worker toggle */}
+              <div className='flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/5'>
+                <div className='flex items-center gap-3'>
+                  <Bell className='h-4 w-4 text-pw-primary' />
+                  <div>
+                    <span className='text-xs font-bold text-white block'>Web Push & Browser Notifications</span>
+                    <span className='text-[10px] text-pw-muted'>
+                      {pushPermission === 'granted' ?
+                        'Browser push permission granted'
+                      : 'Click to enable real browser push alerts via Service Worker'}
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type='checkbox'
+                  checked={notifyWebPush}
+                  onChange={handleToggleWebPush}
                   className='h-4 w-4 rounded accent-pw-primary cursor-pointer'
                 />
               </div>

@@ -306,11 +306,20 @@ export default function PricingPage() {
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
+      // jules edit: Accumulate newly purchased flexible tools with existing tools list
+      const existingTools: string[] = Array.isArray(user?.user_metadata?.purchased_tools)
+        ? user.user_metadata.purchased_tools
+        : [];
+
+      const newTools =
+        selectedTierId === 'flexible'
+          ? Array.from(new Set([...existingTools, selectedFlexibleToolId]))
+          : ['all'];
+
       const { error } = await supabase.auth.updateUser({
         data: {
           tier: selectedTierId,
-          purchased_tools:
-            selectedTierId === 'flexible' ? [selectedFlexibleToolId] : ['all'],
+          purchased_tools: newTools,
         },
       });
 
@@ -581,39 +590,69 @@ export default function PricingPage() {
                   </ul>
 
               
-                      {/* Dropdown to add another tool only when current plan is Flexible */}
-                      {premiumTier === 'flexible' && (
-                        <div className='pt-2 border-t border-white/10 space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-primary uppercase block'>
-                            Purchase Tool
-                          </label>
-                          <div className='flex gap-1.5'>
-                            <select
-                              value={selectedFlexibleToolId}
-                              onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
-                              className='w-full h-8 px-2 bg-[#0c0d1c] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none focus:border-pw-primary'>
-                              {FLEXIBLE_FEATURES.filter(
-                                (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
-                              ).map((feat: any) => (
-                                <option key={feat.id} value={feat.id} className='bg-[#0c0d1c]'>
-                                  {feat.label} (${feat.monthly}/mo)
-                                </option>
-                              ))}
-                            </select>
-                            <Button
-                              size='sm'
-                              onClick={() => {
-                                setSelectedTierId('flexible');
-                                setIsModalOpen(true);
-                              }}
-                              disabled={
-                                FLEXIBLE_FEATURES.filter(
+                      {/* jules edit: Short list of purchased tools & Flexible Tool Dropdown embedded inside Flexible Card when selected */}
+                      {tierId === 'flexible' && (
+                        <div className='pt-3 border-t border-white/10 space-y-2.5'>
+                          {/* Purchased Tools List */}
+                          {(user?.user_metadata?.purchased_tools || []).length > 0 && (
+                            <div className='space-y-1'>
+                              <span className='text-[10px] font-bold uppercase tracking-wider text-pw-success block'>
+                                Purchased Tools:
+                              </span>
+                              <div className='flex flex-wrap gap-1'>
+                                {(user?.user_metadata?.purchased_tools || []).map((tId: string) => {
+                                  const feat = FLEXIBLE_FEATURES.find((f) => f.id === tId);
+                                  return (
+                                    <span
+                                      key={tId}
+                                      className='text-[9px] font-bold px-2 py-0.5 rounded-md bg-pw-success/15 text-pw-success border border-pw-success/20'>
+                                      ✓ {feat ? feat.label : tId}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className='space-y-1.5'>
+                            <label className='text-[10px] font-bold text-pw-primary uppercase block'>
+                              Select Unowned Tool to Purchase
+                            </label>
+                            <div className='flex gap-1.5'>
+                              <select
+                                value={selectedFlexibleToolId}
+                                onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
+                                className='w-full h-8 px-2 bg-[#0c0d1c] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
+                                {FLEXIBLE_FEATURES.filter(
                                   (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
-                                ).length === 0
-                              }
-                              className='btn-primary h-8 text-[10px] font-bold px-3 shrink-0'>
-                              Add
-                            </Button>
+                                ).map((feat: any) => (
+                                  <option key={feat.id} value={feat.id} className='bg-[#0c0d1c]'>
+                                    {feat.label} (${feat.monthly}/mo)
+                                  </option>
+                                ))}
+                                {FLEXIBLE_FEATURES.filter(
+                                  (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
+                                ).length === 0 && (
+                                  <option value='' className='bg-[#0c0d1c]'>
+                                    All Tools Purchased
+                                  </option>
+                                )}
+                              </select>
+                              <Button
+                                size='sm'
+                                onClick={() => {
+                                  setSelectedTierId('flexible');
+                                  setIsModalOpen(true);
+                                }}
+                                disabled={
+                                  FLEXIBLE_FEATURES.filter(
+                                    (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
+                                  ).length === 0
+                                }
+                                className='btn-primary h-8 text-[10px] font-bold px-3 shrink-0'>
+                                Buy
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
