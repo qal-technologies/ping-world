@@ -1088,6 +1088,19 @@ export default function PublicQuizTaker() {
     }
   };
 
+  // jules edit: Replace detail variable placeholders like $name or $email in text strings
+  const formatDetailVars = (rawText: string) => {
+    if (!rawText) return rawText;
+    let formatted = rawText;
+    Object.entries(userData || {}).forEach(([key, val]) => {
+      const cleanKey = key.trim().replace(/\s+/g, '');
+      const regex1 = new RegExp(`\\$${cleanKey}`, 'gi');
+      const regex2 = new RegExp(`\\$${key.trim()}`, 'gi');
+      formatted = formatted.replace(regex1, val).replace(regex2, val);
+    });
+    return formatted;
+  };
+
   const renderQuestionCard = (quest: Question, index: number) => {
     const isActive = index === currentQuestion;
     const isScrollLayout = !!(quiz?.quizScroll || quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
@@ -1101,6 +1114,8 @@ export default function PublicQuizTaker() {
       isScrollLayout ? scrollAnswers[quest.id] || [] : selectedOptions;
     const activeText =
       isScrollLayout ? scrollAnswers[quest.id] || '' : content;
+
+    const formattedQuestionText = formatDetailVars(quest.text);
 
     return (
       <Card
@@ -1117,7 +1132,7 @@ export default function PublicQuizTaker() {
               <span className='text-pw-primary font-black text-xl select-none shrink-0'>
                 {index + 1}.
               </span>
-              <h2 className='text-base font-bold text-white'>{quest.text}</h2>
+              <h2 className='text-base font-bold text-white'>{formattedQuestionText}</h2>
             </div>
           ) : (
             <div className='flex items-center gap-3'>
@@ -1138,7 +1153,7 @@ export default function PublicQuizTaker() {
                 <span className='text-[9px] font-black text-pw-muted uppercase block'>
                   Question {index + 1}
                 </span>
-                <h2 className='text-base font-bold text-white'>{quest.text}</h2>
+                <h2 className='text-base font-bold text-white'>{formattedQuestionText}</h2>
               </div>
             </div>
           )}
@@ -1572,10 +1587,40 @@ export default function PublicQuizTaker() {
                   className='btn-primary h-12 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
                   onClick={() => {
                     const complete = quiz?.askDetails?.every(
-                      (d) => userData[d.title],
+                      (d) => userData[d.title] && String(userData[d.title]).trim() !== '',
                     );
                     if (!complete)
-                      return toast.error('Required fields missing');
+                      return toast.error('Required detail fields are missing.');
+
+                    // jules edit: Admin allowlist verification per detail field
+                    let mismatch = false;
+                    quiz?.askDetails?.forEach((d) => {
+                      if (d.allowlist && d.allowlist.trim() !== '') {
+                        const val = String(userData[d.title] || '').trim();
+                        const rawAllow = d.allowlist.trim();
+                        const allowedItems = rawAllow.split(',').map((item) => item.trim().toLowerCase());
+
+                        let matched = allowedItems.includes(val.toLowerCase());
+                        if (!matched) {
+                          try {
+                            const regex = new RegExp(rawAllow, 'i');
+                            matched = regex.test(val);
+                          } catch {
+                            // ignore regex error if string list
+                          }
+                        }
+
+                        if (!matched) {
+                          mismatch = true;
+                          toast.error(
+                            `Access Denied: The entered ${d.title} ("${val}") does not match the required administrative allowlist.`,
+                          );
+                        }
+                      }
+                    });
+
+                    if (mismatch) return;
+
                     setDetailsCollected(true);
                     setStart(true);
                   }}>

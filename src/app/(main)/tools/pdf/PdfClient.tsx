@@ -74,6 +74,8 @@ import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
 import { useAppModal } from '@/components/ui/AppModalProvider';
 import { HybridStorage } from '@/lib/storage-utils';
+import BookReaderModal from '@/components/pdf/BookReaderModal';
+import ImagePaletteDialog from '@/components/pdf/ImagePaletteDialog';
 
 interface PDFImagePage {
   id: string;
@@ -3024,248 +3026,16 @@ export default function PdfToolStudioPage() {
       )}
 
       {/* ── IMAGE PALETTE MODAL ────────────────────────────────────── */}
-      <Dialog
+      <ImagePaletteDialog
         open={showImagePaletteDialog}
-        onOpenChange={setShowImagePaletteDialog}>
-        <DialogContent className='max-w-2xl bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-4 sm:p-6 mx-2 shadow-2xl'>
-          <DialogHeader>
-            <DialogTitle className='text-lg font-bold font-display flex items-center gap-2 text-white'>
-              <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Palette
-            </DialogTitle>
-            <DialogDescription className='text-xs text-pw-muted'>
-              Upload and manage images. Reference any image in your body text
-              using <code>[img:ref_name]</code>.
-            </DialogDescription>
-          </DialogHeader>
-
-          {editingPaletteItem ?
-            <div className='p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3 my-2'>
-              <span className='text-xs font-bold text-pw-primary uppercase block'>
-                Editing: [img:{editingPaletteItem.name}]
-              </span>
-
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='space-y-1'>
-                  <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                    Ref Name
-                  </label>
-                  <Input
-                    value={paletteNameInput}
-                    onChange={(e) =>
-                      setPaletteNameInput(
-                        e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'),
-                      )
-                    }
-                    className='h-8 bg-black/40 border-white/10 text-xs font-mono'
-                  />
-                </div>
-                <div className='space-y-1'>
-                  <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                    Dimensions (WxH px)
-                  </label>
-                  <div className='flex gap-1'>
-                    <Input
-                      type='number'
-                      value={paletteWidthInput}
-                      onChange={(e) =>
-                        setPaletteWidthInput(Number(e.target.value))
-                      }
-                      className='h-8 bg-black/40 border-white/10 text-xs font-mono'
-                    />
-                    <Input
-                      type='number'
-                      value={paletteHeightInput}
-                      onChange={(e) =>
-                        setPaletteHeightInput(Number(e.target.value))
-                      }
-                      className='h-8 bg-black/40 border-white/10 text-xs font-mono'
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className='space-y-1'>
-                <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                  Alt Text
-                </label>
-                <Input
-                  value={paletteAltInput}
-                  onChange={(e) => setPaletteAltInput(e.target.value)}
-                  placeholder='any-text'
-                  className='h-8 bg-black/40 border-white/10 text-xs'
-                />
-              </div>
-
-              <div className='flex justify-end gap-2 pt-2'>
-                <Button
-                  size='sm'
-                  variant='outline'
-                  onClick={() => setEditingPaletteItem(null)}
-                  className='h-7 text-xs border-white/10'>
-                  Close
-                </Button>
-                <Button
-                  size='sm'
-                  onClick={() => {
-                    const oldName = editingPaletteItem.name;
-                    const newName = paletteNameInput.trim() || oldName;
-
-                    setImagePalette((prev) =>
-                      prev.map((item) =>
-                        item.id === editingPaletteItem.id ?
-                          {
-                            ...item,
-                            name: newName,
-                            width: paletteWidthInput || 120,
-                            height: paletteHeightInput || 120,
-                            altText: paletteAltInput.trim(),
-                          }
-                        : item,
-                      ),
-                    );
-
-                    if (oldName !== newName) {
-                      handleScanAndReplacePaletteReference(oldName, newName);
-                    } else {
-                      toast.success('Image properties saved!');
-                    }
-                    setEditingPaletteItem(null);
-                  }}
-                  className='btn-primary h-7 text-xs font-bold'>
-                  Save
-                </Button>
-              </div>
-            </div>
-          : <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
-              {imagePalette.map((item) => (
-                <div
-                  key={item.id}
-                  className='p-3 rounded-2xl bg-white/5 border border-white/5 space-y-2 flex flex-col justify-between'>
-                  <div className='flex items-center gap-3'>
-                    <img
-                      src={item.src}
-                      alt={item.name}
-                      className='w-14 h-14 object-contain rounded-lg bg-black/40 p-1 border border-white/10'
-                    />
-                    <div className='min-w-0 flex-1'>
-                      <span
-                        className='text-xs font-bold text-white block truncate'
-                        onClick={() => {
-                          navigator.clipboard.writeText(`[img:${item.name}]`);
-                        }}>
-                        [img:{item.name}]
-                      </span>
-                      <span className='text-[10px] text-pw-muted font-mono'>
-                        {item.width}x{item.height}px
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className='flex items-center gap-1.5 pt-1'>
-                    <Button
-                      size='sm'
-                      onClick={() => {
-                        const tag = ` [img:${item.name}] `;
-                        const textarea = document.getElementById(
-                          'book-editor-textarea',
-                        ) as HTMLTextAreaElement;
-                        const cursor =
-                          textarea ?
-                            textarea.selectionStart
-                          : activePage.content.length;
-                        const updated =
-                          activePage.content.substring(0, cursor) +
-                          tag +
-                          activePage.content.substring(cursor);
-                        setPages((prev) =>
-                          prev.map((p, idx) =>
-                            idx === activePageIndex ?
-                              { ...p, content: updated }
-                            : p,
-                          ),
-                        );
-                        setShowImagePaletteDialog(false);
-                        toast.success(`Inserted [img:${item.name}] into page!`);
-                      }}
-                      className='btn-primary h-7 text-[10px] flex-1'>
-                      Insert
-                    </Button>
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      onClick={() => {
-                        setEditingPaletteItem(item);
-                        setPaletteNameInput(item.name);
-                        setPaletteWidthInput(item.width || 120);
-                        setPaletteHeightInput(item.height || 120);
-                        setPaletteAltInput(item.altText || '');
-                      }}
-                      className='h-7 text-[10px] border-white/10'>
-                      <Pencil className='h-3 w-3 mr-1' /> Edit
-                    </Button>
-                    <Button
-                      size='icon'
-                      variant='ghost'
-                      onClick={() =>
-                        setImagePalette((prev) =>
-                          prev.filter((p) => p.id !== item.id),
-                        )
-                      }
-                      className='h-7 w-7 text-pw-muted hover:text-pw-danger'>
-                      <Trash2 className='h-3.5 w-3.5' />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          }
-
-          <DialogFooter className='flex flex-row justify-between items-center pt-2'>
-            <input
-              id='palette-upload-input'
-              type='file'
-              accept='image/*'
-              className='hidden'
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (ev) => {
-                    const src = ev.target?.result as string;
-                    const cleanName = file.name
-                      .replace(/\.[^/.]+$/, '')
-                      .replace(/[^a-zA-Z0-9_]/g, '_')
-                      .toLowerCase();
-                    const newItem: ImagePaletteItem = {
-                      id: `palette-${Date.now()}`,
-                      name: cleanName || 'graphic',
-                      src,
-                      width: 140,
-                      height: 140,
-                    };
-                    setImagePalette((prev) => [...prev, newItem]);
-                    toast.success(`Image added! Tag: [img:${newItem.name}]`);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-            />
-            <Button
-              onClick={() =>
-                document.getElementById('palette-upload-input')?.click()
-              }
-              className='btn-primary h-9 text-xs font-bold gap-1.5'>
-              <Upload className='h-3.5 w-3.5' /> Upload Image
-            </Button>
-            <Button
-              onClick={() => setShowImagePaletteDialog(false)}
-              variant='outline'
-              className='h-9 text-xs font-semibold border-white/10'>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setShowImagePaletteDialog}
+        imagePalette={imagePalette}
+        setImagePalette={setImagePalette}
+        activePageContent={activePage.content}
+        setPages={setPages}
+        activePageIndex={activePageIndex}
+        onScanAndReplace={handleScanAndReplacePaletteReference}
+      />
 
       {/* ── UNIFIED EXPORT MODAL ────────────────────────────────────── */}
       <Dialog
@@ -3342,132 +3112,28 @@ export default function PdfToolStudioPage() {
       </Dialog>
 
       {/* ── OVERALL MULTI-PAGE BOOK READER SHEET MODAL ────────────────── */}
-      <Dialog
+      <BookReaderModal
         open={showOverallBookReader}
-        onOpenChange={setShowOverallBookReader}>
-        <DialogContent className='max-w-5xl bg-[#0a0c1b] border-white/10 text-white rounded-3xl p-6 shadow-2xl h-[90vh] flex flex-col justify-between overflow-hidden'>
-          <DialogHeader className='flex flex-col items-center justify-between border-b border-white/10 pb-4'>
-            <div>
-              <DialogTitle className='text-lg font-bold font-display text-white flex items-center gap-2'>
-                <BookOpen className='h-5 w-5 text-pw-primary' /> Book Reader
-              </DialogTitle>
-              <DialogDescription className='text-xs text-pw-muted'>
-                Read through all covers, chapters and pages across.
-              </DialogDescription>
-            </div>
-
-            <div className='flex items-center gap-2 pr-6'>
-              <span className='text-xs text-pw-muted font-mono'>
-                Zoom: {readerZoom}%
-              </span>
-              <input
-                type='range'
-                min='60'
-                max='140'
-                value={readerZoom}
-                onChange={(e) => setReaderZoom(Number(e.target.value))}
-                className='w-full accent-pw-primary cursor-pointer'
-              />
-            </div>
-          </DialogHeader>
-
-          {/* Sequential Grid */}
-          <div className='flex-1 overflow-y-auto p-4 custom-scrollbar space-y-8'>
-            <div
-              style={{
-                transform: `scale(${readerZoom / 100})`,
-                transformOrigin: 'top center',
-              }}
-              className='grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto transition-transform duration-200'>
-              {/* Front Cover Card */}
-              {hasFrontCover && (
-                <div className='p-8 bg-slate-900 text-white rounded-2xl border border-white/10 shadow-2xl min-h-[420px] flex flex-col justify-between'>
-                  <div className='space-y-4 text-center mt-12'>
-                    <h1 className='text-xl font-extrabold font-display tracking-tight text-pw-primary'>
-                      {frontCoverTitle}
-                    </h1>
-                    <p className='text-xs text-slate-300 italic'>
-                      {frontCoverSubtitle}
-                    </p>
-                  </div>
-                  <div className='text-center space-y-1 text-[8px] text-slate-400 font-mono'>
-                    <p>By {frontCoverAuthor}</p>
-                    <p className='text-[8px] text-slate-500'>
-                      Published with PING WORLD
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Pages Grid */}
-              {pages.map((p, idx) => (
-                <div
-                  key={p.id}
-                  onClick={() => {
-                    setActivePageIndex(idx);
-                    setShowOverallBookReader(false);
-                  }}
-                  style={{
-                    backgroundColor: paperBgColor,
-                    color: bodyColor,
-                    fontFamily: fontFamily,
-                  }}
-                  className='p-8 rounded-2xl border border-slate-200 shadow-2xl min-h-[420px] flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-pw-primary transition-all group relative'>
-                  <span className='absolute top-3 right-4 text-[9px] font-mono text-slate-400 group-hover:text-pw-primary font-bold'>
-                    PAGE {idx + 1}
-                  </span>
-
-                  <div>
-                    {p.showTitle && (
-                      <h2
-                        style={{
-                          textAlign: p.titleAlign || 'left',
-                          color: p.titleColor || globalTitleColor || '#3b82f6',
-                        }}
-                        className='text-xl font-bold border-b border-slate-200/50 pb-2 mb-4'>
-                        {p.title}
-                      </h2>
-                    )}
-                    <div
-                      style={{ color: bodyColor }}
-                      className='text-xs leading-relaxed whitespace-pre-wrap'
-                      dangerouslySetInnerHTML={{
-                        __html: renderFormattedContent(p.content, imagePalette),
-                      }}
-                    />
-                  </div>
-
-                  <div className='text-[8px] font-mono text-slate-400 text-center border-t border-slate-100/50 pt-3'>
-                    Click to jump to page {idx + 1} in editor
-                  </div>
-                </div>
-              ))}
-
-              {/* Back Cover Card */}
-              {hasBackCover && (
-                <div className='p-8 bg-slate-900 text-white rounded-2xl border border-white/10 shadow-2xl min-h-[420px] flex flex-col justify-between text-center'>
-                  <div className='my-auto space-y-3'>
-                    <p className='text-xs leading-relaxed text-slate-300 italic max-w-xs mx-auto'>
-                      &quot;{backCoverSummary}&quot;
-                    </p>
-                  </div>
-                  <div className='text-[10px] font-mono text-slate-500'>
-                    PING WORLD CREATIVE STUDIO
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter className='border-t border-white/10 pt-3'>
-            <Button
-              onClick={() => setShowOverallBookReader(false)}
-              className='btn-primary h-9 px-6 text-xs font-bold'>
-              Close Reader
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setShowOverallBookReader}
+        pages={pages}
+        chapters={chapters}
+        coverConfig={{
+          hasFrontCover,
+          hasBackCover,
+          frontCoverTitle,
+          frontCoverSubtitle,
+          frontCoverAuthor,
+          backCoverSummary,
+          frontCoverTemplate: 'minimal',
+          backCoverTemplate: 'minimal',
+        }}
+        paperBgColor={paperBgColor}
+        bodyColor={bodyColor}
+        fontFamily={fontFamily}
+        globalTitleColor={globalTitleColor}
+        imagePalette={imagePalette}
+        renderFormattedContent={renderFormattedContent}
+      />
 
       {/* ── STICKY HISTORY DRAWER ────────────────────────────────────── */}
       {showHistoryDrawer && (

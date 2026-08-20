@@ -1,28 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Settings,
   User,
   Shield,
   HardDrive,
   Bell,
-  Trash2,
   LogOut,
-  Key,
-  AlertTriangle,
   RefreshCw,
-  Crown,
-  Calendar,
+  Trash2,
   Mail,
   Smartphone,
   Save,
-  DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAppContext } from '@/context/AppContext';
@@ -30,26 +24,35 @@ import { useAppModal } from '@/components/ui/AppModalProvider';
 import { supabase } from '@/lib/supabase';
 import { HybridStorage } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
-import Wrapper from '@/components/ui/wrapper';
+import AccountTab from '@/components/settings/AccountTab';
+import SecurityTab from '@/components/settings/SecurityTab';
 
-export default function SettingsPage() {
-  const { user, username, refresh, premiumTier, isPremium } = useAppContext();
+function SettingsContent() {
+  const { user, username, refresh, isPremium } = useAppContext();
   const router = useRouter();
-  const { showAlert, showConfirm, showPrompt } = useAppModal();
+  const searchParams = useSearchParams();
+  const { showConfirm, showPrompt } = useAppModal();
+
+  // Route tab params sync
+  const tabParam = searchParams.get('tab') || 'account';
+  const [activeTab, setActiveTab] = useState<string>(tabParam);
+
+  useEffect(() => {
+    if (tabParam && ['account', 'security', 'storage', 'preferences'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', newTab);
+    router.push(`/settings?${params.toString()}`);
+  };
 
   // Form states
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
-
-  // Security states
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-
-  const [newEmail, setNewEmail] = useState('');
-  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
 
   // Storage / Cache stats
   const [cacheCounts, setCacheCounts] = useState<{
@@ -70,12 +73,11 @@ export default function SettingsPage() {
   const [pushPermission, setPushPermission] =
     useState<NotificationPermission>('default');
 
-    
-    useEffect(() => {
-      if (!user || !username) router.replace('/');
-    }, [user, username]);
-  
-  
+  // Auth Guard
+  useEffect(() => {
+    if (!user) router.replace('/login');
+  }, [user, router]);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPushPermission(Notification.permission);
@@ -117,7 +119,6 @@ export default function SettingsPage() {
     }
   };
 
-
   useEffect(() => {
     if (user) {
       setDisplayName(
@@ -129,7 +130,6 @@ export default function SettingsPage() {
       setEmail(user.email || '');
     }
 
-    // Tally hybrid cached items
     try {
       const keys = Object.keys(localStorage);
       const quizzes = keys.filter(
@@ -146,103 +146,6 @@ export default function SettingsPage() {
       // ignore
     }
   }, [user, username]);
-
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!displayName.trim()) {
-      toast.error('Display name cannot be empty.');
-      return;
-    }
-
-    setIsUpdatingProfile(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: { full_name: displayName.trim() },
-      });
-
-      if (error) throw error;
-
-      if (user?.id) {
-        await supabase
-          .from('profiles')
-          .update({ display_name: displayName.trim() })
-          .eq('id', user.id);
-      }
-
-      await refresh();
-      toast.success('Account profile updated successfully!');
-    } catch (err: any) {
-      toast.error(
-        'Failed to update profile: ' + (err?.message || 'Please try again.'),
-      );
-    } finally {
-      setIsUpdatingProfile(false);
-    }
-  };
-
-  const handleUpdatePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters long.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match.');
-      return;
-    }
-
-    setIsUpdatingPassword(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) throw error;
-
-      setNewPassword('');
-      setConfirmPassword('');
-      toast.success('Security password changed successfully!');
-    } catch (err: any) {
-      toast.error(
-        'Failed to update password: ' + (err?.message || 'Please try again.'),
-      );
-    } finally {
-      setIsUpdatingPassword(false);
-    }
-  };
-
-  const handleUpdateEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmail || newEmail.length < 4 || !newEmail?.includes('@')) {
-      toast.error(
-        'Email must be at least 4 characters long or must contain @.',
-      );
-      return;
-    }
-
-    if (newEmail === email) {
-      toast.error('This email exists already, choose a different email!');
-      return;
-    }
-
-    setIsUpdatingEmail(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        email: newEmail,
-      });
-
-      if (error) throw error;
-
-      setNewEmail('');
-      toast.success('Account email changed successfully!');
-    } catch (err: any) {
-      toast.error(
-        'Failed to update email: ' + (err?.message || 'Please try again.'),
-      );
-    } finally {
-      setIsUpdatingEmail(false);
-    }
-  };
 
   const handleClearCache = async () => {
     const confirmed = await showConfirm(
@@ -351,7 +254,7 @@ export default function SettingsPage() {
       })
     : 'Recently';
 
-  if (!user || !username) return;
+  if (!user || !username) return null;
 
   return (
     <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-5xl mx-auto'>
@@ -380,7 +283,8 @@ export default function SettingsPage() {
 
       {/* Settings Tabs */}
       <Tabs
-        defaultValue='account'
+        value={activeTab}
+        onValueChange={handleTabChange}
         className='space-y-6'>
         <TabsList
           className='bg-white/5 bkblur border border-white/10 px-0.5 rounded-full min-h-11 max-w-full items-center justify-start flex scrollable-row self-center'
@@ -407,239 +311,25 @@ export default function SettingsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ── TAB 1: ACCOUNT & PROFILE ─────────────────────────────── */}
-        <TabsContent
-          value='account'
-          className='space-y-6'>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-            {/* Account Info Card */}
-            <Card className='bg-transparent ring-0 px-2 sm:px-0 space-y-4 md:col-span-1'>
-              <div className='flex items-center gap-3 border-b border-white/5 pb-4'>
-                <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'>
-                  {displayName ? displayName[0].toUpperCase() : 'U'}
-                </div>
-                <div className='min-w-0 flex-1'>
-                  <h3 className='text-sm font-bold text-white truncate'>
-                    {displayName || 'Ping World User'}
-                  </h3>
-                  <p className='text-[10px] text-pw-muted truncate font-mono'>
-                    {email}
-                  </p>
-                </div>
-              </div>
-
-              <div className='space-y-3 text-xs'>
-                <div className='flex items-center justify-between text-pw-muted'>
-                  <span className='flex items-center gap-1.5'>
-                    <Calendar className='h-3.5 w-3.5 text-pw-primary' /> Member
-                    Since
-                  </span>
-                  <span className='font-mono text-white text-[11px]'>
-                    {createdAtFormatted}
-                  </span>
-                </div>
-
-                <div className='flex items-center justify-between text-pw-muted'>
-                  <span className='flex items-center gap-1.5'>
-                    <Crown className='h-3.5 w-3.5 text-pw-warning' /> Active
-                    Plan
-                  </span>
-                  <span className='font-bold uppercase text-pw-primary text-[11px]'>
-                    {premiumTier}
-                  </span>
-                </div>
-              </div>
-
-              <Link href='/pricing'>
-                <Button className='btn-primary h-9 w-full text-xs font-bold mt-2 gap-1.5'>
-                  <DollarSign className='h-4 w-4' /> Subscription
-                </Button>
-              </Link>
-            </Card>
-
-            {/* Profile Edit Form */}
-            <Card className='p-4 sm:p-6 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-6 shadow-xl md:col-span-2'>
-              <div>
-                <h3 className='text-lg font-bold font-display text-white'>
-                  Profile
-                </h3>
-                <p className='text-xs text-pw-muted'>
-                  Update your publicly visible display name and handle.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleUpdateProfile}
-                className='space-y-4'>
-                <div className='space-y-1.5'>
-                  <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
-                    Display Name
-                  </label>
-                  <Input
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder='Your Name or Brand'
-                    className='h-10 bg-white/2 bkblur border-white/5 text-xs font-semibold'
-                  />
-                </div>
-
-                <div className='space-y-1.5'>
-                  <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
-                    Email Address
-                  </label>
-                  <Input
-                    value={email}
-                    disabled
-                    className='h-10 bg-white/2 border-white/5 text-xs font-mono text-pw-muted cursor-not-allowed'
-                  />
-                  <p className='text-[10px] text-pw-muted'>
-                    To change your login email,{' '}
-                    <a
-                      href='/email-change'
-                      className='ml-0.5 underline text-pw-primary'>
-                      Click here
-                    </a>
-                    .
-                  </p>
-                </div>
-
-                <Button
-                  type='submit'
-                  disabled={isUpdatingProfile}
-                  className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
-                  <Save className='h-3.5 w-3.5' />{' '}
-                  {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </form>
-            </Card>
-          </div>
-
-          {/* Danger Zone */}
-          <Card className='p-4 sm:p-6 bg-pw-danger/2 border border-pw-danger/10 rounded-2xl space-y-4'>
-            <div className='flex items-center gap-3'>
-              <div className='p-2 rounded-xl bg-pw-danger/10 text-pw-danger border border-pw-danger/20'>
-                <AlertTriangle className='h-5 w-5' />
-              </div>
-              <div>
-                <h3 className='text-sm font-bold text-white'>Danger Zone</h3>
-                <p className='text-xs text-pw-muted'>
-                  Permanently delete your account and all associated studio
-                  creations.
-                </p>
-              </div>
-            </div>
-
-            <div className='flex items-center justify-between flex-wrap gap-4 pt-2 border-t border-pw-danger/10'>
-              <p className='text-[10px] text-pw-muted max-w-md'>
-                This action is irreversible. All published quizzes, inbox
-                messages, and books will be permanently erased.
-              </p>
-              <Button
-                onClick={handleDeleteAccount}
-                variant='destructive'
-                className='h-9 px-4 text-xs font-bold gap-2'>
-                <Trash2 className='h-3.5 w-3.5' /> Delete My Account
-              </Button>
-            </div>
-          </Card>
+        {/* TAB 1: ACCOUNT & PROFILE */}
+        <TabsContent value='account'>
+          <AccountTab
+            displayName={displayName}
+            setDisplayName={setDisplayName}
+            email={email}
+            createdAtFormatted={createdAtFormatted}
+            handleDeleteAccount={handleDeleteAccount}
+            onNavigateSecurityTab={() => handleTabChange('security')}
+          />
         </TabsContent>
 
-        {/* ── TAB 2: SECURITY ──────────────────────────────────────── */}
-        <TabsContent
-          value='security'
-          className='space-y-6'>
-          <Wrapper
-            title='Change Password'
-            description='Ensure your account uses a secure password of 6 or more characters.'
-            icon={<Key className='h-4 w-4' />}
-            color='cyan'>
-            <form
-              onSubmit={handleUpdatePassword}
-              className='space-y-4 m-2'>
-              <div className='space-y-1.5'>
-                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
-                  New Password
-                </label>
-                <Input
-                  type='password'
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder='••••••••'
-                  className='h-10 bg-white/5 border-white/10 text-xs'
-                />
-              </div>
-
-              <div className='space-y-1.5'>
-                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
-                  Confirm New Password
-                </label>
-                <Input
-                  type='password'
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder='••••••••'
-                  className='h-10 bg-white/5 border-white/10 text-xs'
-                />
-              </div>
-
-              <Button
-                type='submit'
-                disabled={isUpdatingPassword}
-                className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
-                <Shield className='h-3.5 w-3.5' />{' '}
-                {isUpdatingPassword ? 'Updating...' : 'Update Password'}
-              </Button>
-            </form>
-          </Wrapper>
-
-          <Wrapper
-            title='Change Email'
-            description='Ensure you have access to the new email because verification would be required.'
-            icon={<Mail className='h-4 w-4' />}
-            color='success'>
-            <form
-              onSubmit={handleUpdateEmail}
-              className='space-y-4 m-2'>
-              <div className='space-y-1.5'>
-                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
-                  Current Email
-                </label>
-                <Input
-                  type='email'
-                  value={email}
-                  contentEditable={false}
-                  className='h-10 bg-white/5 border-white/10 text-xs'
-                />
-              </div>
-
-              <div className='space-y-1.5'>
-                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
-                  New Email
-                </label>
-                <Input
-                  type='email'
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder='example@gmail.com'
-                  className='h-10 bg-white/5 border-white/10 text-xs'
-                />
-              </div>
-
-              <Button
-                type='submit'
-                disabled={isUpdatingEmail}
-                className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
-                <Shield className='h-3.5 w-3.5' />{' '}
-                {isUpdatingEmail ? 'Updating...' : 'Update Email'}
-              </Button>
-            </form>
-          </Wrapper>
+        {/* TAB 2: SECURITY */}
+        <TabsContent value='security'>
+          <SecurityTab email={email} />
         </TabsContent>
 
-        {/* ── TAB 3: STORAGE & SYNC ────────────────────────────────── */}
-        <TabsContent
-          value='storage'
-          className='space-y-6'>
+        {/* TAB 3: STORAGE & SYNC */}
+        <TabsContent value='storage' className='space-y-6'>
           <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
             <Card className='p-3 sm:p-5 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-2'>
               <span className='text-xs text-pw-muted font-bold uppercase'>
@@ -724,10 +414,8 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* ── TAB 4: PREFERENCES ───────────────────────────────────── */}
-        <TabsContent
-          value='preferences'
-          className='sm:space-y-4 self-center'>
+        {/* TAB 4: PREFERENCES */}
+        <TabsContent value='preferences' className='sm:space-y-4 self-center'>
           <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-6 sm:shadow-xl max-w-2xl'>
             <div>
               <h3 className='text-lg font-bold font-display text-white'>
@@ -813,5 +501,17 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="h-8 w-8 rounded-full border-2 border-pw-primary border-t-transparent animate-spin" />
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }
