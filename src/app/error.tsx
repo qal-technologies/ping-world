@@ -18,13 +18,13 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className='min-h-screen bg-[#0A0C1B] text-pw-text flex items-center justify-center p-6 font-body relative overflow-hidden'>
+    <div className='min-h-screen bg-[#0A0C1B] text-pw-text flex items-center justify-center p-4 font-body relative overflow-hidden'>
       {/* Background glow */}
 
       <div className='absolute -top-30 -left-35 w-100 h-100 bg-pw-primary/5 rounded-full blur-[45px]' />
       <div className='absolute -bottom-45 -right-40 w-100 h-100 bg-pw-cyan/10 rounded-full blur-[50px]' />
 
-      <Card className='max-w-md w-full bg-white/[0.02] border border-white/10 rounded-[32px] p-8 sm:p-10 text-center backdrop-blur-xl shadow-2xl relative z-10'>
+      <Card className='max-w-md w-full bg-white/[0.02] border border-white/10 rounded-[32px] p-5 sm:p-10 text-center backdrop-blur-xl shadow-2xl relative z-10'>
         <div className='w-20 h-20 rounded-3xl bg-pw-danger/10 border border-pw-danger/25 flex items-center justify-center mx-auto mb-6 shadow-lg'>
           <AlertCircle className='h-10 w-10 text-pw-danger' />
         </div>

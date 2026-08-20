@@ -374,7 +374,7 @@ const QuizBuilder = ({
           </Button>
           <Button
             onClick={async () => {
-              // jules edit: Check for active option or question branching and prompt confirm warning before saving
+              
               const hasActiveBranching = editedQuiz.questions.some(
                 (q) =>
                   q.skipTo ||
@@ -386,7 +386,7 @@ const QuizBuilder = ({
                   'Branching is active on one or more questions. Question order randomization will be restricted to internal category shuffling to preserve valid logical paths. Save quiz now?',
                   {
                     title: 'Branching Active Guard',
-                    confirmText: 'Save Quiz with Branching',
+                    confirmText: 'Save Quiz',
                     type: 'info',
                   },
                 );
@@ -1087,7 +1087,7 @@ const QuizBuilder = ({
                           </Button>
                         </QuizSettingItem>
 
-                        {/* jules edit: Display safeguard warning notice if branching is active */}
+                        
                         {editedQuiz.questions.some(
                           (q) =>
                             q.skipTo ||

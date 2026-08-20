@@ -10,9 +10,7 @@ import {
   Bell,
   Trash2,
   LogOut,
-  Sparkles,
   Key,
-  CheckCircle2,
   AlertTriangle,
   RefreshCw,
   Crown,
@@ -20,6 +18,7 @@ import {
   Mail,
   Smartphone,
   Save,
+  DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -32,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 import { HybridStorage } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import Wrapper from '@/components/ui/wrapper';
 
 export default function SettingsPage() {
   const { user, username, refresh, premiumTier, isPremium } = useAppContext();
@@ -48,8 +48,15 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  const [newEmail, setNewEmail] = useState('');
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+
   // Storage / Cache stats
-  const [cacheCounts, setCacheCounts] = useState<{ quizzes: number; messages: number; documents: number }>({
+  const [cacheCounts, setCacheCounts] = useState<{
+    quizzes: number;
+    messages: number;
+    documents: number;
+  }>({
     quizzes: 0,
     messages: 0,
     documents: 0,
@@ -60,8 +67,15 @@ export default function SettingsPage() {
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifyInApp, setNotifyInApp] = useState(true);
   const [notifyWebPush, setNotifyWebPush] = useState(false);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [pushPermission, setPushPermission] =
+    useState<NotificationPermission>('default');
 
+    
+    useEffect(() => {
+      if (!user || !username) router.replace('/');
+    }, [user, username]);
+  
+  
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPushPermission(Notification.permission);
@@ -73,14 +87,14 @@ export default function SettingsPage() {
 
   const handleToggleWebPush = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
-      toast.error('Web Push notifications are not supported in this browser.');
+      toast.error('Notifications are not supported in this browser.');
       return;
     }
 
     if (Notification.permission === 'granted') {
       setNotifyWebPush(!notifyWebPush);
       toast.success(
-        !notifyWebPush ? 'Web Push notifications enabled.' : 'Web Push notifications disabled.',
+        !notifyWebPush ? 'Notifications enabled.' : 'Notifications disabled.',
       );
       return;
     }
@@ -96,25 +110,37 @@ export default function SettingsPage() {
           // fallback
         }
       }
-      toast.success('🎉 Web Push permission granted and Service Worker registered!');
+      toast.success('Notification permission granted!');
     } else {
       setNotifyWebPush(false);
-      toast.error('Web Push permission denied by browser settings.');
+      toast.error('Notification permission not granted.');
     }
   };
 
+
   useEffect(() => {
     if (user) {
-      setDisplayName(user.user_metadata?.full_name || username || user.email?.split('@')[0] || '');
+      setDisplayName(
+        user.user_metadata?.full_name ||
+          username ||
+          user.email?.split('@')[0] ||
+          '',
+      );
       setEmail(user.email || '');
     }
 
     // Tally hybrid cached items
     try {
       const keys = Object.keys(localStorage);
-      const quizzes = keys.filter((k) => k.startsWith('pw_quiz') || k.includes('quizzes')).length;
-      const messages = keys.filter((k) => k.startsWith('pw_message') || k.includes('messages')).length;
-      const documents = keys.filter((k) => k.startsWith('pw_pdf') || k.includes('doc')).length;
+      const quizzes = keys.filter(
+        (k) => k.startsWith('pw_quiz') || k.includes('quizzes'),
+      ).length;
+      const messages = keys.filter(
+        (k) => k.startsWith('pw_message') || k.includes('messages'),
+      ).length;
+      const documents = keys.filter(
+        (k) => k.startsWith('pw_pdf') || k.includes('doc'),
+      ).length;
       setCacheCounts({ quizzes, messages, documents });
     } catch {
       // ignore
@@ -146,7 +172,9 @@ export default function SettingsPage() {
       await refresh();
       toast.success('Account profile updated successfully!');
     } catch (err: any) {
-      toast.error('Failed to update profile: ' + (err?.message || 'Please try again.'));
+      toast.error(
+        'Failed to update profile: ' + (err?.message || 'Please try again.'),
+      );
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -175,9 +203,44 @@ export default function SettingsPage() {
       setConfirmPassword('');
       toast.success('Security password changed successfully!');
     } catch (err: any) {
-      toast.error('Failed to update password: ' + (err?.message || 'Please try again.'));
+      toast.error(
+        'Failed to update password: ' + (err?.message || 'Please try again.'),
+      );
     } finally {
       setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail || newEmail.length < 4 || !newEmail?.includes('@')) {
+      toast.error(
+        'Email must be at least 4 characters long or must contain @.',
+      );
+      return;
+    }
+
+    if (newEmail === email) {
+      toast.error('This email exists already, choose a different email!');
+      return;
+    }
+
+    setIsUpdatingEmail(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        email: newEmail,
+      });
+
+      if (error) throw error;
+
+      setNewEmail('');
+      toast.success('Account email changed successfully!');
+    } catch (err: any) {
+      toast.error(
+        'Failed to update email: ' + (err?.message || 'Please try again.'),
+      );
+    } finally {
+      setIsUpdatingEmail(false);
     }
   };
 
@@ -188,7 +251,7 @@ export default function SettingsPage() {
         title: 'Clear Local Storage',
         confirmText: 'Clear Cache',
         type: 'warning',
-      }
+      },
     );
 
     if (!confirmed) return;
@@ -208,16 +271,22 @@ export default function SettingsPage() {
   };
 
   const handleSyncOfflineQueue = async () => {
+    if (!isPremium) {
+      toast.error('This feature is available for only premium users');
+      return;
+    }
+
     setIsSyncingStorage(true);
-    const toastId = toast.loading('Syncing offline hybrid records with database...');
+    const toastId = toast.loading(
+      'Syncing offline hybrid records with database...',
+    );
     try {
       await HybridStorage.syncPending();
-      toast.dismiss(toastId);
       toast.success('All local changes synchronized with cloud storage!');
     } catch (err: any) {
-      toast.dismiss(toastId);
       toast.error('Sync failed: ' + (err?.message || 'Network unreachable.'));
     } finally {
+      toast.dismiss(toastId);
       setIsSyncingStorage(false);
     }
   };
@@ -228,7 +297,7 @@ export default function SettingsPage() {
       {
         title: 'Permanently Delete Account',
         placeholder: 'DELETE',
-      }
+      },
     );
 
     if (confirmation !== 'DELETE') {
@@ -248,11 +317,13 @@ export default function SettingsPage() {
       router.push('/');
     } catch (err: any) {
       toast.dismiss();
-      toast.error('Failed to delete account: ' + (err?.message || 'Please contact support.'));
+      toast.error(
+        'Failed to delete account: ' +
+          (err?.message || 'Please contact support.'),
+      );
     }
   };
 
-  // jules edit: Cloud Sync Guard on Logout to alert users about unsynced drafts before signing out
   const handleSignOut = async () => {
     const confirmed = await showConfirm(
       'Cloud Sync Guard: Are you sure you want to log out? Please ensure any offline drafts or unsynced manuscript changes have been synchronized with your cloud workspace before signing out.',
@@ -271,13 +342,16 @@ export default function SettingsPage() {
     router.push('/');
   };
 
-  const createdAtFormatted = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('en-US', {
+  const createdAtFormatted =
+    user?.created_at ?
+      new Date(user.created_at).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       })
     : 'Recently';
+
+  if (!user || !username) return;
 
   return (
     <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-5xl mx-auto'>
@@ -291,7 +365,8 @@ export default function SettingsPage() {
             Settings & <span className='gradient-text'>Account.</span>
           </h1>
           <p className='text-pw-muted text-xs sm:text-sm mt-1 max-w-xl'>
-            Manage your account identity, authentication security, app preferences, and local hybrid storage.
+            Manage your account identity, authentication security, app
+            preferences, and local hybrid storage.
           </p>
         </div>
 
@@ -304,120 +379,165 @@ export default function SettingsPage() {
       </div>
 
       {/* Settings Tabs */}
-      <Tabs defaultValue='account' className='space-y-6'>
-        <TabsList className='bg-white/5 border border-white/10 p-1 rounded-2xl h-11'>
+      <Tabs
+        defaultValue='account'
+        className='space-y-6'>
+        <TabsList
+          className='bg-white/5 bkblur border border-white/10 px-0.5 rounded-full min-h-11 max-w-full items-center justify-start flex scrollable-row self-center'
+          style={{ gap: 0 }}>
           <TabsTrigger
             value='account'
-            className='rounded-xl text-xs font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
+            className='rounded-2xl text-xs h-9 px-3 sm:px-5 font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
             <User className='h-3.5 w-3.5' /> Account & Profile
           </TabsTrigger>
           <TabsTrigger
             value='security'
-            className='rounded-xl text-xs font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
+            className='rounded-2xl text-xs h-9 px-3 sm:px-5 font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
             <Shield className='h-3.5 w-3.5' /> Security
           </TabsTrigger>
           <TabsTrigger
             value='storage'
-            className='rounded-xl text-xs font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
+            className='rounded-2xl text-xs h-9 px-3 sm:px-5 font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
             <HardDrive className='h-3.5 w-3.5' /> Storage & Sync
           </TabsTrigger>
           <TabsTrigger
             value='preferences'
-            className='rounded-xl text-xs font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
+            className='rounded-2xl text-xs h-9 px-3 sm:px-5 font-bold data-[state=active]:bg-pw-primary data-[state=active]:text-white gap-2'>
             <Bell className='h-3.5 w-3.5' /> Preferences
           </TabsTrigger>
         </TabsList>
 
         {/* ── TAB 1: ACCOUNT & PROFILE ─────────────────────────────── */}
-        <TabsContent value='account' className='space-y-6'>
+        <TabsContent
+          value='account'
+          className='space-y-6'>
           <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
             {/* Account Info Card */}
-            <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-4 shadow-xl md:col-span-1'>
+            <Card className='bg-transparent ring-0 px-2 sm:px-0 space-y-4 md:col-span-1'>
               <div className='flex items-center gap-3 border-b border-white/5 pb-4'>
                 <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'>
                   {displayName ? displayName[0].toUpperCase() : 'U'}
                 </div>
                 <div className='min-w-0 flex-1'>
-                  <h3 className='text-sm font-bold text-white truncate'>{displayName || 'Ping World User'}</h3>
-                  <p className='text-[10px] text-pw-muted truncate font-mono'>{email}</p>
+                  <h3 className='text-sm font-bold text-white truncate'>
+                    {displayName || 'Ping World User'}
+                  </h3>
+                  <p className='text-[10px] text-pw-muted truncate font-mono'>
+                    {email}
+                  </p>
                 </div>
               </div>
 
               <div className='space-y-3 text-xs'>
                 <div className='flex items-center justify-between text-pw-muted'>
                   <span className='flex items-center gap-1.5'>
-                    <Calendar className='h-3.5 w-3.5 text-pw-primary' /> Member Since
+                    <Calendar className='h-3.5 w-3.5 text-pw-primary' /> Member
+                    Since
                   </span>
-                  <span className='font-mono text-white text-[11px]'>{createdAtFormatted}</span>
+                  <span className='font-mono text-white text-[11px]'>
+                    {createdAtFormatted}
+                  </span>
                 </div>
 
                 <div className='flex items-center justify-between text-pw-muted'>
                   <span className='flex items-center gap-1.5'>
-                    <Crown className='h-3.5 w-3.5 text-pw-warning' /> Active Plan
+                    <Crown className='h-3.5 w-3.5 text-pw-warning' /> Active
+                    Plan
                   </span>
-                  <span className='font-bold uppercase text-pw-primary text-[11px]'>{premiumTier}</span>
+                  <span className='font-bold uppercase text-pw-primary text-[11px]'>
+                    {premiumTier}
+                  </span>
                 </div>
               </div>
 
               <Link href='/pricing'>
                 <Button className='btn-primary h-9 w-full text-xs font-bold mt-2 gap-1.5'>
-                  <Sparkles className='h-3.5 w-3.5' /> Upgrade / Change Plan
+                  <DollarSign className='h-4 w-4' /> Subscription
                 </Button>
               </Link>
             </Card>
 
             {/* Profile Edit Form */}
-            <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-6 shadow-xl md:col-span-2'>
+            <Card className='p-4 sm:p-6 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-6 shadow-xl md:col-span-2'>
               <div>
-                <h3 className='text-lg font-bold font-display text-white'>Profile Information</h3>
-                <p className='text-xs text-pw-muted'>Update your publicly visible display name and handle.</p>
+                <h3 className='text-lg font-bold font-display text-white'>
+                  Profile
+                </h3>
+                <p className='text-xs text-pw-muted'>
+                  Update your publicly visible display name and handle.
+                </p>
               </div>
 
-              <form onSubmit={handleUpdateProfile} className='space-y-4'>
+              <form
+                onSubmit={handleUpdateProfile}
+                className='space-y-4'>
                 <div className='space-y-1.5'>
-                  <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>Display Name</label>
+                  <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                    Display Name
+                  </label>
                   <Input
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder='Your Name or Brand'
-                    className='h-10 bg-white/5 border-white/10 text-xs font-semibold'
+                    className='h-10 bg-white/2 bkblur border-white/5 text-xs font-semibold'
                   />
                 </div>
 
                 <div className='space-y-1.5'>
-                  <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>Email Address</label>
+                  <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                    Email Address
+                  </label>
                   <Input
                     value={email}
                     disabled
-                    className='h-10 bg-white/[0.02] border-white/5 text-xs font-mono text-pw-muted cursor-not-allowed'
+                    className='h-10 bg-white/2 border-white/5 text-xs font-mono text-pw-muted cursor-not-allowed'
                   />
-                  <p className='text-[10px] text-pw-muted'>To change your login email, please contact customer support.</p>
+                  <p className='text-[10px] text-pw-muted'>
+                    To change your login email,{' '}
+                    <a
+                      href='/email-change'
+                      className='ml-0.5 underline text-pw-primary'>
+                      Click here
+                    </a>
+                    .
+                  </p>
                 </div>
 
-                <Button type='submit' disabled={isUpdatingProfile} className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
-                  <Save className='h-3.5 w-3.5' /> {isUpdatingProfile ? 'Saving...' : 'Save Profile Changes'}
+                <Button
+                  type='submit'
+                  disabled={isUpdatingProfile}
+                  className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
+                  <Save className='h-3.5 w-3.5' />{' '}
+                  {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
                 </Button>
               </form>
             </Card>
           </div>
 
           {/* Danger Zone */}
-          <Card className='p-6 bg-pw-danger/5 border border-pw-danger/20 rounded-2xl space-y-4'>
+          <Card className='p-4 sm:p-6 bg-pw-danger/2 border border-pw-danger/10 rounded-2xl space-y-4'>
             <div className='flex items-center gap-3'>
               <div className='p-2 rounded-xl bg-pw-danger/10 text-pw-danger border border-pw-danger/20'>
                 <AlertTriangle className='h-5 w-5' />
               </div>
               <div>
-                <h4 className='text-sm font-bold text-white'>Danger Zone</h4>
-                <p className='text-xs text-pw-muted'>Permanently delete your account and all associated studio creations.</p>
+                <h3 className='text-sm font-bold text-white'>Danger Zone</h3>
+                <p className='text-xs text-pw-muted'>
+                  Permanently delete your account and all associated studio
+                  creations.
+                </p>
               </div>
             </div>
 
             <div className='flex items-center justify-between flex-wrap gap-4 pt-2 border-t border-pw-danger/10'>
-              <p className='text-xs text-pw-muted max-w-md'>
-                This action is irreversible. All published quizzes, inbox messages, and book manuscripts will be permanently erased.
+              <p className='text-[10px] text-pw-muted max-w-md'>
+                This action is irreversible. All published quizzes, inbox
+                messages, and books will be permanently erased.
               </p>
-              <Button onClick={handleDeleteAccount} variant='destructive' className='h-9 px-4 text-xs font-bold gap-2'>
+              <Button
+                onClick={handleDeleteAccount}
+                variant='destructive'
+                className='h-9 px-4 text-xs font-bold gap-2'>
                 <Trash2 className='h-3.5 w-3.5' /> Delete My Account
               </Button>
             </div>
@@ -425,18 +545,21 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* ── TAB 2: SECURITY ──────────────────────────────────────── */}
-        <TabsContent value='security' className='space-y-6'>
-          <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-6 shadow-xl max-w-2xl'>
-            <div>
-              <h3 className='text-lg font-bold font-display text-white flex items-center gap-2'>
-                <Key className='h-4 w-4 text-pw-primary' /> Change Authentication Password
-              </h3>
-              <p className='text-xs text-pw-muted'>Ensure your account uses a secure password of 6 or more characters.</p>
-            </div>
-
-            <form onSubmit={handleUpdatePassword} className='space-y-4'>
+        <TabsContent
+          value='security'
+          className='space-y-6'>
+          <Wrapper
+            title='Change Password'
+            description='Ensure your account uses a secure password of 6 or more characters.'
+            icon={<Key className='h-4 w-4' />}
+            color='cyan'>
+            <form
+              onSubmit={handleUpdatePassword}
+              className='space-y-4 m-2'>
               <div className='space-y-1.5'>
-                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>New Password</label>
+                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                  New Password
+                </label>
                 <Input
                   type='password'
                   value={newPassword}
@@ -447,7 +570,9 @@ export default function SettingsPage() {
               </div>
 
               <div className='space-y-1.5'>
-                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>Confirm New Password</label>
+                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                  Confirm New Password
+                </label>
                 <Input
                   type='password'
                   value={confirmPassword}
@@ -457,56 +582,137 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <Button type='submit' disabled={isUpdatingPassword} className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
-                <Shield className='h-3.5 w-3.5' /> {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+              <Button
+                type='submit'
+                disabled={isUpdatingPassword}
+                className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
+                <Shield className='h-3.5 w-3.5' />{' '}
+                {isUpdatingPassword ? 'Updating...' : 'Update Password'}
               </Button>
             </form>
-          </Card>
+          </Wrapper>
+
+          <Wrapper
+            title='Change Email'
+            description='Ensure you have access to the new email because verification would be required.'
+            icon={<Mail className='h-4 w-4' />}
+            color='success'>
+            <form
+              onSubmit={handleUpdateEmail}
+              className='space-y-4 m-2'>
+              <div className='space-y-1.5'>
+                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                  Current Email
+                </label>
+                <Input
+                  type='email'
+                  value={email}
+                  contentEditable={false}
+                  className='h-10 bg-white/5 border-white/10 text-xs'
+                />
+              </div>
+
+              <div className='space-y-1.5'>
+                <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
+                  New Email
+                </label>
+                <Input
+                  type='email'
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder='example@gmail.com'
+                  className='h-10 bg-white/5 border-white/10 text-xs'
+                />
+              </div>
+
+              <Button
+                type='submit'
+                disabled={isUpdatingEmail}
+                className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
+                <Shield className='h-3.5 w-3.5' />{' '}
+                {isUpdatingEmail ? 'Updating...' : 'Update Email'}
+              </Button>
+            </form>
+          </Wrapper>
         </TabsContent>
 
         {/* ── TAB 3: STORAGE & SYNC ────────────────────────────────── */}
-        <TabsContent value='storage' className='space-y-6'>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-            <Card className='p-5 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-2'>
-              <span className='text-xs text-pw-muted font-bold uppercase'>Cached Quizzes</span>
-              <p className='text-2xl font-extrabold text-white font-mono'>{cacheCounts.quizzes}</p>
+        <TabsContent
+          value='storage'
+          className='space-y-6'>
+          <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
+            <Card className='p-3 sm:p-5 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-2'>
+              <span className='text-xs text-pw-muted font-bold uppercase'>
+                Cached Quizzes
+              </span>
+              <p className='text-2xl font-extrabold text-white font-mono'>
+                {cacheCounts.quizzes}
+              </p>
             </Card>
-            <Card className='p-5 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-2'>
-              <span className='text-xs text-pw-muted font-bold uppercase'>Cached Messages</span>
-              <p className='text-2xl font-extrabold text-white font-mono'>{cacheCounts.messages}</p>
+            <Card className='p-3 sm:p-5 bg-[#0c0d1c]/70 bkblur border border-white/10 rounded-2xl space-y-2'>
+              <span className='text-xs text-pw-muted font-bold uppercase'>
+                Cached Messages
+              </span>
+              <p className='text-2xl font-extrabold text-white font-mono'>
+                {cacheCounts.messages}
+              </p>
             </Card>
-            <Card className='p-5 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-2'>
-              <span className='text-xs text-pw-muted font-bold uppercase'>Book Manuscripts</span>
-              <p className='text-2xl font-extrabold text-white font-mono'>{cacheCounts.documents}</p>
+            <Card className='p-3 sm:p-5 bg-[#0c0d1c]/70 bkblur border border-white/10 rounded-2xl space-y-2'>
+              <span className='text-xs text-pw-muted font-bold uppercase'>
+                Books
+              </span>
+              <p className='text-2xl font-extrabold text-white font-mono'>
+                {cacheCounts.documents}
+              </p>
             </Card>
           </div>
 
-          <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-6 shadow-xl'>
+          <Card className='p-4 sm:p-6 bg-[#0c0d1c]/70 bkblur border border-white/10 rounded-2xl shadow-xl'>
             <div>
-              <h3 className='text-lg font-bold font-display text-white'>Hybrid Edge Storage Management</h3>
+              <h3 className='text-lg font-bold font-display text-white my-1'>
+                Storage Management
+              </h3>
               <p className='text-xs text-pw-muted'>
-                Ping World uses an offline-first hybrid database architecture. Changes made while offline are saved to your browser and pushed when connected.
+                Ping World uses an offline-first hybrid database architecture.
+                Changes made while offline are saved to your browser and pushed
+                when connected.
               </p>
             </div>
 
             <div className='flex items-center justify-between flex-wrap gap-4 pt-4 border-t border-white/5'>
               <div>
-                <h4 className='text-xs font-bold text-white'>Force Synchronize Database</h4>
-                <p className='text-[10px] text-pw-muted'>Manually push pending offline mutations to the remote database.</p>
+                <h4 className='text-sm font-bold text-white'>
+                  Force Synchronize Database
+                </h4>
+                <p className='text-[10px] text-pw-muted'>
+                  Manually push pending offline mutations to the remote
+                  database.
+                </p>
               </div>
               <Button
                 onClick={handleSyncOfflineQueue}
                 disabled={isSyncingStorage}
                 variant='outline'
                 className='h-9 px-4 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-primary'>
-                <RefreshCw className={cn('h-3.5 w-3.5', isSyncingStorage && 'animate-spin')} /> Synchronize Cloud
+                <RefreshCw
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    isSyncingStorage && 'animate-spin',
+                  )}
+                />{' '}
+                Synchronize Cloud
               </Button>
             </div>
 
             <div className='flex items-center justify-between flex-wrap gap-4 pt-4 border-t border-white/5'>
               <div>
-                <h4 className='text-xs font-bold text-white'>Clear Local Storage Cache</h4>
-                <p className='text-[10px] text-pw-muted'>Remove cached offline items and temporary working copies on this device.</p>
+                <h4 className='text-sm font-bold text-white'>
+                  Clear Local Storage Cache
+                </h4>
+                <p className='text-[10px] text-pw-muted'>
+                  Remove cached offline items and temporary working copies on
+                  this device.
+                </p>
               </div>
               <Button
                 onClick={handleClearCache}
@@ -519,40 +725,53 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* ── TAB 4: PREFERENCES ───────────────────────────────────── */}
-        <TabsContent value='preferences' className='space-y-6'>
-          <Card className='p-6 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-6 shadow-xl max-w-2xl'>
+        <TabsContent
+          value='preferences'
+          className='sm:space-y-4 self-center'>
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-6 sm:shadow-xl max-w-2xl'>
             <div>
-              <h3 className='text-lg font-bold font-display text-white'>Notification Preferences</h3>
-              <p className='text-xs text-pw-muted'>Choose how you want to be notified of anonymous responses and submissions.</p>
+              <h3 className='text-lg font-bold font-display text-white'>
+                Notification Preferences
+              </h3>
+              <p className='text-xs text-pw-muted'>
+                Choose how you want to be notified of anonymous responses and
+                submissions.
+              </p>
             </div>
 
             <div className='space-y-4'>
-              <div className='flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/5'>
+              <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
                   <Mail className='h-4 w-4 text-pw-primary' />
                   <div>
-                    <span className='text-xs font-bold text-white block'>Email Notifications</span>
-                    <span className='text-[10px] text-pw-muted'>Receive weekly summaries of quiz completions</span>
+                    <span className='text-xs font-bold text-white block'>
+                      Email Notifications
+                    </span>
+                    <span className='text-[10px] text-pw-muted'>
+                      Receive weekly summaries of quiz completions
+                    </span>
                   </div>
                 </div>
                 <input
                   type='checkbox'
                   checked={notifyEmail}
                   onChange={(e) => setNotifyEmail(e.target.checked)}
-                  className='h-4 w-4 rounded accent-pw-primary cursor-pointer'
+                  className='h-4 w-4 rounded-full accent-pw-primary cursor-pointer'
                 />
               </div>
 
-              {/* jules edit: Real Web Push Notification permission & Service Worker toggle */}
-              <div className='flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/5'>
+              <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
                   <Bell className='h-4 w-4 text-pw-primary' />
                   <div>
-                    <span className='text-xs font-bold text-white block'>Web Push & Browser Notifications</span>
+                    <span className='text-xs font-bold text-white block'>
+                      Web Push & Browser Notifications
+                    </span>
                     <span className='text-[10px] text-pw-muted'>
                       {pushPermission === 'granted' ?
                         'Browser push permission granted'
-                      : 'Click to enable real browser push alerts via Service Worker'}
+                      : 'Click to enable real browser push alerts via Service Worker'
+                      }
                     </span>
                   </div>
                 </div>
@@ -564,12 +783,16 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className='flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/5'>
+              <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
                   <Smartphone className='h-4 w-4 text-pw-primary' />
                   <div>
-                    <span className='text-xs font-bold text-white block'>In-App Toast Alerts</span>
-                    <span className='text-[10px] text-pw-muted'>Display real-time desktop toast badges for new messages</span>
+                    <span className='text-xs font-bold text-white block'>
+                      In-App Toast Alerts
+                    </span>
+                    <span className='text-[10px] text-pw-muted'>
+                      Display real-time desktop toast badges for new messages
+                    </span>
                   </div>
                 </div>
                 <input

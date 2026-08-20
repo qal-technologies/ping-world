@@ -635,7 +635,7 @@ export function LivePreview({
   const { state, dispatch, getContentForPlatform } = useComposer();
   const activePlatform = platformOverride ?? state.activeEditorPlatform;
 
-  // jules edit: Live Preview Platform Auto-Switching if current active platform is unselected
+  
   useEffect(() => {
     if (
       !platformOverride &&

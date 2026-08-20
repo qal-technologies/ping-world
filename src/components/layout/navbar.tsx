@@ -331,6 +331,7 @@ export const Navbar = () => {
                         href={item.href}
                         onClick={() => {
                           setIsSearchOpen(false);
+                          openSearchInput(false);
                           setSearchQuery('');
                         }}
                         className='p-1 px-1.5 rounded-xl hover:bg-white/2 border border-transparent hover:border-white/1 flex items-center gap-2 transition-all group block'>

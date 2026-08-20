@@ -62,7 +62,7 @@ function flattenItems(items: StorageItem[]): any[] {
   return items.map((i) => i.content || i);
 }
 
-// jules edit: Safe utility to get active user ID from either Firebase Auth or Supabase Auth
+//Safe utility to get active user ID from either Firebase Auth or Supabase Auth
 async function getActiveUserId(): Promise<string | null> {
   try {
     const { auth } = await import('@/lib/firebase');
@@ -109,7 +109,7 @@ function buildSupabasePayload(
       enforceIdentity: content.enforceIdentity,
       askDetails: content.askDetails,
       endScreen: content.endScreen,
-      expires_at: content.expires_at, // jules edit: Map missing expires_at field
+      expires_at: content.expires_at,
       updated_at: timestamp,
     };
   } else if (type === 'link') {
@@ -160,7 +160,7 @@ async function syncFromRemote(
   if (!isOnline()) return;
 
   try {
-    // jules edit: Route 'games' (Tournament Standings) directly to Firebase Firestore collections
+    // Route 'games' (Tournament Standings) directly to Firebase Firestore collections
     if (type === 'games') {
       const userId = await getActiveUserId();
       if (!userId) return;
@@ -247,7 +247,7 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
 
     for (const item of unsynced) {
       try {
-        // jules edit: Route 'games' (Tournament Standings) push to Firebase Firestore collections
+        // Route 'games' (Tournament Standings) push to Firebase Firestore collections
         if (type === 'games') {
           const { db } = await import('@/lib/firebase');
           const { doc, setDoc } = await import('firebase/firestore');
@@ -354,7 +354,7 @@ export const HybridStorage = {
           const userId = await getActiveUserId();
           if (!userId) return;
 
-          // jules edit: Route 'games' (Tournament Standings) background save to Firebase Firestore
+          // Route 'games' (Tournament Standings) background save to Firebase Firestore
           if (type === 'games') {
             const { db } = await import('@/lib/firebase');
             const { doc, setDoc } = await import('firebase/firestore');
@@ -483,7 +483,7 @@ export const HybridStorage = {
     if (isOnline()) {
       (async () => {
         try {
-          // jules edit: Route 'games' (Tournament Standings) remote delete to Firebase Firestore
+          // Route 'games' (Tournament Standings) remote delete to Firebase Firestore
           if (type === 'games') {
             const { db } = await import('@/lib/firebase');
             const { doc, deleteDoc } = await import('firebase/firestore');

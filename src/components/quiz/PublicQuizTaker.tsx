@@ -1,6 +1,5 @@
 'use client';
 
-// jules edit: Sleek High-Fidelity Quiz Taker with Per-Question scroll states, Form/Research layout segregation, and glowing bg-objects
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -422,7 +421,6 @@ export default function PublicQuizTaker() {
   const [reportReason, setReportReason] = useState('');
   const [reportedStatus, setReportedStatus] = useState(false);
 
-  // jules edit: Per-question scroll answers dictionary mapping question IDs to selections
   const [scrollAnswers, setScrollAnswers] = useState<Record<string, any>>({});
 
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
@@ -534,7 +532,6 @@ export default function PublicQuizTaker() {
           setHasAlreadyCompleted(true);
         }
 
-        // jules edit: Check for active branching and restrict randomization to internal category shuffling
         const hasBranching = migratedQuestions.some(
           (q) => q.skipTo || q.skipToCat || q.options?.some((o: any) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
         );
@@ -830,7 +827,6 @@ export default function PublicQuizTaker() {
     );
   };
 
-  // jules edit: Helper to dynamically compute if an answer is correct
   const computeIsCorrect = (qId: string, answer: any) => {
     const secureAnswer = correctAnswersRef.current[qId];
     if (!secureAnswer) return true;
@@ -872,7 +868,6 @@ export default function PublicQuizTaker() {
   const handleNext = (isAutoSubmit: any = false) => {
     const autoSubmit = isAutoSubmit === true;
 
-    // jules edit: Support scrollAnswers state lookups
     const currentQId = q?.id || '';
     let currentSelectedOption =
       quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
@@ -1044,7 +1039,6 @@ export default function PublicQuizTaker() {
           nextIdx = targetIdx;
         }
       } else if (branchCat) {
-        // jules edit: Strict Category Branching Resolution - Jump to first question of category & progress in defined sequence
         const cleanCat = branchCat.trim().toLowerCase();
         const catQuestions = activeQuestions.filter(
           (quest) => quest.category && quest.category.trim().toLowerCase() === cleanCat,
@@ -1329,7 +1323,6 @@ export default function PublicQuizTaker() {
     );
   }
 
-  // jules edit: Setup beautiful animated floating bg-objects and hide horizontal overflows
   return (
     <div
       onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
@@ -1737,7 +1730,6 @@ export default function PublicQuizTaker() {
               quiz?.quizScroll &&
               (quiz?.quizLayout === 'scroll_show' || !quiz?.quizLayout)
             ) ?
-              // jules edit: Scroll Show layout (Dynamic appending as answered)
               <div className='flex flex-col items-center w-full gap-0'>
                 {activeQuestions
                   .slice(

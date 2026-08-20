@@ -14,11 +14,7 @@ import {
   ArrowDown,
   Plus,
   ChevronRight,
-  ChevronDown,
   Sparkles,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Bold,
   Italic,
   Underline,
@@ -35,16 +31,15 @@ import {
   X as XIcon,
   Cloud,
   Strikethrough,
-  Eye,
   Maximize2,
   Minimize2,
   ArrowRight,
   ArrowLeft,
-  CheckCircle2,
-  HelpCircle,
-  FileUp,
   Undo,
   Redo,
+  CheckCircle2,
+  Share,
+  History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -80,7 +75,6 @@ import { useAppContext } from '@/context/AppContext';
 import { useAppModal } from '@/components/ui/AppModalProvider';
 import { HybridStorage } from '@/lib/storage-utils';
 
-// jules edit: Enhanced Interfaces for Book Creator, Palette, Styling, and 2-Tier History Engine
 interface PDFImagePage {
   id: string;
   name: string;
@@ -278,6 +272,10 @@ export default function PdfToolStudioPage() {
   const [chapters, setChapters] = useState<BookChapter[]>(
     BRAND_SEED_BOOK.chapters,
   );
+  const [activeChapter, setActiveChapter] = useState<string>(
+    chapters[0].id || '',
+  );
+
   const [pages, setPages] = useState<BookPage[]>(BRAND_SEED_BOOK.pages);
   const [imagePalette, setImagePalette] = useState<ImagePaletteItem[]>(
     BRAND_SEED_BOOK.imagePalette,
@@ -307,7 +305,8 @@ export default function PdfToolStudioPage() {
   const [pageMargin, setPageMargin] = useState<'compact' | 'normal' | 'wide'>(
     'normal',
   );
-  // jules edit: Global Book Settings states
+
+  // Global Book Settings states
   const [fontFamily, setFontFamily] = useState<string>(
     "'Merriweather', 'Georgia', serif",
   );
@@ -346,6 +345,7 @@ export default function PdfToolStudioPage() {
   // Preview & Drawer toggles
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const [showCoverDrawer, setShowCoverDrawer] = useState(false);
+  const [showBookSettings, setShowBookSettings] = useState(false);
   const [showFootnoteDrawer, setShowFootnoteDrawer] = useState(false);
 
   // Footnote editing
@@ -364,7 +364,7 @@ export default function PdfToolStudioPage() {
   const [paletteHeightInput, setPaletteHeightInput] = useState(120);
   const [paletteAltInput, setPaletteAltInput] = useState('');
 
-  // jules edit: Computed Paper Background Color from paperScheme selection
+  // Paper Background Color from paperScheme selection
   const paperBgColor = useMemo(() => {
     switch (paperScheme) {
       case 'cream':
@@ -382,9 +382,9 @@ export default function PdfToolStudioPage() {
   // Unified Export Modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState('');
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'doc' | 'txt'>(
-    'pdf',
-  );
+  const [exportFormat, setExportFormat] = useState<
+    'pdf' | 'doc' | 'txt' | 'pwbook'
+  >('pdf');
 
   // Merge state
   const [mergeFiles, setMergeFiles] = useState<
@@ -417,7 +417,7 @@ export default function PdfToolStudioPage() {
     loadBooks();
   }, []);
 
-  // jules edit: Dynamic Word Capacity Matrix based on fontSize, margin & orientation
+  // Dynamic Word Capacity Matrix based on fontSize, margin & orientation
   const wordCapacity = useMemo(() => {
     let base = 400;
     if (pageMargin === 'compact') base = 500;
@@ -432,7 +432,7 @@ export default function PdfToolStudioPage() {
     return base;
   }, [pageMargin, fontSize, paperOrientation]);
 
-  // jules edit: Automatic 2-Tier History Snapshot Engine (5-second change batching under session history ID)
+  // Automatic 2-Tier History Snapshot Engine (5-second change batching under session history ID)
   useEffect(() => {
     if (showBookList) return;
     const now = Date.now();
@@ -456,7 +456,8 @@ export default function PdfToolStudioPage() {
         };
       }
 
-      const lastChange = currentSession.changes[currentSession.changes.length - 1];
+      const lastChange =
+        currentSession.changes[currentSession.changes.length - 1];
       const changeTime = new Date().getTime();
 
       // If last change occurred within 5 seconds, batch into it to prevent memory bloat
@@ -473,9 +474,9 @@ export default function PdfToolStudioPage() {
           wordCount: totalWords,
         };
         return prev.map((s) =>
-          s.historyId === activeHistoryId
-            ? { ...s, changes: updatedChanges }
-            : s,
+          s.historyId === activeHistoryId ?
+            { ...s, changes: updatedChanges }
+          : s,
         );
       }
 
@@ -511,13 +512,15 @@ export default function PdfToolStudioPage() {
         changes: [...currentSession.changes, newChange],
       };
 
-      return prev.some((s) => s.historyId === activeHistoryId)
-        ? prev.map((s) => (s.historyId === activeHistoryId ? updatedSession : s))
+      return prev.some((s) => s.historyId === activeHistoryId) ?
+          prev.map((s) =>
+            s.historyId === activeHistoryId ? updatedSession : s,
+          )
         : [updatedSession, ...prev];
     });
   }, [pages, chapters, showBookList, activeHistoryId]);
 
-  // jules edit: Palette Reference Scanner & Safe Exact Tag Replacer
+  // Palette Reference Scanner & Safe Exact Tag Replacer
   const handleScanAndReplacePaletteReference = (
     oldRef: string,
     newRef: string,
@@ -533,25 +536,28 @@ export default function PdfToolStudioPage() {
         return { ...p, content: updatedContent };
       }),
     );
-    toast.success(
-      `Scanned pages and updated all [img:${oldRef}] references to [img:${newRef}]!`,
-    );
+    toast.success(`Updated all [img:${oldRef}] references to [img:${newRef}]!`);
   };
 
-  // jules edit: Step back/forward through change IDs across session history snapshots
+  // Step back/forward through change IDs across session history snapshots
   const [historyPointer, setHistoryPointer] = useState<number>(-1);
 
   const handleUndo = () => {
     if (historySnapshots.length === 0) {
-      toast.info('No history checkpoints available.');
+      toast.info('No saved history available.');
       return;
     }
-    const currentSession = historySnapshots.find((s) => s.historyId === activeHistoryId) || historySnapshots[0];
+    const currentSession =
+      historySnapshots.find((s) => s.historyId === activeHistoryId) ||
+      historySnapshots[0];
     if (!currentSession || currentSession.changes.length < 2) {
-      toast.info('No previous change in active history session.');
+      toast.info('No previous change in active history.');
       return;
     }
-    const targetIdx = historyPointer === -1 ? currentSession.changes.length - 2 : Math.max(0, historyPointer - 1);
+    const targetIdx =
+      historyPointer === -1 ?
+        currentSession.changes.length - 2
+      : Math.max(0, historyPointer - 1);
     setHistoryPointer(targetIdx);
     const targetChange = currentSession.changes[targetIdx];
     if (targetChange) {
@@ -564,9 +570,14 @@ export default function PdfToolStudioPage() {
       toast.info('No redo steps available.');
       return;
     }
-    const currentSession = historySnapshots.find((s) => s.historyId === activeHistoryId) || historySnapshots[0];
+    const currentSession =
+      historySnapshots.find((s) => s.historyId === activeHistoryId) ||
+      historySnapshots[0];
     if (!currentSession) return;
-    const targetIdx = Math.min(currentSession.changes.length - 1, historyPointer + 1);
+    const targetIdx = Math.min(
+      currentSession.changes.length - 1,
+      historyPointer + 1,
+    );
     setHistoryPointer(targetIdx);
     const targetChange = currentSession.changes[targetIdx];
     if (targetChange) {
@@ -574,18 +585,20 @@ export default function PdfToolStudioPage() {
     }
   };
 
-  // jules edit: Rollback to specific history change checkpoint
+  // Rollback to specific history change checkpoint
   const handleRollbackHistoryChange = (change: HistoryChange) => {
     setPages(JSON.parse(JSON.stringify(change.pages)));
     setChapters(JSON.parse(JSON.stringify(change.chapters)));
-    toast.success(`Rolled back to checkpoint from ${new Date(change.timestamp).toLocaleTimeString()}!`);
+    toast.success(
+      `Rolled back to history from ${new Date(change.timestamp).toLocaleTimeString()}!`,
+    );
   };
 
   const handleClearHistorySnapshots = () => {
     setHistorySnapshots([]);
     const freshSess = `sess-${Date.now()}`;
     setActiveHistoryId(freshSess);
-    toast.success('History snapshots cleared.');
+    toast.success('History cleared.');
   };
 
   const activePage = pages[activePageIndex] || pages[0];
@@ -636,7 +649,7 @@ export default function PdfToolStudioPage() {
             }),
           );
           toast.info(
-            'Text overflowed page capacity — excess words pushed to the next page.',
+            'Text overflowed page capacity - excess words pushed to the next page.',
           );
         } else {
           const newPage: BookPage = {
@@ -660,7 +673,7 @@ export default function PdfToolStudioPage() {
           ]);
           setActivePageIndex(nextPageIndex);
           toast.success(
-            'Text overflowed — automatically created a new page for remaining words.',
+            'Text overflowed - automatically created a new page for remaining words.',
           );
         }
       }
@@ -709,11 +722,11 @@ export default function PdfToolStudioPage() {
       .replace(/<strike>(.*?)<\/strike>/g, '<del>$1</del>')
       .replace(
         /<mark>(.*?)<\/mark>/g,
-        '<span style="background-color: rgba(253, 224, 71, 0.4); padding: 1px 4px; border-radius: 4px;">$1</span>',
+        '<span style="background-color: rgba(255, 96, 215, 0.4); padding: 1px 4px; border-radius: 4px;">$1</span>',
       )
       .replace(
         /<blockquote>(.*?)<\/blockquote>/g,
-        '<blockquote style="border-left: 3px solid #3b82f6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
+        '<blockquote style="border-left: 3px solid #da3bf6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
       )
       .replace(
         /<h2>(.*?)<\/h2>/g,
@@ -721,7 +734,7 @@ export default function PdfToolStudioPage() {
       )
       .replace(
         /\[fn:(\d+)\]/g,
-        '<sup style="color: #3b82f6; font-weight: bold;">[$1]</sup>',
+        '<sup style="color: #ca3bf6; font-weight: bold;">[$1]</sup>',
       );
 
     return html;
@@ -751,7 +764,7 @@ export default function PdfToolStudioPage() {
     setPaperOrientation(book.orientation || 'portrait');
     setPaperScheme(book.paperScheme || 'white');
     setBodyColor(book.bodyColor || '#1e293b');
-    setGlobalTitleColor(book.globalTitleColor || '#3b82f6');
+    setGlobalTitleColor(book.globalTitleColor || '#c43bf6');
     setHistorySnapshots(book.historySnapshots || []);
     setActivePageIndex(0);
     setShowBookList(false);
@@ -794,13 +807,13 @@ export default function PdfToolStudioPage() {
     if (hasProPdf || isPremium) {
       try {
         await HybridStorage.save(activeBookId, updatedBook, 'document');
-        toast.success('☁️ Book saved and synced to your cloud workspace!');
+        toast.success('Saved and synced to the cloud!');
       } catch {
-        toast.success('Book saved to browser storage.');
+        toast.success('Saved to browser storage.');
       }
     } else {
       toast.info(
-        '📁 Book saved locally on this device. (Upgrade to Pro for automated Cloud Sync).',
+        'Saved locally on this device. (Upgrade plan for automated Cloud Sync).',
         {
           duration: 5000,
         },
@@ -952,9 +965,11 @@ export default function PdfToolStudioPage() {
   };
 
   const handleAddPageToChapter = (chapterId: string | null) => {
+    let title = `Page ${pages.length + 1}`;
+
     const newPage: BookPage = {
       id: `pg-${Date.now()}`,
-      title: `Page ${pages.length + 1}`,
+      title,
       showTitle: true,
       content: '',
       chapterId,
@@ -967,7 +982,16 @@ export default function PdfToolStudioPage() {
     };
     setPages([...pages, newPage]);
     setActivePageIndex(pages.length);
-    toast.success('New page added to book stack!');
+
+    if (chapterId) {
+      setActiveChapter(chapterId);
+
+      setCollapsedChapters((prev) => ({
+        ...prev,
+        [chapterId]: false,
+      }));
+    }
+    toast.success('New page added to book!');
   };
 
   const handleDeletePage = async (pageId: string) => {
@@ -1398,7 +1422,6 @@ export default function PdfToolStudioPage() {
         }
 
         doc.save(`${finalFilename}.pdf`);
-        toast.dismiss(toastId);
         toast.success('🎉 PDF Manuscript compiled and downloaded!');
       } else if (exportFormat === 'doc') {
         let html = `
@@ -1441,8 +1464,9 @@ export default function PdfToolStudioPage() {
         });
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.doc`);
-        toast.dismiss(toastId);
         toast.success('🎉 Word manuscript (.doc) exported!');
+      } else if (exportFormat === 'pwbook') {
+        await handleExportBookJson();
       } else {
         // Plain Text export
         let plain = `BOOK: ${frontCoverTitle}\nSUBTITLE: ${frontCoverSubtitle}\nAUTHOR: ${frontCoverAuthor}\n\n========================\n\n`;
@@ -1452,18 +1476,18 @@ export default function PdfToolStudioPage() {
         const blob = new Blob([plain], { type: 'text/plain;charset=utf-8' });
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.txt`);
-        toast.dismiss(toastId);
         toast.success('🎉 Text document exported!');
       }
     } catch (err: any) {
-      toast.dismiss(toastId);
       toast.error(
         'Export compilation error: ' + (err?.message || 'Please try again.'),
       );
+    } finally {
+      toast.dismiss(toastId);
     }
   };
 
-  // jules edit: Export Book JSON / .pwbook
+  // Export Book JSON / .pwbook
   const handleExportBookJson = async () => {
     const activeBook: Book = {
       id: activeBookId,
@@ -1492,19 +1516,25 @@ export default function PdfToolStudioPage() {
     const jsonStr = JSON.stringify(activeBook, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const { saveAs } = await import('file-saver');
-    const filename = (frontCoverTitle || 'book').replace(/\s+/g, '-').toLowerCase();
+    const filename = (frontCoverTitle || 'book')
+      .replace(/\s+/g, '-')
+      .toLowerCase();
     saveAs(blob, `${filename}.pwbook`);
-    toast.success('🎉 Exported structured manuscript (.pwbook)!');
+    toast.success('Exported book (.pwbook)!');
   };
 
-  // jules edit: Import Book JSON / .pwbook
+  // Import Book JSON / .pwbook
   const handleImportBookJson = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
         const importedBook = JSON.parse(text) as Book;
-        if (!importedBook || !importedBook.id || !Array.isArray(importedBook.pages)) {
+        if (
+          !importedBook ||
+          !importedBook.id ||
+          !Array.isArray(importedBook.pages)
+        ) {
           throw new Error('Invalid book JSON format.');
         }
 
@@ -1513,16 +1543,21 @@ export default function PdfToolStudioPage() {
 
         const updatedBooks = [importedBook, ...books];
         setBooks(updatedBooks);
-        localStorage.setItem('pw_pdf_books_list_v5', JSON.stringify(updatedBooks));
+        localStorage.setItem(
+          'pw_pdf_books_list_v5',
+          JSON.stringify(updatedBooks),
+        );
 
         handleOpenBookWorkspace(newBookId);
-        toast.success(`🎉 Imported manuscript: "${importedBook.name}"`);
+        toast.success(`Imported book: "${importedBook.name}"`);
         toast.info(
-          '💡 Reminder: If palette images need updating, import or rename them in Image Palette tab. Palette edits immediately reflect across the manuscript!',
+          'Reminder: If palette images need updating, import or rename them in Image Palette tab. Palette edits immediately reflect across the book!',
           { duration: 8000 },
         );
       } catch (err: any) {
-        toast.error('Failed to import book: ' + (err?.message || 'Invalid JSON file.'));
+        toast.error(
+          'Failed to import book: ' + (err?.message || 'Invalid JSON file.'),
+        );
       }
     };
     reader.readAsText(file);
@@ -1532,14 +1567,13 @@ export default function PdfToolStudioPage() {
   return (
     <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-7xl mx-auto'>
       {/* Studio Header */}
-      <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-white/5 pb-6'>
+      <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 sm:mb-8 pb-6'>
         <div>
           <div className='inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-bold mb-2'>
             <FileText className='h-3.5 w-3.5' /> PDF & Word Studio
           </div>
           <h1 className='text-3xl sm:text-4xl font-extrabold font-display text-white tracking-tight'>
-            Universal Document{' '}
-            <span className='gradient-text'>Engineering.</span>
+            Universal Document <span className='gradient-text'>Studio.</span>
           </h1>
           <p className='text-pw-muted text-xs sm:text-sm mt-1 max-w-xl'>
             Convert between formats with real document parsing, and author
@@ -1547,50 +1581,56 @@ export default function PdfToolStudioPage() {
           </p>
         </div>
 
+        <div className='divider my-4 sm:hidden' />
+
         {/* Tab Selector Buttons */}
-        <div className='flex items-center max-w-full bg-white/5 p-1 rounded-full border border-white/10 shrink-0 self-center md:self-auto overflow-hidden scrollable-row'>
+        <div
+          className='flex items-center max-w-full bg-white/2 bkblur p-0.5 sm:p-1 mt-4 sm:mt-0 rounded-full border border-white/10 shrink-0 self-center md:self-auto overflow-hidden scrollable-row'
+          style={{ gap: '0px' }}>
           <Button
             onClick={() => handleTabChange('conversion')}
             variant='ghost'
             className={cn(
-              'h-9 px-5 text-xs font-bold rounded-full transition-all',
+              'h-9 px-4 sm:px-5 text-xs font-bold rounded-full transition-all',
               activeTab === 'conversion' ?
                 'bg-pw-primary text-white shadow-lg'
               : 'text-pw-muted hover:text-white',
             )}>
-            <Sparkles className='h-3.5 w-3.5 mr-1.5' /> Convert
+            <Sparkles className='h-3.5 w-3.5 mr-1' /> Convert
           </Button>
           <Button
             onClick={() => handleTabChange('text-to-pdf')}
             variant='ghost'
             className={cn(
-              'h-9 px-5 text-xs font-bold rounded-full transition-all',
+              'h-9 px-4 sm:px-5 text-xs font-bold rounded-full transition-all',
               activeTab === 'text-to-pdf' ?
                 'bg-pw-primary text-white shadow-lg'
               : 'text-pw-muted hover:text-white',
             )}>
-            <BookOpen className='h-3.5 w-3.5 mr-1.5' /> Book Editor
+            <BookOpen className='h-3.5 w-3.5 mr-1' /> Book Editor
           </Button>
           <Button
             onClick={() => handleTabChange('merge')}
             variant='ghost'
             className={cn(
-              'h-9 px-5 text-xs font-bold rounded-full transition-all',
+              'h-9 px-4 sm:px-5 text-xs font-bold rounded-full transition-all',
               activeTab === 'merge' ?
                 'bg-pw-primary text-white shadow-lg'
               : 'text-pw-muted hover:text-white',
             )}>
-            <Sliders className='h-3.5 w-3.5 mr-1.5' /> Merge PDFs
+            <Sliders className='h-3.5 w-3.5 mr-1' /> Merge PDFs
           </Button>
         </div>
       </div>
 
+      <div className='hidden divider my-4 mb-8 sm:flex' />
+
       {/* ── TAB 1: UNIVERSAL CONVERTER ─────────────────────────────── */}
       {activeTab === 'conversion' && (
-        <Card className='bg-transparent ring-0 sm:ring-1 sm:p-10 sm:bg-[#0c0d1c] sm:border sm:border-white/10 sm:rounded-3xl sm:shadow-2xl space-y-8 max-w-4xl mx-auto'>
-          <div className='text-center space-y-2 max-w-lg mx-auto'>
+        <Card className='bg-transparent ring-0 sm:ring- sm:p-10 sm:bg-[#0c0d1c]/60 bkblur sm:border sm:border-white/2 sm:rounded-3xl sm:shadow-2xl space-y-4 sm:space-y-8 max-w-4xl mx-auto'>
+          <div className='text-left sm:text-center space-y-2 max-w-lg mx-auto'>
             <h2 className='text-2xl font-bold font-display text-white'>
-              Universal File Converter
+              Text File Converter
             </h2>
             <p className='text-xs text-pw-muted'>
               Select your source & target formats. The engine parses raw text
@@ -1599,9 +1639,9 @@ export default function PdfToolStudioPage() {
           </div>
 
           {/* Format Selectors with Responsive Arrow */}
-          <div className='grid grid-cols-1 md:grid-cols-11 gap-4 items-center bg-white/[0.02] p-6 rounded-2xl border border-white/5'>
+          <div className='grid grid-cols-1 md:grid-cols-11 gap-4 items-center'>
             {/* From Dropdown */}
-            <div className='md:col-span-5 space-y-2'>
+            <div className='md:col-span-5 space-y-2 px-1'>
               <label className='text-xs font-bold uppercase tracking-wider text-pw-muted block'>
                 Convert From (Source)
               </label>
@@ -1614,19 +1654,19 @@ export default function PdfToolStudioPage() {
                     toast.warning('Source and Target cannot be identical.');
                   }
                 }}
-                className='w-full h-11 px-3.5 bg-[#12152e] border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
-                <option value='pdf'>PDF Document (.pdf)</option>
-                <option value='word'>Microsoft Word (.doc, .docx)</option>
+                className='w-full h-11 px-3.5 bg-[#12152e]/70 border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
+                <option value='pdf'>PDF (.pdf)</option>
+                <option value='word'>Word (.doc, .docx)</option>
                 <option value='excel'>
                   Excel / Spreadsheets (.xlsx, .csv)
                 </option>
-                <option value='txt'>Plain Text (.txt)</option>
+                <option value='txt'>Text (.txt)</option>
                 <option value='images'>Images (PNG, JPG, WEBP)</option>
               </select>
             </div>
 
             {/* Responsive Direction Arrow (down on mobile, right on desktop) */}
-            <div className='md:col-span-1 flex items-center justify-center pt-2 md:pt-6'>
+            <div className='md:col-span-1 items-center justify-center pt-2 md:pt-6 hidden sm:flex'>
               <div className='w-9 h-9 rounded-full bg-pw-primary/10 text-pw-primary border border-pw-primary/20 flex items-center justify-center font-bold text-sm shadow-md'>
                 <ArrowRight className='hidden md:block h-4 w-4' />
                 <ArrowDown className='block md:hidden h-4 w-4' />
@@ -1634,9 +1674,9 @@ export default function PdfToolStudioPage() {
             </div>
 
             {/* To Dropdown */}
-            <div className='md:col-span-5 space-y-2'>
+            <div className='md:col-span-5 space-y-2 px-1'>
               <label className='text-xs font-bold uppercase tracking-wider text-pw-muted block'>
-                Convert To (Target)
+                Convert To (Export)
               </label>
               <select
                 value={toFormat}
@@ -1647,11 +1687,11 @@ export default function PdfToolStudioPage() {
                     toast.warning('Source and Target cannot be identical.');
                   }
                 }}
-                className='w-full h-11 px-3.5 bg-[#12152e] border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
-                <option value='word'>Microsoft Word Document (.doc)</option>
-                <option value='pdf'>PDF Document (.pdf)</option>
-                <option value='txt'>Plain Text Document (.txt)</option>
-                <option value='excel'>Excel Tabular CSV (.csv)</option>
+                className='w-full h-11 px-3.5 bg-[#12152e]/70 border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
+                <option value='word'>Word (.doc)</option>
+                <option value='pdf'>PDF (.pdf)</option>
+                <option value='txt'>Text (.txt)</option>
+                <option value='excel'>Excel (.csv)</option>
               </select>
             </div>
           </div>
@@ -1672,7 +1712,7 @@ export default function PdfToolStudioPage() {
                 );
               }
             }}
-            className='flex flex-col items-center justify-center py-16 px-6 text-center border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.01] hover:bg-white/[0.03] transition-all cursor-pointer group'>
+            className='flex flex-col items-center justify-center py-12 sm:py-16 px-4 sm:px-6 text-center border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.01] hover:bg-white/[0.03] transition-all cursor-pointer group bkblur'>
             <input
               ref={conversionInputRef}
               type='file'
@@ -1690,7 +1730,9 @@ export default function PdfToolStudioPage() {
             />
 
             <div className='w-14 h-14 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center mb-4 shadow-xl group-hover:scale-110 transition-transform'>
-              <Upload className='h-6 w-6' />
+              {conversionFile ?
+                <ImageIcon className='h-6 w-6' />
+              : <Upload className='h-6 w-6' />}
             </div>
 
             {conversionFile ?
@@ -1707,7 +1749,7 @@ export default function PdfToolStudioPage() {
                 <h3 className='text-base font-bold text-white'>
                   Drop or select your {fromFormat.toUpperCase()} file here
                 </h3>
-                <p className='text-xs text-pw-muted max-w-sm'>
+                <p className='text-[10px] text-pw-muted max-w-sm'>
                   File types are automatically detected and prepared for
                   high-integrity conversion.
                 </p>
@@ -1719,9 +1761,11 @@ export default function PdfToolStudioPage() {
           <Button
             onClick={handleUniversalConversion}
             disabled={!conversionFile || isConverting}
-            className='btn-primary h-12 w-full text-sm font-bold shadow-xl shadow-pw-primary/20 gap-2'>
-            <Sparkles className='h-4 w-4' /> Convert {fromFormat.toUpperCase()}{' '}
-            to {toFormat.toUpperCase()}
+            className='btn-primary h-12 w-full text-sm font-bold shadow-xl max-w-[400px] shadow-pw-primary/20 self-center'>
+            <CheckCircle2 className='h-6 w-6 mr-2' /> Convert{' '}
+            <span className='hidden sm:inline-block'>
+              {fromFormat.toUpperCase()} to {toFormat.toUpperCase()}
+            </span>
           </Button>
         </Card>
       )}
@@ -1738,14 +1782,16 @@ export default function PdfToolStudioPage() {
                     My Books Library
                   </h2>
                   <p className='text-xs text-pw-muted mt-0.5'>
-                    Select an existing volume to continue authoring, or start a
-                    new book volume.
+                    Select an existing book to continue writing, or start a new
+                    book.
                   </p>
                 </div>
                 <Button
                   onClick={handleCreateNewBookPrompt}
-                  className='btn-primary h-10 px-5 text-xs font-bold gap-2'>
-                  <Plus className='h-4 w-4' /> New Book
+                  title='Create New Book'
+                  className='gradient-brand h-10 px-4 sm:px-5 text-sm rounded-full font-bold'>
+                  <Plus className='h-6 w-6' />{' '}
+                  <span className='hidden sm:inline-flex ml-1'>New Book</span>
                 </Button>
               </div>
 
@@ -1762,8 +1808,8 @@ export default function PdfToolStudioPage() {
                   return (
                     <Card
                       key={book.id}
-                      className='p-4 sm:p-6 bg-[#0c0d1c] border border-white/10 hover:border-pw-primary/40 rounded-2xl shadow-xl transition-all flex flex-col justify-between group space-y-4'>
-                      <div className='space-y-2'>
+                      className='bg-[#0c0d1c]/70 bkblur border border-white/5 hover:border-pw-primary/30 rounded-2xl shadow-xl transition-all flex flex-col justify-between group p-0'>
+                      <div className='sapce-y-2 p-3 sm:p-4 pb-1'>
                         <div className='flex items-start justify-between gap-2'>
                           <div className='p-2.5 rounded-xl bg-pw-primary/10 text-pw-primary border border-pw-primary/20 shrink-0'>
                             <BookOpen className='h-5 w-5' />
@@ -1776,7 +1822,8 @@ export default function PdfToolStudioPage() {
                             : `1 Page`}
                           </span>
                         </div>
-                        <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1'>
+
+                        <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1 pt-2'>
                           {book.name}
                         </h3>
                         <p className='text-xs text-pw-muted line-clamp-2 leading-relaxed'>
@@ -1786,13 +1833,13 @@ export default function PdfToolStudioPage() {
                         </p>
                       </div>
 
-                      <div className='border-t border-white/5 pt-3 space-y-3'>
-                        <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono'>
+                      <div className='border-t border-white/5 p-2 sm:p-4 pt-3 space-y-3'>
+                        <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono px-1 flex-wrap'>
                           <span>{book.chapters?.length || 1} Chapters</span>
                           <span>~{totalWords} Words</span>
                         </div>
 
-                        <div className='flex items-center gap-2'>
+                        <div className='flex items-center gap-2 flex-wrap'>
                           <Button
                             onClick={() => handleOpenBookWorkspace(book.id)}
                             className='btn-primary h-9 flex-1 text-xs font-bold'>
@@ -1823,95 +1870,91 @@ export default function PdfToolStudioPage() {
               </div>
             </div>
           : /* VIEW B: ACTIVE BOOK WORKSPACE */
-            <div className='space-y-6'>
+            <div className='space-y-4 sm:space-y-6'>
               {/* Workspace Action Bar */}
-              <div className='flex items-center justify-between bg-[#0c0d1c] p-4 rounded-2xl border border-white/10 flex-wrap gap-4'>
-                <div className='flex items-center gap-3'>
+              <div className='flex items-center justify-between flex-wrap gap-4'>
+                <div className='min-w-full flex items-center flex-wrap gap-3 sm:bg-[#0c0d1c]/50 sm:bkblur sm:p-2 sm:rounded-2xl sm:border sm:border-white/2'>
                   <Button
                     onClick={handleSaveCurrentBookAndClose}
                     variant='outline'
-                    className='h-9 px-4 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
-                    <ArrowLeft className='h-3.5 w-3.5' /> Library
+                    className='h-9 px-2 sm:px-3 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
+                    <ArrowLeft className='h-3.5 w-3.5' />
                   </Button>
-                  <div>
-                    <h2 className='text-base font-bold text-white flex items-center gap-2'>
-                      <span>{frontCoverTitle || 'Manuscript Editor'}</span>
+
+                  <div className='flex-1 gap-1 flex flex-wrap items-center justify-between'>
+                    <h2 className='flex-1 text-base font-bold text-white flex items-center justify-between gap-2'>
+                      {frontCoverTitle || 'Book Editor'}
+                    </h2>
+
+                    <div className='flex items-center gap-1'>
                       {hasProPdf ?
                         <span className='text-[9px] uppercase px-2 py-0.5 rounded-full bg-pw-primary/15 text-pw-primary font-bold'>
-                          Cloud Linked
+                          <Cloud className='h-3.5 w-3.5' />
                         </span>
-                      : <span className='text-[9px] uppercase px-2 py-0.5 rounded-full bg-white/5 text-pw-muted font-mono'>
-                          Local Draft
+                      : <span className='text-[9px] uppercase px-2 py-1 rounded-full bg-white/5 text-pw-muted font-mono'>
+                          Draft
                         </span>
                       }
-                    </h2>
+
+                      <Button
+                        onClick={() => {
+                          setExportFilename(
+                            frontCoverTitle.replace(/\s+/g, '-').toLowerCase(),
+                          );
+                          setShowExportModal(true);
+                        }}
+                        variant='ghost'
+                        className='h-9 text-xs font-bold gap-1.5'>
+                        <Share className='h-3.5 w-3.5' /> Export
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
-                {/* jules edit: Workspace Action Buttons including Reader Sheet, History, Palette & Global Settings */}
-                <div className='flex items-center gap-2 flex-wrap'>
+                <div className='flex items-center gap-2 flex-wrap sm:mt-0'>
                   <Button
                     onClick={() => setShowOverallBookReader(true)}
                     variant='outline'
                     className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-primary'>
-                    <BookOpen className='h-3.5 w-3.5' /> Reader Sheet
+                    <BookOpen className='h-3.5 w-3.5' /> Reader
                   </Button>
                   <Button
                     onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
                     variant='outline'
                     className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-muted hover:text-white'>
-                    <Sparkles className='h-3.5 w-3.5 text-pw-warning' /> History
+                    <History className='h-3.5 w-3.5 text-pw-warning' /> History
                   </Button>
                   <Button
                     onClick={() => setShowImagePaletteDialog(true)}
                     variant='outline'
                     className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5'>
-                    <ImageIcon className='h-3.5 w-3.5 text-pw-primary' /> Palette
-                  </Button>
-                  <Button
-                    onClick={handleExportBookJson}
-                    variant='outline'
-                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-cyan'>
-                    <FileCode className='h-3.5 w-3.5' /> .pwbook
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setExportFilename(
-                        frontCoverTitle.replace(/\s+/g, '-').toLowerCase(),
-                      );
-                      setShowExportModal(true);
-                    }}
-                    className='btn-primary h-9 text-xs font-bold gap-1.5'>
-                    <Download className='h-3.5 w-3.5' /> Export
-                  </Button>
-                  <Button
-                    onClick={handleSaveCurrentBookAndClose}
-                    variant='outline'
-                    className='h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-pw-success'>
-                    <Save className='h-3.5 w-3.5' /> Save & Exit
+                    <ImageIcon className='h-3.5 w-3.5 text-pw-primary' />{' '}
+                    Palette
                   </Button>
                 </div>
               </div>
+
+              <div className='sm:hidden divider my-4' />
 
               {/* Main Book Workspace Grid */}
               <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
                 {/* LEFT NAVIGATOR: CHAPTERS & PAGES TREE */}
                 <div className='lg:col-span-4 space-y-4'>
-                  <Card className='p-4 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-4 shadow-xl'>
-                    <div className='flex items-center justify-between'>
+                  <Card className='mt-2 sm:mt-0 sm:p-4 bg-transparent ring-0 sm:ring-1 sm:bg-[#0c0d1c]/70 bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-4 sm:shadow-xl'>
+                    <div className='flex items-center justify-between flex-wrap'>
                       <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                        Chapters & Pages Tree
+                        Chapters & Pages
                       </span>
                       <Button
                         onClick={() => handleAddPageToChapter(null)}
                         size='sm'
-                        className='btn-primary h-7 px-3 text-[10px] font-bold gap-1'>
+                        className='btn-ghost h-7 text-[10px] font-bold gap-1'>
                         <Plus className='h-3 w-3' /> Add Page
                       </Button>
                     </div>
 
                     {/* Add Stack (Chapter / Page) */}
-                    <div className='flex gap-2'>
+                    <div className='flex gap-2 mx-1 flex-wrap'>
                       <select
                         value={stackType}
                         onChange={(e) => setStackType(e.target.value as any)}
@@ -1924,7 +1967,7 @@ export default function PdfToolStudioPage() {
                         <option
                           value='chapter'
                           className='bg-[#0A0C1B]'>
-                          Chapter Header
+                          Chapter
                         </option>
                       </select>
                       <Button
@@ -1938,14 +1981,17 @@ export default function PdfToolStudioPage() {
                                 name: `Chapter ${chapters.length + 1}: Subtitle`,
                               },
                             ]);
+                            setActiveChapter(newChId);
+
                             setStackType('page');
-                            toast.success(
-                              'Chapter created! Switched stack selector to Page.',
-                            );
+                            toast.success('Chapter created!.');
                           } else {
-                            handleAddPageToChapter(
-                              chapters[chapters.length - 1]?.id || null,
-                            );
+                            handleAddPageToChapter(activeChapter || null);
+                            setCollapsedChapters((prev) => ({
+                              ...prev,
+                              [activeChapter as string]:
+                                !prev[activeChapter as string],
+                            }));
                           }
                         }}
                         size='sm'
@@ -1967,16 +2013,21 @@ export default function PdfToolStudioPage() {
                             key={ch.id}
                             className='space-y-1.5'>
                             {/* Chapter Header */}
-                            <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 group'>
-                              <div
-                                onClick={() =>
-                                  setCollapsedChapters((prev) => ({
-                                    ...prev,
-                                    [ch.id]: !prev[ch.id],
-                                  }))
-                                }
-                                className='flex items-center gap-2 cursor-pointer flex-1 min-w-0'>
+                            <div
+                              className={cn(
+                                'flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 group',
+                                activeChapter === ch.id &&
+                                  'border-pw-primary/15 bg-pw-primary/10',
+                              )}
+                              onClick={() => setActiveChapter(ch.id)}>
+                              <div className='flex items-center gap-2 cursor-pointer flex-1 min-w-0'>
                                 <ChevronRight
+                                  onClick={() =>
+                                    setCollapsedChapters((prev) => ({
+                                      ...prev,
+                                      [ch.id]: !prev[ch.id],
+                                    }))
+                                  }
                                   className={cn(
                                     'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
                                     !isCollapsed && 'rotate-90',
@@ -2003,14 +2054,14 @@ export default function PdfToolStudioPage() {
                                       handleRenameChapter(ch.id, ch.name)
                                     }>
                                     <Pencil className='h-3.5 w-3.5 mr-2 text-pw-primary' />{' '}
-                                    Rename Chapter
+                                    Rename
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() =>
                                       handleAddPageToChapter(ch.id)
                                     }>
                                     <Plus className='h-3.5 w-3.5 mr-2 text-pw-success' />{' '}
-                                    Add Page Under Chapter
+                                    Add Page
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleDisbandChapter(ch.id)}>
@@ -2023,7 +2074,7 @@ export default function PdfToolStudioPage() {
                                       handleDeleteChapterWithPages(ch.id)
                                     }>
                                     <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
-                                    Delete Chapter & Pages
+                                    Delete All
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -2102,7 +2153,7 @@ export default function PdfToolStudioPage() {
                                               handleDeletePage(page.id)
                                             }>
                                             <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
-                                            Delete Page
+                                            Delete
                                           </DropdownMenuItem>
                                         </DropdownMenuContent>
                                       </DropdownMenu>
@@ -2206,7 +2257,7 @@ export default function PdfToolStudioPage() {
                                           handleDeletePage(page.id)
                                         }>
                                         <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
-                                        Delete Page
+                                        Delete
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
@@ -2286,6 +2337,206 @@ export default function PdfToolStudioPage() {
                       </div>
                     )}
                   </Card>
+
+{/* Book Global settings */}
+                  <Card className='p-4 bg-[#0c0d1c] border border-white/10 rounded-2xl space-y-3'>
+                    <div
+                      onClick={() => setShowBookSettings(!showBookSettings)}
+                      className='flex items-center justify-between cursor-pointer'>
+                      <span className='text-xs font-bold text-white uppercase flex items-center gap-2'>
+                        <Settings className='h-3.5 w-3.5 text-pw-primary' />{' '}
+                        Book Settings
+                      </span>
+                      <ChevronRight
+                        className={cn(
+                          'h-4 w-4 text-pw-muted transition-transform',
+                          showBookSettings && 'rotate-90',
+                        )}
+                      />
+                    </div>
+
+                    {showBookSettings && (
+                      <div className='space-y-4 pt-2 border-t border-white/5 text-white p-4 space-y-3 max-h-[480px] overflow-y-auto custom-scrollbar'>
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Font
+                          </label>
+                          <select
+                            value={fontFamily}
+                            onChange={(e) => setFontFamily(e.target.value)}
+                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                            <option
+                              value="'Merriweather', 'Georgia', serif"
+                              className='bg-[#0a0c1b]'>
+                              Serif (Merriweather / Georgia)
+                            </option>
+                            <option
+                              value="'Inter', 'Arial', sans-serif"
+                              className='bg-[#0a0c1b]'>
+                              Sans (Inter / Arial)
+                            </option>
+                            <option
+                              value="'JetBrains Mono', 'Courier', monospace"
+                              className='bg-[#0a0c1b]'>
+                              Mono (JetBrains Mono / Courier)
+                            </option>
+                            <option
+                              value='OpenDyslexic, sans-serif'
+                              className='bg-[#0a0c1b]'>
+                              OpenDyslexic
+                            </option>
+                          </select>
+                        </div>
+
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Font Size
+                          </label>
+                          <select
+                            value={fontSize}
+                            onChange={(e) => setFontSize(e.target.value as any)}
+                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                            <option
+                              value='small'
+                              className='bg-[#0a0c1b]'>
+                              Small (12pt)
+                            </option>
+                            <option
+                              value='normal'
+                              className='bg-[#0a0c1b]'>
+                              Normal (14pt)
+                            </option>
+                            <option
+                              value='large'
+                              className='bg-[#0a0c1b]'>
+                              Large (16pt)
+                            </option>
+                            <option
+                              value='extralarge'
+                              className='bg-[#0a0c1b]'>
+                              Extra Large (18pt)
+                            </option>
+                          </select>
+                        </div>
+
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Paper Orientation
+                          </label>
+                          <div className='flex gap-1'>
+                            {(['portrait', 'landscape'] as const).map(
+                              (orient) => (
+                                <Button
+                                  key={orient}
+                                  size='sm'
+                                  variant='ghost'
+                                  onClick={() => setPaperOrientation(orient)}
+                                  className={cn(
+                                    'h-7 flex-1 text-xs capitalize',
+                                    paperOrientation === orient ?
+                                      'bg-pw-primary text-white'
+                                    : 'hover:bg-white/5',
+                                  )}>
+                                  {orient}
+                                </Button>
+                              ),
+                            )}
+                          </div>
+                        </div>
+
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Paper Color Scheme
+                          </label>
+                          <select
+                            value={paperScheme}
+                            onChange={(e) =>
+                              setPaperScheme(e.target.value as any)
+                            }
+                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                            <option
+                              value='white'
+                              className='bg-[#0a0c1b]'>
+                              Crisp White (#FFFFFF)
+                            </option>
+                            <option
+                              value='cream'
+                              className='bg-[#0a0c1b]'>
+                              Warm Cream (#FAF7EE)
+                            </option>
+                            <option
+                              value='gray'
+                              className='bg-[#0a0c1b]'>
+                              Soft Gray (#F3F4F6)
+                            </option>
+                            <option
+                              value='dark'
+                              className='bg-[#0a0c1b]'>
+                              Dark Slate (#0F172A)
+                            </option>
+                          </select>
+                        </div>
+
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Body Font Color
+                          </label>
+                          <Input
+                            type='color'
+                            value={bodyColor}
+                            onChange={(e) => setBodyColor(e.target.value)}
+                            className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
+                          />
+                        </div>
+
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Book Titles Color
+                          </label>
+                          <Input
+                            type='color'
+                            value={globalTitleColor}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setGlobalTitleColor(val);
+                              setPages((prev) =>
+                                prev.map((p) => ({ ...p, titleColor: val })),
+                              );
+                            }}
+                            className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
+                          />
+                        </div>
+
+                        <div className='space-y-1.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                            Page Margin
+                          </label>
+                          <select
+                            value={pageMargin}
+                            onChange={(e) =>
+                              setPageMargin(e.target.value as any)
+                            }
+                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                            <option
+                              value='compact'
+                              className='bg-[#0a0c1b]'>
+                              Compact (15mm)
+                            </option>
+                            <option
+                              value='normal'
+                              className='bg-[#0a0c1b]'>
+                              Normal (25mm)
+                            </option>
+                            <option
+                              value='wide'
+                              className='bg-[#0a0c1b]'>
+                              Wide (35mm)
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
                 </div>
 
                 {/* RIGHT WORKSPACE: EDITOR & LIVE PREVIEW */}
@@ -2318,118 +2569,10 @@ export default function PdfToolStudioPage() {
                             <Settings className='h-4 w-4 text-pw-primary' />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className='w-80 bg-[#0c0d1c] border-white/10 text-white p-4 space-y-3 rounded-2xl shadow-2xl max-h-[480px] overflow-y-auto custom-scrollbar'>
+                        <PopoverContent>
                           <span className='text-xs font-bold uppercase tracking-wider text-pw-primary block'>
-                            Global Book & Page Settings
+                            Book & Page Settings
                           </span>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Font Family (Web-Safe)
-                            </label>
-                            <select
-                              value={fontFamily}
-                              onChange={(e) => setFontFamily(e.target.value)}
-                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                              <option value="'Merriweather', 'Georgia', serif" className='bg-[#0a0c1b]'>Serif (Merriweather / Georgia)</option>
-                              <option value="'Inter', 'Arial', sans-serif" className='bg-[#0a0c1b]'>Sans (Inter / Arial)</option>
-                              <option value="'JetBrains Mono', 'Courier', monospace" className='bg-[#0a0c1b]'>Mono (JetBrains Mono / Courier)</option>
-                              <option value="OpenDyslexic, sans-serif" className='bg-[#0a0c1b]'>OpenDyslexic</option>
-                            </select>
-                          </div>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Font Size
-                            </label>
-                            <select
-                              value={fontSize}
-                              onChange={(e) => setFontSize(e.target.value as any)}
-                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                              <option value='small' className='bg-[#0a0c1b]'>Small (12pt)</option>
-                              <option value='normal' className='bg-[#0a0c1b]'>Normal (14pt)</option>
-                              <option value='large' className='bg-[#0a0c1b]'>Large (16pt)</option>
-                              <option value='extralarge' className='bg-[#0a0c1b]'>Extra Large (18pt)</option>
-                            </select>
-                          </div>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Paper Orientation
-                            </label>
-                            <div className='flex gap-1'>
-                              {(['portrait', 'landscape'] as const).map((orient) => (
-                                <Button
-                                  key={orient}
-                                  size='sm'
-                                  variant='ghost'
-                                  onClick={() => setPaperOrientation(orient)}
-                                  className={cn(
-                                    'h-7 flex-1 text-xs capitalize',
-                                    paperOrientation === orient ? 'bg-pw-primary text-white' : 'hover:bg-white/5'
-                                  )}>
-                                  {orient}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Paper Color Scheme
-                            </label>
-                            <select
-                              value={paperScheme}
-                              onChange={(e) => setPaperScheme(e.target.value as any)}
-                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                              <option value='white' className='bg-[#0a0c1b]'>Crisp White (#FFFFFF)</option>
-                              <option value='cream' className='bg-[#0a0c1b]'>Warm Cream (#FAF7EE)</option>
-                              <option value='gray' className='bg-[#0a0c1b]'>Soft Gray (#F3F4F6)</option>
-                              <option value='dark' className='bg-[#0a0c1b]'>Dark Slate (#0F172A)</option>
-                            </select>
-                          </div>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Body Font Color
-                            </label>
-                            <Input
-                              type='color'
-                              value={bodyColor}
-                              onChange={(e) => setBodyColor(e.target.value)}
-                              className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
-                            />
-                          </div>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Global All Titles Color
-                            </label>
-                            <Input
-                              type='color'
-                              value={globalTitleColor}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setGlobalTitleColor(val);
-                                setPages((prev) => prev.map((p) => ({ ...p, titleColor: val })));
-                              }}
-                              className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
-                            />
-                          </div>
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                              Page Margins
-                            </label>
-                            <select
-                              value={pageMargin}
-                              onChange={(e) => setPageMargin(e.target.value as any)}
-                              className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                              <option value='compact' className='bg-[#0a0c1b]'>Compact (15mm)</option>
-                              <option value='normal' className='bg-[#0a0c1b]'>Normal (25mm)</option>
-                              <option value='wide' className='bg-[#0a0c1b]'>Wide (35mm)</option>
-                            </select>
-                          </div>
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -2539,8 +2682,7 @@ export default function PdfToolStudioPage() {
                     <div className='bg-white/[0.02] p-3 rounded-xl border border-white/5 space-y-1.5'>
                       <div className='flex items-center justify-between text-xs font-mono'>
                         <span className='text-pw-muted'>
-                          Page Capacity: {activeWordCount} / {wordCapacity}{' '}
-                          words
+                          {activeWordCount} / {wordCapacity} words
                         </span>
                         <span
                           className={cn(
@@ -2572,10 +2714,6 @@ export default function PdfToolStudioPage() {
                     <textarea
                       id='book-editor-textarea'
                       value={activePage.content}
-                      style={{
-                        fontFamily: fontFamily,
-                        color: bodyColor,
-                      }}
                       onChange={(e) => {
                         const val = e.target.value;
                         setPages((prev) =>
@@ -2603,7 +2741,7 @@ export default function PdfToolStudioPage() {
                     <div className='space-y-3 pt-2'>
                       <div className='flex items-center justify-between'>
                         <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
-                          Physical Paper Sheet Preview
+                          Page Preview
                         </span>
                         <Button
                           size='sm'
@@ -2621,7 +2759,6 @@ export default function PdfToolStudioPage() {
                         </Button>
                       </div>
 
-                      {/* jules edit: Apply global paper color scheme, body color & font family directly to sheet preview */}
                       <Card
                         style={{
                           backgroundColor: paperBgColor,
@@ -2629,7 +2766,7 @@ export default function PdfToolStudioPage() {
                           fontFamily: fontFamily,
                         }}
                         className={cn(
-                          'p-8 rounded-2xl shadow-2xl min-h-[380px] flex flex-col justify-between select-all transition-all border border-slate-200',
+                          'p-4 rounded-2xl shadow-2xl min-h-[380px] flex flex-col justify-between select-all transition-all border border-slate-200',
                           isPreviewFullscreen &&
                             'fixed inset-4 z-50 overflow-y-auto max-w-4xl mx-auto',
                         )}>
@@ -2638,7 +2775,10 @@ export default function PdfToolStudioPage() {
                             <h2
                               style={{
                                 textAlign: activePage.titleAlign || 'left',
-                                color: activePage.titleColor || globalTitleColor || '#3b82f6',
+                                color:
+                                  activePage.titleColor ||
+                                  globalTitleColor ||
+                                  '#3b82f6',
                                 padding: `${activePage.titlePadding || 4}px`,
                                 marginBottom: `${activePage.titleMargin || 10}px`,
                               }}
@@ -2899,11 +3039,10 @@ export default function PdfToolStudioPage() {
       <Dialog
         open={showImagePaletteDialog}
         onOpenChange={setShowImagePaletteDialog}>
-        <DialogContent className='max-w-2xl bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-6 shadow-2xl'>
+        <DialogContent className='max-w-2xl bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-4 sm:p-6 mx-2 shadow-2xl'>
           <DialogHeader>
             <DialogTitle className='text-lg font-bold font-display flex items-center gap-2 text-white'>
-              <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Reference
-              Palette
+              <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Palette
             </DialogTitle>
             <DialogDescription className='text-xs text-pw-muted'>
               Upload and manage images. Reference any image in your body text
@@ -2911,35 +3050,46 @@ export default function PdfToolStudioPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* jules edit: Image Palette Editing Panel & Auto-Scanning Reference Replacer */}
-          {editingPaletteItem ? (
+          {editingPaletteItem ?
             <div className='p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3 my-2'>
               <span className='text-xs font-bold text-pw-primary uppercase block'>
-                Editing Asset: [img:{editingPaletteItem.name}]
+                Editing: [img:{editingPaletteItem.name}]
               </span>
 
               <div className='grid grid-cols-2 gap-3'>
                 <div className='space-y-1'>
-                  <label className='text-[10px] font-bold text-pw-muted uppercase'>Ref Name</label>
+                  <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                    Ref Name
+                  </label>
                   <Input
                     value={paletteNameInput}
-                    onChange={(e) => setPaletteNameInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'))}
+                    onChange={(e) =>
+                      setPaletteNameInput(
+                        e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'),
+                      )
+                    }
                     className='h-8 bg-black/40 border-white/10 text-xs font-mono'
                   />
                 </div>
                 <div className='space-y-1'>
-                  <label className='text-[10px] font-bold text-pw-muted uppercase'>Dimensions (WxH px)</label>
+                  <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                    Dimensions (WxH px)
+                  </label>
                   <div className='flex gap-1'>
                     <Input
                       type='number'
                       value={paletteWidthInput}
-                      onChange={(e) => setPaletteWidthInput(Number(e.target.value))}
+                      onChange={(e) =>
+                        setPaletteWidthInput(Number(e.target.value))
+                      }
                       className='h-8 bg-black/40 border-white/10 text-xs font-mono'
                     />
                     <Input
                       type='number'
                       value={paletteHeightInput}
-                      onChange={(e) => setPaletteHeightInput(Number(e.target.value))}
+                      onChange={(e) =>
+                        setPaletteHeightInput(Number(e.target.value))
+                      }
                       className='h-8 bg-black/40 border-white/10 text-xs font-mono'
                     />
                   </div>
@@ -2947,11 +3097,13 @@ export default function PdfToolStudioPage() {
               </div>
 
               <div className='space-y-1'>
-                <label className='text-[10px] font-bold text-pw-muted uppercase'>Accessibility Alt Text</label>
+                <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                  Alt Text
+                </label>
                 <Input
                   value={paletteAltInput}
                   onChange={(e) => setPaletteAltInput(e.target.value)}
-                  placeholder='e.g. Brand Corporate Logo'
+                  placeholder='any-text'
                   className='h-8 bg-black/40 border-white/10 text-xs'
                 />
               </div>
@@ -2962,7 +3114,7 @@ export default function PdfToolStudioPage() {
                   variant='outline'
                   onClick={() => setEditingPaletteItem(null)}
                   className='h-7 text-xs border-white/10'>
-                  Cancel
+                  Close
                 </Button>
                 <Button
                   size='sm'
@@ -2972,32 +3124,31 @@ export default function PdfToolStudioPage() {
 
                     setImagePalette((prev) =>
                       prev.map((item) =>
-                        item.id === editingPaletteItem.id
-                          ? {
-                              ...item,
-                              name: newName,
-                              width: paletteWidthInput || 120,
-                              height: paletteHeightInput || 120,
-                              altText: paletteAltInput.trim(),
-                            }
-                          : item,
+                        item.id === editingPaletteItem.id ?
+                          {
+                            ...item,
+                            name: newName,
+                            width: paletteWidthInput || 120,
+                            height: paletteHeightInput || 120,
+                            altText: paletteAltInput.trim(),
+                          }
+                        : item,
                       ),
                     );
 
                     if (oldName !== newName) {
                       handleScanAndReplacePaletteReference(oldName, newName);
                     } else {
-                      toast.success('Palette image properties saved!');
+                      toast.success('Image properties saved!');
                     }
                     setEditingPaletteItem(null);
                   }}
                   className='btn-primary h-7 text-xs font-bold'>
-                  Save Changes
+                  Save
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
+          : <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
               {imagePalette.map((item) => (
                 <div
                   key={item.id}
@@ -3009,7 +3160,11 @@ export default function PdfToolStudioPage() {
                       className='w-14 h-14 object-contain rounded-lg bg-black/40 p-1 border border-white/10'
                     />
                     <div className='min-w-0 flex-1'>
-                      <span className='text-xs font-bold text-white block truncate'>
+                      <span
+                        className='text-xs font-bold text-white block truncate'
+                        onClick={() => {
+                          navigator.clipboard.writeText(`[img:${item.name}]`);
+                        }}>
                         [img:{item.name}]
                       </span>
                       <span className='text-[10px] text-pw-muted font-mono'>
@@ -3042,7 +3197,7 @@ export default function PdfToolStudioPage() {
                           ),
                         );
                         setShowImagePaletteDialog(false);
-                        toast.success(`Inserted [img:${item.name}] into text!`);
+                        toast.success(`Inserted [img:${item.name}] into page!`);
                       }}
                       className='btn-primary h-7 text-[10px] flex-1'>
                       Insert
@@ -3075,7 +3230,7 @@ export default function PdfToolStudioPage() {
                 </div>
               ))}
             </div>
-          )}
+          }
 
           <DialogFooter className='flex flex-row justify-between items-center pt-2'>
             <input
@@ -3112,7 +3267,7 @@ export default function PdfToolStudioPage() {
                 document.getElementById('palette-upload-input')?.click()
               }
               className='btn-primary h-9 text-xs font-bold gap-1.5'>
-              <Upload className='h-3.5 w-3.5' /> Upload Image Asset
+              <Upload className='h-3.5 w-3.5' /> Upload Image
             </Button>
             <Button
               onClick={() => setShowImagePaletteDialog(false)}
@@ -3128,10 +3283,10 @@ export default function PdfToolStudioPage() {
       <Dialog
         open={showExportModal}
         onOpenChange={setShowExportModal}>
-        <DialogContent className='max-w-md bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-6 shadow-2xl space-y-4'>
+        <DialogContent className='max-w-md bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-4 sm:p-6 mx-2 shadow-2xl sm:space-y-4'>
           <DialogHeader>
             <DialogTitle className='text-lg font-bold font-display text-white'>
-              Export Book Manuscript
+              Export Book
             </DialogTitle>
             <DialogDescription className='text-xs text-pw-muted'>
               Choose your export document format and filename.
@@ -3155,12 +3310,13 @@ export default function PdfToolStudioPage() {
               <label className='text-[10px] font-bold text-pw-muted uppercase'>
                 Select Format
               </label>
-              <div className='grid grid-cols-3 gap-2'>
+              <div className='flex items-center flex-wrap gap-2'>
                 {(
                   [
-                    { id: 'pdf', label: 'PDF Document (.pdf)' },
-                    { id: 'doc', label: 'MS Word (.doc)' },
-                    { id: 'txt', label: 'Plain Text (.txt)' },
+                    { id: 'pdf', label: 'PDF (.pdf)' },
+                    { id: 'doc', label: 'Word (.doc)' },
+                    { id: 'txt', label: 'Text (.txt)' },
+                    { id: 'pwbook', label: 'Pwbook (.pwbook)' },
                   ] as const
                 ).map((fmt) => (
                   <Button
@@ -3169,7 +3325,7 @@ export default function PdfToolStudioPage() {
                     variant='ghost'
                     onClick={() => setExportFormat(fmt.id)}
                     className={cn(
-                      'h-12 flex flex-col items-center justify-center text-[10px] font-bold rounded-xl border transition-all',
+                      'h-8 flex flex-col items-center justify-center text-[10px] p-1 px-3 font-bold rounded-xl border transition-all',
                       exportFormat === fmt.id ?
                         'bg-pw-primary/20 border-pw-primary text-pw-primary shadow-lg'
                       : 'bg-white/5 border-white/10 text-pw-muted hover:text-white',
@@ -3186,12 +3342,12 @@ export default function PdfToolStudioPage() {
               onClick={() => setShowExportModal(false)}
               variant='outline'
               className='h-9 text-xs border-white/10'>
-              Cancel
+              Close
             </Button>
             <Button
               onClick={handleExecuteBookExport}
               className='btn-primary h-9 px-5 text-xs font-bold'>
-              Export & Download
+              Export
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3202,25 +3358,27 @@ export default function PdfToolStudioPage() {
         open={showOverallBookReader}
         onOpenChange={setShowOverallBookReader}>
         <DialogContent className='max-w-5xl bg-[#0a0c1b] border-white/10 text-white rounded-3xl p-6 shadow-2xl h-[90vh] flex flex-col justify-between overflow-hidden'>
-          <DialogHeader className='flex flex-row items-center justify-between border-b border-white/10 pb-4'>
+          <DialogHeader className='flex flex-col items-center justify-between border-b border-white/10 pb-4'>
             <div>
               <DialogTitle className='text-lg font-bold font-display text-white flex items-center gap-2'>
-                <BookOpen className='h-5 w-5 text-pw-primary' /> Overall Multi-Page Book Reader
+                <BookOpen className='h-5 w-5 text-pw-primary' /> Book Reader
               </DialogTitle>
               <DialogDescription className='text-xs text-pw-muted'>
-                Sequential manuscript inspection mode across all chapters, covers, and pages.
+                Read through all covers, chapters and pages across.
               </DialogDescription>
             </div>
 
             <div className='flex items-center gap-2 pr-6'>
-              <span className='text-xs text-pw-muted font-mono'>Zoom: {readerZoom}%</span>
+              <span className='text-xs text-pw-muted font-mono'>
+                Zoom: {readerZoom}%
+              </span>
               <input
                 type='range'
                 min='60'
                 max='140'
                 value={readerZoom}
                 onChange={(e) => setReaderZoom(Number(e.target.value))}
-                className='w-28 accent-pw-primary cursor-pointer'
+                className='w-full accent-pw-primary cursor-pointer'
               />
             </div>
           </DialogHeader>
@@ -3228,20 +3386,27 @@ export default function PdfToolStudioPage() {
           {/* Sequential Grid */}
           <div className='flex-1 overflow-y-auto p-4 custom-scrollbar space-y-8'>
             <div
-              style={{ transform: `scale(${readerZoom / 100})`, transformOrigin: 'top center' }}
+              style={{
+                transform: `scale(${readerZoom / 100})`,
+                transformOrigin: 'top center',
+              }}
               className='grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto transition-transform duration-200'>
               {/* Front Cover Card */}
               {hasFrontCover && (
                 <div className='p-8 bg-slate-900 text-white rounded-2xl border border-white/10 shadow-2xl min-h-[420px] flex flex-col justify-between'>
                   <div className='space-y-4 text-center mt-12'>
-                    <h1 className='text-2xl font-extrabold font-display tracking-tight text-pw-primary'>
+                    <h1 className='text-xl font-extrabold font-display tracking-tight text-pw-primary'>
                       {frontCoverTitle}
                     </h1>
-                    <p className='text-xs text-slate-300 italic'>{frontCoverSubtitle}</p>
+                    <p className='text-xs text-slate-300 italic'>
+                      {frontCoverSubtitle}
+                    </p>
                   </div>
-                  <div className='text-center space-y-1 text-xs text-slate-400 font-mono'>
+                  <div className='text-center space-y-1 text-[8px] text-slate-400 font-mono'>
                     <p>By {frontCoverAuthor}</p>
-                    <p className='text-[10px] text-slate-500'>PING WORLD PUBLISHING</p>
+                    <p className='text-[8px] text-slate-500'>
+                      Published with PING WORLD
+                    </p>
                   </div>
                 </div>
               )}
@@ -3284,7 +3449,7 @@ export default function PdfToolStudioPage() {
                     />
                   </div>
 
-                  <div className='text-[9px] font-mono text-slate-400 text-center border-t border-slate-100/50 pt-3'>
+                  <div className='text-[8px] font-mono text-slate-400 text-center border-t border-slate-100/50 pt-3'>
                     Click to jump to page {idx + 1} in editor
                   </div>
                 </div>
@@ -3310,7 +3475,7 @@ export default function PdfToolStudioPage() {
             <Button
               onClick={() => setShowOverallBookReader(false)}
               className='btn-primary h-9 px-6 text-xs font-bold'>
-              Close Reader Sheet
+              Close Reader
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3323,7 +3488,7 @@ export default function PdfToolStudioPage() {
             <div className='flex items-center gap-2'>
               <Sparkles className='h-4 w-4 text-pw-warning' />
               <span className='text-xs font-bold uppercase tracking-wider text-white'>
-                Session History Checkpoints
+                Book History
               </span>
             </div>
             <Button
@@ -3336,15 +3501,17 @@ export default function PdfToolStudioPage() {
           </div>
 
           <div className='space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1'>
-            {historySnapshots.length === 0 ? (
+            {historySnapshots.length === 0 ?
               <p className='text-xs text-pw-muted italic text-center py-4'>
-                No history checkpoints recorded yet. Changes in the editor will automatically generate batch snapshots.
+                No history recorded yet. Changes in the editor will
+                automatically generate batch snapshots.
               </p>
-            ) : (
-              historySnapshots.map((sess) => (
-                <div key={sess.historyId} className='space-y-1.5'>
+            : historySnapshots.map((sess) => (
+                <div
+                  key={sess.historyId}
+                  className='space-y-1.5'>
                   <span className='text-[9px] font-mono text-pw-muted uppercase font-bold block'>
-                    Session {new Date(sess.startTime).toLocaleTimeString()}
+                    Change {new Date(sess.startTime).toLocaleTimeString()}
                   </span>
                   {sess.changes.map((chg) => (
                     <div
@@ -3368,7 +3535,7 @@ export default function PdfToolStudioPage() {
                   ))}
                 </div>
               ))
-            )}
+            }
           </div>
 
           <div className='border-t border-white/10 pt-3 flex justify-between items-center'>
@@ -3377,9 +3544,8 @@ export default function PdfToolStudioPage() {
               variant='ghost'
               onClick={handleClearHistorySnapshots}
               className='h-7 text-[10px] text-pw-danger hover:bg-pw-danger/10'>
-              Clear History
+              Clear
             </Button>
-            <span className='text-[9px] font-mono text-pw-muted'>5m Session Batch</span>
           </div>
         </div>
       )}

@@ -25,9 +25,12 @@ import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
 import { PREMIUM_TIERS } from '@/lib/config/premium';
 import { SITE } from '@/lib/config/site';
+import {useRouter} from 'next/navigation';
 
 export default function GeneralDashboard() {
-  const { premiumTier } = useAppContext();
+  const {premiumTier, user, username} = useAppContext();
+    const router = useRouter();
+  
   const tierConfig = PREMIUM_TIERS[premiumTier];
   const [stats, setStats] = useState({
     quizzes: 0,
@@ -35,8 +38,11 @@ export default function GeneralDashboard() {
     links: 0,
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [username, setUsername] = useState('User');
-
+  
+    useEffect(() => {
+      if (!user || !username) router.replace('/');
+    }, [user, username]);
+  
   useEffect(() => {
     const loadStats = async () => {
       const q = await HybridStorage.getAll('quiz');
@@ -65,26 +71,12 @@ export default function GeneralDashboard() {
     loadStats();
   }, []);
 
-  useEffect(() => {
-    const getUsername = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const username =
-        user?.user_metadata.username ||
-        user?.user_metadata.full_name ||
-        'creator';
-      setUsername(username);
-    };
-    getUsername();
-  }, []);
-
   return (
     <div className='container mx-auto px-6 py-12 max-w-7xl pb-32'>
       <div className='flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12'>
         <div>
           <h1 className='text-4xl font-extrabold font-display leading-tight'>
-            Welcome back, <span className='gradient-text'>@{username}</span>
+            Welcome back, <span className='gradient-text'>@{username || 'User'}</span>
           </h1>
           <p className='text-pw-muted mt-2'>
             Manage your creative ecosystem and track your tool performance.

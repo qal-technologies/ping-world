@@ -51,7 +51,7 @@ export function SavePreviewPanel() {
     state.selectedPlatforms[0] ?? 'x',
   );
 
-  // jules edit: Canvas & Non-X Preview Image Capture Fix - Sanitizing backdrop-filter, SVGs & fallback avatars
+  
   const capturePreview = async () => {
     if (!previewRef.current) return;
     setIsCapturing(true);

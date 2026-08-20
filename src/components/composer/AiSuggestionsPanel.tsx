@@ -29,10 +29,10 @@ export function AiSuggestionsPanel() {
 
   const activePlatform = state.activeEditorPlatform;
 
-  // jules edit: Determine if active platform override text is turned on
+  // Determine if active platform override text is turned on
   const isOverridden = state.platformVariants.find(v => v.platform === activePlatform)?.isOverridden ?? false;
 
-  // jules edit: Focused-platform context content fetching
+  // Focused-platform context content fetching
   const activeContent = isOverridden ? getContentForPlatform(activePlatform) : state.baseContent;
 
   const atSuggestLimit =
@@ -107,7 +107,7 @@ export function AiSuggestionsPanel() {
         getContext(),
       );
 
-      // jules edit: Apply changes exclusively to the active platform if overridden, otherwise fallback to base content syncing
+      // Apply changes exclusively to the active platform if overridden, otherwise fallback to base content syncing
       if (isOverridden) {
         dispatch({
           type: 'SET_PLATFORM_VARIANT',
@@ -127,7 +127,7 @@ export function AiSuggestionsPanel() {
   };
 
   const handleInsert = (text: string, index: number) => {
-    // jules edit: Insert directly into focus platform overridden state or base content
+    // Insert directly into focus platform overridden state or base content
     if (isOverridden) {
       dispatch({
         type: 'SET_PLATFORM_VARIANT',

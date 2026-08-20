@@ -258,7 +258,6 @@ export default function PricingPage() {
     : selectedTier?.price.yearly || 0;
   const savings = Math.round(displayMonthlyPrice * 12 - displayYearlyPrice);
 
-  // jules edit: Secure payment gateway checkout routing with Stripe and Sandbox fallbacks
   const handleCheckout = async () => {
     if (!selectedTierId || !selectedTier) return;
 
@@ -270,7 +269,7 @@ export default function PricingPage() {
     }
 
     setIsSimulating(true);
-    toast.loading(`Connecting to Checkout Gateway...`);
+    toast.loading(`Connecting...`);
 
     try {
       const targetPrice =
@@ -292,9 +291,8 @@ export default function PricingPage() {
       const sessionData = await res.json();
 
       if (sessionData.url) {
-        // Redirect to real Stripe billing portal
         toast.dismiss();
-        toast.loading('Redirecting to Stripe payment portal...');
+        toast.loading('Redirecting to payment...');
         window.location.href = sessionData.url;
         return;
       }
@@ -306,7 +304,6 @@ export default function PricingPage() {
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // jules edit: Accumulate newly purchased flexible tools with existing tools list
       const existingTools: string[] = Array.isArray(user?.user_metadata?.purchased_tools)
         ? user.user_metadata.purchased_tools
         : [];
@@ -590,9 +587,8 @@ export default function PricingPage() {
                   </ul>
 
               
-                      {/* jules edit: Short list of purchased tools & Flexible Tool Dropdown embedded inside Flexible Card when selected */}
-                      {tierId === 'flexible' && (
-                        <div className='pt-3 border-t border-white/10 space-y-2.5'>
+                      {premiumTier === 'flexible' && (
+                        <div className='pt-3 border-t border-white/5 space-y-2.5'>
                           {/* Purchased Tools List */}
                           {(user?.user_metadata?.purchased_tools || []).length > 0 && (
                             <div className='space-y-1'>
@@ -616,7 +612,7 @@ export default function PricingPage() {
 
                           <div className='space-y-1.5'>
                             <label className='text-[10px] font-bold text-pw-primary uppercase block'>
-                              Select Unowned Tool to Purchase
+                              Select Tool to Purchase
                             </label>
                             <div className='flex gap-1.5'>
                               <select
