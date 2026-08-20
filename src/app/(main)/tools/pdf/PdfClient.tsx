@@ -2356,7 +2356,7 @@ export default function PdfToolStudioPage() {
                     </div>
 
                     {showBookSettings && (
-                      <div className='space-y-4 pt-2 border-t border-white/5 text-white p-4 space-y-3 max-h-[480px] overflow-y-auto custom-scrollbar'>
+                      <div className='space-y-4 pt-2 border-t border-white/5 text-white space-y-3 max-h-[480px] overflow-y-auto custom-scrollbar'>
                         <div className='space-y-1.5'>
                           <label className='text-[10px] font-bold text-pw-muted uppercase'>
                             Font
