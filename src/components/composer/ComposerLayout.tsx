@@ -25,6 +25,7 @@ import { useComposer } from '@/lib/composer/useComposerStore';
 import { Card } from '@/components/ui/card';
 import { sanitizeInput } from '@/lib/general/sanitize';
 import { supabase } from '@/lib/supabase';
+import { HybridStorage } from '@/lib/storage-utils';
 
 // ─── Sub-components ───────────────────────────────────────────
 import { AccountConnector } from './AccountConnector';
@@ -143,8 +144,17 @@ export function ComposerLayout() {
         return toast.error(errorMsg);
       }
 
-      // 2. Save composed history log to Supabase or localStorage
+      // 2. Save composed history log to HybridStorage & Supabase/localStorage
+      // jules edit: Always persist composed post to HybridStorage and local history
       const sanitizedBody = sanitizeInput(state.baseContent);
+      const newLog = {
+        id: `post-${Date.now()}`,
+        content: sanitizedBody,
+        platforms: state.selectedPlatforms,
+        created_at: new Date().toISOString(),
+      };
+
+      await HybridStorage.save(newLog.id, newLog, 'composer_history');
 
       if (user) {
         const maxHistory = premiumTier === 'free' || premiumTier === 'flexible' ? 5 : 50;
@@ -156,13 +166,6 @@ export function ComposerLayout() {
           .single();
 
         let history = Array.isArray(profile?.composer_history) ? profile.composer_history : [];
-        const newLog = {
-          id: `post-${Date.now()}`,
-          content: sanitizedBody,
-          platforms: state.selectedPlatforms,
-          created_at: new Date().toISOString(),
-        };
-
         history.unshift(newLog);
         if (history.length > maxHistory) history = history.slice(0, maxHistory);
 
@@ -173,12 +176,7 @@ export function ComposerLayout() {
       } else {
         const cached = localStorage.getItem('pw_composer_history') || '[]';
         const list = JSON.parse(cached);
-        list.unshift({
-          id: `post-${Date.now()}`,
-          content: sanitizedBody,
-          platforms: state.selectedPlatforms,
-          created_at: new Date().toISOString(),
-        });
+        list.unshift(newLog);
         localStorage.setItem('pw_composer_history', JSON.stringify(list.slice(0, 10)));
       }
 

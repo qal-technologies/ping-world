@@ -304,6 +304,12 @@ export default function PdfToolStudioPage() {
   const [hasBackCover, setHasBackCover] = useState(
     BRAND_SEED_BOOK.hasBackCover,
   );
+  const [frontCoverTemplate, setFrontCoverTemplate] = useState<
+    'minimal' | 'bold' | 'split' | 'center'
+  >('minimal');
+  const [backCoverTemplate, setBackCoverTemplate] = useState<
+    'minimal' | 'bold' | 'split' | 'center'
+  >('minimal');
   const [pageMargin, setPageMargin] = useState<'compact' | 'normal' | 'wide'>(
     'normal',
   );
@@ -683,6 +689,7 @@ export default function PdfToolStudioPage() {
   };
 
   // ── Formatted HTML Content Parser ──────────────────────────────
+  // jules edit: Render image descriptions and themed links/highlights
   const renderFormattedContent = (
     content: string,
     palette: ImagePaletteItem[],
@@ -690,13 +697,15 @@ export default function PdfToolStudioPage() {
     if (!content) return '';
     let html = content;
 
-    // Replace Image Palette tags [img:name]
+    // Replace Image Palette tags [img:name] with image + description
     if (Array.isArray(palette)) {
       palette.forEach((item) => {
         if (!item || !item.src) return;
         const tagId = `\\[img:${item.id}\\]`;
         const tagName = `\\[img:${item.name}\\]`;
-        const imgHtml = `<img src="${item.src}" alt="${item.name || 'Graphic'}" style="max-width: ${item.width || 120}px; max-height: ${item.height || 120}px; object-fit: contain; margin: 12px auto; display: block; border-radius: 8px;" />`;
+        const caption = item.description || item.altText || '';
+        const descHtml = caption ? `<span style="display:block; font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px; text-align: center;">${caption}</span>` : '';
+        const imgHtml = `<div style="text-align: center; margin: 12px auto;"><img src="${item.src}" alt="${item.name || 'Graphic'}" style="max-width: ${item.width || 120}px; max-height: ${item.height || 120}px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" />${descHtml}</div>`;
         html = html.replace(new RegExp(tagId, 'gi'), imgHtml);
         html = html.replace(new RegExp(tagName, 'gi'), imgHtml);
       });
@@ -706,6 +715,12 @@ export default function PdfToolStudioPage() {
     html = html.replace(
       /!\[(.*?)\]\((.*?)\)/g,
       '<img src="$2" alt="$1" style="max-width: 100%; max-height: 240px; object-fit: contain; margin: 12px auto; display: block; border-radius: 8px;" />',
+    );
+
+    // Links: styled and underlined
+    html = html.replace(
+      /<a href="(.*?)">(.*?)<\/a>/gi,
+      '<a href="$1" target="_blank" style="color: #3b82f6; font-weight: 600; text-decoration: underline;">$2</a>',
     );
 
     // Lists & formatting
@@ -724,11 +739,11 @@ export default function PdfToolStudioPage() {
       .replace(/<strike>(.*?)<\/strike>/g, '<del>$1</del>')
       .replace(
         /<mark>(.*?)<\/mark>/g,
-        '<span style="background-color: rgba(255, 96, 215, 0.4); padding: 1px 4px; border-radius: 4px;">$1</span>',
+        '<span style="background-color: rgba(59, 130, 246, 0.2); color: #1e3a8a; padding: 1px 4px; border-radius: 4px; font-weight: 600;">$1</span>',
       )
       .replace(
         /<blockquote>(.*?)<\/blockquote>/g,
-        '<blockquote style="border-left: 3px solid #da3bf6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
+        '<blockquote style="border-left: 3px solid #3b82f6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
       )
       .replace(
         /<h2>(.*?)<\/h2>/g,
@@ -736,7 +751,7 @@ export default function PdfToolStudioPage() {
       )
       .replace(
         /\[fn:(\d+)\]/g,
-        '<sup style="color: #ca3bf6; font-weight: bold;">[$1]</sup>',
+        '<sup style="color: #3b82f6; font-weight: bold;">[$1]</sup>',
       );
 
     return html;
@@ -2292,52 +2307,95 @@ export default function PdfToolStudioPage() {
 
                     {showCoverDrawer && (
                       <div className='space-y-4 pt-2 border-t border-white/5'>
-                        <div className='space-y-2'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                            Front Cover Title
-                          </label>
-                          <Input
-                            value={frontCoverTitle}
-                            onChange={(e) => setFrontCoverTitle(e.target.value)}
-                            className='h-8 bg-white/5 border-white/10 text-xs'
-                          />
+                        {/* Front Cover Enable Toggle */}
+                        <div className='flex items-center justify-between p-2 rounded-xl bg-white/5'>
+                          <span className='text-xs font-bold text-white'>Enable Front Cover</span>
+                          <button
+                            type='button'
+                            onClick={() => setHasFrontCover(!hasFrontCover)}
+                            className={cn(
+                              'w-10 h-5 px-0.5 rounded-full flex items-center transition-all',
+                              hasFrontCover ? 'bg-pw-primary justify-end' : 'bg-white/10 justify-start',
+                            )}>
+                            <span className='w-4 h-4 rounded-full bg-white shadow' />
+                          </button>
                         </div>
-                        <div className='space-y-2'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                            Subtitle
-                          </label>
-                          <Input
-                            value={frontCoverSubtitle}
-                            onChange={(e) =>
-                              setFrontCoverSubtitle(e.target.value)
-                            }
-                            className='h-8 bg-white/5 border-white/10 text-xs'
-                          />
+
+                        {hasFrontCover && (
+                          <>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                Front Cover Design Template
+                              </label>
+                              <select
+                                value={frontCoverTemplate}
+                                onChange={(e) => setFrontCoverTemplate(e.target.value as any)}
+                                className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2 text-white'>
+                                <option value='minimal' className='bg-[#0a0c1b]'>Classic Minimal</option>
+                                <option value='bold' className='bg-[#0a0c1b]'>Bold Header</option>
+                                <option value='split' className='bg-[#0a0c1b]'>Split Accent</option>
+                                <option value='center' className='bg-[#0a0c1b]'>Center Canvas</option>
+                              </select>
+                            </div>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                Front Cover Title
+                              </label>
+                              <Input
+                                value={frontCoverTitle}
+                                onChange={(e) => setFrontCoverTitle(e.target.value)}
+                                className='h-8 bg-white/5 border-white/10 text-xs'
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                Subtitle
+                              </label>
+                              <Input
+                                value={frontCoverSubtitle}
+                                onChange={(e) => setFrontCoverSubtitle(e.target.value)}
+                                className='h-8 bg-white/5 border-white/10 text-xs'
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                Author
+                              </label>
+                              <Input
+                                value={frontCoverAuthor}
+                                onChange={(e) => setFrontCoverAuthor(e.target.value)}
+                                className='h-8 bg-white/5 border-white/10 text-xs'
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {/* Back Cover Enable Toggle */}
+                        <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border-t border-white/5 pt-3'>
+                          <span className='text-xs font-bold text-white'>Enable Back Cover</span>
+                          <button
+                            type='button'
+                            onClick={() => setHasBackCover(!hasBackCover)}
+                            className={cn(
+                              'w-10 h-5 px-0.5 rounded-full flex items-center transition-all',
+                              hasBackCover ? 'bg-pw-primary justify-end' : 'bg-white/10 justify-start',
+                            )}>
+                            <span className='w-4 h-4 rounded-full bg-white shadow' />
+                          </button>
                         </div>
-                        <div className='space-y-2'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                            Author
-                          </label>
-                          <Input
-                            value={frontCoverAuthor}
-                            onChange={(e) =>
-                              setFrontCoverAuthor(e.target.value)
-                            }
-                            className='h-8 bg-white/5 border-white/10 text-xs'
-                          />
-                        </div>
-                        <div className='space-y-2'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                            Back Cover Summary
-                          </label>
-                          <textarea
-                            value={backCoverSummary}
-                            onChange={(e) =>
-                              setBackCoverSummary(e.target.value)
-                            }
-                            className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
-                          />
-                        </div>
+
+                        {hasBackCover && (
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                              Back Cover Summary
+                            </label>
+                            <textarea
+                              value={backCoverSummary}
+                              onChange={(e) => setBackCoverSummary(e.target.value)}
+                              className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -3124,8 +3182,8 @@ export default function PdfToolStudioPage() {
           frontCoverSubtitle,
           frontCoverAuthor,
           backCoverSummary,
-          frontCoverTemplate: 'minimal',
-          backCoverTemplate: 'minimal',
+          frontCoverTemplate,
+          backCoverTemplate,
         }}
         paperBgColor={paperBgColor}
         bodyColor={bodyColor}

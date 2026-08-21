@@ -48,14 +48,23 @@ export default function BookReaderModal({
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [readerZoom, setReaderZoom] = useState(100);
 
-  // Combine cover items and pages in chronological index sequence
-  const readerItems: { type: 'front_cover' | 'page' | 'back_cover'; data?: any; pageIndex?: number }[] = [];
+  // jules edit: Combine cover items, chapters, and pages in sequential index order
+  const readerItems: { type: 'front_cover' | 'chapter_header' | 'page' | 'back_cover'; data?: any; pageIndex?: number }[] = [];
 
   if (coverConfig.hasFrontCover) {
     readerItems.push({ type: 'front_cover' });
   }
 
+  const renderedChapters = new Set<string>();
+
   pages.forEach((p, idx) => {
+    if (p.chapterId && !renderedChapters.has(p.chapterId)) {
+      const ch = chapters.find((c) => c.id === p.chapterId);
+      if (ch) {
+        readerItems.push({ type: 'chapter_header', data: ch });
+        renderedChapters.add(p.chapterId);
+      }
+    }
     readerItems.push({ type: 'page', data: p, pageIndex: idx });
   });
 
@@ -132,9 +141,9 @@ export default function BookReaderModal({
                 <div
                   className={cn(
                     'p-10 rounded-2xl border border-white/10 shadow-2xl min-h-[460px] flex flex-col justify-between text-white bg-slate-900',
-                    coverConfig.frontCoverTemplate === 'bold' && 'border-2 border-pw-primary bg-gradient-to-b from-pw-primary/20 to-slate-950',
-                    coverConfig.frontCoverTemplate === 'split' && 'border-l-8 border-l-pw-primary bg-slate-900',
-                    coverConfig.frontCoverTemplate === 'center' && 'text-center border-white/20',
+                    coverConfig.frontCoverTemplate === 'bold' && 'border-2 border-pw-primary bg-gradient-to-b from-pw-primary/20 to-slate-950 text-center',
+                    coverConfig.frontCoverTemplate === 'split' && 'border-l-8 border-l-pw-primary bg-slate-900 text-left',
+                    coverConfig.frontCoverTemplate === 'center' && 'text-center border-white/20 items-center justify-center',
                   )}>
                   <div className='space-y-4 my-auto'>
                     <h1 className='text-3xl font-extrabold font-display tracking-tight text-pw-primary'>
@@ -148,6 +157,17 @@ export default function BookReaderModal({
                     <p>By {coverConfig.frontCoverAuthor || 'Author'}</p>
                     <p className='text-[10px] text-slate-500'>PING WORLD PUBLISHING</p>
                   </div>
+                </div>
+              )}
+
+              {currentItem?.type === 'chapter_header' && currentItem.data && (
+                <div className='p-10 rounded-2xl border border-pw-primary/30 shadow-2xl min-h-[460px] flex flex-col items-center justify-center text-center bg-slate-950 text-white space-y-4'>
+                  <span className='text-xs font-mono font-bold text-pw-primary uppercase tracking-[0.3em]'>
+                    CHAPTER SECTION
+                  </span>
+                  <h1 className='text-3xl font-extrabold font-display text-white'>
+                    {currentItem.data.name}
+                  </h1>
                 </div>
               )}
 

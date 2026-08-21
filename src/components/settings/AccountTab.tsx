@@ -78,7 +78,7 @@ export default function AccountTab({
   };
 
   const formattedPurchasedList = Array.from(
-    new Set(purchasedTools.filter((t) => t !== 'all').map(getToolName)),
+    new Set((purchasedTools || []).filter((t) => t !== 'all').map(getToolName)),
   );
 
   return (

@@ -21,9 +21,17 @@ export function PostHistoryPanel() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // jules edit: Load history from HybridStorage as primary source
   const fetchHistory = async () => {
     setLoading(true);
     try {
+      const hybridList = await HybridStorage.getAll('composer_history');
+      if (Array.isArray(hybridList) && hybridList.length > 0) {
+        setHistory(hybridList as HistoryItem[]);
+        setLoading(false);
+        return;
+      }
+
       if (user) {
         const { data: profile, error } = await supabase
           .from('profiles')
