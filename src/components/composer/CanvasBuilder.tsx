@@ -233,6 +233,7 @@ export function CanvasBuilder() {
     setDraggingShapeId(null);
   };
 
+  // jules edit: Convert canvas export directly via native toBlob & DataURL fallback
   const handleDownload = async () => {
     if (!canvasRef.current) return;
     setDownloading(true);
@@ -243,7 +244,7 @@ export function CanvasBuilder() {
         backgroundColor: null,
         logging: false,
         useCORS: true,
-        allowTaint: false,
+        allowTaint: true,
         imageTimeout: 5000,
       });
 
@@ -255,24 +256,7 @@ export function CanvasBuilder() {
         ctx.fillText('pingwrld.com', canvas.width - 120, canvas.height - 12);
       }
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
-            const arr = dataUrl.split(',');
-            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
-            const bstr = atob(arr[1]);
-            let n = bstr.length;
-            const u8arr = new Uint8Array(n);
-            while (n--) u8arr[n] = bstr.charCodeAt(n);
-            blob = new Blob([u8arr], { type: mime });
-          } catch (e) {
-            toast.error('Download failed - could not capture canvas blob');
-            setDownloading(false);
-            return;
-          }
-        }
-
+      const processBlob = async (blob: Blob) => {
         const downloadUrl = URL.createObjectURL(blob);
         setCanvasPreview(downloadUrl);
 
@@ -291,6 +275,27 @@ export function CanvasBuilder() {
           toast.success('Canvas downloaded!');
         }
         setDownloading(false);
+      };
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          processBlob(blob);
+        } else {
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            const arr = dataUrl.split(',');
+            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) u8arr[n] = bstr.charCodeAt(n);
+            const fallbackBlob = new Blob([u8arr], { type: mime });
+            processBlob(fallbackBlob);
+          } catch (e) {
+            toast.error('Download failed - could not capture canvas blob');
+            setDownloading(false);
+          }
+        }
       }, 'image/png');
     } catch (err) {
       console.error(err);

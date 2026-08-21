@@ -241,12 +241,13 @@ export default function ImagePaletteDialog({
             type='file'
             accept='image/*'
             className='hidden'
+              // jules edit: Convert uploaded palette image to Base64 Data URL to prevent CORS taint errors
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                  const src = ev.target?.result as string;
+                    const base64DataUrl = ev.target?.result as string;
                   const cleanName = file.name
                     .replace(/\.[^/.]+$/, '')
                     .replace(/[^a-zA-Z0-9_]/g, '_')
@@ -254,13 +255,13 @@ export default function ImagePaletteDialog({
                   const newItem: ImagePaletteItem = {
                     id: `palette-${Date.now()}`,
                     name: cleanName || 'graphic',
-                    src,
+                      src: base64DataUrl,
                     width: 140,
                     height: 140,
                     description: '',
                   };
                   setImagePalette((prev) => [...prev, newItem]);
-                  toast.success(`Image added! Tag: [img:${newItem.name}]`);
+                    toast.success(`Image uploaded as Base64! Tag: [img:${newItem.name}]`);
                 };
                 reader.readAsDataURL(file);
               }
