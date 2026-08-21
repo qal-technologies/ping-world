@@ -1086,15 +1086,22 @@ export default function PublicQuizTaker() {
     }
   };
 
-  // jules edit: Replace detail variable placeholders like $name or $email in text strings
+  // jules edit: Replace detail variable placeholders using @ (@name, @email) with bold styling
   const formatDetailVars = (rawText: string) => {
     if (!rawText) return rawText;
     let formatted = rawText;
     Object.entries(userData || {}).forEach(([key, val]) => {
       const cleanKey = key.trim().replace(/\s+/g, '');
-      const regex1 = new RegExp(`\\$${cleanKey}`, 'gi');
-      const regex2 = new RegExp(`\\$${key.trim()}`, 'gi');
-      formatted = formatted.replace(regex1, val).replace(regex2, val);
+      const boldVal = `<strong class="text-pw-primary font-bold">${val}</strong>`;
+      const regex1 = new RegExp(`@${cleanKey}`, 'gi');
+      const regex2 = new RegExp(`@${key.trim()}`, 'gi');
+      const regex3 = new RegExp(`\\$${cleanKey}`, 'gi');
+      const regex4 = new RegExp(`\\$${key.trim()}`, 'gi');
+      formatted = formatted
+        .replace(regex1, boldVal)
+        .replace(regex2, boldVal)
+        .replace(regex3, boldVal)
+        .replace(regex4, boldVal);
     });
     return formatted;
   };
@@ -1130,7 +1137,7 @@ export default function PublicQuizTaker() {
               <span className='text-pw-primary font-black text-xl select-none shrink-0'>
                 {index + 1}.
               </span>
-              <h2 className='text-base font-bold text-white'>{formattedQuestionText}</h2>
+              <h2 className='text-base font-bold text-white' dangerouslySetInnerHTML={{ __html: formattedQuestionText }} />
             </div>
           ) : (
             <div className='flex items-center gap-3'>
@@ -1151,7 +1158,7 @@ export default function PublicQuizTaker() {
                 <span className='text-[9px] font-black text-pw-muted uppercase block'>
                   Question {index + 1}
                 </span>
-                <h2 className='text-base font-bold text-white'>{formattedQuestionText}</h2>
+                <h2 className='text-base font-bold text-white' dangerouslySetInnerHTML={{ __html: formattedQuestionText }} />
               </div>
             </div>
           )}

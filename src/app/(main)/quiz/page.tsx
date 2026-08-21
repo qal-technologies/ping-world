@@ -1601,17 +1601,42 @@ const QuizBuilder = ({
                     </label>
 
                     <div className='w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm'>
-                      <textarea
-                        value={editedQuiz.questions[currentStep].text}
-                        onChange={(e) =>
-                          updateQuestion(currentStep, {
-                            ...editedQuiz.questions[currentStep],
-                            text: e.target.value,
-                          })
-                        }
-                        placeholder='Enter your question'
-                        className='w-full h-20 bg-transparent p-0 text-sm no-outline resize-none transition-all'
-                      />
+                      <div className='relative'>
+                        <textarea
+                          value={editedQuiz.questions[currentStep].text}
+                          onChange={(e) =>
+                            updateQuestion(currentStep, {
+                              ...editedQuiz.questions[currentStep],
+                              text: e.target.value,
+                            })
+                          }
+                          placeholder='Enter your question (Use @ to mention parameters like @name or @email)'
+                          className='w-full h-20 bg-transparent p-0 text-sm no-outline resize-none transition-all'
+                        />
+                        {/* Mention Helper Badge List */}
+                        {editedQuiz.askDetails && editedQuiz.askDetails.length > 0 && (
+                          <div className='flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5'>
+                            <span className='text-[10px] font-bold text-pw-muted uppercase'>Mention Detail:</span>
+                            {editedQuiz.askDetails.map((d) => (
+                              <button
+                                key={d.title}
+                                type='button'
+                                onClick={() => {
+                                  const mentionTag = `@${d.title.trim().replace(/\s+/g, '')}`;
+                                  const curText = editedQuiz.questions[currentStep].text || '';
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    text: `${curText} ${mentionTag} `.trimStart(),
+                                  });
+                                  toast.success(`Inserted ${mentionTag} tag!`);
+                                }}
+                                className='px-2 py-0.5 rounded bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-[10px] font-bold hover:bg-pw-primary/25 transition-all'>
+                                @{d.title}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Group + Question Routing row */}
                       <div className='flex flex-wrap items-center justify-between gap-2 mt-2 border-t border-white/5 pt-2'>
