@@ -347,6 +347,9 @@ export default function PdfToolStudioPage() {
   >({});
   const [stackType, setStackType] = useState<'page' | 'chapter'>('page');
 
+  // jules edit: Add sidebar open/close toggle state for desktop
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   // Preview & Drawer toggles
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const [showCoverDrawer, setShowCoverDrawer] = useState(false);
@@ -981,6 +984,7 @@ export default function PdfToolStudioPage() {
     toast.success('Chapter and associated pages deleted.');
   };
 
+  // jules edit: Insert new pages directly inline right after chapter's last page by index
   const handleAddPageToChapter = (chapterId: string | null) => {
     let title = `Page ${pages.length + 1}`;
 
@@ -997,16 +1001,32 @@ export default function PdfToolStudioPage() {
       titleMargin: 10,
       footnotes: [],
     };
-    setPages([...pages, newPage]);
-    setActivePageIndex(pages.length);
 
     if (chapterId) {
+      let lastIndex = -1;
+      for (let i = pages.length - 1; i >= 0; i--) {
+        if (pages[i].chapterId === chapterId) {
+          lastIndex = i;
+          break;
+        }
+      }
+      if (lastIndex !== -1) {
+        const nextPages = [...pages];
+        nextPages.splice(lastIndex + 1, 0, newPage);
+        setPages(nextPages);
+        setActivePageIndex(lastIndex + 1);
+      } else {
+        setPages([...pages, newPage]);
+        setActivePageIndex(pages.length);
+      }
       setActiveChapter(chapterId);
-
       setCollapsedChapters((prev) => ({
         ...prev,
         [chapterId]: false,
       }));
+    } else {
+      setPages([...pages, newPage]);
+      setActivePageIndex(pages.length);
     }
     toast.success('New page added to book!');
   };
@@ -1929,6 +1949,14 @@ export default function PdfToolStudioPage() {
                 </div>
 
                 <div className='flex items-center gap-2 flex-wrap sm:mt-0'>
+                  {/* jules edit: Add sidebar drawer toggle button for desktop focus mode */}
+                  <Button
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    variant='outline'
+                    className='hidden lg:flex h-9 text-xs font-bold border-white/10 hover:bg-white/5 gap-1.5 text-white'>
+                    <Sliders className='h-3.5 w-3.5 text-pw-secondary' />
+                    {sidebarOpen ? 'Hide Sidebars' : 'Show Sidebars'}
+                  </Button>
                   <Button
                     onClick={() => setShowOverallBookReader(true)}
                     variant='outline'
@@ -1956,7 +1984,8 @@ export default function PdfToolStudioPage() {
               {/* Main Book Workspace Grid */}
               <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
                 {/* LEFT NAVIGATOR: CHAPTERS & PAGES TREE */}
-                <div className='lg:col-span-4 space-y-4'>
+                {sidebarOpen && (
+                <div className='lg:col-span-4 space-y-4 transition-all duration-300'>
 
               {/* Collapsible Book Covers Settings */}
               <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
@@ -2623,12 +2652,13 @@ export default function PdfToolStudioPage() {
                     </div>
                   </Card>
                 </div>
+                )}
 
                 {/* RIGHT WORKSPACE: EDITOR & LIVE PREVIEW */}
 
                 <div className='divider my-4 sm:hidden' />
 
-                <div className='lg:col-span-8 space-y-6'>
+                <div className={cn('space-y-6 transition-all duration-300', sidebarOpen ? 'lg:col-span-8' : 'lg:col-span-12')}>
                   <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/10 sm:rounded-3xl sm:space-y-6 sm:shadow-2xl'>
                     {/* Header Row: Title + Settings Popover */}
                     <div className='flex items-center justify-between gap-3 mb-1'>

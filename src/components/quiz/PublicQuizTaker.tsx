@@ -1750,8 +1750,8 @@ export default function PublicQuizTaker() {
               </div>
 
               <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
-                {/* Top Progress Bar */}
-                {quiz?.type === 'quiz' &&  (
+                {/* jules edit: Only show top progress bar if quiz has categories/questions and not disabled */}
+                {quiz?.type === 'quiz' && activeQuestions.some((q) => q.category && q.category.trim() !== '') && (
                   <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                     <motion.div
                       initial={{ width: 0 }}

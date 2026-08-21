@@ -297,6 +297,7 @@ export const Navbar = () => {
             className='relative pointer-events-auto w-90'>
             <div className='flex items-center gap-2 bg-[#0c0d1c]/40 border border-white/5 p-1 px-4 rounded-2xl shadow-xl focus-within:border-pw-primary/50 transition-all bkblur'>
               <Search className='h-4 w-4 text-pw-muted shrink-0' />
+              {/* jules edit: Add enter key handling to select first search result */}
               <input
                 type='text'
                 value={searchQuery}
@@ -305,6 +306,15 @@ export const Navbar = () => {
                   setIsSearchOpen(true);
                 }}
                 onFocus={() => setIsSearchOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchResults.length > 0) {
+                    const firstResult = searchResults[0];
+                    setIsSearchOpen(false);
+                    openSearchInput(false);
+                    setSearchQuery('');
+                    window.location.href = firstResult.href;
+                  }
+                }}
                 placeholder='Search tools, pages...'
                 className='bg-transparent border-none h-8 no-outline text-sm text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
               />
@@ -384,10 +394,19 @@ export const Navbar = () => {
               className='relative w-full mb-4'>
               <div className='flex items-center gap-2 bg-[#0c0d1c]/50 bkblur border border-white/5 px-4 py-3 rounded-xl shadow-lg focus-within:border-pw-primary/80'>
                 <Search className='h-4 w-4 text-pw-muted shrink-0' />
+                {/* jules edit: Add enter key handling for mobile search */}
                 <input
                   type='text'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchResults.length > 0) {
+                      const firstResult = searchResults[0];
+                      setMobileOpen(false);
+                      setSearchQuery('');
+                      window.location.href = firstResult.href;
+                    }
+                  }}
                   placeholder='Search tools, pages...'
                   className='bg-transparent border-none no-outline text-sm text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
                 />

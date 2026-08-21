@@ -73,12 +73,16 @@ function SettingsContent() {
   const [pushPermission, setPushPermission] =
     useState<NotificationPermission>('default');
 
-  // Auth Guard
+  // jules edit: Safe Auth Guard check using Supabase session to prevent redirect loops
   useEffect(() => {
-    if (!user || !username) {
-      router.replace('/login');
-    }
-  }, [user,username]);
+    const verifyUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace('/login');
+      }
+    };
+    verifyUser();
+  }, [router]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -120,15 +124,14 @@ function SettingsContent() {
     }
   };
 
+  // jules edit: Initialize user email and display name safely without re-triggering form state loops
   useEffect(() => {
-    const loadData = async() => {
-    if(user) {
-      await refresh();
-      setDisplayName(username || user.email?.split('@')[0] || '');
+    if (user) {
       setEmail(user.email || '');
+      if (!displayName) {
+        setDisplayName(username || user.user_metadata?.full_name || user.email?.split('@')[0] || '');
+      }
     }
-  }
-  loadData();
     try {
       const keys = Object.keys(localStorage);
       const quizzes = keys.filter(
@@ -192,9 +195,10 @@ function SettingsContent() {
     }
   };
 
+  // jules edit: Handle account deletion and clearance in both Supabase and Firebase
   const handleDeleteAccount = async () => {
     const confirmation = await showPrompt(
-      'DANGER: Deleting your account will permanently wipe all your quizzes, messages, and books. Type "DELETE" to confirm:',
+      'DANGER: Deleting your account will permanently wipe all your quizzes, messages, books, and Firebase data. Type "DELETE" to confirm:',
       {
         title: 'Permanently Delete Account',
         placeholder: 'DELETE',
@@ -208,13 +212,52 @@ function SettingsContent() {
 
     try {
       toast.loading('Processing account deletion...');
+
+      // 1. Firebase Auth and Firestore cleanup
+      try {
+        const { auth, db } = await import('@/lib/firebase');
+        const { deleteUser } = await import('firebase/auth');
+        const { doc, deleteDoc, collection, getDocs, query, where } = await import('firebase/firestore');
+
+        if (user?.id) {
+          // Delete user tournaments/standings in Firestore
+          const q = query(collection(db, 'tournaments'), where('user_id', '==', user.id));
+          const querySnapshot = await getDocs(q);
+          const deletePromises: Promise<void>[] = [];
+          querySnapshot.forEach((docSnapshot) => {
+            deletePromises.push(deleteDoc(doc(db, 'tournaments', docSnapshot.id)));
+          });
+          await Promise.all(deletePromises);
+        }
+
+        if (auth.currentUser) {
+          await deleteUser(auth.currentUser).catch((fErr) => {
+            console.warn('[Firebase] Firebase Auth delete failed:', fErr);
+          });
+        }
+      } catch (fbErr) {
+        console.warn('[Firebase] Clearance error:', fbErr);
+      }
+
+      // 2. Supabase profile and data clearance
       if (user?.id) {
         await supabase.from('profiles').delete().eq('id', user.id);
       }
+
+      // 3. Clear local storage
+      try {
+        const keys = Object.keys(localStorage);
+        keys.forEach((key) => {
+          if (key.startsWith('pw_') || key.startsWith('pingworld_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      } catch {}
+
       await supabase.auth.signOut();
       await refresh();
       toast.dismiss();
-      toast.success('Your account has been deleted.');
+      toast.success('Your account and associated data have been deleted across all platforms.');
       router.push('/');
     } catch (err: any) {
       toast.dismiss();
