@@ -125,22 +125,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const tools = meta.purchased_tools || [];
         setPurchasedTools(Array.isArray(tools) ? tools : [tools]);
 
-        try {
-          const res = await fetch('/api/auth/firebase-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: authSession.access_token }),
-          });
-          const data = await res.json();
-          if (data.firebaseToken) {
-            const { signInWithCustomToken } = await import('firebase/auth');
-            const { auth: firebaseAuth } = await import('@/lib/firebase');
-            await signInWithCustomToken(firebaseAuth, data.firebaseToken);
-            console.log('[Firebase Auth Bridge] Signed into Firebase with Supabase UID successfully!');
-          }
-        } catch (firebaseErr) {
-          console.warn('[Firebase Auth Bridge] Session bridging was bypassed or failed:', firebaseErr);
-        }
+        // try {
+        //   const res = await fetch('/api/auth/firebase-token', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ token: authSession.access_token }),
+        //   });
+        //   const data = await res.json();
+        //   if (data.firebaseToken) {
+        //     const { signInWithCustomToken } = await import('firebase/auth');
+        //     const { auth: firebaseAuth } = await import('@/lib/firebase');
+        //     await signInWithCustomToken(firebaseAuth, data.firebaseToken);
+        //     console.log('[Firebase Auth Bridge] Signed into Firebase with Supabase UID successfully!');
+        //   }
+        // } catch (firebaseErr) {
+        //   console.warn('[Firebase Auth Bridge] Session bridging was bypassed or failed:', firebaseErr);
+        // }
       } else {
         setUser(null);
         setUsername('');

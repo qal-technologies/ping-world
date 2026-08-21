@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { useAppContext } from '@/context/AppContext';
 
 export default function LoginPage() {
   const [secure, setSecure] = useState(true);
@@ -16,18 +17,17 @@ export default function LoginPage() {
     email: '',
     password: '',
   });
+
+
   const router = useRouter();
+  const {user, username, refresh} = useAppContext();
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
     const checkUser = async () => {
       if(navigator.onLine) {
-        const {
-          data: {session},
-        } = await supabase.auth.getSession();
-        if(session) {
-          router.push('/dashboard');
-        }
+        await refresh();
+        if(user?.id && username) router.replace('/dashboard');
         setPageLoading(false);
       } else {
         setPageLoading(false);
@@ -45,15 +45,16 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
+      await refresh();
 
       if (error) throw error;
 
       toast.success('Welcome back!');
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (err: any) {
       if (!navigator.onLine) toast.error('No internet connection, Try again!');
       else toast.error(err.message || 'Failed to login');

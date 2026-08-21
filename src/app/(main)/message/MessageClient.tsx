@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle,
-  Globe,
   Clock,
   Unlock,
   Lock,
@@ -15,6 +14,7 @@ import {
   Sparkles,
   Inbox,
   CornerDownRight,
+  LockIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -37,15 +37,16 @@ interface MessageRow {
 import { useAppContext } from '@/context/AppContext';
 
 export default function MessageLandingPage() {
-  const { premiumTier, isOnline, user, isFeatureUnlocked } = useAppContext();
-  // jules edit: Secure tool-specific flexible plan gating for Anonymous Link Messages
+  const {premiumTier, user, isFeatureUnlocked, username} = useAppContext();
+  
   const isPremium = isFeatureUnlocked('anonlink');
   const [activeTab, setActiveTab] = useState<'inbox' | 'settings'>('inbox');
-  const [username, setUsername] = useState('creator');
+
   const [linkId, setLinkId] = useState('');
-  const [expiryDays, setExpiryDays] = useState<number>(7);
+  const [expiryDays, setExpiryDays] = useState<number>(1);
   const [isPublicInbox, setIsPublicInbox] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+
   // const [selectedReplies, setSelectedReplies] = useState<string[]>([
   //   '💜 I felt this deeply',
   //   '😭 Why did you wait this long?',
@@ -54,6 +55,8 @@ export default function MessageLandingPage() {
   //   '🫣 I always knew...',
   //   "👀 Say more. I'm listening.",
   // ]);
+
+
   const [messageTitle, setMessageTitle] = useState('');
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [copiedLink, setCopiedLink] = useState<'inbox' | 'public' | null>(null);
@@ -65,40 +68,31 @@ export default function MessageLandingPage() {
     const fetchUserAndMessages = async () => {
       setLoading(true);
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
 
         let userId = '';
         if (user) {
           userId = user.id;
 
+          HybridStorage.getAll('message');
+
           const { data: profile } = await supabase
             .from('profiles')
             .select(
-              'username, display_name, is_public_inbox, custom_question, message_expiry_days',
+              'is_public_inbox, custom_question, message_expiry_days',
             )
             .eq('id', user.id)
             .single();
 
-          // jules edit: Load custom_link_id safely from auth user metadata or localStorage to prevent PostgREST schema errors
           const cachedLinkId = user.user_metadata?.custom_link_id || localStorage.getItem('pw_anon_custom_link_id') || '';
           setLinkId(cachedLinkId);
 
           if (profile) {
-            setUsername(profile.username || 'creator');
             setIsPublicInbox(!!profile.is_public_inbox);
             setMessageTitle(profile.custom_question || '');
             if (profile.message_expiry_days) {
               setExpiryDays(profile.message_expiry_days);
             }
-          } else {
-            const name =
-              user.user_metadata.username ||
-              user.user_metadata.full_name ||
-              'creator';
-            setUsername(name);
-          }
+          } 
         }
 
         if (!userId) return;
@@ -150,28 +144,16 @@ export default function MessageLandingPage() {
 
     setSavingSettings(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
       // 1. Update profiles table with verified columns
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          custom_question: messageTitle.trim() || null,
-          message_expiry_days: expiryDays,
-          is_public_inbox: isPublicInbox,
-        })
-        .eq('id', user.id);
-
-      if (profileError) throw profileError;
-
-      // 2. Persist custom link ID into user auth metadata & local storage
-      await supabase.auth.updateUser({
-        data: { custom_link_id: linkId.trim() || null },
-      });
-      localStorage.setItem('pw_anon_custom_link_id', linkId.trim());
+      await HybridStorage.save('message', {
+        custom_question: messageTitle.trim() || null,
+        message_expiry_days: expiryDays,
+        is_public_inbox: isPublicInbox,
+        custom_link_id: linkId.trim() || null,
+        is_anonymous: true,
+      }, 'message');
 
       toast.success('Inbox configurations saved successfully!');
     } catch (err: any) {
@@ -482,11 +464,12 @@ export default function MessageLandingPage() {
 
                   <div className='grid grid-cols-2 md:grid-cols-3 sm:grid-cols-5 gap-3'>
                     {[
-                      { l: '24 Hours', v: 1, minTier: 'free' },
-                      { l: '3 Days', v: 3, minTier: 'premium' },
-                      { l: '7 Days', v: 7, minTier: 'premium' },
+                      { l: '24 Hours', v: 1, minTier: ['free', 'flexible','standard', 'pro'] },
+                      { l: '3 Days', v: 3, minTier: ['flexible','standard', 'pro'] },
+                      { l: '7 Days', v: 7, minTier: ['standard', 'pro'] },
+                      { l: '30 Days', v: 30, minTier: ['pro'] },
                     ].map((item) => {
-                      const isLocked = item.v > 2 && !isPremium;
+                      const isLocked = !item.minTier.includes(premiumTier);
                       return (
                         <button
                           key={item.v}
@@ -498,15 +481,16 @@ export default function MessageLandingPage() {
                             setExpiryDays(item.v);
                             toast.success(`Expiry length selection updated to ${item.l}!`);
                           }}
-                          className={`h-11 px-3 text-xs font-bold rounded-lg border transition-all flex items-center justify-between ${
+                          className={`h-11 px-3 text-xs font-bold rounded-lg border transition-all flex items-center justify-between bkblur ${
                             expiryDays === item.v
                               ? 'bg-pw-primary/10 border-pw-primary text-pw-primary'
                               : 'border-white/10 hover:bg-white/5 text-pw-muted'
-                          } ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                          } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           <span>{item.l}</span>
                           {isLocked && (
-                            <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1 ml-1'>
-                              PRO
+                            <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1 ml-1 flex items-center gap-1'>
+                              <LockIcon size={14}/>
+                              <span>PRO</span>
                             </span>
                           )}
                         </button>
@@ -572,14 +556,14 @@ export default function MessageLandingPage() {
                     <Button
                       onClick={saveInboxSettings}
                       disabled={savingSettings}
-                      className="btn-primary h-11 px-8 text-xs font-bold gap-2">
+                      className="btn-primary h-9 px-6 text-xs font-bold gap-2">
                       {savingSettings ? (
                         <>
                           <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                          Saving configurations...
+                          Creating...
                         </>
                       ) : (
-                        'Save Inbox Settings'
+                        'Create Link'
                       )}
                     </Button>
                   </div>

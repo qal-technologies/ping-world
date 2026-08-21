@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Image as ImageIcon, Upload, Trash2, Pencil } from 'lucide-react';
+import { Image as ImageIcon, Upload, Trash2, Pencil, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -46,7 +46,7 @@ export default function ImagePaletteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-4 sm:p-6 mx-2 shadow-2xl'>
+      <DialogContent className='w-[95%] sm:max-w-2xl bg-[#0c0d1c] border-white/10 text-white rounded-3xl p-4 sm:p-6 mx-2 shadow-2xl'>
         <DialogHeader>
           <DialogTitle className='text-lg font-bold font-display flex items-center gap-2 text-white'>
             <ImageIcon className='h-5 w-5 text-pw-primary' /> Image Palette & Captions
@@ -98,12 +98,12 @@ export default function ImagePaletteDialog({
 
             <div className='space-y-1'>
               <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                Image Description / Caption
+                Image Caption
               </label>
               <Input
                 value={descriptionInput}
                 onChange={(e) => setDescriptionInput(e.target.value)}
-                placeholder='e.g. Figure 1: Architectural diagram of the core system'
+                placeholder='e.g Image of a thing...'
                 className='h-8 bg-black/40 border-white/10 text-xs'
               />
               <p className='text-[9px] text-pw-muted italic'>
@@ -147,12 +147,12 @@ export default function ImagePaletteDialog({
                   setEditingItem(null);
                 }}
                 className='btn-primary h-7 text-xs font-bold'>
-                Save Changes
+                <CheckCircle/>
               </Button>
             </div>
           </div>
         ) : (
-          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-4 max-h-80 overflow-y-auto custom-scrollbar'>
             {imagePalette.map((item) => (
               <div
                 key={item.id}

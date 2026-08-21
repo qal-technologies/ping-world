@@ -83,20 +83,20 @@ export default function BookReaderModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-5xl bg-[#0a0c1b] border-white/10 text-white rounded-3xl p-6 shadow-2xl h-[90vh] flex flex-col justify-between overflow-hidden relative'>
-        <DialogHeader className='flex flex-row items-center justify-between border-b border-white/10 pb-4'>
-          <div>
+    <Dialog open={open} onOpenChange={onOpenChange} >
+      <DialogContent className='w-[95%] sm:min-w-[600px] bg-[#0a0c1b]/20 bkblur border-white/10 text-white rounded-3xl p-4 sm:p-6 shadow-2xl h-[95vh] flex flex-col justify-between overflow-hidden flex-1'>
+        <DialogHeader className='w-full flex flex-col items-center justify-between border-b border-white/10 pb-3'>
+          <div className='w-full pt-1'>
             <DialogTitle className='text-lg font-bold font-display text-white flex items-center gap-2'>
-              <BookOpen className='h-5 w-5 text-pw-primary' /> Interactive Reader
+              <BookOpen className='h-5 w-5 text-pw-primary' /> Book Reader
             </DialogTitle>
-            <DialogDescription className='text-xs text-pw-muted'>
-              Horizontal swiping reader with font and sizing.
+            <DialogDescription className='text-[10px] text-pw-muted'>
+              Read through each cover, chapter and page with all styling and formatting.
             </DialogDescription>
           </div>
 
-          <div className='flex items-center gap-4'>
-            <div className='flex items-center gap-2'>
+          <div className='flex items-center gap-4 w-full justify-between flex-wrap'>
+            <div className=' w-full flex-1 flex items-center gap-2'>
               <span className='text-xs text-pw-muted font-mono'>Zoom: {readerZoom}%</span>
               <input
                 type='range'
@@ -104,49 +104,40 @@ export default function BookReaderModal({
                 max='140'
                 value={readerZoom}
                 onChange={(e) => setReaderZoom(Number(e.target.value))}
-                className='w-24 accent-pw-primary cursor-pointer'
+                className='w-1/2 accent-pw-primary cursor-pointer'
               />
             </div>
-
-            {/* Explicit Close Button */}
-            <Button
-              size='icon'
-              variant='ghost'
-              onClick={() => onOpenChange(false)}
-              className='h-8 w-8 text-pw-muted hover:text-white rounded-full bg-white/5 border border-white/10'>
-              <X className='h-4 w-4' />
-            </Button>
           </div>
         </DialogHeader>
 
         {/* Reader Swiping Body */}
-        <div className='flex-1 flex items-center justify-between px-4 my-2 relative overflow-hidden'>
+        <div className='flex-1 flex items-center justify-between my-1 h-full relative overflow-hidden'>
           <Button
             size='icon'
             variant='ghost'
             onClick={handlePrev}
             disabled={activeItemIndex === 0}
-            className='h-12 w-12 rounded-full bg-white/10 text-white disabled:opacity-20 hover:bg-pw-primary z-20 shrink-0'>
+            className='h-10 sm:h-12 w-10 sm:w-12 rounded-full bg-white/10 bkblur text-white disabled:opacity-20 hover:bg-pw-primary z-20 shrink-0'>
             <ChevronLeft className='h-6 w-6' />
           </Button>
 
-          <div className='flex-1 flex items-center justify-center overflow-y-auto px-4 py-2 custom-scrollbar h-full'>
+          <div className='flex-1 flex items-center justify-center overflow-y-auto custom-scrollbar h-full'>
             <div
               style={{
                 transform: `scale(${readerZoom / 100})`,
                 transformOrigin: 'center center',
               }}
-              className='w-full max-w-xl transition-transform duration-200'>
+              className='w-full transition-transform duration-200'>
               {currentItem?.type === 'front_cover' && (
                 <div
                   className={cn(
-                    'p-10 rounded-2xl border border-white/10 shadow-2xl min-h-[460px] flex flex-col justify-between text-white bg-slate-900',
+                    'p-5 rounded-2xl border border-white/10 shadow-2xl min-h-[460px] flex flex-col justify-between text-white bg-slate-900',
                     coverConfig.frontCoverTemplate === 'bold' && 'border-2 border-pw-primary bg-gradient-to-b from-pw-primary/20 to-slate-950 text-center',
                     coverConfig.frontCoverTemplate === 'split' && 'border-l-8 border-l-pw-primary bg-slate-900 text-left',
                     coverConfig.frontCoverTemplate === 'center' && 'text-center border-white/20 items-center justify-center',
                   )}>
                   <div className='space-y-4 my-auto'>
-                    <h1 className='text-3xl font-extrabold font-display tracking-tight text-pw-primary'>
+                    <h1 className='text-xl font-extrabold font-display tracking-tight text-pw-primary'>
                       {coverConfig.frontCoverTitle || 'Untitled Book'}
                     </h1>
                     <p className='text-sm text-slate-300 italic'>
@@ -155,13 +146,13 @@ export default function BookReaderModal({
                   </div>
                   <div className='border-t border-white/10 pt-4 space-y-1 text-xs text-slate-400 font-mono'>
                     <p>By {coverConfig.frontCoverAuthor || 'Author'}</p>
-                    <p className='text-[10px] text-slate-500'>PING WORLD PUBLISHING</p>
+                    <p className='text-[10px] text-slate-500'>Published with PingWorld</p>
                   </div>
                 </div>
               )}
 
               {currentItem?.type === 'chapter_header' && currentItem.data && (
-                <div className='p-10 rounded-2xl border border-pw-primary/30 shadow-2xl min-h-[460px] flex flex-col items-center justify-center text-center bg-slate-950 text-white space-y-4'>
+                <div className='p-5 rounded-2xl border border-pw-primary/30 shadow-2xl min-h-[460px] flex flex-col items-center justify-center text-center bg-slate-950 text-white space-y-4'>
                   <span className='text-xs font-mono font-bold text-pw-primary uppercase tracking-[0.3em]'>
                     CHAPTER SECTION
                   </span>
@@ -178,7 +169,7 @@ export default function BookReaderModal({
                     color: bodyColor,
                     fontFamily: fontFamily,
                   }}
-                  className='p-10 rounded-2xl border border-slate-200 shadow-2xl min-h-[460px] flex flex-col justify-between relative'>
+                  className='p-5 rounded-2xl border border-slate-200 shadow-2xl min-h-[460px] flex flex-col justify-between relative'>
                   <div>
                     {currentItem.data.showTitle && (
                       <h2
@@ -186,13 +177,13 @@ export default function BookReaderModal({
                           textAlign: currentItem.data.titleAlign || 'left',
                           color: currentItem.data.titleColor || globalTitleColor || '#3b82f6',
                         }}
-                        className='text-2xl font-bold border-b border-slate-200/50 pb-3 mb-4'>
+                        className='text-lg font-bold border-b border-slate-200/50 pb-1 mb-2'>
                         {currentItem.data.title}
                       </h2>
                     )}
                     <div
                       style={{ color: bodyColor }}
-                      className='text-sm leading-relaxed whitespace-pre-wrap'
+                      className='text-xs leading-relaxed whitespace-pre-wrap'
                       dangerouslySetInnerHTML={{
                         __html: renderFormattedContent(currentItem.data.content, imagePalette),
                       }}
@@ -214,7 +205,7 @@ export default function BookReaderModal({
               {currentItem?.type === 'back_cover' && (
                 <div
                   className={cn(
-                    'p-10 rounded-2xl border border-white/10 shadow-2xl min-h-[460px] flex flex-col justify-between text-white bg-slate-900 text-center',
+                    'p-5 rounded-2xl border border-white/10 shadow-2xl min-h-[460px] flex flex-col justify-between text-white bg-slate-900 text-center',
                     coverConfig.backCoverTemplate === 'bold' && 'border-2 border-pw-primary bg-gradient-to-t from-pw-primary/20 to-slate-950',
                     coverConfig.backCoverTemplate === 'split' && 'border-r-8 border-r-pw-primary bg-slate-900',
                   )}>
@@ -237,19 +228,19 @@ export default function BookReaderModal({
             variant='ghost'
             onClick={handleNext}
             disabled={activeItemIndex === readerItems.length - 1}
-            className='h-12 w-12 rounded-full bg-white/10 text-white disabled:opacity-20 hover:bg-pw-primary z-20 shrink-0'>
+            className='h-10 sm:h-12 w-10 sm:w-12 rounded-full bg-white/10 text-white disabled:opacity-20 hover:bg-pw-primary z-20 shrink-0'>
             <ChevronRight className='h-6 w-6' />
           </Button>
         </div>
 
-        <DialogFooter className='border-t border-white/10 pt-3 flex flex-row items-center justify-between'>
+        <DialogFooter className='flex flex-row items-center gap-4 justify-between rounded-full bg-pw-surface/20 bkblur'>
           <span className='text-xs font-mono text-pw-muted'>
-            Item {activeItemIndex + 1} of {readerItems.length}
+            Page {activeItemIndex + 1} of {readerItems.length}
           </span>
           <Button
             onClick={() => onOpenChange(false)}
-            className='btn-primary h-9 px-6 text-xs font-bold'>
-            Close Reader
+            className='btn-primary h-9 px-6 text-xs font-bold rounded-full'>
+            Close
           </Button>
         </DialogFooter>
       </DialogContent>

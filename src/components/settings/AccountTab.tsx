@@ -63,7 +63,6 @@ export default function AccountTab({
     }
   };
 
-  // jules edit: Map flexible purchased tools to human readable plan names
   const getToolName = (toolKey: string) => {
     const map: Record<string, string> = {
       quizzable: 'Quiz Builder',
@@ -120,7 +119,7 @@ export default function AccountTab({
             </div>
 
             {premiumTier === 'flexible' && formattedPurchasedList.length > 0 && (
-              <div className='p-2.5 bg-pw-primary/5 border border-pw-primary/10 rounded-xl space-y-1.5'>
+              <div className='p-2 bg-pw-primary/2 border border-pw-primary/5 rounded-xl space-y-1'>
                 <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider block flex items-center gap-1'>
                   <ShieldCheck className='h-3 w-3' /> Active Tools
                 </span>
@@ -194,7 +193,7 @@ export default function AccountTab({
             <Button
               type='submit'
               disabled={isUpdatingProfile}
-              className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
+              className='btn-primary h-9 px-5 text-xs font-bold gap-2'>
               <Save className='h-3.5 w-3.5' />{' '}
               {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
             </Button>

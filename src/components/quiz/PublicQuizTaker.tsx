@@ -972,7 +972,9 @@ export default function PublicQuizTaker() {
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     if (quiz) {
-      localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+      if (!quiz.allowRetry) {
+        localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+      }
       try {
         const finalScore = finalAnswers.filter((a) => a.correct).length;
         await HybridStorage.saveResponse(quiz.id, {
@@ -989,7 +991,7 @@ export default function PublicQuizTaker() {
   };
 
   // Proceed to the next question, taking logical branching configuration into account
-  // jules edit: Strict category branching isolation to prevent category question leaking
+  // Strict category branching isolation to prevent category question leaking
   const proceedToNext = (latestAnswers?: any[], chosenOptionVal?: string | null) => {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
@@ -1050,7 +1052,6 @@ export default function PublicQuizTaker() {
         if (targetIdx !== -1) {
           nextIdx = targetIdx;
         }
-      // jules edit: Category boundary checks only apply when explicit branching skip targets are active
       }
     }
 
@@ -1086,13 +1087,13 @@ export default function PublicQuizTaker() {
     }
   };
 
-  // jules edit: Replace detail variable placeholders using @ (@name, @email) with bold styling
+  // Replace detail variable placeholders using @ (@name, @email) with bold styling
   const formatDetailVars = (rawText: string) => {
     if (!rawText) return rawText;
     let formatted = rawText;
     Object.entries(userData || {}).forEach(([key, val]) => {
       const cleanKey = key.trim().replace(/\s+/g, '');
-      const boldVal = `<strong class="text-pw-primary font-bold">${val}</strong>`;
+      const boldVal = `<strong class="text-pw-cyan font-bold">${val}</strong>`;
       const regex1 = new RegExp(`@${cleanKey}`, 'gi');
       const regex2 = new RegExp(`@${key.trim()}`, 'gi');
       const regex3 = new RegExp(`\\$${cleanKey}`, 'gi');
@@ -1205,6 +1206,7 @@ export default function PublicQuizTaker() {
               {currentOptions.map((opt: any, oIdx) => {
                 const optId = opt.id || String(oIdx);
                 const optText = opt.text || String(opt);
+                const formattedOptionText = formatDetailVars(optText);
 
                 const isSelected =
                   quest.type === 'checkbox' ?
@@ -1262,12 +1264,12 @@ export default function PublicQuizTaker() {
                       }
                     }}
                     className={cn(
-                      'w-full h-11 px-3 text-left rounded-xl border transition-all text-xs flex items-center justify-between',
+                      'w-full h-11 px-3 text-left rounded-xl border transition-all text-xs flex items-center justify-between backdrop-blur-lg',
                       isSelected ?
-                        'bg-pw-primary/10 border-pw-primary text-white font-bold'
-                      : 'bg-white/5 border-white/10 text-pw-muted',
+                        'bg-pw-primary/12 border-pw-primary text-white font-bold'
+                      : 'bg-white/5 border-white/10 text-white/80',
                     )}>
-                    <span>{optText}</span>
+                    <span className='whitespace-pre-wrap' dangerouslySetInnerHTML={{ __html: formattedOptionText }} />
                     <CheckCircle
                       className={cn(
                         'h-4 w-4 text-pw-primary transition-opacity',
@@ -1597,7 +1599,6 @@ export default function PublicQuizTaker() {
                     if (!complete)
                       return toast.error('Required detail fields are missing.');
 
-                    // jules edit: Admin allowlist verification per detail field
                     let mismatch = false;
                     quiz?.askDetails?.forEach((d) => {
                       if (d.allowlist && d.allowlist.trim() !== '') {
@@ -1611,7 +1612,6 @@ export default function PublicQuizTaker() {
                             const regex = new RegExp(rawAllow, 'i');
                             matched = regex.test(val);
                           } catch {
-                            // ignore regex error if string list
                           }
                         }
 
@@ -1751,7 +1751,7 @@ export default function PublicQuizTaker() {
 
               <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
                 {/* Top Progress Bar */}
-                {quiz?.type === 'quiz' && (
+                {quiz?.type === 'quiz' &&  (
                   <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
                     <motion.div
                       initial={{ width: 0 }}
@@ -1842,7 +1842,7 @@ export default function PublicQuizTaker() {
                     </div>
                   : <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
                       <div className='flex items-center gap-2'>
-                        <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
+                        {/* <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
                           {(
                             quiz?.questions.some(
                               (q) => q.category || q.category !== null,
@@ -1851,7 +1851,7 @@ export default function PublicQuizTaker() {
                             `Question ${currentQuestion + 1}`
                           : `Question ${currentQuestion + 1} of ${activeQuestions.length}`
                           }
-                        </div>
+                        </div> */}
 
                         {questionTimeLeft !== null && (
                           <div className='badge bg-pw-warning/10 text-pw-warning border-pw-warning/20 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1'>

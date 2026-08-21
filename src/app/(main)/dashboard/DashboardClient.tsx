@@ -21,7 +21,6 @@ import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { HybridStorage } from '@/lib/storage-utils';
-import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
 import { PREMIUM_TIERS } from '@/lib/config/premium';
 import { SITE } from '@/lib/config/site';
@@ -38,11 +37,12 @@ export default function GeneralDashboard() {
     links: 0,
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  
-    // jules edit: Redirect unauthenticated visitors to /login instead of home
-    useEffect(() => {
-      if (!user) router.replace('/login');
-    }, [user]);
+
+  useEffect(() => {
+      if (!user || !username) {
+        router.replace('/login');
+      }
+  }, [user,username]);
   
   useEffect(() => {
     const loadStats = async () => {

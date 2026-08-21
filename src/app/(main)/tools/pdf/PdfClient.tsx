@@ -40,11 +40,11 @@ import {
   CheckCircle2,
   Share,
   History,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -64,11 +64,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
@@ -87,8 +82,9 @@ interface PDFImagePage {
 
 interface ImagePaletteItem {
   id: string;
-  name: string; // reference name (e.g. logo, chart1)
-  src: string; // URL or base64
+  name: string;
+  description?: string;
+  src: string;
   width: number;
   height: number;
   altText?: string;
@@ -170,23 +166,24 @@ const FORMAT_ACCEPT_MAP: Record<FormatType, string> = {
 
 const BRAND_SEED_BOOK: Book = {
   id: 'book-seed-1',
-  name: 'Qal Technologies Blueprint',
-  chapters: [{ id: 'ch-1', name: 'Chapter 1: Corporate Blueprint' }],
+  name: 'PingWorld Blueprint',
+  chapters: [{ id: 'ch-1', name: 'Chapter 1: About PingWorld' }],
   pages: [
     {
       id: 'pg-seed-1',
-      title: 'Qal Technologies Corporate Blueprint',
+      title: 'PingWorld Corporate Blueprint',
       showTitle: true,
-      content: `Welcome to the official Brand Blueprint of Qal Technologies! This default template showcases our sophisticated page flow and modular design guidelines.
+      content: `Welcome to the official Brand Blueprint of PingWorld! This default template showcases our sophisticated page flow and modular design guidelines.
 
-Qal Technologies is a pioneering developer and orchestrator of visual platforms, high-integrity developer sandboxes, and hybrid edge synchronizations. Our core tenets represent:
+PingWorld is an open utility website, with engagement, creativity, design, development and authoring tools. We are also a developer and orchestrator of visual platforms, high-integrity developer sandboxes, and hybrid edge synchronizations. Our core tenets represent:
 * Precision craftsmanship & pixel-perfect designs
 * Advanced real-time visual formatting and pagination
 * Multi-source database synchronization integrity
 
 This template also showcases rich text annotations, inline footnotes, custom list listings, and hyperlinked references:
-* Read our <a href="https://qaltech.io">Technical Whitepaper</a>
-* Explore <a href="https://poshcodes.site">Poshcodes Styling Core</a>
+* Read our <a href="https://ping-world.vercel.app/about">About Page</a>
+* Explore other <a href="https://ping-world.vercel.app/tools">Tools</a>
+* Contact <a href="https://wa.me/2349016561308">Developer</a>
 
 To load brand logo graphics directly inside your text content streams, use the Image Palette tool! Pre-loaded brand assets have been supplied for immediate visual formatting: [img:company_logo]`,
       chapterId: 'ch-1',
@@ -199,7 +196,7 @@ To load brand logo graphics directly inside your text content streams, use the I
         {
           id: 'fn-1',
           number: 1,
-          text: 'This blueprint document is powered by Qal Technologies in partnership with Ping World.',
+          text: 'This blueprint document is powered by Ping World.',
         },
       ],
     },
@@ -213,9 +210,9 @@ To load brand logo graphics directly inside your text content streams, use the I
       height: 120,
     },
   ],
-  frontCoverTitle: 'Qal Technologies',
-  frontCoverSubtitle: 'Corporate Brand and Creative Asset Manual',
-  frontCoverAuthor: 'Qal Executive Board',
+  frontCoverTitle: 'PingWorld',
+  frontCoverSubtitle: 'Developer for PingWorld',
+  frontCoverAuthor: 'Paschal Ngaoka',
   backCoverSummary:
     'A cohesive style manual and technical visual specification blueprint compiled on the Ping World platform.',
   backCoverBgColor: '#0a0c1b',
@@ -689,7 +686,7 @@ export default function PdfToolStudioPage() {
   };
 
   // ── Formatted HTML Content Parser ──────────────────────────────
-  // jules edit: Render image descriptions and themed links/highlights
+  //  Render image descriptions and themed links/highlights
   const renderFormattedContent = (
     content: string,
     palette: ImagePaletteItem[],
@@ -704,7 +701,10 @@ export default function PdfToolStudioPage() {
         const tagId = `\\[img:${item.id}\\]`;
         const tagName = `\\[img:${item.name}\\]`;
         const caption = item.description || item.altText || '';
-        const descHtml = caption ? `<span style="display:block; font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px; text-align: center;">${caption}</span>` : '';
+        const descHtml =
+          caption ?
+            `<span style="display:block; font-size: 10px; color: #64748b; font-style: italic; margin-top: 4px; text-align: center;">${caption}</span>`
+          : '';
         const imgHtml = `<div style="text-align: center; margin: 12px auto;"><img src="${item.src}" alt="${item.name || 'Graphic'}" style="max-width: ${item.width || 120}px; max-height: ${item.height || 120}px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" />${descHtml}</div>`;
         html = html.replace(new RegExp(tagId, 'gi'), imgHtml);
         html = html.replace(new RegExp(tagName, 'gi'), imgHtml);
@@ -720,7 +720,7 @@ export default function PdfToolStudioPage() {
     // Links: styled and underlined
     html = html.replace(
       /<a href="(.*?)">(.*?)<\/a>/gi,
-      '<a href="$1" target="_blank" style="color: #3b82f6; font-weight: 600; text-decoration: underline;">$2</a>',
+      '<a href="$1" target="_blank" style="color: #d414f8; font-weight: 600; text-decoration: underline;">$2</a>',
     );
 
     // Lists & formatting
@@ -739,11 +739,11 @@ export default function PdfToolStudioPage() {
       .replace(/<strike>(.*?)<\/strike>/g, '<del>$1</del>')
       .replace(
         /<mark>(.*?)<\/mark>/g,
-        '<span style="background-color: rgba(59, 130, 246, 0.2); color: #1e3a8a; padding: 1px 4px; border-radius: 4px; font-weight: 600;">$1</span>',
+        '<span style="background-color: rgba(240, 59, 246, 0.2); color: #1e3a8a; padding: 1px 4px; border-radius: 4px; font-weight: 600;">$1</span>',
       )
       .replace(
         /<blockquote>(.*?)<\/blockquote>/g,
-        '<blockquote style="border-left: 3px solid #3b82f6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
+        '<blockquote style="border-left: 3px solid #b03bf6; padding-left: 12px; margin: 10px 0; color: #64748b; font-style: italic;">$1</blockquote>',
       )
       .replace(
         /<h2>(.*?)<\/h2>/g,
@@ -751,7 +751,7 @@ export default function PdfToolStudioPage() {
       )
       .replace(
         /\[fn:(\d+)\]/g,
-        '<sup style="color: #3b82f6; font-weight: bold;">[$1]</sup>',
+        '<sup style="color: #9f3df6; font-weight: bold;">[$1]</sup>',
       );
 
     return html;
@@ -793,7 +793,7 @@ export default function PdfToolStudioPage() {
       name:
         frontCoverTitle ||
         books.find((b) => b.id === activeBookId)?.name ||
-        'Untitled Volume',
+        'Untitled Book',
       chapters,
       pages,
       imagePalette,
@@ -842,7 +842,7 @@ export default function PdfToolStudioPage() {
 
   const handleCreateNewBookPrompt = async () => {
     const name = await showPrompt('Enter the title for your new book:', {
-      title: 'Create New Book Volume',
+      title: 'Create New Book',
       placeholder: 'e.g. Modern Architecture Guide',
       defaultValue: `Book ${books.length + 1}`,
     });
@@ -859,7 +859,7 @@ export default function PdfToolStudioPage() {
           id: `pg-${Date.now()}`,
           title: 'Opening Page',
           showTitle: true,
-          content: 'Begin drafting your sophisticated volume here...',
+          content: 'Begin drafting your book here...',
           chapterId: `ch-${Date.now()}`,
           titleAlign: 'left',
           titleColor: '#3b82f6',
@@ -871,9 +871,9 @@ export default function PdfToolStudioPage() {
       ],
       imagePalette: [],
       frontCoverTitle: name.trim(),
-      frontCoverSubtitle: 'A new manuscript volume',
-      frontCoverAuthor: user?.user_metadata?.full_name || 'Author Name',
-      backCoverSummary: 'Summary of this published book volume.',
+      frontCoverSubtitle: 'A new book',
+      frontCoverAuthor: user?.user_metadata?.full_name || 'PingWorld',
+      backCoverSummary: 'Summary of this published book.',
       backCoverBgColor: '#0a0c1b',
       hasFrontCover: true,
       hasBackCover: true,
@@ -890,14 +890,14 @@ export default function PdfToolStudioPage() {
 
   const handleDeleteBook = async (bookId: string) => {
     if (books.length <= 1) {
-      toast.error('You must keep at least one book volume in your library.');
+      toast.error('You must keep at least one book in your library.');
       return;
     }
 
     const confirmed = await showConfirm(
-      'Are you sure you want to permanently delete this book volume?',
+      'Are you sure you want to permanently delete this book?',
       {
-        title: 'Delete Book Volume',
+        title: 'Delete Book',
         confirmText: 'Delete Permanently',
         type: 'danger',
       },
@@ -908,7 +908,7 @@ export default function PdfToolStudioPage() {
     const list = books.filter((b) => b.id !== bookId);
     setBooks(list);
     localStorage.setItem('pw_pdf_books_list_v5', JSON.stringify(list));
-    toast.success('Book volume removed from library.');
+    toast.success('Book removed from library.');
   };
 
   // ── Chapter & Page Organization ─────────────────────────────────
@@ -1951,12 +1951,349 @@ export default function PdfToolStudioPage() {
                 </div>
               </div>
 
-              <div className='sm:hidden divider my-4' />
+              <div className='divider my-4 sm:hidden' />
 
               {/* Main Book Workspace Grid */}
               <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
                 {/* LEFT NAVIGATOR: CHAPTERS & PAGES TREE */}
                 <div className='lg:col-span-4 space-y-4'>
+
+              {/* Collapsible Book Covers Settings */}
+              <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
+                <div
+                  onClick={() => setShowCoverDrawer(!showCoverDrawer)}
+                  className='flex items-center justify-between cursor-pointer'>
+                  <span className='text-xs font-bold text-white uppercase flex items-center gap-2'>
+                    <BookOpen className='h-3.5 w-3.5 text-pw-primary' /> Front &
+                    Back Covers
+                  </span>
+                  <ChevronRight
+                    className={cn(
+                      'h-4 w-4 text-pw-muted transition-transform',
+                      showCoverDrawer && 'rotate-90',
+                    )}
+                  />
+                </div>
+
+                {showCoverDrawer && (
+                  <div className='space-y-4 pt-2 border-t border-white/5'>
+                    {/* Front Cover Enable Toggle */}
+                    <div className='flex items-center justify-between p-2 rounded-xl bg-white/5'>
+                      <span className='text-xs font-bold text-white'>
+                        Enable Front Cover
+                      </span>
+                      <button
+                        type='button'
+                        onClick={() => setHasFrontCover(!hasFrontCover)}
+                        className={cn(
+                          'w-10 h-5 px-0.5 rounded-full flex items-center transition-all',
+                          hasFrontCover ?
+                            'bg-pw-primary justify-end'
+                          : 'bg-white/10 justify-start',
+                        )}>
+                        <span className='w-4 h-4 rounded-full bg-white shadow' />
+                      </button>
+                    </div>
+
+                    {hasFrontCover && (
+                      <>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Front Cover Design Template
+                          </label>
+                          <select
+                            value={frontCoverTemplate}
+                            onChange={(e) =>
+                              setFrontCoverTemplate(e.target.value as any)
+                            }
+                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2 text-white'>
+                            <option
+                              value='minimal'
+                              className='bg-[#0a0c1b]'>
+                              Classic Minimal
+                            </option>
+                            <option
+                              value='bold'
+                              className='bg-[#0a0c1b]'>
+                              Bold Header
+                            </option>
+                            <option
+                              value='split'
+                              className='bg-[#0a0c1b]'>
+                              Split Accent
+                            </option>
+                            <option
+                              value='center'
+                              className='bg-[#0a0c1b]'>
+                              Center Canvas
+                            </option>
+                          </select>
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Front Cover Title
+                          </label>
+                          <Input
+                            value={frontCoverTitle}
+                            onChange={(e) => setFrontCoverTitle(e.target.value)}
+                            className='h-8 bg-white/5 border-white/10 text-xs'
+                          />
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Subtitle
+                          </label>
+                          <Input
+                            value={frontCoverSubtitle}
+                            onChange={(e) =>
+                              setFrontCoverSubtitle(e.target.value)
+                            }
+                            className='h-8 bg-white/5 border-white/10 text-xs'
+                          />
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Author
+                          </label>
+                          <Input
+                            value={frontCoverAuthor}
+                            onChange={(e) =>
+                              setFrontCoverAuthor(e.target.value)
+                            }
+                            className='h-8 bg-white/5 border-white/10 text-xs'
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Back Cover Enable Toggle */}
+                    <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border-t border-white/5 pt-3'>
+                      <span className='text-xs font-bold text-white'>
+                        Enable Back Cover
+                      </span>
+                      <button
+                        type='button'
+                        onClick={() => setHasBackCover(!hasBackCover)}
+                        className={cn(
+                          'w-10 h-5 px-0.5 rounded-full flex items-center transition-all',
+                          hasBackCover ?
+                            'bg-pw-primary justify-end'
+                          : 'bg-white/10 justify-start',
+                        )}>
+                        <span className='w-4 h-4 rounded-full bg-white shadow' />
+                      </button>
+                    </div>
+
+                    {hasBackCover && (
+                      <div className='space-y-2'>
+                        <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                          Back Cover Summary
+                        </label>
+                        <textarea
+                          value={backCoverSummary}
+                          onChange={(e) => setBackCoverSummary(e.target.value)}
+                          className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+
+              {/* Book Global settings */}
+              <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
+                <div
+                  onClick={() => setShowBookSettings(!showBookSettings)}
+                  className='flex items-center justify-between cursor-pointer'>
+                  <span className='text-xs font-bold text-white uppercase flex items-center gap-2'>
+                    <Settings className='h-3.5 w-3.5 text-pw-primary' /> Book
+                    Settings
+                  </span>
+                  <ChevronRight
+                    className={cn(
+                      'h-4 w-4 text-pw-muted transition-transform',
+                      showBookSettings && 'rotate-90',
+                    )}
+                  />
+                </div>
+
+                {showBookSettings && (
+                  <div className='space-y-4 pt-2 border-t border-white/5 text-white space-y-3 max-h-[480px] overflow-y-auto custom-scrollbar'>
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Font
+                      </label>
+                      <select
+                        value={fontFamily}
+                        onChange={(e) => setFontFamily(e.target.value)}
+                        className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                        <option
+                          value="'Merriweather', 'Georgia', serif"
+                          className='bg-[#0a0c1b]'>
+                          Serif (Merriweather / Georgia)
+                        </option>
+                        <option
+                          value="'Inter', 'Arial', sans-serif"
+                          className='bg-[#0a0c1b]'>
+                          Sans (Inter / Arial)
+                        </option>
+                        <option
+                          value="'JetBrains Mono', 'Courier', monospace"
+                          className='bg-[#0a0c1b]'>
+                          Mono (JetBrains Mono / Courier)
+                        </option>
+                        <option
+                          value='OpenDyslexic, sans-serif'
+                          className='bg-[#0a0c1b]'>
+                          OpenDyslexic
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Font Size
+                      </label>
+                      <select
+                        value={fontSize}
+                        onChange={(e) => setFontSize(e.target.value as any)}
+                        className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                        <option
+                          value='small'
+                          className='bg-[#0a0c1b]'>
+                          Small (12pt)
+                        </option>
+                        <option
+                          value='normal'
+                          className='bg-[#0a0c1b]'>
+                          Normal (14pt)
+                        </option>
+                        <option
+                          value='large'
+                          className='bg-[#0a0c1b]'>
+                          Large (16pt)
+                        </option>
+                        <option
+                          value='extralarge'
+                          className='bg-[#0a0c1b]'>
+                          Extra Large (18pt)
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Paper Orientation
+                      </label>
+                      <div className='flex gap-1'>
+                        {(['portrait', 'landscape'] as const).map((orient) => (
+                          <Button
+                            key={orient}
+                            size='sm'
+                            variant='ghost'
+                            onClick={() => setPaperOrientation(orient)}
+                            className={cn(
+                              'h-7 flex-1 text-xs capitalize',
+                              paperOrientation === orient ?
+                                'bg-pw-primary text-white'
+                              : 'hover:bg-white/5',
+                            )}>
+                            {orient}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Paper Color Scheme
+                      </label>
+                      <select
+                        value={paperScheme}
+                        onChange={(e) => setPaperScheme(e.target.value as any)}
+                        className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                        <option
+                          value='white'
+                          className='bg-[#0a0c1b]'>
+                          Crisp White (#FFFFFF)
+                        </option>
+                        <option
+                          value='cream'
+                          className='bg-[#0a0c1b]'>
+                          Warm Cream (#FAF7EE)
+                        </option>
+                        <option
+                          value='gray'
+                          className='bg-[#0a0c1b]'>
+                          Soft Gray (#F3F4F6)
+                        </option>
+                        <option
+                          value='dark'
+                          className='bg-[#0a0c1b]'>
+                          Dark Slate (#0F172A)
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Body Font Color
+                      </label>
+                      <Input
+                        type='color'
+                        value={bodyColor}
+                        onChange={(e) => setBodyColor(e.target.value)}
+                        className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
+                      />
+                    </div>
+
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Book Titles Color
+                      </label>
+                      <Input
+                        type='color'
+                        value={globalTitleColor}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGlobalTitleColor(val);
+                          setPages((prev) =>
+                            prev.map((p) => ({ ...p, titleColor: val })),
+                          );
+                        }}
+                        className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
+                      />
+                    </div>
+
+                    <div className='space-y-1.5'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Page Margin
+                      </label>
+                      <select
+                        value={pageMargin}
+                        onChange={(e) => setPageMargin(e.target.value as any)}
+                        className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
+                        <option
+                          value='compact'
+                          className='bg-[#0a0c1b]'>
+                          Compact (15mm)
+                        </option>
+                        <option
+                          value='normal'
+                          className='bg-[#0a0c1b]'>
+                          Normal (25mm)
+                        </option>
+                        <option
+                          value='wide'
+                          className='bg-[#0a0c1b]'>
+                          Wide (35mm)
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </Card>
+              <div className='sm:hidden divider my-4' />
                   <Card className='mt-2 sm:mt-0 sm:p-4 bg-transparent ring-0 sm:ring-1 sm:bg-[#0c0d1c]/70 bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-4 sm:shadow-xl'>
                     <div className='flex items-center justify-between flex-wrap'>
                       <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
@@ -2007,7 +2344,7 @@ export default function PdfToolStudioPage() {
                             setCollapsedChapters((prev) => ({
                               ...prev,
                               [activeChapter as string]:
-                                !prev[activeChapter as string],
+                                false,
                             }));
                           }
                         }}
@@ -2034,7 +2371,7 @@ export default function PdfToolStudioPage() {
                               className={cn(
                                 'flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 group',
                                 activeChapter === ch.id &&
-                                  'border-pw-primary/15 bg-pw-primary/10',
+                                  'border-pw-primary/5 bg-pw-primary/11',
                               )}
                               onClick={() => setActiveChapter(ch.id)}>
                               <div className='flex items-center gap-2 cursor-pointer flex-1 min-w-0'>
@@ -2050,7 +2387,7 @@ export default function PdfToolStudioPage() {
                                     !isCollapsed && 'rotate-90',
                                   )}
                                 />
-                                <span className='text-xs font-bold text-pw-primary font-mono truncate'>
+                                <span className={cn('text-xs font-bold font-mono truncate', activeChapter === ch.id ?'text-pw-primary' : 'text-white')}>
                                   {ch.name}
                                 </span>
                               </div>
@@ -2285,320 +2622,6 @@ export default function PdfToolStudioPage() {
                       )}
                     </div>
                   </Card>
-
-                  <div className='divider my-4 sm:hidden' />
-
-                  {/* Collapsible Book Covers Settings */}
-                  <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
-                    <div
-                      onClick={() => setShowCoverDrawer(!showCoverDrawer)}
-                      className='flex items-center justify-between cursor-pointer'>
-                      <span className='text-xs font-bold text-white uppercase flex items-center gap-2'>
-                        <BookOpen className='h-3.5 w-3.5 text-pw-primary' />{' '}
-                        Front & Back Covers
-                      </span>
-                      <ChevronRight
-                        className={cn(
-                          'h-4 w-4 text-pw-muted transition-transform',
-                          showCoverDrawer && 'rotate-90',
-                        )}
-                      />
-                    </div>
-
-                    {showCoverDrawer && (
-                      <div className='space-y-4 pt-2 border-t border-white/5'>
-                        {/* Front Cover Enable Toggle */}
-                        <div className='flex items-center justify-between p-2 rounded-xl bg-white/5'>
-                          <span className='text-xs font-bold text-white'>Enable Front Cover</span>
-                          <button
-                            type='button'
-                            onClick={() => setHasFrontCover(!hasFrontCover)}
-                            className={cn(
-                              'w-10 h-5 px-0.5 rounded-full flex items-center transition-all',
-                              hasFrontCover ? 'bg-pw-primary justify-end' : 'bg-white/10 justify-start',
-                            )}>
-                            <span className='w-4 h-4 rounded-full bg-white shadow' />
-                          </button>
-                        </div>
-
-                        {hasFrontCover && (
-                          <>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                                Front Cover Design Template
-                              </label>
-                              <select
-                                value={frontCoverTemplate}
-                                onChange={(e) => setFrontCoverTemplate(e.target.value as any)}
-                                className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2 text-white'>
-                                <option value='minimal' className='bg-[#0a0c1b]'>Classic Minimal</option>
-                                <option value='bold' className='bg-[#0a0c1b]'>Bold Header</option>
-                                <option value='split' className='bg-[#0a0c1b]'>Split Accent</option>
-                                <option value='center' className='bg-[#0a0c1b]'>Center Canvas</option>
-                              </select>
-                            </div>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                                Front Cover Title
-                              </label>
-                              <Input
-                                value={frontCoverTitle}
-                                onChange={(e) => setFrontCoverTitle(e.target.value)}
-                                className='h-8 bg-white/5 border-white/10 text-xs'
-                              />
-                            </div>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                                Subtitle
-                              </label>
-                              <Input
-                                value={frontCoverSubtitle}
-                                onChange={(e) => setFrontCoverSubtitle(e.target.value)}
-                                className='h-8 bg-white/5 border-white/10 text-xs'
-                              />
-                            </div>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                                Author
-                              </label>
-                              <Input
-                                value={frontCoverAuthor}
-                                onChange={(e) => setFrontCoverAuthor(e.target.value)}
-                                className='h-8 bg-white/5 border-white/10 text-xs'
-                              />
-                            </div>
-                          </>
-                        )}
-
-                        {/* Back Cover Enable Toggle */}
-                        <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border-t border-white/5 pt-3'>
-                          <span className='text-xs font-bold text-white'>Enable Back Cover</span>
-                          <button
-                            type='button'
-                            onClick={() => setHasBackCover(!hasBackCover)}
-                            className={cn(
-                              'w-10 h-5 px-0.5 rounded-full flex items-center transition-all',
-                              hasBackCover ? 'bg-pw-primary justify-end' : 'bg-white/10 justify-start',
-                            )}>
-                            <span className='w-4 h-4 rounded-full bg-white shadow' />
-                          </button>
-                        </div>
-
-                        {hasBackCover && (
-                          <div className='space-y-2'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                              Back Cover Summary
-                            </label>
-                            <textarea
-                              value={backCoverSummary}
-                              onChange={(e) => setBackCoverSummary(e.target.value)}
-                              className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </Card>
-
-                  {/* Book Global settings */}
-                  <Card className='p-4 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-3'>
-                    <div
-                      onClick={() => setShowBookSettings(!showBookSettings)}
-                      className='flex items-center justify-between cursor-pointer'>
-                      <span className='text-xs font-bold text-white uppercase flex items-center gap-2'>
-                        <Settings className='h-3.5 w-3.5 text-pw-primary' />{' '}
-                        Book Settings
-                      </span>
-                      <ChevronRight
-                        className={cn(
-                          'h-4 w-4 text-pw-muted transition-transform',
-                          showBookSettings && 'rotate-90',
-                        )}
-                      />
-                    </div>
-
-                    {showBookSettings && (
-                      <div className='space-y-4 pt-2 border-t border-white/5 text-white space-y-3 max-h-[480px] overflow-y-auto custom-scrollbar'>
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Font
-                          </label>
-                          <select
-                            value={fontFamily}
-                            onChange={(e) => setFontFamily(e.target.value)}
-                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                            <option
-                              value="'Merriweather', 'Georgia', serif"
-                              className='bg-[#0a0c1b]'>
-                              Serif (Merriweather / Georgia)
-                            </option>
-                            <option
-                              value="'Inter', 'Arial', sans-serif"
-                              className='bg-[#0a0c1b]'>
-                              Sans (Inter / Arial)
-                            </option>
-                            <option
-                              value="'JetBrains Mono', 'Courier', monospace"
-                              className='bg-[#0a0c1b]'>
-                              Mono (JetBrains Mono / Courier)
-                            </option>
-                            <option
-                              value='OpenDyslexic, sans-serif'
-                              className='bg-[#0a0c1b]'>
-                              OpenDyslexic
-                            </option>
-                          </select>
-                        </div>
-
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Font Size
-                          </label>
-                          <select
-                            value={fontSize}
-                            onChange={(e) => setFontSize(e.target.value as any)}
-                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                            <option
-                              value='small'
-                              className='bg-[#0a0c1b]'>
-                              Small (12pt)
-                            </option>
-                            <option
-                              value='normal'
-                              className='bg-[#0a0c1b]'>
-                              Normal (14pt)
-                            </option>
-                            <option
-                              value='large'
-                              className='bg-[#0a0c1b]'>
-                              Large (16pt)
-                            </option>
-                            <option
-                              value='extralarge'
-                              className='bg-[#0a0c1b]'>
-                              Extra Large (18pt)
-                            </option>
-                          </select>
-                        </div>
-
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Paper Orientation
-                          </label>
-                          <div className='flex gap-1'>
-                            {(['portrait', 'landscape'] as const).map(
-                              (orient) => (
-                                <Button
-                                  key={orient}
-                                  size='sm'
-                                  variant='ghost'
-                                  onClick={() => setPaperOrientation(orient)}
-                                  className={cn(
-                                    'h-7 flex-1 text-xs capitalize',
-                                    paperOrientation === orient ?
-                                      'bg-pw-primary text-white'
-                                    : 'hover:bg-white/5',
-                                  )}>
-                                  {orient}
-                                </Button>
-                              ),
-                            )}
-                          </div>
-                        </div>
-
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Paper Color Scheme
-                          </label>
-                          <select
-                            value={paperScheme}
-                            onChange={(e) =>
-                              setPaperScheme(e.target.value as any)
-                            }
-                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                            <option
-                              value='white'
-                              className='bg-[#0a0c1b]'>
-                              Crisp White (#FFFFFF)
-                            </option>
-                            <option
-                              value='cream'
-                              className='bg-[#0a0c1b]'>
-                              Warm Cream (#FAF7EE)
-                            </option>
-                            <option
-                              value='gray'
-                              className='bg-[#0a0c1b]'>
-                              Soft Gray (#F3F4F6)
-                            </option>
-                            <option
-                              value='dark'
-                              className='bg-[#0a0c1b]'>
-                              Dark Slate (#0F172A)
-                            </option>
-                          </select>
-                        </div>
-
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Body Font Color
-                          </label>
-                          <Input
-                            type='color'
-                            value={bodyColor}
-                            onChange={(e) => setBodyColor(e.target.value)}
-                            className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
-                          />
-                        </div>
-
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Book Titles Color
-                          </label>
-                          <Input
-                            type='color'
-                            value={globalTitleColor}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setGlobalTitleColor(val);
-                              setPages((prev) =>
-                                prev.map((p) => ({ ...p, titleColor: val })),
-                              );
-                            }}
-                            className='h-8 w-full bg-white/5 border-white/10 cursor-pointer p-0'
-                          />
-                        </div>
-
-                        <div className='space-y-1.5'>
-                          <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                            Page Margin
-                          </label>
-                          <select
-                            value={pageMargin}
-                            onChange={(e) =>
-                              setPageMargin(e.target.value as any)
-                            }
-                            className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2'>
-                            <option
-                              value='compact'
-                              className='bg-[#0a0c1b]'>
-                              Compact (15mm)
-                            </option>
-                            <option
-                              value='normal'
-                              className='bg-[#0a0c1b]'>
-                              Normal (25mm)
-                            </option>
-                            <option
-                              value='wide'
-                              className='bg-[#0a0c1b]'>
-                              Wide (35mm)
-                            </option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
                 </div>
 
                 {/* RIGHT WORKSPACE: EDITOR & LIVE PREVIEW */}
@@ -2818,6 +2841,10 @@ export default function PdfToolStudioPage() {
                           isPreviewFullscreen &&
                             'fixed inset-4 z-50 overflow-y-auto max-w-4xl mx-auto',
                         )}>
+                        
+                        {isPreviewFullscreen && <button onClick={() => setIsPreviewFullscreen(false)} 
+                        className="p-2 rounded-full w-10 h-10 flex items-center justify-center bg-pw-primary/60 backdrop-blur-sm hover:bg-pw-primary/80 text-white font-bold transition-all top-2 right-2 absolute z-50"
+                        ><X /></button>}
                         <div>
                           {activePage.showTitle && (
                             <h2

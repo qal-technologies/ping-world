@@ -75,8 +75,10 @@ function SettingsContent() {
 
   // Auth Guard
   useEffect(() => {
-    if (!user) router.replace('/login');
-  }, [user, router]);
+    if (!user || !username) {
+      router.replace('/login');
+    }
+  }, [user,username]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -109,7 +111,6 @@ function SettingsContent() {
         try {
           await navigator.serviceWorker.register('/sw.js').catch(() => {});
         } catch {
-          // fallback
         }
       }
       toast.success('Notification permission granted!');
@@ -120,16 +121,14 @@ function SettingsContent() {
   };
 
   useEffect(() => {
-    if (user) {
-      setDisplayName(
-        user.user_metadata?.full_name ||
-          username ||
-          user.email?.split('@')[0] ||
-          '',
-      );
+    const loadData = async() => {
+    if(user) {
+      await refresh();
+      setDisplayName(username || user.email?.split('@')[0] || '');
       setEmail(user.email || '');
     }
-
+  }
+  loadData();
     try {
       const keys = Object.keys(localStorage);
       const quizzes = keys.filter(
@@ -143,7 +142,6 @@ function SettingsContent() {
       ).length;
       setCacheCounts({ quizzes, messages, documents });
     } catch {
-      // ignore
     }
   }, [user, username]);
 
@@ -491,12 +489,6 @@ function SettingsContent() {
                 />
               </div>
             </div>
-
-            <Button
-              onClick={() => toast.success('Notification preferences updated!')}
-              className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
-              <Save className='h-3.5 w-3.5' /> Save Preferences
-            </Button>
           </Card>
         </TabsContent>
       </Tabs>
