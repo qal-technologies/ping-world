@@ -133,6 +133,7 @@ export default function PublicInboxForm({ profile, username }: Props) {
         created_at: new Date().toISOString(),
       };
 
+      // jules edit: Always persist messages first to local storage via HybridStorage
       await HybridStorage.save(msgId, payload, 'message');
 
       setSent(true);

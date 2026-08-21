@@ -989,6 +989,7 @@ export default function PublicQuizTaker() {
   };
 
   // Proceed to the next question, taking logical branching configuration into account
+  // jules edit: Strict category branching isolation to prevent category question leaking
   const proceedToNext = (latestAnswers?: any[], chosenOptionVal?: string | null) => {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
@@ -997,7 +998,6 @@ export default function PublicQuizTaker() {
     let nextIdx = currentQuestion + 1;
     const isScrollLayout = !!(quiz?.quizScroll || quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
 
-    // Apply logical branching (skipTo / skipToCat targets on both options and questions) for progressive layouts
     if (q && !isScrollLayout) {
       let branchTarget: string | undefined = undefined;
       let branchCat: string | undefined = undefined;
@@ -1049,10 +1049,8 @@ export default function PublicQuizTaker() {
 
         if (targetIdx !== -1) {
           nextIdx = targetIdx;
-          toast.info(`Branching active: Switched sequence to Category "${catQuestions[0]?.category || branchCat}"`, {
-            duration: 3000,
-          });
         }
+      // jules edit: Category boundary checks only apply when explicit branching skip targets are active
       }
     }
 
