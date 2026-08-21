@@ -106,7 +106,7 @@ export interface Question {
   timer?: number; // Optional question timer in seconds
 }
 
-interface Details {
+export interface Details {
   title: string;
   type:
     | 'name'
@@ -117,6 +117,7 @@ interface Details {
     | 'email'
     | 'dropdown'
     | 'others';
+  allowlist?: string; // Comma-separated allowed values or regex string
   //necessary for dropdown
   options?: string[];
 }
@@ -744,6 +745,27 @@ const QuizBuilder = ({
                             </p>
                           </div>
                         )}
+
+                        <div className='space-y-1 mt-1'>
+                          <Input
+                            placeholder='Allowlist / Allowed Values (e.g. STU123, STU456 or ^ID-[0-9]+$)'
+                            value={detail.allowlist || ''}
+                            onChange={(e) => {
+                              const newDetails = [
+                                ...(editedQuiz.askDetails || []),
+                              ];
+                              newDetails[idx].allowlist = e.target.value;
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                askDetails: newDetails,
+                              });
+                            }}
+                            className='h-8 text-[10px] bg-black/20 font-mono text-pw-primary'
+                          />
+                          <p className='text-[9px] text-pw-muted italic ml-1'>
+                            Restrict access: Comma-separated allowed values or regex pattern
+                          </p>
+                        </div>
                       </div>
                     ))}
                     <Button

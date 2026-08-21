@@ -55,11 +55,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [offlineToastShown, setOfflineToastShown] = useState(false);
 
   // ── Online / offline detection
+  // jules edit: Suppress initial visit online toast and check for prior visits
   useEffect(() => {
+    let initialVisit = false;
+    if (typeof window !== 'undefined') {
+      const hasVisited = localStorage.getItem('pw_has_visited');
+      if (!hasVisited) {
+        initialVisit = true;
+        localStorage.setItem('pw_has_visited', 'true');
+      }
+    }
+
     const handleOnline = () => {
       setIsOnline(true);
-      toast.success('Back online - syncing data...', { id: 'online-status' });
+      // Only show sync toast if not initial visit on fresh tab open
+      if (!initialVisit) {
+        toast.success('Back online - syncing data...', { id: 'online-status' });
+      }
+      initialVisit = false;
     };
+
     const handleOffline = () => {
       setIsOnline(false);
       if (!offlineToastShown) {
@@ -74,13 +89,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Set initial state
     const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
     setIsOnline(online);
-    if (!online && !offlineToastShown) {
-      toast.warning(
-        "You're offline. Some features are disabled.",
-        { id: 'offline-status', duration: 8000 },
-      );
-      setOfflineToastShown(true);
-    }
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);

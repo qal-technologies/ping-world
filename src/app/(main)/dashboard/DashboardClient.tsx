@@ -39,9 +39,10 @@ export default function GeneralDashboard() {
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   
+    // jules edit: Redirect unauthenticated visitors to /login instead of home
     useEffect(() => {
-      if (!user || !username) router.replace('/');
-    }, [user, username]);
+      if (!user) router.replace('/login');
+    }, [user]);
   
   useEffect(() => {
     const loadStats = async () => {

@@ -482,20 +482,36 @@ export default function MessageLandingPage() {
 
                   <div className='grid grid-cols-2 md:grid-cols-3 sm:grid-cols-5 gap-3'>
                     {[
-                      { l: '24 Hours', v: 1 },
-                      { l: '3 Days', v: 3 },
-                      { l: '7 Days', v: 7 },
-                    ].map((item) => (
-                      <button
-                        key={item.v}
-                        onClick={() => {
-                          setExpiryDays(item.v);
-                          toast.success(`Expiry length selection updated to ${item.l}!`);
-                        }}
-                        className={`h-11 px-3 text-xs font-bold rounded-lg border transition-all ${expiryDays === item.v ? 'bg-pw-primary/10 border-pw-primary text-pw-primary' : 'border-white/10 hover:bg-white/5 text-pw-muted'}`}>
-                        {item.l}
-                      </button>
-                    ))}
+                      { l: '24 Hours', v: 1, minTier: 'free' },
+                      { l: '3 Days', v: 3, minTier: 'premium' },
+                      { l: '7 Days', v: 7, minTier: 'premium' },
+                    ].map((item) => {
+                      const isLocked = item.v > 2 && !isPremium;
+                      return (
+                        <button
+                          key={item.v}
+                          onClick={() => {
+                            if (isLocked) {
+                              toast.info('⭐ Extended message lifespan (> 2 days) is restricted to flexible/premium subscribers.');
+                              return;
+                            }
+                            setExpiryDays(item.v);
+                            toast.success(`Expiry length selection updated to ${item.l}!`);
+                          }}
+                          className={`h-11 px-3 text-xs font-bold rounded-lg border transition-all flex items-center justify-between ${
+                            expiryDays === item.v
+                              ? 'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'border-white/10 hover:bg-white/5 text-pw-muted'
+                          } ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                          <span>{item.l}</span>
+                          {isLocked && (
+                            <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1 ml-1'>
+                              PRO
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </Card>
 
