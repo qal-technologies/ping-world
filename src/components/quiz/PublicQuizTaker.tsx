@@ -981,6 +981,7 @@ export default function PublicQuizTaker() {
           userData,
           answers: finalAnswers,
           score: finalScore,
+          categoryScores,
           totalQuestions: activeQuestions.length,
           answeredQuestions: finalAnswers.length,
         });
@@ -1325,13 +1326,31 @@ export default function PublicQuizTaker() {
           </p>
 
           {quiz?.type === 'quiz' && (
-            <Card className='p-6 bg-white/[0.02] border border-white/5 rounded-2xl'>
-              <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
-                Your Performance
-              </span>
-              <span className='text-3xl font-bold font-mono text-pw-primary'>
-                {score} / {totalQuestions}
-              </span>
+            <Card className='p-6 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4'>
+              <div>
+                <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
+                  Your Overall Score
+                </span>
+                <span className='text-3xl font-bold font-mono text-pw-primary'>
+                  {score} / {totalQuestions}
+                </span>
+              </div>
+
+              {Object.keys(categoryScores).length > 0 && (
+                <div className='border-t border-white/5 pt-4 space-y-2 text-left'>
+                  <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-2'>
+                    Category Breakdown
+                  </span>
+                  {Object.entries(categoryScores).map(([cat, stats]) => (
+                    <div key={cat} className='flex items-center justify-between text-xs py-1 border-b border-white/5'>
+                      <span className='font-bold text-white'>{cat}</span>
+                      <span className='font-mono text-pw-cyan font-bold'>
+                        {stats.correct} / {stats.total}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           )}
 

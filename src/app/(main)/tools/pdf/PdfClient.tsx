@@ -390,8 +390,9 @@ export default function PdfToolStudioPage() {
   // Unified Export Modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState('');
+  // jules edit: Add epub export format option
   const [exportFormat, setExportFormat] = useState<
-    'pdf' | 'doc' | 'txt' | 'pwbook'
+    'pdf' | 'doc' | 'txt' | 'pwbook' | 'epub'
   >('pdf');
 
   // Merge state
@@ -1504,6 +1505,19 @@ export default function PdfToolStudioPage() {
         toast.success('🎉 Word manuscript (.doc) exported!');
       } else if (exportFormat === 'pwbook') {
         await handleExportBookJson();
+      } else if (exportFormat === 'epub') {
+        const title = frontCoverTitle || 'Untitled Book';
+        const author = frontCoverAuthor || 'PingWorld Author';
+        let bodyHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title></head><body><h1>${title}</h1><h2>By ${author}</h2>\n`;
+        pages.forEach((p, i) => {
+          bodyHtml += `<section><h3>${p.title}</h3><p>${renderFormattedContent(p.content, imagePalette)}</p></section>\n`;
+        });
+        bodyHtml += `</body></html>`;
+
+        const blob = new Blob([bodyHtml], { type: 'application/epub+zip' });
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${finalFilename}.epub`);
+        toast.success('🎉 EPUB manuscript exported!');
       } else {
         // Plain Text export
         let plain = `BOOK: ${frontCoverTitle}\nSUBTITLE: ${frontCoverSubtitle}\nAUTHOR: ${frontCoverAuthor}\n\n========================\n\n`;
@@ -3190,6 +3204,7 @@ export default function PdfToolStudioPage() {
                     { id: 'doc', label: 'Word (.doc)' },
                     { id: 'txt', label: 'Text (.txt)' },
                     { id: 'pwbook', label: 'Pwbook (.pwbook)' },
+                    { id: 'epub', label: 'EPUB (.epub)' },
                   ] as const
                 ).map((fmt) => (
                   <Button
