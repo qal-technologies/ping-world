@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 export type StorageItem = {
   id: string;
-  type: 'quiz' | 'message' | 'post' | 'link' | 'games' | 'document';
+  type: 'quiz' | 'message' | 'post' | 'link' | 'games' | 'document' | 'composer_history';
   content: any;
   updated_at: string;
   is_synced: boolean;
@@ -201,7 +201,8 @@ async function syncFromRemote(
       link: 'id,creator_id,original_url,clicks',
       games: 'id,user_id,name,teams,updated_at',
       post: 'id,updated_at', // Not currently used but satisfying type mapping
-      document:''
+      document: '',
+      'composer_history':''
     };
 
     let query = supabase
