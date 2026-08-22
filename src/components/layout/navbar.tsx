@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Wrench,
@@ -70,6 +70,7 @@ const toolLinks = [
 
 export const Navbar = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState<any | null>();
   const { isLoggedIn } = useAppContext();
@@ -312,7 +313,7 @@ export const Navbar = () => {
                     setIsSearchOpen(false);
                     openSearchInput(false);
                     setSearchQuery('');
-                    window.location.href = firstResult.href;
+                    router.push(firstResult.href);
                   }
                 }}
                 placeholder='Search tools, pages...'
@@ -404,7 +405,7 @@ export const Navbar = () => {
                       const firstResult = searchResults[0];
                       setMobileOpen(false);
                       setSearchQuery('');
-                      window.location.href = firstResult.href;
+                      router.push(firstResult.href);
                     }
                   }}
                   placeholder='Search tools, pages...'
