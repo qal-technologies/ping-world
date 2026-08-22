@@ -160,7 +160,7 @@ export const Navbar = () => {
             className='h-9 w-9 object-fit'
           />
 
-          <span className='text-lg sm:text-xl font-bold font-display tracking-tight text-pw-text group-hover:text-pw-primary transition-colors duration-300'>
+          <span className='text-lg sm:text-xl font-bold font-display tracking-tight text-pw-text group-hover:text-pw-primary transition-colors duration-300 text-shadow-md'>
             Ping World
           </span>
         </Link>

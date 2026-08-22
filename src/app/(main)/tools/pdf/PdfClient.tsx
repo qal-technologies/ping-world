@@ -2420,7 +2420,7 @@ export default function PdfToolStudioPage() {
                                   <DropdownMenuItem
                                     onClick={() => handleDisbandChapter(ch.id)}>
                                     <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
-                                    Disband (Keep Pages)
+                                    Ungroup (Keep Pages)
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator className='bg-white/10' />
                                   <DropdownMenuItem
