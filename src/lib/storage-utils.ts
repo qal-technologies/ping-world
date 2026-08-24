@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 
+// jules edit: Add composer_history to StorageItem type
 export type StorageItem = {
   id: string;
   type: 'quiz' | 'message' | 'post' | 'link' | 'games' | 'document' | 'composer_history';
@@ -202,7 +203,7 @@ async function syncFromRemote(
       games: 'id,user_id,name,teams,updated_at',
       post: 'id,updated_at', // Not currently used but satisfying type mapping
       document: '',
-      'composer_history':''
+      composer_history: '',
     };
 
     let query = supabase
@@ -326,6 +327,19 @@ if (typeof window !== 'undefined') {
 // ---------------------------------------------------------------------------
 
 export const HybridStorage = {
+  // jules edit: Add dedicated post helpers
+  async savePost(postData: any) {
+    return this.save(postData.id || `post_${Date.now()}`, postData, 'post');
+  },
+
+  async getPosts(onUpdate?: (items: any[]) => void) {
+    return this.getAll('post', onUpdate);
+  },
+
+  async deletePost(id: string) {
+    return this.delete(id, 'post');
+  },
+
   /**
    * Save a resource.
    * 1. Writes to local cache IMMEDIATELY (no network wait).

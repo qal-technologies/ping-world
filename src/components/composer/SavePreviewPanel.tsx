@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download,
@@ -39,7 +39,7 @@ const PLATFORM_ICONS: Record<Platform, React.ElementType> = {
 };
 
 export function SavePreviewPanel() {
-  const { state, dispatch, getContentForPlatform } = useComposer();
+  const { state, dispatch } = useComposer();
   const previewRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<string | null>(null);
@@ -48,16 +48,25 @@ export function SavePreviewPanel() {
   const [darkMode, setDarkMode] = useState(true);
 
   const [exportPlatform, setExportPlatform] = useState<Platform>(
-    state.selectedPlatforms[0] ?? 'x',
+    state.activeEditorPlatform
   );
 
+  const handleOverride = () => {
+    if(exportPlatform && !state.selectedPlatforms.includes(exportPlatform)) {
+      setExportPlatform(state.selectedPlatforms[0])
+    }
+  }
   
+  useEffect(() => {
+    handleOverride();
+  }, [exportPlatform, state.selectedPlatforms, state.activeEditorPlatform]);
+
+
   const capturePreview = async () => {
     if (!previewRef.current) return;
     setIsCapturing(true);
     try {
       const targetEl = previewRef.current;
-      // Temporarily disable backdrop-filter on preview elements to avoid html2canvas render glitches
       const filterEls = targetEl.querySelectorAll('*');
       const originalFilters: { el: HTMLElement; filter: string }[] = [];
       filterEls.forEach((node) => {
@@ -176,7 +185,7 @@ export function SavePreviewPanel() {
   };
 
   return (
-    <div className='space-y-4'>
+    <div className='space-y-2'>
       {/* Export Platform Selector */}
       {state.selectedPlatforms.length > 1 && (
         <div className='flex gap-2 flex-wrap mb-2'>

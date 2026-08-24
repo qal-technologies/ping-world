@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Wrench,
@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Layout,
   Code2,
+  BookCheck,
 } from 'lucide-react';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -55,23 +56,30 @@ const toolLinks = [
     description: 'Anonymous messaging system',
   },
   {
-    href: '/editor',
-    label: 'Text Editor',
-    icon: Type,
-    description: 'Rich text and post maker',
+    href: '/tools/pdf',
+    label: 'PDF Toolkit',
+    icon: BookCheck,
+    description: 'Conversion, merging and book creation',
   },
   {
     href: '/image',
     label: 'Image Toolkit',
     icon: ImageIcon,
-    description: 'Filters and processing',
+    description: 'Filters and image editing',
+  },
+  {
+    href: '/editor',
+    label: 'Text Editor',
+    icon: Type,
+    description: 'Rich text and post maker',
   },
 ];
 
 export const Navbar = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [session, setSession] = useState<any | null>();
+
   const { isLoggedIn } = useAppContext();
 
   // Search Bar States
@@ -123,7 +131,6 @@ export const Navbar = () => {
     { href: '/', label: 'Home', icon: Home },
     { href: '/tools', label: 'Browse Tools', icon: Wrench },
     { href: '/api', label: 'Developer APIs', icon: Code },
-    { href: '/quiz', label: 'Quiz', icon: Brain },
     {
       href: '/dashboard',
       label: 'Dashboard',
@@ -131,18 +138,6 @@ export const Navbar = () => {
       isLogged: isLoggedIn,
     },
   ];
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        setSession(session);
-      }
-    };
-    checkUser();
-  }, []);
 
   return (
     <header className='fixed top-0 left-0 right-0 z-50'>
@@ -267,13 +262,11 @@ export const Navbar = () => {
                 Dashboard
               </div>
 
-          : !session && (
-              <Link
-                href='/login'
-                className='hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20'>
-                Sign In
-              </Link>
-            )
+          : <Link
+              href='/login'
+              className='hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20'>
+              Sign In
+            </Link>
           }
 
           <button
@@ -297,6 +290,7 @@ export const Navbar = () => {
             className='relative pointer-events-auto w-90'>
             <div className='flex items-center gap-2 bg-[#0c0d1c]/40 border border-white/5 p-1 px-4 rounded-2xl shadow-xl focus-within:border-pw-primary/50 transition-all bkblur'>
               <Search className='h-4 w-4 text-pw-muted shrink-0' />
+              {/* jules edit: Add enter key handling to select first search result */}
               <input
                 type='text'
                 value={searchQuery}
@@ -304,7 +298,17 @@ export const Navbar = () => {
                   setSearchQuery(e.target.value);
                   setIsSearchOpen(true);
                 }}
+                autoFocus
                 onFocus={() => setIsSearchOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchResults.length > 0) {
+                    const firstResult = searchResults[0];
+                    setIsSearchOpen(false);
+                    openSearchInput(false);
+                    setSearchQuery('');
+                    router.push(firstResult.href);
+                  }
+                }}
                 placeholder='Search tools, pages...'
                 className='bg-transparent border-none h-8 no-outline text-sm text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
               />
@@ -384,10 +388,19 @@ export const Navbar = () => {
               className='relative w-full mb-4'>
               <div className='flex items-center gap-2 bg-[#0c0d1c]/50 bkblur border border-white/5 px-4 py-3 rounded-xl shadow-lg focus-within:border-pw-primary/80'>
                 <Search className='h-4 w-4 text-pw-muted shrink-0' />
+                {/* jules edit: Add enter key handling for mobile search */}
                 <input
                   type='text'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchResults.length > 0) {
+                      const firstResult = searchResults[0];
+                      setMobileOpen(false);
+                      setSearchQuery('');
+                      router.push(firstResult.href);
+                    }
+                  }}
                   placeholder='Search tools, pages...'
                   className='bg-transparent border-none no-outline text-sm text-pw-text placeholder:text-pw-muted/60 focus:outline-none w-full'
                 />
@@ -480,21 +493,19 @@ export const Navbar = () => {
             })}
 
             <div className='w-full pt-1 flex-1 flex items-center justify-center'>
-              {isLoggedIn && pathname !== '/dashboard' ?
+              {isLoggedIn ?
                 <Link
                   href='/dashboard'
                   onClick={() => setMobileOpen(false)}
                   className='btn-ghost text-sm text-center mt-4 h-12 flex-1'>
                   Dashboard
                 </Link>
-              : !session && (
-                  <Link
-                    href='/login'
-                    onClick={() => setMobileOpen(false)}
-                    className='btn-primary text-sm text-center mt-4 h-12 flex-1'>
-                    Sign In
-                  </Link>
-                )
+              : <Link
+                  href='/login'
+                  onClick={() => setMobileOpen(false)}
+                  className='btn-primary text-sm text-center mt-4 h-12 flex-1'>
+                  Sign In
+                </Link>
               }
             </div>
           </div>

@@ -503,11 +503,6 @@ pre {
 }
 
 /* ─── Glow Ring (focus-visible) ─────────────────────────────── */
-:focus-visible {
-  outline: 1px solid #5c6fff;
-  outline-offset: 1px;
-}
-
 ::-ms-tooltip {
   background: var(--background);
   color: var(--pw-cyan);

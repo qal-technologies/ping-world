@@ -32,7 +32,7 @@ const INSTA_THEMES = [
   { label: 'Sunset Gradient', value: 'linear-gradient(135deg, #FFB347 0%, #FF5C7A 100%)', text: '#ffffff' },
   { label: 'Deep Blue', value: 'linear-gradient(135deg, #12152E 0%, #1A1F40 100%)', text: '#f8f9ff' },
   { label: 'Emerald Mint', value: 'linear-gradient(135deg, #22C985 0%, #22D4FD 100%)', text: '#111827' },
-  { label: 'Minimal Light', value: '#ffffff', text: '#1f2937' },
+  { label: 'Minimal Light', value: '#ffff', text: '#1f2937' },
   { label: 'Bold Dark', value: '#111827', text: '#f9fafb' },
 ];
 
@@ -108,7 +108,7 @@ function XPreview({
     >
       {/* Header */}
       <div className='flex items-start gap-3 mb-3'>
-        <div className='h-10 w-10 rounded-full bg-gradient-to-br from-pw-primary to-pw-secondary shrink-0 overflow-hidden flex items-center justify-center font-bold text-white text-sm'>
+        <div className='h-10 w-10 rounded-full bg-gradient-to-br from-pw-primary to-pw-secondary shrink-0 overflow-hidden flex items-center justify-center font-bold text-white text-sm '>
           {avatarUrl ? (
             <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
           ) : (
@@ -148,7 +148,7 @@ function XPreview({
         >
           {images.slice(0, 4).map((img, idx) => (
             <img
-              key={img.id}
+              key={img.id + 'x-image'}
               src={img.previewUrl}
               alt={img.altText || 'upload'}
               className='w-full h-full object-cover aspect-video'
@@ -300,12 +300,12 @@ function InstagramPreview({
             <span className='absolute bottom-2.5 right-3 text-[9px] opacity-60'>
               {index + 1}/{slides.length}
             </span>
-            <span className='absolute bottom-2.5 left-3 text-[9px] opacity-40 font-mono tracking-widest uppercase'>
+            <span className='absolute bottom-2.5 left-3 text-[8px] opacity-40 font-mono tracking-widest uppercase'>
               pingworld slide
             </span>
           </div>
         ) : (
-          <Instagram className='h-12 w-12 text-gray-300' />
+          <Instagram className='h-12 w-12 text-gray-300 animate-pulse' />
         )}
       </div>
 
@@ -314,7 +314,7 @@ function InstagramPreview({
         <div className='w-full p-2.5 items-center gap-1.5 flex justify-center'>
           {Array.from({ length: totalSlidesOrImages }).map((_, i) => (
             <div
-              key={i}
+              key={i + 'slides'}
               className={cn(
                 'w-1.5 h-1.5 rounded-full cursor-pointer transition-all',
                 index === i ? 'bg-sky-500 w-3' : 'bg-gray-300',
@@ -434,7 +434,7 @@ function FacebookPreview({
         >
           {images.map((img) => (
             <img
-              key={img.id}
+              key={img.id + 'facebook-image'}
               src={img.previewUrl}
               alt='Facebook post'
               className='w-full h-full object-cover max-h-48'
@@ -559,7 +559,7 @@ function LinkedInPreview({
         >
           {images.map((img) => (
             <img
-              key={img.id}
+              key={img.id + 'linkedin-image'}
               src={img.previewUrl}
               alt='LinkedIn post'
               className='w-full h-full object-cover max-h-56'
@@ -633,32 +633,19 @@ export function LivePreview({
   platformOverride?: Platform;
 }) {
   const { state, dispatch, getContentForPlatform } = useComposer();
-  const activePlatform = platformOverride ?? state.activeEditorPlatform;
+  let activePlatform:Platform = platformOverride ?? state.activeEditorPlatform;
 
-  
-  useEffect(() => {
-    if (
-      !platformOverride &&
-      state.selectedPlatforms.length > 0 &&
-      !state.selectedPlatforms.includes(state.activeEditorPlatform)
-    ) {
-      dispatch({
-        type: 'SET_ACTIVE_EDITOR_PLATFORM',
-        payload: state.selectedPlatforms[0],
-      });
-    }
-  }, [state.selectedPlatforms, state.activeEditorPlatform, platformOverride, dispatch]);
+  const PreviewComponent = PLATFORM_PREVIEWS[activePlatform || state.selectedPlatforms[0]];
+  const content = getContentForPlatform(activePlatform || state.selectedPlatforms[0]);
 
-  const PreviewComponent = PLATFORM_PREVIEWS[activePlatform];
-  const content = getContentForPlatform(activePlatform);
-
+  const error =
+    'SavePreviewPanel.tsx:132 Capture error: Error: Attempting to parse an unsupported color function "lab"';
   return (
-    <div className='space-y-4'>
-    
+    <div className='space-y-2'>
 
       {/* The Preview */}
       <motion.div
-        key={activePlatform}
+        key={activePlatform + 'preview'}
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.25 }}
@@ -682,7 +669,7 @@ export function LivePreview({
               const PC = PLATFORM_PREVIEWS[platform];
               return (
                 <div
-                  key={platform}
+                  key={platform + 'other-preview'}
                   className='opacity-70 hover:opacity-100 transition-opacity cursor-pointer'
                   onClick={() =>
                     dispatch({

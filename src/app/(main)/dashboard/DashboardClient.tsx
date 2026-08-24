@@ -38,11 +38,17 @@ export default function GeneralDashboard() {
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
+  // jules edit: Verify auth session safely using Supabase session check to prevent login redirect loops
   useEffect(() => {
-      if (!user || !username) {
+    const verifyUser = async () => {
+      const { supabase } = await import('@/lib/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         router.replace('/login');
       }
-  }, [user,username]);
+    };
+    verifyUser();
+  }, [router]);
   
   useEffect(() => {
     const loadStats = async () => {

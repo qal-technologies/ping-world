@@ -533,10 +533,17 @@ export default function PublicQuizTaker() {
         }
 
         const hasBranching = migratedQuestions.some(
-          (q) => q.skipTo || q.skipToCat || q.options?.some((o: any) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
+          (q) =>
+            q.skipTo ||
+            q.skipToCat ||
+            q.options?.some(
+              (o: any) => typeof o === 'object' && (o.skipTo || o.skipToCat),
+            ),
         );
         if (hasBranching && finalQuiz.randomizeQuestions) {
-          toast.info('Branching Active: Question order shuffling is restricted to internal category blocks.');
+          toast.info(
+            'Branching Active: Question order shuffling is restricted to internal category blocks.',
+          );
         }
 
         // Shuffle questions
@@ -852,8 +859,8 @@ export default function PublicQuizTaker() {
         answer.every((val: any) => correctIds.includes(val))
       );
     } else if (question.type === 'input') {
-      const userAns = String(answer).trim();
-      const targetAns = String(decodedCorrect).trim();
+      const userAns = String(formatDetailVars(answer)).trim();
+      const targetAns = String(formatDetailVars(decodedCorrect)).trim();
       return question.caseSensitive ?
           userAns === targetAns
         : userAns.toLowerCase() === targetAns.toLowerCase();
@@ -981,6 +988,7 @@ export default function PublicQuizTaker() {
           userData,
           answers: finalAnswers,
           score: finalScore,
+          categoryScores,
           totalQuestions: activeQuestions.length,
           answeredQuestions: finalAnswers.length,
         });
@@ -992,13 +1000,20 @@ export default function PublicQuizTaker() {
 
   // Proceed to the next question, taking logical branching configuration into account
   // Strict category branching isolation to prevent category question leaking
-  const proceedToNext = (latestAnswers?: any[], chosenOptionVal?: string | null) => {
+  const proceedToNext = (
+    latestAnswers?: any[],
+    chosenOptionVal?: string | null,
+  ) => {
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
     const q = activeQuestions[currentQuestion];
     let nextIdx = currentQuestion + 1;
-    const isScrollLayout = !!(quiz?.quizScroll || quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
+    const isScrollLayout = !!(
+      quiz?.quizScroll ||
+      quiz?.quizLayout === 'scroll' ||
+      quiz?.surveyType === 'form'
+    );
 
     if (q && !isScrollLayout) {
       let branchTarget: string | undefined = undefined;
@@ -1006,15 +1021,23 @@ export default function PublicQuizTaker() {
 
       // Option-level branching
       if (q.type !== 'checkbox' && q.type !== 'input') {
-        const currentChoice = chosenOptionVal !== undefined ? chosenOptionVal : selectedOption;
+        const currentChoice =
+          chosenOptionVal !== undefined ? chosenOptionVal : selectedOption;
 
         if (currentChoice !== null && currentChoice !== undefined) {
           const currentOpts = shuffledOptions[q.id] || q.options || [];
           const foundOpt = currentOpts.find((opt: any, oIdx: number) => {
             if (opt && typeof opt === 'object') {
-              return opt.id === currentChoice || String(oIdx) === String(currentChoice) || opt.text === currentChoice;
+              return (
+                opt.id === currentChoice ||
+                String(oIdx) === String(currentChoice) ||
+                opt.text === currentChoice
+              );
             }
-            return String(oIdx) === String(currentChoice) || String(opt) === String(currentChoice);
+            return (
+              String(oIdx) === String(currentChoice) ||
+              String(opt) === String(currentChoice)
+            );
           });
 
           if (foundOpt && typeof foundOpt === 'object') {
@@ -1043,10 +1066,12 @@ export default function PublicQuizTaker() {
       } else if (branchCat) {
         const cleanCat = branchCat.trim().toLowerCase();
         const catQuestions = activeQuestions.filter(
-          (quest) => quest.category && quest.category.trim().toLowerCase() === cleanCat,
+          (quest) =>
+            quest.category && quest.category.trim().toLowerCase() === cleanCat,
         );
         const targetIdx = activeQuestions.findIndex(
-          (quest) => quest.category && quest.category.trim().toLowerCase() === cleanCat,
+          (quest) =>
+            quest.category && quest.category.trim().toLowerCase() === cleanCat,
         );
 
         if (targetIdx !== -1) {
@@ -1109,7 +1134,11 @@ export default function PublicQuizTaker() {
 
   const renderQuestionCard = (quest: Question, index: number) => {
     const isActive = index === currentQuestion;
-    const isScrollLayout = !!(quiz?.quizScroll || quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
+    const isScrollLayout = !!(
+      quiz?.quizScroll ||
+      quiz?.quizLayout === 'scroll' ||
+      quiz?.surveyType === 'form'
+    );
 
     // Read selections dynamically from scrollAnswers inside scroll layouts
     const currentOptions = shuffledOptions[quest.id] || quest.options;
@@ -1118,8 +1147,7 @@ export default function PublicQuizTaker() {
       isScrollLayout ? scrollAnswers[quest.id] || null : selectedOption;
     const activeChecked =
       isScrollLayout ? scrollAnswers[quest.id] || [] : selectedOptions;
-    const activeText =
-      isScrollLayout ? scrollAnswers[quest.id] || '' : content;
+    const activeText = isScrollLayout ? scrollAnswers[quest.id] || '' : content;
 
     const formattedQuestionText = formatDetailVars(quest.text);
 
@@ -1128,44 +1156,52 @@ export default function PublicQuizTaker() {
         key={quest.id}
         className={cn(
           'sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300',
-          !isActive &&
-            !isScrollLayout &&
-            'opacity-65 pointer-events-none',
+          !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
         )}>
         <div className='flex items-start gap-3 mb-4'>
-          {isScrollLayout ? (
+          {isScrollLayout ?
             <div className='flex items-baseline gap-2'>
               <span className='text-pw-primary font-black text-xl select-none shrink-0'>
                 {index + 1}.
               </span>
-              <h2 className='text-base font-bold text-white' dangerouslySetInnerHTML={{ __html: formattedQuestionText }} />
+              <h2
+                className='text-base font-bold text-white'
+                dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
+              />
             </div>
-          ) : (
-            <div className='flex items-center gap-3'>
+          : <div className='flex items-center gap-3'>
               <div
                 className={cn(
                   'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner',
-                  quiz?.type === 'quiz'
-                    ? 'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-                    : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+                  quiz?.type === 'quiz' ?
+                    'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+                  : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
                 )}>
-                {quiz?.type === 'quiz' ? (
-                  <Brain className='text-pw-primary' size={24} />
-                ) : (
-                  <HelpCircle className='text-pw-cyan' size={24} />
-                )}
+                {quiz?.type === 'quiz' ?
+                  <Brain
+                    className='text-pw-primary'
+                    size={24}
+                  />
+                : <HelpCircle
+                    className='text-pw-cyan'
+                    size={24}
+                  />
+                }
               </div>
               <div>
                 <span className='text-[9px] font-black text-pw-muted uppercase block'>
                   Question {index + 1}
                 </span>
-                <h2 className='text-base font-bold text-white' dangerouslySetInnerHTML={{ __html: formattedQuestionText }} />
+                <h2
+                  className='text-base font-bold text-white'
+                  dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
+                />
               </div>
             </div>
-          )}
+          }
         </div>
 
-        <div className='space-y-3 mt-2'>
+        <div className='space-y-2 mt-1'>
           {quest.type === 'input' ?
             <textarea
               value={activeText}
@@ -1269,7 +1305,10 @@ export default function PublicQuizTaker() {
                         'bg-pw-primary/12 border-pw-primary text-white font-bold'
                       : 'bg-white/5 border-white/10 text-white/80',
                     )}>
-                    <span className='whitespace-pre-wrap' dangerouslySetInnerHTML={{ __html: formattedOptionText }} />
+                    <span
+                      className='whitespace-pre-wrap'
+                      dangerouslySetInnerHTML={{ __html: formattedOptionText }}
+                    />
                     <CheckCircle
                       className={cn(
                         'h-4 w-4 text-pw-primary transition-opacity',
@@ -1325,13 +1364,35 @@ export default function PublicQuizTaker() {
           </p>
 
           {quiz?.type === 'quiz' && (
-            <Card className='p-6 bg-white/[0.02] border border-white/5 rounded-2xl'>
-              <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
-                Your Performance
-              </span>
-              <span className='text-3xl font-bold font-mono text-pw-primary'>
-                {score} / {totalQuestions}
-              </span>
+            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4'>
+              <div>
+                <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
+                  ASSESSMENT SUMMARY
+                </span>
+                <span className='text-3xl font-bold font-mono text-pw-primary'>
+                  {score} / {totalQuestions}
+                </span>
+              </div>
+
+              {Object.keys(categoryScores).length > 0 && (
+                <div className='border-t border-white/5 pt-4 space-y-2 text-left'>
+                  <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-2'>
+                    Category Breakdown
+                  </span>
+                  {Object.entries(categoryScores).map(([cat, stats]) => (
+                    <div
+                      key={cat}
+                      className='flex items-center justify-between text-xs py-1 border-b border-white/5'>
+                      <span className='font-bold text-white'>
+                        {capFirst(cat)}
+                      </span>
+                      <span className='font-mono text-pw-cyan font-bold'>
+                        {stats.correct} / {stats.total}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           )}
 
@@ -1429,7 +1490,7 @@ export default function PublicQuizTaker() {
           </div>
 
           {/* Terms disclaimer & Reporting Flow */}
-          <div className='border-t border-white/5 pt-6 mt-8 text-[11px] text-pw-muted leading-relaxed relative z-10'>
+          <div className='border-t border-white/5 pt-6 mt-10 text-xs text-pw-muted leading-relaxed relative z-10'>
             <p className='mb-2'>
               Disclaimer: PingWorld is strictly a service provider hosting
               content and is not responsible for any questions, responses, or
@@ -1437,7 +1498,7 @@ export default function PublicQuizTaker() {
             </p>
             <button
               onClick={() => setShowReportModal(true)}
-              className='text-pw-primary underline hover:text-pw-primary/80 transition-colors font-bold'>
+              className='text-pw-primary text-[10px] underline hover:text-pw-primary/80 transition-colors font-bold'>
               Report this assessment for investigation or takedown
             </button>
           </div>
@@ -1515,7 +1576,7 @@ export default function PublicQuizTaker() {
               <div className='space-y-5'>
                 {quiz?.askDetails?.map((detail, idx) => (
                   <div
-                    key={(detail?.title as string) + idx + '6r5e4wx4wyn6rs43'}
+                    key={(detail?.title as string) + idx}
                     className='space-y-2'>
                     <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
                       {detail.title}
@@ -1558,7 +1619,7 @@ export default function PublicQuizTaker() {
                               <ChevronDown size={16} />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent className='w-56 bg-pw-surface border-white/10 rounded-2xl'>
+                          <DropdownMenuContent className='w-56 bg-pw-surface/70 bkblur border-white/10 rounded-2xl'>
                             {detail.options?.map((opt, index) => (
                               <DropdownMenuItem
                                 key={opt + index + '98gdewaa576yfy'}
@@ -1575,8 +1636,36 @@ export default function PublicQuizTaker() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+                    : detail.type === 'dob' ?
+                      <>
+                        <input
+                          type={'date'}
+                          className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
+                          placeholder={`Enter ${detail.title}...`}
+                          value={userData[detail.title] || ''}
+                          onChange={(e) =>
+                            setUserData({
+                              ...userData,
+                              [detail.title]: e.target.value,
+                            })
+                          }
+                        />
+                        <p className='text-xs py-1 pl-1 break-all'>
+                          You are {}
+                          years old.
+                        </p>
+                      </>
                     : <input
-                        type={detail.type}
+                        type={
+                          detail.type === 'email' ? 'email'
+                          : detail.type === 'tel' ?
+                            'tel'
+                          : detail.type === 'date' ?
+                            'date'
+                          : detail.type === 'number' ?
+                            'number'
+                          : 'text'
+                        }
                         className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
                         placeholder={`Enter ${detail.title}...`}
                         value={userData[detail.title] || ''}
@@ -1594,7 +1683,9 @@ export default function PublicQuizTaker() {
                   className='btn-primary h-12 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
                   onClick={() => {
                     const complete = quiz?.askDetails?.every(
-                      (d) => userData[d.title] && String(userData[d.title]).trim() !== '',
+                      (d) =>
+                        userData[d.title] &&
+                        String(userData[d.title]).trim() !== '',
                     );
                     if (!complete)
                       return toast.error('Required detail fields are missing.');
@@ -1604,15 +1695,16 @@ export default function PublicQuizTaker() {
                       if (d.allowlist && d.allowlist.trim() !== '') {
                         const val = String(userData[d.title] || '').trim();
                         const rawAllow = d.allowlist.trim();
-                        const allowedItems = rawAllow.split(',').map((item) => item.trim().toLowerCase());
+                        const allowedItems = rawAllow
+                          .split(',')
+                          .map((item) => item.trim().toLowerCase());
 
                         let matched = allowedItems.includes(val.toLowerCase());
                         if (!matched) {
                           try {
                             const regex = new RegExp(rawAllow, 'i');
                             matched = regex.test(val);
-                          } catch {
-                          }
+                          } catch {}
                         }
 
                         if (!matched) {
@@ -1641,7 +1733,7 @@ export default function PublicQuizTaker() {
         <>
           <div
             className={cn(
-              'container relative z-10 mx-auto px-4 md:px-6 pt-12 pb-10 max-w-7xl',
+              'container relative z-10 mx-auto px-4 md:px-6 pt-8 pb-10 max-w-7xl',
               quizTheme === 'dark' ? 'text-white' : 'text-black',
             )}>
             <div className='mb-8 flex flex-col gap-2 w-full'>
@@ -1678,7 +1770,7 @@ export default function PublicQuizTaker() {
               )}
 
               {/* Header Row */}
-              <div className='flex flex-wrap items-center justify-between gap-4 bg-white/2 p-2 rounded-full border border-white/4 bkblur'>
+              <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-full border border-white/4 bkblur'>
                 <div className='flex items-center gap-4 pl-3'>
                   <div className='flex flex-col'>
                     <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
@@ -1693,26 +1785,6 @@ export default function PublicQuizTaker() {
                 </div>
 
                 <div className='flex items-center gap-2'>
-                  {quiz?.hasTimer && timeLeft !== null && (
-                    <div
-                      title={`${capFirst(quiz?.type)} Timer`}
-                      className={cn(
-                        'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[14px] font-mono lg:text-lg border transition-all',
-                        timeLeft < 60 ?
-                          'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
-                        : 'bg-white/5 border-white/10 text-pw-primary',
-                      )}>
-                      <Clock
-                        size={18}
-                        className={
-                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
-                        }
-                      />
-                      {Math.floor(timeLeft / 60)}:
-                      {String(timeLeft % 60).padStart(2, '0')}
-                    </div>
-                  )}
-
                   <Button
                     variant='ghost'
                     title={`Quit ${capFirst(quiz.type)}`}
@@ -1749,29 +1821,54 @@ export default function PublicQuizTaker() {
                 </div>
               </div>
 
-              <div className='flex flex-col gap-3 mb-2 items-end pt-1 px-2'>
-                {/* Top Progress Bar */}
-                {quiz?.type === 'quiz' &&  (
-                  <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm'>
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{
-                        width: `${(answeredCount / activeQuestions.length) * 100}%`,
-                      }}
-                      className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
-                    />
-                  </div>
-                )}
+              <div className='flex flex-col gap-3 mb-2 pt-1 px-2'>
+                {quiz?.type === 'quiz' &&
+                  activeQuestions.some(
+                    (q) => q.category && q.category.trim() !== '',
+                  ) && (
+                    <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm mx-1'>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{
+                          width: `${(answeredCount / activeQuestions.length) * 100}%`,
+                        }}
+                        className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
+                      />
+                    </div>
+                  )}
 
-                {quiz?.allowEarlySubmit && (
-                  <Button
-                    title={`Submit ${capFirst(quiz.type)}`}
-                    onClick={confirmSubmitQuiz}
-                    className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden '>
-                    <CheckCircle2 size={18} />
-                    <span className='font-bold'>SUBMIT</span>
-                  </Button>
-                )}
+                <div className={cn('flex w-full gap-1 items-center', quiz?.hasTimer && timeLeft !== null ? 'justify-between' : 'justify-end')}>
+                  {quiz?.hasTimer && timeLeft !== null && (
+                    <div
+                      title={`${capFirst(quiz?.type)} Timer`}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[12px] font-mono lg:text-base border transition-all',
+                        timeLeft < 60 ?
+                          'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
+                        : 
+                          'bg-white/5 border-white/10 text-pw-primary',
+                      )}>
+                      <Clock
+                        size={18}
+                        className={
+                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
+                        }
+                      />
+                      {Math.floor(timeLeft / 60)}:
+                      {String(timeLeft % 60).padStart(2, '0')} 
+                    </div>
+                  )}
+                  
+                  {quiz?.allowEarlySubmit && (
+                    <Button
+                      title={`Submit ${capFirst(quiz.type)}`}
+                      onClick={confirmSubmitQuiz}
+                      className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden'>
+                      <CheckCircle2 size={18} />
+                      <span className='font-bold'>SUBMIT</span>
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1840,15 +1937,15 @@ export default function PublicQuizTaker() {
                         Return to Start
                       </Button>
                     </div>
-                  : <div className='flex flex-col items-center mb-4 w-full justify-center gap-2'>
+                  : <div className='flex flex-col items-center w-full justify-center gap-2'>
                       <div className='flex items-center gap-2'>
-                        {/* <div className='badge bg-pw-primary/5 text-pw-primary border-pw-primary/10 px-4 py-1.5 rounded-full text-xs font-bold'>
+                        {/* <div className='badge bg-pw-primary/2 text-pw-primary border-pw-primary/5 px-4 py-1.5 rounded-full text-xs font-bold uppercase'>
                           {(
                             quiz?.questions.some(
                               (q) => q.category || q.category !== null,
                             )
                           ) ?
-                            `Question ${currentQuestion + 1}`
+                            `{Question ${currentQuestion + 1}}`
                           : `Question ${currentQuestion + 1} of ${activeQuestions.length}`
                           }
                         </div> */}
@@ -1864,7 +1961,7 @@ export default function PublicQuizTaker() {
                         )}
                       </div>
 
-                      <div className='w-full flex flex-col items-center gap-1 mt-2'>
+                      <div className='w-full flex flex-col items-center gap-1'>
                         {renderQuestionCard(q!, currentQuestion)}
 
                         <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>

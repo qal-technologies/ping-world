@@ -623,7 +623,7 @@ export default function CalculatorPage() {
                   value={fromCurrency}
                   onChange={(e) => setFromCurrency(e.target.value)}
                   className='w-full h-10 bg-white/5 border border-white/10 rounded-lg px-3 focus:border-pw-primary focus:outline-none cursor-pointer'>
-                  {fromCurrencies.map((cur ) => {
+                  {fromCurrencies.map((cur) => {
                     return (
                       <option
                         value={cur.value}
@@ -675,7 +675,8 @@ export default function CalculatorPage() {
                       Live Rate
                     </span>
                     <span className='text-xs font-mono font-bold text-pw-text'>
-                      1 {fromCurrency} = {exchangeRate} {toCurrency}
+                      1 {fromCurrency} = {formatOutput(exchangeRate)}{' '}
+                      {toCurrency}
                     </span>
                   </div>
                 </>
@@ -779,7 +780,7 @@ export default function CalculatorPage() {
             <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
               <div>
                 <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
-                  Principal ($)
+                  Principal
                 </label>
                 <Input
                   type='text'
@@ -849,12 +850,11 @@ export default function CalculatorPage() {
                 Compound Future Value
               </p>
               <span className='text-3xl font-bold font-display text-pw-primary mt-1 block'>
-                ${formatOutput(futureValue)}
+                {formatOutput(futureValue)}
               </span>
               <p className='text-[10px] text-pw-muted mt-2'>
                 Accumulated Profit:{' '}
                 <span className='text-pw-success font-bold'>
-                  $
                   {formatOutput(
                     futureValue ?
                       futureValue - parseFormattedFloat(principal)
@@ -872,7 +872,7 @@ export default function CalculatorPage() {
             <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
               <div>
                 <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
-                  Product Cost $
+                  Product Cost
                 </label>
                 <Input
                   type='text'
@@ -900,12 +900,11 @@ export default function CalculatorPage() {
                   Target Selling Price
                 </p>
                 <span className='text-3xl font-bold font-display text-pw-primary mt-1 block'>
-                  ${sellingPrice?.toLocaleString()}
+                  {sellingPrice?.toLocaleString()}
                 </span>
                 <p className='text-[10px] text-pw-muted mt-1'>
-                  Cost: ${formatOutput(parseFormattedFloat(cost))} ◆ Profit:{' '}
+                  Cost: {formatOutput(parseFormattedFloat(cost))} ◆ Profit:{' '}
                   <span className='text-pw-success font-bold'>
-                    $
                     {sellingPrice ?
                       formatOutput(sellingPrice - parseFormattedFloat(cost))
                     : '0.00'}
@@ -1057,9 +1056,9 @@ export default function CalculatorPage() {
                   <br />
                   • Underweight: &lt; 18.5
                   <br />
-                  • Normal weight: 18.5 – 24.9
+                  • Normal weight: 18.5 - 24.9
                   <br />
-                  • Overweight: 25.0 – 29.9
+                  • Overweight: 25.0 - 29.9
                   <br />• Obese: 30.0 or greater
                 </div>
               </div>
@@ -1073,7 +1072,7 @@ export default function CalculatorPage() {
             <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
               <div>
                 <label className='text-xs font-bold text-pw-muted uppercase block mb-1'>
-                  Loan Principal Amount ($)
+                  Loan Principal Amount
                 </label>
                 <Input
                   type='text'
@@ -1114,8 +1113,8 @@ export default function CalculatorPage() {
                 <p className='text-xs text-pw-muted font-bold uppercase'>
                   Monthly Payment (EMI)
                 </p>
-                <span className='text-3xl font-bold font-display text-pw-primary mt-1 block'>
-                  ${formatOutput(monthlyPayment)}
+                <span className='text-xl sm:text-3xl font-bold font-display text-pw-primary mt-1 block'>
+                  {formatOutput(monthlyPayment)}
                 </span>
                 <p className='text-[10px] text-pw-muted mt-1'>
                   Installment calculated per month.
@@ -1126,8 +1125,8 @@ export default function CalculatorPage() {
                 <p className='text-xs text-pw-muted font-bold uppercase'>
                   Total Interest Payed
                 </p>
-                <span className='text-3xl font-bold font-display text-pw-secondary mt-1 block'>
-                  ${formatOutput(totalLoanInterest)}
+                <span className='text-xl sm:text-3xl font-bold font-display text-pw-secondary mt-1 block'>
+                  {formatOutput(totalLoanInterest)}
                 </span>
                 <p className='text-[10px] text-pw-muted mt-1'>
                   Accumulated interest cost over term.
@@ -1138,8 +1137,8 @@ export default function CalculatorPage() {
                 <p className='text-xs text-pw-muted font-bold uppercase'>
                   Total Payments Cost
                 </p>
-                <span className='text-3xl font-bold font-display text-pw-success mt-1 block'>
-                  ${formatOutput(totalLoanCost)}
+                <span className='text-xl sm:text-3xl font-bold font-display text-pw-success mt-1 block'>
+                  {formatOutput(totalLoanCost)}
                 </span>
                 <p className='text-[10px] text-pw-muted mt-1'>
                   Principal + Interest combined.

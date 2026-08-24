@@ -58,7 +58,14 @@ export function PrivacyPermissionModal() {
     });
   };
 
+  // jules edit: Store granular permission selections to validate actual platform posting
   const handleAccept = () => {
+    try {
+      localStorage.setItem(
+        'pw_composer_permissions',
+        JSON.stringify(Array.from(checkedItems)),
+      );
+    } catch {}
     dispatch({ type: 'ACCEPT_PRIVACY' });
   };
 

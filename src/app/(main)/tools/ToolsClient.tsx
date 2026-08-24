@@ -87,7 +87,7 @@ export default function ToolsHubPage() {
 
   return (
     <div className='container mx-auto py-12 max-w-7xl px-1 min-h-screen'>
-      <div className='w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-16 px-3'>
+      <div className='w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-16 flex-wrap md:px-2 lg:px-3'>
         <div className='max-w-2xl text-center md:text-left mb-2'>
           <div className='badge mb-4 inline-flex'>
             <Sparkles className='h-3.5 w-3.5' />
@@ -96,15 +96,15 @@ export default function ToolsHubPage() {
           <h1 className='text-4xl md:text-6xl font-extrabold font-display leading-tight mb-4'>
             Discover your <span className='gradient-text'>World.</span>
           </h1>
-          <p className='text-pw-muted text-lg'>
+          <p className='text-pw-muted px-2 sm:text-lg'>
             Access all the designed tools for quiz, social management, text
             editing, image editing and many more...
           </p>
         </div>
 
-        <div className='w-full md:w-[400px] flex flex-wrap gap-2 items-center flex-1 px-4'>
+        <div className='w-full md:min-w-[200px] flex flex-wrap gap-2 items-center flex-1 px-4'>
           <div className='relative flex-1'>
-            <Search className='absolute left-4 top-5 -translate-y-1/2 h-5 w-5 text-pw-muted transition-colors' />
+            <Search className='absolute left-3 top-5 z-10 -translate-y-1/2 h-5 w-5 text-pw-muted transition-colors' />
             <Input
               value={search}
               onChange={(e) => {
@@ -112,39 +112,9 @@ export default function ToolsHubPage() {
                 if (e.target.value) setActiveCategory('All');
               }}
               placeholder='Search tools...'
-              className='card-glow pl-12 h-11 bg-transparent border-none focus-visible:ring-0'
+              className='card-glow pl-10 z-0 h-10 bg-transparent border-none focus-visible:ring-0'
             />
           </div>
-          <div
-            className='p-2 card-glow rounded-xl w-11 h-11 flex-col flex items-center cursor-pointer opacity-90'
-            onClick={() => setViewCat(!viewCat)}>
-            {viewCat ?
-              <X className='w-6 h-6 text-red-500' />
-            : <Filter className='w-6 h-6' />}
-          </div>
-
-          {viewCat && (
-            <div className='flex flex-wrap gap-2 min-w-full'>
-              {categories.map((cat) => (
-                <Button
-                  key={cat}
-                  variant='ghost'
-                  onClick={() => {
-                    setActiveCategory(cat);
-                    setSearch('');
-                  }}
-                  className={cn(
-                    'h-8 rounded-full px-6 transition-all cursor-pointer text-[12px]',
-                    activeCategory === cat ?
-                      'bg-pw-primary text-white shadow-lg shadow-pw-primary/20'
-                    : 'bg-white/5 text-pw-muted hover:text-pw-text hover:bg-white/10',
-                  )}
-                  style={{ letterSpacing: '0.5px' }}>
-                  {cat.toUpperCase()}
-                </Button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

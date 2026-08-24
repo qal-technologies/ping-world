@@ -413,7 +413,7 @@ export function ComposerLayout() {
                   Live Preview
                 </span>
               </div>
-              <div className='sm:p-3 lg:p-5 pt-0'>
+              <div className='sm:p-2 lg:p-4 pt-0'>
                 <SavePreviewPanel />
               </div>
             </Card>

@@ -76,7 +76,7 @@ export function InstagramCanvasSettings() {
                 payload: { themeIdx: Number(e.target.value) },
               })
             }
-            className='w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none no-outline appearance-none cursor-pointer'>
+            className='w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none no-outline cursor-pointer'>
             {INSTA_THEMES.map((theme, i) => (
               <option
                 key={i}
@@ -101,7 +101,7 @@ export function InstagramCanvasSettings() {
                 payload: { font: e.target.value },
               })
             }
-            className='w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none no-outline appearance-none cursor-pointer'>
+            className='w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none no-outline cursor-pointer'>
             {FONTS.map((f) => (
               <option
                 key={f}
@@ -146,8 +146,8 @@ export function InstagramCanvasSettings() {
             ))}
           </div>
         </div>
-      : <div className='w-full space-y-1.5 items-center flex bg-pw-primary/5 flex-col border border-primary/30 p-4 rounded-xl'>
-          <p className='w-full text-sm font-bold text-center'>
+      : <div className='w-full space-y-1.5 items-center flex bg-pw-primary/5 flex-col border-dashed border-primary/10 p-4 rounded-xl py-6'>
+          <p className='w-full text-[10px] text-center tracking-widest break-all mx-1'>
             Add text to the instgram post editor to create text-post
           </p>
         </div>

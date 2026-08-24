@@ -32,12 +32,13 @@ import {
   Lock,
   Image,
   AlertTriangle,
+  CheckCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { capFirst, cn } from '@/lib/utils';
 import { useAppModal } from '@/components/ui/AppModalProvider';
 import {
   Dialog,
@@ -57,11 +58,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
-import {
-  PREMIUM_TIERS,
-  computeExpiry,
-  tierAtLeast,
-} from '@/lib/config/premium';
+import { computeExpiry, tierAtLeast } from '@/lib/config/premium';
 
 // --- Types ---
 export type QuestionType =
@@ -71,15 +68,16 @@ export type QuestionType =
   | 'checkbox'
   | 'input'
   | 'range'
-  | 'rating';
+  | 'rating'
+  | 'upload';
 
 export interface QuizOption {
   id: string; // questionId-index or uuid
   text: string;
+  uploadType?: 'image' | 'video' | 'audio';
   skipTo?: string; // ID of the next question to jump to
   skipToCat?: string; // Category name to jump to (jumps to first question in category)
 }
-
 export interface Question {
   id: string;
   type: QuestionType;
@@ -108,17 +106,8 @@ export interface Question {
 
 export interface Details {
   title: string;
-  type:
-    | 'name'
-    | 'sex'
-    | 'input'
-    | 'number'
-    | 'tel'
-    | 'email'
-    | 'dropdown'
-    | 'others';
-  allowlist?: string; // Comma-separated allowed values or regex string
-  //necessary for dropdown
+  type: 'sex' | 'input' | 'number' | 'date' | 'tel' | 'email' | 'dropdown' | 'dob';
+  allowlist?: string;
   options?: string[];
 }
 
@@ -142,7 +131,6 @@ export interface Quiz {
   introBgUrl?: string;
   showCategoryInPerformance?: boolean;
   askDetails?: Details[];
-  //default time is 10mins
   hasTimer?: boolean | string | number;
   randomizeOptions?: boolean;
   randomizeQuestions?: boolean;
@@ -158,7 +146,7 @@ export interface Quiz {
   createdAt: number;
   responses?: QuizTakerResponse[];
   allowEarlySubmit?: boolean;
-  expires_at?: string; // ISO date — max 3 days from creation, cleaned by cron
+  expires_at?: string; // ISO date - max 3 days from creation, cleaned by cron
   quizScroll?: boolean;
   quizLayout?: string;
   branding?: {
@@ -205,8 +193,9 @@ const QuizBuilder = ({
   onSave: (q: Quiz) => void;
   onCancel: () => void;
 }) => {
-  const { premiumTier, isFeatureUnlocked } = useAppContext();
-  const isQuizzablePremium = isFeatureUnlocked('quizzable');
+  const { premiumTier } = useAppContext();
+  const [collapse, setCollapse] = useState<Record<string, boolean>>({});
+  const [allowlistArr, setAllowlistArr] = useState<Record<string, boolean>>({});
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
@@ -375,12 +364,13 @@ const QuizBuilder = ({
           </Button>
           <Button
             onClick={async () => {
-              
               const hasActiveBranching = editedQuiz.questions.some(
                 (q) =>
                   q.skipTo ||
                   q.skipToCat ||
-                  q.options.some((o) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
+                  q.options.some(
+                    (o) => typeof o === 'object' && (o.skipTo || o.skipToCat),
+                  ),
               );
               if (hasActiveBranching) {
                 const confirmed = await showConfirm(
@@ -441,54 +431,78 @@ const QuizBuilder = ({
             ))}
 
             {/* Categorized Questions grouped by Category */}
-            {sidebarGroups.categories.map((cat) => (
-              <div
-                key={cat.name}
-                className='flex flex-col gap-1 mt-2 border-l border-white/10 pl-2'>
-                {/* Category Header */}
-                <div className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/5 rounded-md'>
-                  <span className='truncate flex items-center'>
-                    <Folder className='w-4 h-4 mr-1' /> {cat.name}
-                  </span>
-                  <button
-                    type='button'
-                    title={`Add question under ${cat.name.toUpperCase()}`}
+            {sidebarGroups.categories.map((cat) => {
+              const isCollapsed = !!collapse[cat.name];
+
+              return (
+                <div
+                  key={cat.name}
+                  className={cn(
+                    'flex flex-col gap-1',
+                    !isCollapsed && ' border-l border-white/10 pl-2',
+                  )}>
+                  {/* Category Header */}
+                  <div
+                    className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/5 rounded-md cursor-pointer'
                     onClick={(e) => {
                       e.stopPropagation();
-                      addQuestion(cat.name);
-                    }}
-                    className='p-1 rounded hover:bg-white/10 text-pw-muted hover:text-pw-primary transition-all'>
-                    <Plus className='h-3.5 w-3.5' />
-                  </button>
-                </div>
 
-                {/* Categorized Questions List (with visual indentation) */}
-                <div className='flex flex-col gap-1 ml-4'>
-                  {cat.questions.map(({ question: q, index: i }) => (
-                    <button
-                      key={q.id}
-                      onClick={() => setCurrentStep(i)}
-                      className={cn(
-                        'flex items-center justify-between p-3 rounded-xl text-xs font-medium transition-all group border',
-                        currentStep === i ?
-                          'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                        : 'bg-pw-surface/50 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
-                      )}>
-                      <span className='truncate flex-1 text-left'>
-                        Q{i + 1}: {q.text || 'New Question...'}
-                      </span>
-                      <Trash2
-                        className='h-3 w-3 base:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeQuestion(i);
-                        }}
+                      setCollapse((prev) => ({
+                        ...prev,
+                        [cat.name]: !prev[cat.name],
+                      }));
+                    }}>
+                    <span className='truncate flex items-center'>
+                      <ChevronRight
+                        className={cn(
+                          'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
+                          !isCollapsed && 'rotate-90',
+                        )}
                       />
+                      <Folder className='w-4 h-4 mx-1' /> {cat.name}
+                    </span>
+                    <button
+                      type='button'
+                      title={`Add question under ${cat.name.toUpperCase()}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addQuestion(cat.name);
+                      }}
+                      className='p-1 rounded hover:bg-white/10 text-pw-muted hover:text-pw-primary transition-all'>
+                      <Plus className='h-3.5 w-3.5' />
                     </button>
-                  ))}
+                  </div>
+
+                  {/* Categorized Questions List (with visual indentation) */}
+                  {!isCollapsed && (
+                    <div className='flex flex-col gap-1 ml-4'>
+                      {cat.questions.map(({ question: q, index: i }) => (
+                        <button
+                          key={q.id}
+                          onClick={() => setCurrentStep(i)}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-xl text-xs font-medium transition-all group border',
+                            currentStep === i ?
+                              'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                            : 'bg-pw-surface/50 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
+                          )}>
+                          <span className='truncate flex-1 text-left'>
+                            Q{i + 1}: {q.text || 'New Question...'}
+                          </span>
+                          <Trash2
+                            className='h-3 w-3 base:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeQuestion(i);
+                            }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <Button
@@ -534,7 +548,13 @@ const QuizBuilder = ({
                         <Button
                           variant='ghost'
                           onClick={() =>
-                            setEditedQuiz({ ...editedQuiz, type: 'quiz' })
+                            setEditedQuiz({
+                              ...editedQuiz,
+                              type: 'quiz',
+                              surveyType: undefined,
+                              quizLayout: 'single',
+                              quizScroll: false,
+                            })
                           }
                           className={cn(
                             'flex-1 h-9 rounded-full transition-all',
@@ -577,7 +597,6 @@ const QuizBuilder = ({
                             setEditedQuiz({
                               ...editedQuiz,
                               surveyType: val,
-                              // Form forces scroll-all; research keeps current or defaults to single
                               quizLayout:
                                 isForm ? 'scroll'
                                 : editedQuiz.quizLayout === 'scroll' ? 'single'
@@ -592,12 +611,12 @@ const QuizBuilder = ({
                           <option
                             value='research'
                             className='bg-[#0A0C1B]'>
-                            Research — Logical Branching, Page-by-Page
+                            Research - Logical Branching, Page-by-Page
                           </option>
                           <option
                             value='form'
                             className='bg-[#0A0C1B]'>
-                            Form / Feedback — Scroll All (Branching Disabled)
+                            Form - Scroll All (Branching Disabled)
                           </option>
                         </select>
                         {editedQuiz.surveyType === 'form' && (
@@ -642,6 +661,69 @@ const QuizBuilder = ({
                       />
                     </div>
                   </div>
+
+                  <QuizSettingItem
+                    label={`${capFirst(editedQuiz.type)} Layout Presentation`}
+                    description={
+                      editedQuiz.surveyType === 'form' ?
+                        'Form type is locked to Scroll All, all other layouts are disabled.'
+                      : editedQuiz.quizScroll ?
+                        'Branching is only available in Single Show (Progressive) mode.'
+                      : 'Select how questions are rendered visually: Single Show (page-by-page), Scroll All (continuous), or Scroll Show (add next on-response).'
+
+                    }
+                    className='mt-2'>
+                    <div className='flex flex-col gap-1'>
+                      <select
+                        value={
+                          editedQuiz.quizLayout ||
+                          (editedQuiz.quizScroll ? 'scroll' : 'single')
+                        }
+                        disabled={editedQuiz.surveyType === 'form'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditedQuiz({
+                            ...editedQuiz,
+                            quizLayout: val,
+                            quizScroll: val !== 'single',
+                          });
+                          toast.success(
+                            `Layout changed to: ${val.toUpperCase().replace('_', ' ')}`,
+                          );
+                        }}
+                        className={cn(
+                          'bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none cursor-pointer',
+                          editedQuiz.surveyType === 'form' &&
+                            'opacity-40 cursor-not-allowed',
+                        )}>
+                        <option
+                          value='single'
+                          className='bg-[#0A0C1B]'>
+                          Single Show - Progressive (Branching Enabled)
+                        </option>
+                        <option
+                          value='scroll'
+                          className='bg-[#0A0C1B]'
+                          disabled={
+                            editedQuiz.surveyType === 'form' ? false : false
+                          }>
+                          Scroll All - Continuous (Branching Disabled)
+                        </option>
+                        <option
+                          value='scroll_show'
+                          className='bg-[#0A0C1B]'>
+                          Scroll Show - On Response (Branching Disabled)
+                        </option>
+                      </select>
+                      {editedQuiz.quizScroll &&
+                        editedQuiz.surveyType !== 'form' && (
+                          <p className='text-[10px] text-pw-muted ml-1'>
+                            💡 Switch to Single Show to enable logical branching
+                            on questions and options.
+                          </p>
+                        )}
+                    </div>
+                  </QuizSettingItem>
                 </Wrapper>
 
                 {/* Participant Details */}
@@ -651,123 +733,159 @@ const QuizBuilder = ({
                   icon={<Type className='h-4 w-4' />}
                   color='primary'>
                   <div className='flex flex-col gap-3 py-2'>
-                    {(editedQuiz.askDetails || []).map((detail, idx) => (
-                      <div
-                        key={idx}
-                        className='flex flex-col gap-2 bg-white/5 lg:p-2 p-1 rounded-xl border border-white/5'>
-                        <div className='flex gap-2 items-center'>
-                          <Input
-                            value={detail.title}
-                            onChange={(e) => {
-                              const newDetails = [
-                                ...(editedQuiz.askDetails || []),
-                              ];
-                              newDetails[idx].title = e.target.value;
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                askDetails: newDetails,
-                              });
-                            }}
-                            className='bg-transparent border-none h-8 text-xs focus-visible:ring-0'
-                            placeholder='Field Label'
-                          />
-                          <DropdownMenu>
-                            <DropdownMenuTrigger>
-                              <Button
-                                variant='ghost'
-                                size='sm'
-                                className='h-8 text-[10px] font-bold uppercase tracking-tighter bg-white/5'>
-                                {detail.type}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className='bg-pw-surface border-white/10'>
-                              {[
-                                'name',
-                                'email',
-                                'tel',
-                                'dropdown',
-                                'input',
-                              ].map((t) => (
-                                <DropdownMenuItem
-                                  key={t}
-                                  onClick={() => {
-                                    const newDetails = [
-                                      ...(editedQuiz.askDetails || []),
-                                    ];
-                                    newDetails[idx].type = t as any;
-                                    setEditedQuiz({
-                                      ...editedQuiz,
-                                      askDetails: newDetails,
-                                    });
-                                  }}>
-                                  {t.toUpperCase()}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            onClick={() => {
-                              const newDetails = (
-                                editedQuiz.askDetails || []
-                              ).filter((_, i) => i !== idx);
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                askDetails: newDetails,
-                              });
-                            }}
-                            className='h-8 w-8 text-pw-danger'>
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                        {detail.type === 'dropdown' && (
-                          <div className='space-y-1 mt-1'>
+                    {(editedQuiz.askDetails || []).map((detail, idx) => {
+                      const showAllow = allowlistArr[idx];
+                      const hasAllow =
+                        detail.allowlist && detail.allowlist.length > 0;
+
+                      return (
+                        <div
+                          key={idx}
+                          className='flex flex-col gap-2 bg-white/5 lg:p-2 p-1 rounded-xl border border-white/5'>
+                          <div className='flex gap-2 items-center flex-wrap'>
                             <Input
-                              placeholder='Option 1, Option 2, Option 3...'
-                              value={detail.options?.join(', ') || ''}
+                              value={detail.title}
                               onChange={(e) => {
                                 const newDetails = [
                                   ...(editedQuiz.askDetails || []),
                                 ];
-                                newDetails[idx].options = e.target.value
-                                  .split(',')
-                                  .map((s) => s.trim());
+                                newDetails[idx].title = e.target.value;
                                 setEditedQuiz({
                                   ...editedQuiz,
                                   askDetails: newDetails,
                                 });
                               }}
-                              className='h-8 text-[10px] bg-black/20'
+                              className='flex-1 bg-transparent focus-visible:border focus-visible:border-pw-primary/5 h-8 text-xs'
+                              placeholder='Detail Label'
                             />
-                            <p className='text-[9px] text-pw-muted italic ml-1'>
-                              Separate options with commas
-                            </p>
-                          </div>
-                        )}
+                            <div className='flex'>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger>
+                                  <Button
+                                    title={'Type of detail required'}
+                                    variant='ghost'
+                                    size='sm'
+                                    className='h-7 sm:h-8 text-[10px] font-bold uppercase tracking-tighter bg-white/5'>
+                                    {detail.type}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
+                                  {[
+                                    'email',
+                                    'tel',
+                                    'number',
+                                    'dropdown',
+                                    'input',
+                                    'sex',
+                                    'date',
+                                    'dob'
+                                  ].map((t) => (
+                                    <DropdownMenuItem
+                                      key={t}
+                                      onClick={() => {
+                                        const newDetails = [
+                                          ...(editedQuiz.askDetails || []),
+                                        ];
+                                        newDetails[idx].type = t as any;
+                                        setEditedQuiz({
+                                          ...editedQuiz,
+                                          askDetails: newDetails,
+                                        });
+                                      }}
+                                      className={'h-8 px-2'}>
+                                      {t.toUpperCase()}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
 
-                        <div className='space-y-1 mt-1'>
-                          <Input
-                            placeholder='Allowlist / Allowed Values (e.g. STU123, STU456 or ^ID-[0-9]+$)'
-                            value={detail.allowlist || ''}
-                            onChange={(e) => {
-                              const newDetails = [
-                                ...(editedQuiz.askDetails || []),
-                              ];
-                              newDetails[idx].allowlist = e.target.value;
-                              setEditedQuiz({
-                                ...editedQuiz,
-                                askDetails: newDetails,
-                              });
-                            }}
-                            className='h-8 text-[10px] bg-black/20 font-mono text-pw-primary'
-                          />
-                          <p className='text-[9px] text-pw-muted italic ml-1'>
-                            Restrict access: Comma-separated allowed values or regex pattern
-                          </p>
+                              <Button
+                                variant='ghost'
+                                size='icon'
+                                title='Add Allowlist'
+                                onClick={() => {
+                                  setAllowlistArr((prev) => ({
+                                    [idx]: !prev[idx],
+                                  }));
+                                }}
+                                className={cn(
+                                  'h-8 w-8',
+                                  hasAllow ?
+                                    'text-pw-primary bg-pw-primary/6'
+                                  : 'text-pw-muted',
+                                )}>
+                                <CheckCircle size={14} />
+                              </Button>
+
+                              <Button
+                                variant='ghost'
+                                title='Delete Detail'
+                                size='icon'
+                                onClick={() => {
+                                  const newDetails = (
+                                    editedQuiz.askDetails || []
+                                  ).filter((_, i) => i !== idx);
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    askDetails: newDetails,
+                                  });
+                                }}
+                                className='h-8 w-8 text-pw-danger'>
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {detail.type === 'dropdown' && (
+                            <div className='space-y-1 mt-1'>
+                              <Input
+                                placeholder='Option 1, Option 2...'
+                                value={detail.options?.join(', ') || ''}
+                                onChange={(e) => {
+                                  const newDetails = [
+                                    ...(editedQuiz.askDetails || []),
+                                  ];
+                                  newDetails[idx].options = e.target.value
+                                    .split(',')
+                                    .map((s) => s.trim());
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    askDetails: newDetails,
+                                  });
+                                }}
+                                className='h-8 text-[10px] bg-black/20'
+                              />
+                              <p className='text-[8px] text-pw-muted italic ml-1'>
+                                Separate options with commas
+                              </p>
+                            </div>
+                          )}
+                          {showAllow && (
+                            <div className='space-y-1 mt-1'>
+                              <Input
+                                placeholder='Allowlist / Allowed Values'
+                                value={detail.allowlist || ''}
+                                onChange={(e) => {
+                                  const newDetails = [
+                                    ...(editedQuiz.askDetails || []),
+                                  ];
+                                  newDetails[idx].allowlist = e.target.value;
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    askDetails: newDetails,
+                                  });
+                                }}
+                                className='h-8 text-[10px] bg-black/10 bkblur font-mono'
+                              />
+                              <p className='text-[9px] text-pw-muted italic ml-1'>
+                                Restrict access: Comma-separated allowed values
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+
                     <Button
                       variant='outline'
                       size='sm'
@@ -1109,17 +1227,22 @@ const QuizBuilder = ({
                           </Button>
                         </QuizSettingItem>
 
-                        
                         {editedQuiz.questions.some(
                           (q) =>
                             q.skipTo ||
                             q.skipToCat ||
-                            q.options.some((o) => typeof o === 'object' && (o.skipTo || o.skipToCat)),
+                            q.options.some(
+                              (o) =>
+                                typeof o === 'object' &&
+                                (o.skipTo || o.skipToCat),
+                            ),
                         ) && (
                           <div className='p-3 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs rounded-xl flex items-center gap-2 mb-2'>
                             <AlertTriangle className='h-4 w-4 shrink-0' />
                             <span>
-                              Branching Active: Question order randomization is restricted to internal category shuffling to maintain valid logical branching paths.
+                              Branching Active: Question order randomization is
+                              restricted to internal category shuffling to
+                              maintain valid logical branching paths.
                             </span>
                           </div>
                         )}
@@ -1245,70 +1368,6 @@ const QuizBuilder = ({
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
                       color='primary'>
                       <div className='flex flex-col gap-4 pt-2'>
-                        <QuizSettingItem
-                          label='Quiz Layout Presentation'
-                          description={
-                            editedQuiz.surveyType === 'form' ?
-                              'Form type is locked to Scroll All, all other layouts are disabled.'
-                            : editedQuiz.quizScroll ?
-                              'Branching is only available in Single Show (Progressive) mode.'
-                            : 'Select how questions are rendered visually: Single Show (page-by-page), Scroll All (continuous), or Scroll Show (add next on-response).'
-
-                          }>
-                          <div className='flex flex-col gap-1'>
-                            <select
-                              value={
-                                editedQuiz.quizLayout ||
-                                (editedQuiz.quizScroll ? 'scroll' : 'single')
-                              }
-                              disabled={editedQuiz.surveyType === 'form'}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  quizLayout: val,
-                                  quizScroll: val !== 'single',
-                                });
-                                toast.success(
-                                  `Layout changed to: ${val.toUpperCase().replace('_', ' ')}`,
-                                );
-                              }}
-                              className={cn(
-                                'bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-pw-text focus:outline-none cursor-pointer',
-                                editedQuiz.surveyType === 'form' &&
-                                  'opacity-40 cursor-not-allowed',
-                              )}>
-                              <option
-                                value='single'
-                                className='bg-[#0A0C1B]'>
-                                Single Show - Progressive (Branching Enabled)
-                              </option>
-                              <option
-                                value='scroll'
-                                className='bg-[#0A0C1B]'
-                                disabled={
-                                  editedQuiz.surveyType === 'form' ?
-                                    false
-                                  : false
-                                }>
-                                Scroll All - Continuous (Branching Disabled)
-                              </option>
-                              <option
-                                value='scroll_show'
-                                className='bg-[#0A0C1B]'>
-                                Scroll Show - On Response (Branching Disabled)
-                              </option>
-                            </select>
-                            {editedQuiz.quizScroll &&
-                              editedQuiz.surveyType !== 'form' && (
-                                <p className='text-[10px] text-pw-muted ml-1'>
-                                  💡 Switch to Single Show to enable logical
-                                  branching on questions and options.
-                                </p>
-                              )}
-                          </div>
-                        </QuizSettingItem>
-
                         <div className='space-y-4 mt-4 border-t border-white/5 pt-4'>
                           <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
                             Institutional Branding (File Uploads)
@@ -1614,28 +1673,35 @@ const QuizBuilder = ({
                           className='w-full h-20 bg-transparent p-0 text-sm no-outline resize-none transition-all'
                         />
                         {/* Mention Helper Badge List */}
-                        {editedQuiz.askDetails && editedQuiz.askDetails.length > 0 && (
-                          <div className='flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5'>
-                            <span className='text-[10px] font-bold text-pw-muted uppercase'>Mention Detail:</span>
-                            {editedQuiz.askDetails.map((d) => (
-                              <button
-                                key={d.title}
-                                type='button'
-                                onClick={() => {
-                                  const mentionTag = `@${d.title.trim().replace(/\s+/g, '')}`;
-                                  const curText = editedQuiz.questions[currentStep].text || '';
-                                  updateQuestion(currentStep, {
-                                    ...editedQuiz.questions[currentStep],
-                                    text: `${curText} ${mentionTag} `.trimStart(),
-                                  });
-                                  toast.success(`Inserted ${mentionTag} tag!`);
-                                }}
-                                className='px-2 py-0.5 rounded bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-[10px] font-bold hover:bg-pw-primary/25 transition-all'>
-                                @{d.title}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {editedQuiz.askDetails &&
+                          editedQuiz.askDetails.length > 0 && (
+                            <div className='flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5'>
+                              <span className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Mention Detail:
+                              </span>
+                              {editedQuiz.askDetails.map((d) => (
+                                <button
+                                  key={d.title}
+                                  type='button'
+                                  onClick={() => {
+                                    const mentionTag = `@${d.title.trim().replace(/\s+/g, '')}`;
+                                    const curText =
+                                      editedQuiz.questions[currentStep].text ||
+                                      '';
+                                    updateQuestion(currentStep, {
+                                      ...editedQuiz.questions[currentStep],
+                                      text: `${curText} ${mentionTag} `.trimStart(),
+                                    });
+                                    toast.success(
+                                      `Inserted ${mentionTag} tag!`,
+                                    );
+                                  }}
+                                  className='px-2 py-0.5 rounded bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-[10px] font-bold hover:bg-pw-primary/25 transition-all'>
+                                  @{d.title}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                       </div>
 
                       {/* Group + Question Routing row */}
@@ -1691,10 +1757,12 @@ const QuizBuilder = ({
                         </div>
 
                         {/* Question-level routing dropdown */}
-                        {(editedQuiz.quizScroll ||
+                        {(
+                          editedQuiz.quizScroll ||
                           editedQuiz.quizLayout === 'scroll' ||
                           editedQuiz.quizLayout === 'scroll_show' ||
-                          editedQuiz.surveyType === 'form') ? (
+                          editedQuiz.surveyType === 'form'
+                        ) ?
                           <div className='relative group'>
                             <Button
                               variant='ghost'
@@ -1704,11 +1772,11 @@ const QuizBuilder = ({
                               Next →
                             </Button>
                             <div className='absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-[#0E1026] border border-white/10 text-[9px] text-white px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none'>
-                              Branching logic is exclusive to Progressive Single-Show mode
+                              Branching logic is exclusive to Progressive
+                              Single-Show mode
                             </div>
                           </div>
-                        ) : (
-                          <DropdownMenu>
+                        : <DropdownMenu>
                             <DropdownMenuTrigger>
                               <Button
                                 variant='ghost'
@@ -1717,24 +1785,25 @@ const QuizBuilder = ({
                                   'h-6 text-[10px] gap-1 px-2',
                                   (
                                     editedQuiz.questions[currentStep].skipTo ||
-                                    editedQuiz.questions[currentStep].skipToCat
+                                      editedQuiz.questions[currentStep]
+                                        .skipToCat
                                   ) ?
                                     'text-pw-warning hover:text-pw-warning/80'
-                                    : 'text-pw-muted hover:text-pw-primary',
+                                  : 'text-pw-muted hover:text-pw-primary',
                                 )}>
                                 {editedQuiz.questions[currentStep].skipToCat ?
                                   `↪ Group: ${editedQuiz.questions[currentStep].skipToCat}`
-                                  : (
-                                    editedQuiz.questions[currentStep].skipTo ===
-                                    'end'
-                                  ) ?
-                                    '⛔ Ends Here'
-                                    : editedQuiz.questions[currentStep].skipTo ?
-                                      `↪ Q${editedQuiz.questions.findIndex((q) => q.id === editedQuiz.questions[currentStep].skipTo) + 1}`
-                                      : 'Next →'}
+                                : (
+                                  editedQuiz.questions[currentStep].skipTo ===
+                                  'end'
+                                ) ?
+                                  '⛔ Ends Here'
+                                : editedQuiz.questions[currentStep].skipTo ?
+                                  `↪ Q${editedQuiz.questions.findIndex((q) => q.id === editedQuiz.questions[currentStep].skipTo) + 1}`
+                                : 'Next →'}
                               </Button>
                             </DropdownMenuTrigger>
-                        
+
                             <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 max-h-[280px] overflow-y-auto'>
                               <div className='px-2 pt-1.5 pb-0.5'>
                                 <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
@@ -1774,16 +1843,17 @@ const QuizBuilder = ({
                                 (q) =>
                                   q.id !== editedQuiz.questions[currentStep].id,
                               ).length > 0 && (
-                                  <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
-                                    <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
-                                      Jump to Specific Question
-                                    </p>
-                                  </div>
-                                )}
+                                <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                                  <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                    Jump to Specific Question
+                                  </p>
+                                </div>
+                              )}
                               {editedQuiz.questions
                                 .filter(
                                   (q) =>
-                                    q.id !== editedQuiz.questions[currentStep].id,
+                                    q.id !==
+                                    editedQuiz.questions[currentStep].id,
                                 )
                                 .map((q) => (
                                   <DropdownMenuItem
@@ -1813,17 +1883,17 @@ const QuizBuilder = ({
                                       (q) =>
                                         (q as any).category &&
                                         q.id !==
-                                        editedQuiz.questions[currentStep].id,
+                                          editedQuiz.questions[currentStep].id,
                                     )
                                     .map((q) => (q as any).category as string),
                                 ),
                               ).length > 0 && (
-                                  <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
-                                    <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
-                                      Jump to Group (sequential flow)
-                                    </p>
-                                  </div>
-                                )}
+                                <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
+                                  <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
+                                    Jump to Group (sequential flow)
+                                  </p>
+                                </div>
+                              )}
                               {Array.from(
                                 new Set(
                                   editedQuiz.questions
@@ -1831,7 +1901,7 @@ const QuizBuilder = ({
                                       (q) =>
                                         (q as any).category &&
                                         q.id !==
-                                        editedQuiz.questions[currentStep].id,
+                                          editedQuiz.questions[currentStep].id,
                                     )
                                     .map((q) => (q as any).category as string),
                                 ),
@@ -1858,7 +1928,7 @@ const QuizBuilder = ({
                               ))}
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        )}
+                        }
                       </div>
                     </div>
                   </div>
@@ -2160,10 +2230,12 @@ const QuizBuilder = ({
 
                                   <div className='flex items-center gap-1 shrink-0'>
                                     {/* Branching Logic for Option */}
-                                    {(editedQuiz.quizScroll ||
+                                    {(
+                                      editedQuiz.quizScroll ||
                                       editedQuiz.quizLayout === 'scroll' ||
                                       editedQuiz.quizLayout === 'scroll_show' ||
-                                      editedQuiz.surveyType === 'form') ? (
+                                      editedQuiz.surveyType === 'form'
+                                    ) ?
                                       <div className='relative group'>
                                         <Button
                                           variant='ghost'
@@ -2173,11 +2245,11 @@ const QuizBuilder = ({
                                           <Share2 size={10} /> Branch
                                         </Button>
                                         <div className='absolute bottom-full right-0 mb-1 hidden group-hover:block bg-[#0E1026] border border-white/10 text-[9px] text-white px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none'>
-                                          Branching logic is exclusive to Progressive Single-Show mode
+                                          Branching logic is exclusive to
+                                          Progressive Single-Show mode
                                         </div>
                                       </div>
-                                    ) : (
-                                      <DropdownMenu>
+                                    : <DropdownMenu>
                                         <DropdownMenuTrigger>
                                           <Button
                                             variant='ghost'
@@ -2266,8 +2338,9 @@ const QuizBuilder = ({
                                             .filter(
                                               (q) =>
                                                 q.id !==
-                                                editedQuiz.questions[currentStep]
-                                                  .id,
+                                                editedQuiz.questions[
+                                                  currentStep
+                                                ].id,
                                             )
                                             .map((q) => (
                                               <DropdownMenuItem
@@ -2313,7 +2386,8 @@ const QuizBuilder = ({
                                                 )
                                                 .map(
                                                   (q) =>
-                                                    (q as any).category as string,
+                                                    (q as any)
+                                                      .category as string,
                                                 ),
                                             ),
                                           ).length > 0 && (
@@ -2347,19 +2421,23 @@ const QuizBuilder = ({
                                                     const newOpts = [
                                                       ...(editedQuiz.questions[
                                                         currentStep
-                                                      ].options as QuizOption[]),
+                                                      ]
+                                                        .options as QuizOption[]),
                                                     ];
                                                     newOpts[idx] = {
                                                       ...newOpts[idx],
                                                       skipToCat: cat,
                                                       skipTo: undefined,
                                                     };
-                                                    updateQuestion(currentStep, {
-                                                      ...editedQuiz.questions[
-                                                        currentStep
-                                                      ],
-                                                      options: newOpts,
-                                                    });
+                                                    updateQuestion(
+                                                      currentStep,
+                                                      {
+                                                        ...editedQuiz.questions[
+                                                          currentStep
+                                                        ],
+                                                        options: newOpts,
+                                                      },
+                                                    );
                                                   }}>
                                                   <span className='text-[10px] font-bold uppercase'>
                                                     {cat}
@@ -2370,7 +2448,7 @@ const QuizBuilder = ({
                                           )}
                                         </DropdownMenuContent>
                                       </DropdownMenu>
-                                    )}
+                                    }
 
                                     <Button
                                       variant='ghost'
@@ -2495,7 +2573,7 @@ export default function QuizPage() {
     const question = quiz.questions?.find((q) => q.id === questionId);
     if (!question) return String(val !== undefined && val !== null ? val : '');
     if (question.type === 'input')
-      return String(val !== undefined && val !== null ? val : '');
+      return String(val !== undefined && val !== null ? val :  '');
 
     const options = question.options || [];
     const findText = (id: any) => {
@@ -2583,7 +2661,7 @@ export default function QuizPage() {
       ...quiz.questions.map((q) => {
         const a = resp.answers.find((ans: any) => ans.questionId === q.id);
         if (!a) return '""';
-        const resolvedText = resolveAnswerToText(quiz, q.id, a.answer);
+        const resolvedText = formatDetailVars(resolveAnswerToText(quiz, q.id, a.answer), resp.userData, true, true);
         return `"${resolvedText.replace(/"/g, '""')}"`;
       }),
     ]);
@@ -2789,6 +2867,27 @@ export default function QuizPage() {
 
   const playQuiz = (id: string) => {
     window.open(`/quiz/${id}`, '_blank');
+  };
+
+  const formatDetailVars = (rawText: string, details:any, showPrev?:boolean, hideBold?:boolean) => {
+    if (!rawText) return rawText;
+    let formatted = rawText;
+    Object.entries(details || {}).forEach(([key, val]) => {
+      const cleanKey = key.trim().replace(/\s+/g, '');
+      const boldVal = `${showPrev ? `@${cleanKey} (<strong class="text-pw-cyan font-bold">${val}</strong>)` : `<strong class="text-pw-cyan font-bold">${val}</strong>`}`;
+      const normalVal = `${showPrev ? `@${cleanKey} (${val})` : `${val}`}`;
+      const replText = `${hideBold ? normalVal : boldVal}`
+      const regex1 = new RegExp(`@${cleanKey}`, 'gi');
+      const regex2 = new RegExp(`@${key.trim()}`, 'gi');
+      const regex3 = new RegExp(`\\$${cleanKey}`, 'gi');
+      const regex4 = new RegExp(`\\$${key.trim()}`, 'gi');
+      formatted = formatted
+        .replace(regex1, replText)
+        .replace(regex2, replText)
+        .replace(regex3, replText)
+        .replace(regex4, replText);
+    });
+    return formatted;
   };
 
   return (
@@ -3188,6 +3287,11 @@ export default function QuizPage() {
                                     viewingResponses.questions.find(
                                       (q) => q.id === ans.questionId,
                                     );
+                                  const resolvedAnswer = resolveAnswerToText(viewingResponses, ans.questionId, ans.answer)
+                                  const resolvedCorrect = resolveCorrectText(
+                                    viewingResponses,
+                                    ans.questionId,
+                                  );
 
                                   return (
                                     <div
@@ -3196,9 +3300,11 @@ export default function QuizPage() {
                                       <p className='text-[10px] font-bold text-pw-muted uppercase'>
                                         Question {i + 1}
                                       </p>
-                                      <p className='text-xs font-medium leading-relaxed'>
-                                        {question?.text || 'Question removed.'}
-                                      </p>
+                                      <p className='text-xs font-medium leading-relaxed' dangerouslySetInnerHTML={{__html:
+                                        formatDetailVars(question?.text as string || '', resp.userData, true)
+                                        || 'Question removed.'
+                                      }} />
+                                      
                                       <div className='flex items-start gap-2 pt-1'>
                                         <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
                                           ANSWER:
@@ -3208,15 +3314,9 @@ export default function QuizPage() {
                                             'text-[11px] font-mono',
                                             ans.correct === undefined ?
                                               'text-white/80'
-                                            : ans.correct ? 'text-pw-success'
-                                            : 'text-pw-danger',
-                                          )}>
-                                          {resolveAnswerToText(
-                                            viewingResponses,
-                                            ans.questionId,
-                                            ans.answer,
-                                          )}
-                                        </p>
+                                              : ans.correct ? 'text-pw-success'
+                                                : 'text-pw-danger',
+                                          )} dangerouslySetInnerHTML={{__html: formatDetailVars(resolvedAnswer, resp.userData, false, true)}}/>
                                       </div>
                                       {viewingResponses.type === 'quiz' &&
                                         !ans.correct && (
@@ -3227,12 +3327,8 @@ export default function QuizPage() {
                                             <p
                                               className={cn(
                                                 'text-[11px] font-mono text-white/80',
-                                              )}>
-                                              {resolveCorrectText(
-                                                viewingResponses,
-                                                ans.questionId,
-                                              )}
-                                            </p>
+                                              )} dangerouslySetInnerHTML={{__html: formatDetailVars(resolvedCorrect, resp.userData, false, true) }}
+                                          />
                                           </div>
                                         )}
                                     </div>

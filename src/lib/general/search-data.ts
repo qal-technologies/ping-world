@@ -24,7 +24,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
     category: 'Tool',
     description: 'Structure chapters, pages, custom title styles, footnotes, image palettes, and live pagination.',
     keywords: ['book', 'creator', 'pdf', 'chapters', 'pages', 'write', 'editor', 'publish', 'manuscript', 'footnotes', 'palette'],
-    href: '/tools/pdf?tab=text-to-pdf',
+    href: '/tools/pdf?tab=book-editor',
   },
   {
     id: 'pdf-conversion',
