@@ -33,6 +33,7 @@ import {
   Image,
   AlertTriangle,
   CheckCircle,
+  BarChart2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -3365,7 +3366,116 @@ export default function QuizPage() {
                 </div>
               </div>
 
-              <div className='space-y-4 pb-20'>
+              <div className='space-y-6 pb-20'>
+                {/* jules edit: Admin Analytics Overview for Feedback Responses */}
+                {viewingResponses.responses && viewingResponses.responses.length > 0 && (() => {
+                  const responses = viewingResponses.responses;
+                  const totalParticipants = responses.length;
+                  let totalPass = 0;
+                  let totalFail = 0;
+                  let timeouts = 0;
+                  let completions = 0;
+                  let selfSubmits = 0;
+
+                  const categoryStats: Record<string, { attempts: number; pass: number; fail: number }> = {};
+                  const questionStats: Record<string, { text: string; correct: number; incorrect: number; topWrongOption?: string }> = {};
+
+                  responses.forEach((resp) => {
+                    const reason = resp.submissionReason || 'completion';
+                    if (reason === 'timeout') timeouts++;
+                    else if (reason === 'self_submit') selfSubmits++;
+                    else completions++;
+
+                    const passCutoff = Math.ceil((resp.totalQuestions || viewingResponses.questions.length) * 0.5);
+                    if (resp.score >= passCutoff) totalPass++;
+                    else totalFail++;
+
+                    if (resp.categoryScores) {
+                      Object.entries(resp.categoryScores).forEach(([cat, stat]) => {
+                        if (!categoryStats[cat]) categoryStats[cat] = { attempts: 0, pass: 0, fail: 0 };
+                        categoryStats[cat].attempts += stat.total;
+                        categoryStats[cat].pass += stat.correct;
+                        categoryStats[cat].fail += (stat.total - stat.correct);
+                      });
+                    }
+
+                    resp.answers?.forEach((ans) => {
+                      const qObj = viewingResponses.questions.find((q) => q.id === ans.questionId);
+                      if (qObj) {
+                        if (!questionStats[qObj.id]) {
+                          questionStats[qObj.id] = { text: qObj.text, correct: 0, incorrect: 0 };
+                        }
+                        if (ans.correct) questionStats[qObj.id].correct++;
+                        else questionStats[qObj.id].incorrect++;
+                      }
+                    });
+                  });
+
+                  const passPct = Math.round((totalPass / totalParticipants) * 100);
+
+                  return (
+                    <Card className='p-5 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
+                      <div className='flex items-center justify-between border-b border-white/5 pb-2'>
+                        <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
+                          <BarChart2 className='h-4 w-4' /> Response Analytics Overview
+                        </span>
+                        <span className='text-[10px] font-mono text-pw-muted'>
+                          {totalParticipants} Total Submissions
+                        </span>
+                      </div>
+
+                      {/* Stat Metrics Grid */}
+                      <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-center'>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Pass Rate</span>
+                          <span className='text-xl font-bold font-mono text-pw-success'>{passPct}%</span>
+                          <span className='text-[9px] text-pw-muted block'>{totalPass} Pass / {totalFail} Fail</span>
+                        </div>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Completions</span>
+                          <span className='text-xl font-bold font-mono text-pw-cyan'>{completions}</span>
+                          <span className='text-[9px] text-pw-muted block'>Full finishes</span>
+                        </div>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Timeouts</span>
+                          <span className='text-xl font-bold font-mono text-pw-warning'>{timeouts}</span>
+                          <span className='text-[9px] text-pw-muted block'>Timer expired</span>
+                        </div>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Self-Submits</span>
+                          <span className='text-xl font-bold font-mono text-pw-primary'>{selfSubmits}</span>
+                          <span className='text-[9px] text-pw-muted block'>Early submissions</span>
+                        </div>
+                      </div>
+
+                      {/* Category Breakdown Table */}
+                      {Object.keys(categoryStats).length > 0 && (
+                        <div className='space-y-2 pt-2 border-t border-white/5'>
+                          <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                            Category Performance Analysis
+                          </span>
+                          <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
+                            {Object.entries(categoryStats).map(([cat, stat]) => {
+                              const catPassPct = stat.attempts > 0 ? Math.round((stat.pass / stat.attempts) * 100) : 0;
+                              return (
+                                <div key={cat} className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
+                                  <span className='font-bold text-white uppercase text-[10px]'>{cat}</span>
+                                  <div className='flex items-center gap-3 font-mono text-[10px]'>
+                                    <span>{stat.pass} Pass / {stat.fail} Fail</span>
+                                    <span className={cn('font-bold', catPassPct >= 50 ? 'text-pw-success' : 'text-pw-danger')}>
+                                      {catPassPct}%
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })()}
+
                 {(
                   !viewingResponses.responses ||
                   viewingResponses.responses.length === 0

@@ -175,38 +175,54 @@ export function AccountConnector() {
                   className='absolute top-full left-0 mt-2 z-50 min-w-[160px] p-3 rounded-xl bg-pw-surface border border-white/10 shadow-xl text-xs'
                 >
                   {isConnected ? (
-                    <div className='space-y-1'>
+                    <div className='space-y-1.5'>
                       <div className='flex items-center gap-2'>
-                        <UserCircle2 className='h-4 w-4 text-pw-muted shrink-0' />
+                        <UserCircle2 className='h-4 w-4 text-pw-primary shrink-0' />
                         <div>
                           <p className='font-semibold text-pw-text'>
                             {account?.displayName}
                           </p>
-                          <p className='text-pw-muted'>{account?.username}</p>
+                          <p className='text-pw-muted text-[10px]'>{account?.username}</p>
+                        </div>
+                      </div>
+                      {/* jules edit: Display API permissions & OAuth scopes */}
+                      <div className='p-1.5 rounded bg-white/5 border border-white/5 space-y-1 text-[9px] text-pw-muted'>
+                        <span className='font-bold text-pw-primary uppercase tracking-wider block'>API Permissions</span>
+                        <div className='flex items-center gap-1 flex-wrap'>
+                          <span className='px-1 py-0.5 rounded bg-pw-primary/10 text-pw-primary font-mono'>post:write</span>
+                          <span className='px-1 py-0.5 rounded bg-pw-primary/10 text-pw-primary font-mono'>user:read</span>
+                          <span className='px-1 py-0.5 rounded bg-pw-primary/10 text-pw-primary font-mono'>media:upload</span>
                         </div>
                       </div>
                       {account?.isDemo && (
                         <div className='flex items-center gap-1 text-pw-warning mt-1'>
-                          <AlertTriangle className='h-3 w-3' />
-                          <span className='text-[10px]'>
-                            Demo mode — add OAuth key to connect real account
+                          <AlertTriangle className='h-3 w-3 shrink-0' />
+                          <span className='text-[9px]'>
+                            Demo Mode (Simulated OAuth token active)
                           </span>
                         </div>
                       )}
-                      <p className='text-pw-danger/80 text-[10px] mt-1 cursor-pointer hover:text-pw-danger'>
+                      <p className='text-pw-danger/80 text-[10px] mt-1 cursor-pointer hover:text-pw-danger font-bold'>
                         Click to disconnect
                       </p>
                     </div>
                   ) : !state.isOnline ? (
-                    <p className='text-pw-muted'>
+                    <p className='text-pw-muted text-[10px]'>
                       Connect requires internet connection
                     </p>
                   ) : (
-                    <div className='flex items-center justify-between gap-3'>
-                      <span className='text-pw-muted'>
-                        Connect {platform.name}
-                      </span>
-                      <ChevronRight className='h-3 w-3 text-pw-muted shrink-0' />
+                    <div className='space-y-1.5'>
+                      <div className='flex items-center justify-between gap-3'>
+                        <span className='text-pw-text font-bold text-[11px]'>
+                          Connect {platform.name}
+                        </span>
+                        <ChevronRight className='h-3 w-3 text-pw-primary shrink-0' />
+                      </div>
+                      <div className='text-[9px] text-pw-muted space-y-0.5 border-t border-white/5 pt-1'>
+                        <p className='font-bold text-pw-primary'>Requested OAuth Scopes:</p>
+                        <p>• Publish posts on your behalf (post:write)</p>
+                        <p>• Access basic profile info (user:read)</p>
+                      </div>
                     </div>
                   )}
                 </motion.div>
