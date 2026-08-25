@@ -379,14 +379,17 @@ export default function PublicQuizTaker() {
     Record<string, (string | QuizOption)[]>
   >({});
 
+  /* jules edit: Ref for auto-scroll to the first question on scroll layout start */
   const bottomRef = React.useRef<HTMLDivElement>(null);
+  const firstQuestionRef = React.useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (quiz?.quizScroll && started) {
       setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+        firstQuestionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     }
-  }, [currentQuestion, started, quiz?.quizScroll]);
+  }, [started, quiz?.quizScroll]);
 
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
@@ -1177,6 +1180,7 @@ export default function PublicQuizTaker() {
     return (
       <Card
         key={quest.id}
+        ref={index === 0 ? firstQuestionRef : undefined}
         className={cn(
           'sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300',
           !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
