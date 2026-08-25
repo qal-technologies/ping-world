@@ -42,8 +42,18 @@ export default function EncryptionDecryptionPage() {
   const searchParams = useSearchParams();
   const decryptSectionRef = useRef<HTMLDivElement>(null);
 
+  const urlTab = searchParams.get("tab");
   const [algo, setAlgo] = useState<"AES" | "TripleDES" | "RC4">("AES");
-  const [mobileTab, setMobileTab] = useState<"encrypt" | "decrypt">("encrypt");
+  const [mobileTab, setMobileTab] = useState<"encrypt" | "decrypt">((urlTab === "decrypt" || urlTab === "encrypt") ? urlTab : "encrypt");
+
+  const handleTabChange = (val: "encrypt" | "decrypt") => {
+    setMobileTab(val);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", val);
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  };
 
   // Encrypt states
   const [plainText, setPlainText] = useState("");
@@ -241,7 +251,7 @@ export default function EncryptionDecryptionPage() {
       {/* Mobile Tab Swapper using unified pointer events */}
       <div className="flex md:hidden p-1 bg-white/5 border border-white/10 rounded-full mb-6">
         <button
-          onPointerDown={() => setMobileTab("encrypt")}
+          onPointerDown={() => handleTabChange("encrypt")}
           className={cn(
             "flex-1 py-3 text-xs font-bold rounded-full transition-all duration-200",
             mobileTab === "encrypt" ? "bg-pw-primary text-white shadow-lg" : "text-pw-muted"
@@ -250,7 +260,7 @@ export default function EncryptionDecryptionPage() {
           Encrypt
         </button>
         <button
-          onPointerDown={() => setMobileTab("decrypt")}
+          onPointerDown={() => handleTabChange("decrypt")}
           className={cn(
             "flex-1 py-3 text-xs font-bold rounded-full transition-all duration-200",
             mobileTab === "decrypt" ? "bg-pw-primary text-white shadow-lg" : "text-pw-muted"
