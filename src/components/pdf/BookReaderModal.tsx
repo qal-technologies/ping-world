@@ -129,24 +129,31 @@ export default function BookReaderModal({
               }}
               className='w-full transition-transform duration-200'>
               {currentItem?.type === 'front_cover' && (
+                /* jules edit: Premium A4 proportioned Front Cover preview */
                 <div
                   className={cn(
-                    'p-5 rounded-2xl border border-white/10 shadow-2xl min-h-[460px] flex flex-col justify-between text-white bg-slate-900',
-                    coverConfig.frontCoverTemplate === 'bold' && 'border-2 border-pw-primary bg-gradient-to-b from-pw-primary/20 to-slate-950 text-center',
+                    'w-[340px] sm:w-[420px] aspect-[1/1.414] mx-auto p-8 rounded-2xl border shadow-2xl flex flex-col justify-between text-white transition-all overflow-hidden',
+                    coverConfig.frontCoverTemplate === 'minimal' && 'bg-slate-950 border-white/10 text-left',
+                    coverConfig.frontCoverTemplate === 'bold' && 'border-2 border-pw-primary bg-gradient-to-b from-pw-primary/30 via-slate-950 to-slate-950 text-center',
                     coverConfig.frontCoverTemplate === 'split' && 'border-l-8 border-l-pw-primary bg-slate-900 text-left',
-                    coverConfig.frontCoverTemplate === 'center' && 'text-center border-white/20 items-center justify-center',
+                    coverConfig.frontCoverTemplate === 'center' && 'text-center border-white/20 items-center justify-between bg-gradient-to-br from-indigo-950 via-slate-950 to-purple-950',
                   )}>
-                  <div className='space-y-4 my-auto'>
-                    <h1 className='text-xl font-extrabold font-display tracking-tight text-pw-primary'>
+                  <div className='w-full space-y-2 pt-4'>
+                    <span className='text-[10px] font-mono tracking-[0.3em] uppercase text-pw-primary font-bold block'>
+                      PingWorld Manuscript Edition
+                    </span>
+                    <h1 className='text-2xl sm:text-3xl font-extrabold font-display tracking-tight text-white leading-tight'>
                       {coverConfig.frontCoverTitle || 'Untitled Book'}
                     </h1>
-                    <p className='text-sm text-slate-300 italic'>
-                      {coverConfig.frontCoverSubtitle}
-                    </p>
+                    {coverConfig.frontCoverSubtitle && (
+                      <p className='text-xs sm:text-sm text-slate-300 italic pt-1 border-t border-white/10'>
+                        {coverConfig.frontCoverSubtitle}
+                      </p>
+                    )}
                   </div>
-                  <div className='border-t border-white/10 pt-4 space-y-1 text-xs text-slate-400 font-mono'>
-                    <p>By {coverConfig.frontCoverAuthor || 'Author'}</p>
-                    <p className='text-[10px] text-slate-500'>Published with PingWorld</p>
+                  <div className='w-full border-t border-white/15 pt-4 space-y-1 text-xs text-slate-400 font-mono'>
+                    <p className='font-bold text-white text-sm'>By {coverConfig.frontCoverAuthor || 'Author'}</p>
+                    <p className='text-[10px] text-slate-500'>Published & Styled with PingWorld Studio</p>
                   </div>
                 </div>
               )}
@@ -163,13 +170,14 @@ export default function BookReaderModal({
               )}
 
               {currentItem?.type === 'page' && currentItem.data && (
+                /* jules edit: True A4 proportions (aspect-[1/1.414]) for book reader page view */
                 <Card
                   style={{
                     backgroundColor: paperBgColor,
                     color: bodyColor,
                     fontFamily: fontFamily,
                   }}
-                  className='p-5 rounded-2xl border border-slate-200 shadow-2xl min-h-[460px] flex flex-col justify-between relative'>
+                  className='w-[340px] sm:w-[420px] aspect-[1/1.414] mx-auto p-6 rounded-2xl border border-slate-200 shadow-2xl flex flex-col justify-between relative overflow-y-auto custom-scrollbar'>
                   <div>
                     {currentItem.data.showTitle && (
                       <h2

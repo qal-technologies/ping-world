@@ -638,8 +638,6 @@ export function LivePreview({
   const PreviewComponent = PLATFORM_PREVIEWS[activePlatform || state.selectedPlatforms[0]];
   const content = getContentForPlatform(activePlatform || state.selectedPlatforms[0]);
 
-  const error =
-    'SavePreviewPanel.tsx:132 Capture error: Error: Attempting to parse an unsupported color function "lab"';
   return (
     <div className='space-y-2'>
 
