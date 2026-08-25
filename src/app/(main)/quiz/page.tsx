@@ -33,6 +33,7 @@ import {
   Image,
   AlertTriangle,
   CheckCircle,
+  BarChart2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -74,10 +75,19 @@ export type QuestionType =
 export interface QuizOption {
   id: string; // questionId-index or uuid
   text: string;
+  imageUrl?: string; // jules edit: Image upload URL for option
   uploadType?: 'image' | 'video' | 'audio';
   skipTo?: string; // ID of the next question to jump to
   skipToCat?: string; // Category name to jump to (jumps to first question in category)
 }
+
+export interface InputBranchRule {
+  keyword: string;
+  caseSensitive?: boolean;
+  skipTo?: string;
+  skipToCat?: string;
+}
+
 export interface Question {
   id: string;
   type: QuestionType;
@@ -86,6 +96,9 @@ export interface Question {
   correctExplanation?: string;
   correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
   caseSensitive?: boolean; // for input type
+  inputBranchRules?: InputBranchRule[]; // jules edit: Branching rules for input type questions
+  elseSkipTo?: string; // Branching if no input rule matches
+  elseSkipToCat?: string;
   min?: number; // for range
   max?: number; // for range
   step?: number; // for range
@@ -115,8 +128,11 @@ export interface QuizTakerResponse {
   userData: Record<string, string>;
   answers: any[];
   score: number;
+  categoryScores?: Record<string, { correct: number; total: number }>;
   totalQuestions: number;
   timestamp: string;
+  submissionReason?: 'completion' | 'timeout' | 'self_submit' | 'quit';
+  country?: string;
 }
 
 export interface Quiz {
@@ -129,6 +145,7 @@ export interface Quiz {
   canGoBack?: boolean;
   showScore?: boolean;
   introBgUrl?: string;
+  showCategory?: boolean; // jules edit: Admin setting to display category above question headers
   showCategoryInPerformance?: boolean;
   askDetails?: Details[];
   hasTimer?: boolean | string | number;
@@ -935,6 +952,32 @@ const QuizBuilder = ({
                               <Check className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
                             {editedQuiz.showScore ? 'ON' : 'OFF'}
+                          </Button>
+                        </QuizSettingItem>
+
+                        {/* jules edit: Show Question Category setting for Quiz Taker header */}
+                        <QuizSettingItem
+                          label='Show Category Tag'
+                          description='Displays the category badge above question headers for quiz takers.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                showCategory: !editedQuiz.showCategory,
+                              })
+                            }
+                            className={cn(
+                              'h-6 min-w-[80px] gap-2',
+                              editedQuiz.showCategory ?
+                                'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {editedQuiz.showCategory ?
+                              <Check className='h-3 w-3' />
+                            : <X className='h-3 w-3' />}
+                            {editedQuiz.showCategory ? 'ON' : 'OFF'}
                           </Button>
                         </QuizSettingItem>
 
@@ -1939,93 +1982,176 @@ const QuizBuilder = ({
                     </label>
 
                     {editedQuiz.questions[currentStep].type === 'input' ?
+                      /* jules edit: Enhanced Input question rules & branching builder */
                       <div className='space-y-4'>
-                        <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col items-center text-center gap-4 pt-12 md:pt-8 md:flex-row md:align-start justify-evenly'>
-                          <div className='gap-2 flex flex-col items-center'>
-                            <Type className='h-8 w-8 text-pw-primary opacity-50' />
+                        <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col gap-4 text-left'>
+                          <div className='flex items-center gap-3 border-b border-white/5 pb-3'>
+                            <Type className='h-6 w-6 text-pw-primary shrink-0' />
                             <div>
-                              <p className='text-sm font-bold'>
-                                Input Question
+                              <p className='text-sm font-bold text-white'>
+                                Input Question Matching & Branching
                               </p>
-                              <p className='text-[10px] text-pw-muted max-w-[350px]'>
-                                Takers will type their answer.
-                                <br />
-                                Leave the "Keyword" field empty to accept any
-                                text as correct.
+                              <p className='text-[10px] text-pw-muted'>
+                                Match taker responses against keywords and configure dynamic branching routes.
                               </p>
                             </div>
-                            <Input
-                              placeholder='Keyword (Optional)'
-                              value={
-                                editedQuiz.questions[currentStep]
-                                  .correctIndex || ''
-                              }
-                              onChange={(e) =>
-                                updateQuestion(currentStep, {
-                                  ...editedQuiz.questions[currentStep],
-                                  correctIndex: e.target.value,
-                                })
-                              }
-                              className='h-8 w-full max-w-[300px] bg-white/5 border-white/10 text-center transition-all focus:border-pw-primary placeholder:text-pw-muted/50 mt-2'
-                            />
+                          </div>
 
-                            <div
-                              className={cn(
-                                'items-center gap-2 w-full mt-1 justify-between px-1',
-                                (
-                                  !editedQuiz.questions[currentStep]
-                                    .correctIndex
-                                ) ?
-                                  'hidden'
-                                : 'flex',
-                              )}>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Case Sensitive
+                          {/* Default Keyword & Case Sensitivity */}
+                          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 items-end'>
+                            <div className='space-y-1.5'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                Target Keyword (Correct Answer)
                               </label>
+                              <Input
+                                placeholder='Target Keyword (Optional)'
+                                value={
+                                  editedQuiz.questions[currentStep].correctIndex || ''
+                                }
+                                onChange={(e) =>
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    correctIndex: e.target.value,
+                                  })
+                                }
+                                className='h-9 bg-white/5 border-white/10 text-xs focus:border-pw-primary'
+                              />
+                            </div>
+
+                            <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 h-9'>
+                              <span className='text-[10px] font-bold text-pw-muted uppercase'>
+                                Case Sensitive Match
+                              </span>
                               <Button
+                                type='button'
                                 variant='outline'
                                 size='sm'
                                 onClick={() =>
                                   updateQuestion(currentStep, {
                                     ...editedQuiz.questions[currentStep],
-                                    caseSensitive:
-                                      !editedQuiz.questions[currentStep]
-                                        .caseSensitive,
+                                    caseSensitive: !editedQuiz.questions[currentStep].caseSensitive,
                                   })
                                 }
                                 className={cn(
-                                  'h-8 px-3 text-[10px] gap-1',
-                                  (
-                                    editedQuiz.questions[currentStep]
-                                      .caseSensitive
-                                  ) ?
-                                    'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                                  : 'bg-white/5 border-white/10',
+                                  'h-6 px-2 text-[9px] font-bold gap-1',
+                                  editedQuiz.questions[currentStep].caseSensitive ?
+                                    'bg-pw-primary/20 border-pw-primary text-pw-primary'
+                                  : 'bg-white/5 border-white/10 text-pw-muted',
                                 )}>
-                                {(
-                                  editedQuiz.questions[currentStep]
-                                    .caseSensitive
-                                ) ?
-                                  <Check className='h-3 w-3' />
-                                : <X className='h-3 w-3' />}
-                                {(
-                                  editedQuiz.questions[currentStep]
-                                    .caseSensitive
-                                ) ?
-                                  'ON'
-                                : 'OFF'}
+                                {editedQuiz.questions[currentStep].caseSensitive ? 'ON' : 'OFF'}
                               </Button>
                             </div>
                           </div>
 
-                          <div className='space-y-2 mt-4'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest pl-1'>
+                          {/* Input Branching Rules */}
+                          <div className='space-y-3 pt-2 border-t border-white/5'>
+                            <div className='flex items-center justify-between'>
+                              <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider'>
+                                Keyword Branching Rules (Optional)
+                              </span>
+                              <Button
+                                type='button'
+                                size='sm'
+                                onClick={() => {
+                                  const curRules = editedQuiz.questions[currentStep].inputBranchRules || [];
+                                  const newRule: InputBranchRule = { keyword: '', caseSensitive: false };
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    inputBranchRules: [...curRules, newRule],
+                                  });
+                                }}
+                                className='btn-ghost h-6 text-[10px] gap-1 px-2 text-pw-primary'>
+                                <Plus className='h-3 w-3' /> Add Branch Rule
+                              </Button>
+                            </div>
+
+                            {(editedQuiz.questions[currentStep].inputBranchRules || []).map((rule, rIdx) => (
+                              <div key={rIdx} className='p-3 rounded-xl bg-white/5 border border-white/5 space-y-2 text-xs'>
+                                <div className='flex items-center gap-2'>
+                                  <Input
+                                    placeholder='If input contains / matches keyword...'
+                                    value={rule.keyword}
+                                    onChange={(e) => {
+                                      const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
+                                      curRules[rIdx] = { ...curRules[rIdx], keyword: e.target.value };
+                                      updateQuestion(currentStep, {
+                                        ...editedQuiz.questions[currentStep],
+                                        inputBranchRules: curRules,
+                                      });
+                                    }}
+                                    className='h-8 bg-black/30 border-white/10 text-xs flex-1'
+                                  />
+                                  <Button
+                                    type='button'
+                                    size='sm'
+                                    variant='ghost'
+                                    onClick={() => {
+                                      const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
+                                      curRules[rIdx] = { ...curRules[rIdx], caseSensitive: !curRules[rIdx].caseSensitive };
+                                      updateQuestion(currentStep, {
+                                        ...editedQuiz.questions[currentStep],
+                                        inputBranchRules: curRules,
+                                      });
+                                    }}
+                                    className={cn('h-8 px-2 text-[9px] font-bold border', rule.caseSensitive ? 'border-pw-primary text-pw-primary' : 'border-white/10 text-pw-muted')}>
+                                    {rule.caseSensitive ? 'Aa (Exact)' : 'aa (Any Case)'}
+                                  </Button>
+                                  <Button
+                                    type='button'
+                                    size='icon'
+                                    variant='ghost'
+                                    onClick={() => {
+                                      const curRules = (editedQuiz.questions[currentStep].inputBranchRules || []).filter((_, i) => i !== rIdx);
+                                      updateQuestion(currentStep, {
+                                        ...editedQuiz.questions[currentStep],
+                                        inputBranchRules: curRules,
+                                      });
+                                    }}
+                                    className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
+                                    <Trash2 className='h-3.5 w-3.5' />
+                                  </Button>
+                                </div>
+
+                                <div className='flex items-center gap-2 text-[10px] text-pw-muted'>
+                                  <span>Route to:</span>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant='outline' size='sm' className='h-6 text-[10px] bg-white/5 border-white/10 text-pw-primary font-bold'>
+                                        {rule.skipToCat ? `Group: ${rule.skipToCat}` : rule.skipTo === 'end' ? '⛔ Finish' : rule.skipTo ? `Q${editedQuiz.questions.findIndex(q => q.id === rule.skipTo) + 1}` : 'Next Question'}
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52'>
+                                      <DropdownMenuItem onClick={() => {
+                                        const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
+                                        curRules[rIdx] = { ...curRules[rIdx], skipTo: undefined, skipToCat: undefined };
+                                        updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], inputBranchRules: curRules });
+                                      }}>Next Question (Default)</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => {
+                                        const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
+                                        curRules[rIdx] = { ...curRules[rIdx], skipTo: 'end', skipToCat: undefined };
+                                        updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], inputBranchRules: curRules });
+                                      }}>⛔ Finish Assessment</DropdownMenuItem>
+                                      {editedQuiz.questions.map((qItem, qI) => (
+                                        <DropdownMenuItem key={qItem.id} onClick={() => {
+                                          const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
+                                          curRules[rIdx] = { ...curRules[rIdx], skipTo: qItem.id, skipToCat: undefined };
+                                          updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], inputBranchRules: curRules });
+                                        }}>Q{qI + 1}: {qItem.text.slice(0, 18)}</DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className='space-y-2 mt-2 border-t border-white/5 pt-3'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest block'>
                               Correct Explanation (Optional)
                             </label>
                             <textarea
                               value={
-                                editedQuiz.questions[currentStep]
-                                  .correctExplanation || ''
+                                editedQuiz.questions[currentStep].correctExplanation || ''
                               }
                               onChange={(e) =>
                                 updateQuestion(currentStep, {
@@ -2034,7 +2160,7 @@ const QuizBuilder = ({
                                 })
                               }
                               placeholder='Explain why this is correct...'
-                              className='w-full h-full max-h-[200px] bg-white/5 border border-white/10 rounded-xl p-4 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
+                              className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
                             />
                           </div>
                         </div>
@@ -2211,22 +2337,72 @@ const QuizBuilder = ({
                                       <Check className='h-3 w-3' />
                                     </button>
                                   )}
-                                  <Input
-                                    value={opt.text}
-                                    onChange={(e) => {
-                                      const newOpts = [
-                                        ...(editedQuiz.questions[currentStep]
-                                          .options as QuizOption[]),
-                                      ];
-                                      newOpts[idx].text = e.target.value;
-                                      updateQuestion(currentStep, {
-                                        ...editedQuiz.questions[currentStep],
-                                        options: newOpts,
-                                      });
-                                    }}
-                                    placeholder={`Option ${idx + 1}`}
-                                    className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1'
-                                  />
+                                  <div className='flex items-center gap-2 flex-1 min-w-0'>
+                                    <Input
+                                      value={opt.text}
+                                      onChange={(e) => {
+                                        const newOpts = [
+                                          ...(editedQuiz.questions[currentStep]
+                                            .options as QuizOption[]),
+                                        ];
+                                        newOpts[idx].text = e.target.value;
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          options: newOpts,
+                                        });
+                                      }}
+                                      placeholder={`Option ${idx + 1}`}
+                                      className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1'
+                                    />
+
+                                    {/* jules edit: Option Image Upload button & preview */}
+                                    {opt.imageUrl ?
+                                      <div className='relative shrink-0 group/img'>
+                                        <img
+                                          src={opt.imageUrl}
+                                          alt='Option'
+                                          className='h-8 w-8 object-cover rounded-md border border-white/10'
+                                        />
+                                        <button
+                                          type='button'
+                                          onClick={() => {
+                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                            delete newOpts[idx].imageUrl;
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[currentStep],
+                                              options: newOpts,
+                                            });
+                                          }}
+                                          className='absolute -top-1 -right-1 h-4 w-4 rounded-full bg-pw-danger text-white flex items-center justify-center text-[8px] font-bold opacity-0 group-hover/img:opacity-100 transition-opacity'>
+                                          ✕
+                                        </button>
+                                      </div>
+                                    : <label className='cursor-pointer text-pw-muted hover:text-pw-primary transition-colors p-1 shrink-0' title='Upload option image'>
+                                        <Image className='h-4 w-4' />
+                                        <input
+                                          type='file'
+                                          accept='image/*'
+                                          className='hidden'
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              const reader = new FileReader();
+                                              reader.onload = (ev) => {
+                                                const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                                newOpts[idx].imageUrl = ev.target?.result as string;
+                                                updateQuestion(currentStep, {
+                                                  ...editedQuiz.questions[currentStep],
+                                                  options: newOpts,
+                                                });
+                                                toast.success('Option image uploaded!');
+                                              };
+                                              reader.readAsDataURL(file);
+                                            }
+                                          }}
+                                        />
+                                      </label>
+                                    }
+                                  </div>
 
                                   <div className='flex items-center gap-1 shrink-0'>
                                     {/* Branching Logic for Option */}
@@ -3190,7 +3366,116 @@ export default function QuizPage() {
                 </div>
               </div>
 
-              <div className='space-y-4 pb-20'>
+              <div className='space-y-6 pb-20'>
+                {/* jules edit: Admin Analytics Overview for Feedback Responses */}
+                {viewingResponses.responses && viewingResponses.responses.length > 0 && (() => {
+                  const responses = viewingResponses.responses;
+                  const totalParticipants = responses.length;
+                  let totalPass = 0;
+                  let totalFail = 0;
+                  let timeouts = 0;
+                  let completions = 0;
+                  let selfSubmits = 0;
+
+                  const categoryStats: Record<string, { attempts: number; pass: number; fail: number }> = {};
+                  const questionStats: Record<string, { text: string; correct: number; incorrect: number; topWrongOption?: string }> = {};
+
+                  responses.forEach((resp) => {
+                    const reason = resp.submissionReason || 'completion';
+                    if (reason === 'timeout') timeouts++;
+                    else if (reason === 'self_submit') selfSubmits++;
+                    else completions++;
+
+                    const passCutoff = Math.ceil((resp.totalQuestions || viewingResponses.questions.length) * 0.5);
+                    if (resp.score >= passCutoff) totalPass++;
+                    else totalFail++;
+
+                    if (resp.categoryScores) {
+                      Object.entries(resp.categoryScores).forEach(([cat, stat]) => {
+                        if (!categoryStats[cat]) categoryStats[cat] = { attempts: 0, pass: 0, fail: 0 };
+                        categoryStats[cat].attempts += stat.total;
+                        categoryStats[cat].pass += stat.correct;
+                        categoryStats[cat].fail += (stat.total - stat.correct);
+                      });
+                    }
+
+                    resp.answers?.forEach((ans) => {
+                      const qObj = viewingResponses.questions.find((q) => q.id === ans.questionId);
+                      if (qObj) {
+                        if (!questionStats[qObj.id]) {
+                          questionStats[qObj.id] = { text: qObj.text, correct: 0, incorrect: 0 };
+                        }
+                        if (ans.correct) questionStats[qObj.id].correct++;
+                        else questionStats[qObj.id].incorrect++;
+                      }
+                    });
+                  });
+
+                  const passPct = Math.round((totalPass / totalParticipants) * 100);
+
+                  return (
+                    <Card className='p-5 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
+                      <div className='flex items-center justify-between border-b border-white/5 pb-2'>
+                        <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
+                          <BarChart2 className='h-4 w-4' /> Response Analytics Overview
+                        </span>
+                        <span className='text-[10px] font-mono text-pw-muted'>
+                          {totalParticipants} Total Submissions
+                        </span>
+                      </div>
+
+                      {/* Stat Metrics Grid */}
+                      <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-center'>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Pass Rate</span>
+                          <span className='text-xl font-bold font-mono text-pw-success'>{passPct}%</span>
+                          <span className='text-[9px] text-pw-muted block'>{totalPass} Pass / {totalFail} Fail</span>
+                        </div>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Completions</span>
+                          <span className='text-xl font-bold font-mono text-pw-cyan'>{completions}</span>
+                          <span className='text-[9px] text-pw-muted block'>Full finishes</span>
+                        </div>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Timeouts</span>
+                          <span className='text-xl font-bold font-mono text-pw-warning'>{timeouts}</span>
+                          <span className='text-[9px] text-pw-muted block'>Timer expired</span>
+                        </div>
+                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Self-Submits</span>
+                          <span className='text-xl font-bold font-mono text-pw-primary'>{selfSubmits}</span>
+                          <span className='text-[9px] text-pw-muted block'>Early submissions</span>
+                        </div>
+                      </div>
+
+                      {/* Category Breakdown Table */}
+                      {Object.keys(categoryStats).length > 0 && (
+                        <div className='space-y-2 pt-2 border-t border-white/5'>
+                          <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                            Category Performance Analysis
+                          </span>
+                          <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
+                            {Object.entries(categoryStats).map(([cat, stat]) => {
+                              const catPassPct = stat.attempts > 0 ? Math.round((stat.pass / stat.attempts) * 100) : 0;
+                              return (
+                                <div key={cat} className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
+                                  <span className='font-bold text-white uppercase text-[10px]'>{cat}</span>
+                                  <div className='flex items-center gap-3 font-mono text-[10px]'>
+                                    <span>{stat.pass} Pass / {stat.fail} Fail</span>
+                                    <span className={cn('font-bold', catPassPct >= 50 ? 'text-pw-success' : 'text-pw-danger')}>
+                                      {catPassPct}%
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })()}
+
                 {(
                   !viewingResponses.responses ||
                   viewingResponses.responses.length === 0

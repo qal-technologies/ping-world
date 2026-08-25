@@ -102,6 +102,41 @@ export function ComposerLayout() {
   const { state, dispatch, user, premiumTier } = useComposer();
   const [activeTab, setActiveTab] = useState<ToolTab>('analysis');
   const [isPosting, setIsPosting] = useState(false);
+  // jules edit: Scheduled post states
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('12:00');
+
+  const handleSchedulePost = async () => {
+    if (!scheduledDate) {
+      return toast.error('Please pick a valid schedule date!');
+    }
+    const targetIso = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
+    setIsPosting(true);
+    const toastId = toast.loading('Scheduling post...');
+
+    try {
+      const sanitizedBody = sanitizeInput(state.baseContent);
+      const scheduledLog = {
+        id: `post-sched-${Date.now()}`,
+        content: sanitizedBody,
+        platforms: state.selectedPlatforms,
+        created_at: new Date().toISOString(),
+        scheduled_for: targetIso,
+        status: 'scheduled',
+      };
+
+      await HybridStorage.save(scheduledLog.id, scheduledLog, 'composer_history');
+      setShowScheduleModal(false);
+      toast.dismiss(toastId);
+      toast.success(`🎉 Post scheduled for ${new Date(targetIso).toLocaleString()}!`);
+    } catch (e: any) {
+      toast.dismiss(toastId);
+      toast.error('Failed to schedule post.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const handlePostToSocials = async () => {
     if (!state.isOnline) {
@@ -292,6 +327,16 @@ export function ComposerLayout() {
 
               <AnimatePresence mode='popLayout'>
                 <div className='h-12 bg-transparent w-full items-center justify-end flex gap-2'>
+                  {/* Schedule Post Button for Premium Users */}
+                  {state.isPremium && (
+                    <button
+                      title='Schedule Post'
+                      onClick={() => setShowScheduleModal(true)}
+                      className='h-10 px-4 rounded-full border border-pw-warning/30 bg-pw-warning/10 text-pw-warning text-xs font-bold flex items-center gap-1.5 hover:bg-pw-warning/20 transition-all'>
+                      <Crown className='h-3.5 w-3.5' /> Schedule
+                    </button>
+                  )}
+
                   <button
                     title='Post to social platforms'
                     onClick={handlePostToSocials}
@@ -320,6 +365,56 @@ export function ComposerLayout() {
 
                 <InstagramCanvasSettings />
               </AnimatePresence>
+
+              {/* Schedule Post Dialog Modal */}
+              {showScheduleModal && (
+                <div className='fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4'>
+                  <div className='bg-[#0c0d1c] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white'>
+                    <div className='flex items-center gap-2 text-pw-warning'>
+                      <Crown className='h-5 w-5' />
+                      <h3 className='text-lg font-bold font-display'>Schedule Post</h3>
+                    </div>
+                    <p className='text-xs text-pw-muted'>
+                      Pick a date & time to automatically queue this post.
+                    </p>
+
+                    <div className='space-y-3'>
+                      <div className='space-y-1'>
+                        <label className='text-[10px] font-bold text-pw-muted uppercase'>Date</label>
+                        <input
+                          type='date'
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          className='w-full h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white'
+                        />
+                      </div>
+
+                      <div className='space-y-1'>
+                        <label className='text-[10px] font-bold text-pw-muted uppercase'>Time</label>
+                        <input
+                          type='time'
+                          value={scheduledTime}
+                          onChange={(e) => setScheduledTime(e.target.value)}
+                          className='w-full h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white'
+                        />
+                      </div>
+                    </div>
+
+                    <div className='flex gap-2 pt-2'>
+                      <button
+                        onClick={() => setShowScheduleModal(false)}
+                        className='flex-1 h-9 rounded-xl border border-white/10 text-xs font-bold text-pw-muted hover:text-white'>
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSchedulePost}
+                        className='flex-1 h-9 rounded-xl btn-primary text-xs font-bold'>
+                        Confirm
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <Card
                 className={cn(

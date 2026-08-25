@@ -1,6 +1,7 @@
 import { COMPANY } from "@/lib/config/company";
 
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import CalculatorClient from "./CalculatorClient";
 
 export const metadata: Metadata = {
@@ -29,5 +30,9 @@ export const metadata: Metadata = {
 };
 
 export default function CalculatorPage() {
-  return <CalculatorClient />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-pw-muted text-xs">Loading Calculator...</div>}>
+      <CalculatorClient />
+    </Suspense>
+  );
 }

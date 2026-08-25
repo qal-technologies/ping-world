@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Calculator,
   Percent,
@@ -34,8 +35,19 @@ const parseFormattedFloat = (val: string): number => {
 };
 
 export default function CalculatorPage() {
-  // Tab control
-  const [activeTab, setActiveTab] = useState('basic');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Tab control synced with URL query param `?tab=tabId`
+  const urlTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(urlTab || 'basic');
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', val);
+    router.replace(url.pathname + url.search, { scroll: false });
+  };
 
   // Basic Math States
   const [calcDisplay, setCalcDisplay] = useState('0');
@@ -428,8 +440,8 @@ export default function CalculatorPage() {
 
       <Card className='bg-transparent ring-0 space-y-8 flex items-center shrink-0'>
         <Tabs
-          defaultValue='basic'
-          onValueChange={setActiveTab}
+          value={activeTab}
+          onValueChange={handleTabChange}
           className='w-full flex flex-col max-w-[700px]'>
           <TabsList
             className='flex bg-white/5 mb-8 gap-2 px-1 min-h-10 w-full sm:min-w-full rounded-full gap-1 overflow-x-auto'

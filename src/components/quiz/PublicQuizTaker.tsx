@@ -1242,6 +1242,7 @@ export default function PublicQuizTaker() {
               {currentOptions.map((opt: any, oIdx) => {
                 const optId = opt.id || String(oIdx);
                 const optText = opt.text || String(opt);
+                const optImage = typeof opt === 'object' ? opt.imageUrl : undefined;
                 const formattedOptionText = formatDetailVars(optText);
 
                 const isSelected =
@@ -1300,18 +1301,28 @@ export default function PublicQuizTaker() {
                       }
                     }}
                     className={cn(
-                      'w-full h-11 px-3 text-left rounded-xl border transition-all text-xs flex items-center justify-between backdrop-blur-lg',
+                      'w-full min-h-11 p-3 text-left rounded-xl border transition-all text-xs flex flex-col sm:flex-row items-center justify-between gap-3 backdrop-blur-lg',
                       isSelected ?
                         'bg-pw-primary/12 border-pw-primary text-white font-bold'
                       : 'bg-white/5 border-white/10 text-white/80',
                     )}>
-                    <span
-                      className='whitespace-pre-wrap'
-                      dangerouslySetInnerHTML={{ __html: formattedOptionText }}
-                    />
+                    <div className='flex items-center gap-3 flex-1 min-w-0'>
+                      {optImage && (
+                        <img
+                          src={optImage}
+                          alt='Option attachment'
+                          className='h-12 w-12 object-cover rounded-lg border border-white/10 shrink-0'
+                        />
+                      )}
+                      <span
+                        className='whitespace-pre-wrap'
+                        dangerouslySetInnerHTML={{ __html: formattedOptionText }}
+                      />
+                    </div>
+
                     <CheckCircle
                       className={cn(
-                        'h-4 w-4 text-pw-primary transition-opacity',
+                        'h-4 w-4 text-pw-primary transition-opacity shrink-0',
                         isSelected ? 'opacity-100' : 'opacity-0',
                       )}
                     />

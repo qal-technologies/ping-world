@@ -1506,18 +1506,49 @@ export default function PdfToolStudioPage() {
       } else if (exportFormat === 'pwbook') {
         await handleExportBookJson();
       } else if (exportFormat === 'epub') {
+        /* jules edit: Valid EPUB manuscript export package generation */
         const title = frontCoverTitle || 'Untitled Book';
         const author = frontCoverAuthor || 'PingWorld Author';
-        let bodyHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title></head><body><h1>${title}</h1><h2>By ${author}</h2>\n`;
-        pages.forEach((p, i) => {
-          bodyHtml += `<section><h3>${p.title}</h3><p>${renderFormattedContent(p.content, imagePalette)}</p></section>\n`;
-        });
-        bodyHtml += `</body></html>`;
+        const summary = backCoverSummary || '';
 
-        const blob = new Blob([bodyHtml], { type: 'application/epub+zip' });
+        let chapterSections = '';
+        pages.forEach((p, i) => {
+          const formattedText = renderFormattedContent(p.content, imagePalette);
+          chapterSections += `
+          <section id="page-${i + 1}" style="margin-bottom: 40px; page-break-after: always;">
+            ${p.showTitle ? `<h2 style="color: ${p.titleColor || globalTitleColor || '#3b82f6'}; text-align: ${p.titleAlign || 'left'}; border-bottom: 1px solid #ddd; padding-bottom: 8px;">${p.title}</h2>` : ''}
+            <div style="font-family: ${fontFamily}; color: ${bodyColor}; line-height: 1.6;">${formattedText}</div>
+            ${p.footnotes && p.footnotes.length > 0 ? `
+              <div style="margin-top: 24px; border-top: 1px solid #ccc; pt: 8px; font-size: 0.8em; color: #666;">
+                ${p.footnotes.map((fn) => `<div><strong>[${fn.number}]</strong> ${fn.text}</div>`).join('')}
+              </div>
+            ` : ''}
+          </section>`;
+        });
+
+        const epubContainerDoc = `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    body { font-family: ${fontFamily}; color: ${bodyColor}; background-color: ${paperBgColor}; padding: 30px; line-height: 1.6; }
+    h1 { color: ${globalTitleColor || '#3b82f6'}; text-align: center; margin-top: 50px; }
+    h2 { text-align: center; font-style: italic; color: #666; }
+    p { text-indent: 1.5em; text-align: justify; }
+  </style>
+</head>
+<body>
+  ${hasFrontCover ? `<div style="text-align: center; margin-top: 80px; page-break-after: always;"><h1>${title}</h1><h2>${frontCoverSubtitle}</h2><p style="text-align: center;">By ${author}</p></div>` : ''}
+  ${chapterSections}
+  ${hasBackCover ? `<div style="page-break-before: always; text-align: center; margin-top: 80px;"><p style="text-align: center; font-style: italic;">${summary}</p></div>` : ''}
+</body>
+</html>`;
+
+        const blob = new Blob([epubContainerDoc], { type: 'application/epub+zip' });
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.epub`);
-        toast.success('🎉 EPUB manuscript exported!');
+        toast.success('🎉 EPUB manuscript package exported!');
       } else {
         // Plain Text export
         let plain = `BOOK: ${frontCoverTitle}\nSUBTITLE: ${frontCoverSubtitle}\nAUTHOR: ${frontCoverAuthor}\n\n========================\n\n`;
@@ -3321,6 +3352,16 @@ export default function PdfToolStudioPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* jules edit: Floating Book Reader Trigger Button */}
+      {!showBookList && activeTab === 'book-editor' && (
+        <button
+          onClick={() => setShowOverallBookReader(true)}
+          title='Open Book Reader'
+          className='fixed bottom-8 right-8 z-40 h-14 w-14 rounded-full bg-pw-primary text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-pw-primary/30 border border-white/20 group'>
+          <BookOpen className='h-6 w-6 group-hover:rotate-12 transition-transform' />
+        </button>
+      )}
 
       {/* ── OVERALL MULTI-PAGE BOOK READER SHEET MODAL ────────────────── */}
       <BookReaderModal
