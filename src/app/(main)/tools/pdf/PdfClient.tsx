@@ -1416,7 +1416,17 @@ export default function PdfToolStudioPage() {
           doc.setFont('helvetica', 'normal');
 
           const startY = page.showTitle ? 42 : 25;
-          const cleanLines = page.content.replace(/<[^>]*>/g, '');
+          /* jules edit: Clean tags while preserving palette image labels */
+          let processedText = page.content;
+          if (Array.isArray(imagePalette)) {
+            imagePalette.forEach((item) => {
+              const tagId = new RegExp(`\\[img:${item.id}\\]`, 'gi');
+              const tagName = new RegExp(`\\[img:${item.name}\\]`, 'gi');
+              const label = `\n[Image Graphic: ${item.name}]\n`;
+              processedText = processedText.replace(tagId, label).replace(tagName, label);
+            });
+          }
+          const cleanLines = processedText.replace(/<[^>]*>/g, '');
           const splitBody = doc.splitTextToSize(cleanLines, 180);
           doc.text(splitBody, 15, startY);
 
@@ -1506,11 +1516,68 @@ export default function PdfToolStudioPage() {
       } else if (exportFormat === 'pwbook') {
         await handleExportBookJson();
       } else if (exportFormat === 'epub') {
-        /* jules edit: Valid EPUB manuscript export package generation */
+        /* jules edit: Valid EPUB 3.0 ZIP Container package generation via JSZip */
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
         const title = frontCoverTitle || 'Untitled Book';
         const author = frontCoverAuthor || 'PingWorld Author';
         const summary = backCoverSummary || '';
 
+        // 1. mimetype (must be uncompressed at container root)
+        zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+
+        // 2. META-INF/container.xml
+        zip.file(
+          'META-INF/container.xml',
+          `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+        );
+
+        // 3. OEBPS/content.opf
+        zip.file(
+          'OEBPS/content.opf',
+          `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>${title}</dc:title>
+    <dc:creator>${author}</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:identifier id="BookId">urn:uuid:${activeBookId}</dc:identifier>
+  </metadata>
+  <manifest>
+    <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="toc">
+    <itemref idref="chapter"/>
+  </spine>
+</package>`
+        );
+
+        // 4. OEBPS/toc.ncx
+        zip.file(
+          'OEBPS/toc.ncx',
+          `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:${activeBookId}"/>
+  </head>
+  <docTitle><text>${title}</text></docTitle>
+  <navMap>
+    <navPoint id="navPoint-1" playOrder="1">
+      <navLabel><text>${title}</text></navLabel>
+      <content src="chapter.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>`
+        );
+
+        // 5. OEBPS/chapter.xhtml
         let chapterSections = '';
         pages.forEach((p, i) => {
           const formattedText = renderFormattedContent(p.content, imagePalette);
@@ -1519,14 +1586,15 @@ export default function PdfToolStudioPage() {
             ${p.showTitle ? `<h2 style="color: ${p.titleColor || globalTitleColor || '#3b82f6'}; text-align: ${p.titleAlign || 'left'}; border-bottom: 1px solid #ddd; padding-bottom: 8px;">${p.title}</h2>` : ''}
             <div style="font-family: ${fontFamily}; color: ${bodyColor}; line-height: 1.6;">${formattedText}</div>
             ${p.footnotes && p.footnotes.length > 0 ? `
-              <div style="margin-top: 24px; border-top: 1px solid #ccc; pt: 8px; font-size: 0.8em; color: #666;">
+              <div style="margin-top: 24px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 0.8em; color: #666;">
                 ${p.footnotes.map((fn) => `<div><strong>[${fn.number}]</strong> ${fn.text}</div>`).join('')}
               </div>
             ` : ''}
           </section>`;
         });
 
-        const epubContainerDoc = `<?xml version="1.0" encoding="UTF-8"?>
+        const epubXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en">
 <head>
   <meta charset="utf-8" />
@@ -1545,10 +1613,18 @@ export default function PdfToolStudioPage() {
 </body>
 </html>`;
 
-        const blob = new Blob([epubContainerDoc], { type: 'application/epub+zip' });
+        zip.file('OEBPS/chapter.xhtml', epubXhtml);
+
+        const epubContentBlob = await zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/epub+zip',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 9 },
+        });
+
         const { saveAs } = await import('file-saver');
-        saveAs(blob, `${finalFilename}.epub`);
-        toast.success('🎉 EPUB manuscript package exported!');
+        saveAs(epubContentBlob, `${finalFilename}.epub`);
+        toast.success('🎉 Valid EPUB 3.0 manuscript archive exported!');
       } else {
         // Plain Text export
         let plain = `BOOK: ${frontCoverTitle}\nSUBTITLE: ${frontCoverSubtitle}\nAUTHOR: ${frontCoverAuthor}\n\n========================\n\n`;
