@@ -3367,7 +3367,7 @@ export default function QuizPage() {
               </div>
 
               <div className='space-y-6 pb-20'>
-                {/* jules edit: Admin Analytics Overview for Feedback Responses */}
+                {/* jules edit: Comprehensive Collapsible Admin Analytics Overview for Feedback Responses */}
                 {viewingResponses.responses && viewingResponses.responses.length > 0 && (() => {
                   const responses = viewingResponses.responses;
                   const totalParticipants = responses.length;
@@ -3376,15 +3376,33 @@ export default function QuizPage() {
                   let timeouts = 0;
                   let completions = 0;
                   let selfSubmits = 0;
+                  let quits = 0;
 
                   const categoryStats: Record<string, { attempts: number; pass: number; fail: number }> = {};
-                  const questionStats: Record<string, { text: string; correct: number; incorrect: number; topWrongOption?: string }> = {};
+                  const questionStats: Record<string, { text: string; correct: number; incorrect: number; wrongChoices: Record<string, number> }> = {};
+                  const countriesCount: Record<string, number> = {};
+
+                  let bestTaker = { name: 'None', score: -1 };
+                  let worstTaker = { name: 'None', score: 999999 };
 
                   responses.forEach((resp) => {
                     const reason = resp.submissionReason || 'completion';
                     if (reason === 'timeout') timeouts++;
                     else if (reason === 'self_submit') selfSubmits++;
+                    else if (reason === 'quit') quits++;
                     else completions++;
+
+                    if (resp.country) {
+                      countriesCount[resp.country] = (countriesCount[resp.country] || 0) + 1;
+                    }
+
+                    const takerName = resp.userData.name || resp.userData.email || 'Anonymous Taker';
+                    if (resp.score > bestTaker.score) {
+                      bestTaker = { name: takerName, score: resp.score };
+                    }
+                    if (resp.score < worstTaker.score) {
+                      worstTaker = { name: takerName, score: resp.score };
+                    }
 
                     const passCutoff = Math.ceil((resp.totalQuestions || viewingResponses.questions.length) * 0.5);
                     if (resp.score >= passCutoff) totalPass++;
@@ -3403,50 +3421,87 @@ export default function QuizPage() {
                       const qObj = viewingResponses.questions.find((q) => q.id === ans.questionId);
                       if (qObj) {
                         if (!questionStats[qObj.id]) {
-                          questionStats[qObj.id] = { text: qObj.text, correct: 0, incorrect: 0 };
+                          questionStats[qObj.id] = { text: qObj.text, correct: 0, incorrect: 0, wrongChoices: {} };
                         }
-                        if (ans.correct) questionStats[qObj.id].correct++;
-                        else questionStats[qObj.id].incorrect++;
+                        if (ans.correct) {
+                          questionStats[qObj.id].correct++;
+                        } else {
+                          questionStats[qObj.id].incorrect++;
+                          const choiceText = resolveAnswerToText(viewingResponses, qObj.id, ans.answer) || 'Selected Incorrect Option';
+                          questionStats[qObj.id].wrongChoices[choiceText] = (questionStats[qObj.id].wrongChoices[choiceText] || 0) + 1;
+                        }
                       }
                     });
                   });
 
                   const passPct = Math.round((totalPass / totalParticipants) * 100);
+                  const topFailedQuestion = Object.values(questionStats).sort((a, b) => b.incorrect - a.incorrect)[0];
 
                   return (
-                    <Card className='p-5 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
+                    <Card className='p-3 sm:p-4 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
                       <div className='flex items-center justify-between border-b border-white/5 pb-2'>
                         <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
-                          <BarChart2 className='h-4 w-4' /> Response Analytics Overview
+                          <BarChart2 className='h-4 w-4' /> Assessment Analytics
                         </span>
                         <span className='text-[10px] font-mono text-pw-muted'>
-                          {totalParticipants} Total Submissions
+                          {totalParticipants} Total Participants
                         </span>
+                      </div>
+
+                      {/* Visual Pass/Fail Bar */}
+                      <div className='space-y-1.5'>
+                        <div className='flex justify-between text-xs font-mono font-bold'>
+                          <span className='text-pw-success'>{totalPass} Passed ({passPct}%)</span>
+                          <span className='text-pw-danger'>{totalFail} Failed ({100 - passPct}%)</span>
+                        </div>
+                        <div className='w-full bg-white/10 h-2.5 rounded-full overflow-hidden flex'>
+                          <div style={{ width: `${passPct}%` }} className='bg-pw-success h-full transition-all duration-300' />
+                          <div style={{ width: `${100 - passPct}%` }} className='bg-pw-danger h-full transition-all duration-300' />
+                        </div>
                       </div>
 
                       {/* Stat Metrics Grid */}
-                      <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-center'>
-                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Pass Rate</span>
-                          <span className='text-xl font-bold font-mono text-pw-success'>{passPct}%</span>
-                          <span className='text-[9px] text-pw-muted block'>{totalPass} Pass / {totalFail} Fail</span>
+                      <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                        <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Full Finishes</span>
+                          <span className='text-lg font-bold font-mono text-pw-cyan'>{completions}</span>
                         </div>
                         <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Completions</span>
-                          <span className='text-xl font-bold font-mono text-pw-cyan'>{completions}</span>
-                          <span className='text-[9px] text-pw-muted block'>Full finishes</span>
+                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Timeouts</span>
+                          <span className='text-lg font-bold font-mono text-pw-warning'>{timeouts}</span>
                         </div>
-                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Timeouts</span>
-                          <span className='text-xl font-bold font-mono text-pw-warning'>{timeouts}</span>
-                          <span className='text-[9px] text-pw-muted block'>Timer expired</span>
+                        <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Self-Submits</span>
+                          <span className='text-lg font-bold font-mono text-pw-primary'>{selfSubmits}</span>
                         </div>
-                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[9px] font-bold uppercase text-pw-muted block'>Self-Submits</span>
-                          <span className='text-xl font-bold font-mono text-pw-primary'>{selfSubmits}</span>
-                          <span className='text-[9px] text-pw-muted block'>Early submissions</span>
+                        <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Quits</span>
+                          <span className='text-lg font-bold font-mono text-pw-danger'>{quits}</span>
                         </div>
                       </div>
+
+                      {/* Participant Insights */}
+                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-white/5 pt-3'>
+                        <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                          <span className='text-[9px] text-pw-muted uppercase font-bold block'>Top Scoring Participant</span>
+                          <span className='font-bold text-pw-success block truncate'>{bestTaker.name}</span>
+                        </div>
+                        <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                          <span className='text-[9px] text-pw-muted uppercase font-bold block'>Lowest Scoring Participant</span>
+                          <span className='font-bold text-pw-danger block truncate'>{worstTaker.name}</span>
+                        </div>
+                      </div>
+
+                      {/* Most Failed Question Insight */}
+                      {topFailedQuestion && topFailedQuestion.incorrect > 0 && (
+                        <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1'>
+                          <span className='text-[9px] font-bold uppercase text-pw-danger block'>Most Missed Question</span>
+                          <p className='font-bold text-white line-clamp-1'>&quot;{topFailedQuestion.text}&quot;</p>
+                          <p className='text-[10px] text-pw-muted font-mono'>
+                            Missed {topFailedQuestion.incorrect} times out of {topFailedQuestion.correct + topFailedQuestion.incorrect} attempts
+                          </p>
+                        </div>
+                      )}
 
                       {/* Category Breakdown Table */}
                       {Object.keys(categoryStats).length > 0 && (

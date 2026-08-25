@@ -379,14 +379,17 @@ export default function PublicQuizTaker() {
     Record<string, (string | QuizOption)[]>
   >({});
 
+  /* jules edit: Ref for auto-scroll to the first question on scroll layout start */
   const bottomRef = React.useRef<HTMLDivElement>(null);
+  const firstQuestionRef = React.useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (quiz?.quizScroll && started) {
       setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+        firstQuestionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     }
-  }, [currentQuestion, started, quiz?.quizScroll]);
+  }, [started, quiz?.quizScroll]);
 
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
@@ -546,7 +549,7 @@ export default function PublicQuizTaker() {
           );
         }
 
-        // Shuffle questions
+        /* jules edit: Map questions by category and independence on load with strict category isolation */
         let questionsToUse = [...migratedQuestions];
         if (finalQuiz.randomizeQuestions) {
           const uncategorized = migratedQuestions.filter(
@@ -555,10 +558,11 @@ export default function PublicQuizTaker() {
           const categoriesMap: Record<string, Question[]> = {};
           migratedQuestions.forEach((q) => {
             if (q.category && q.category.trim() !== '') {
-              if (!categoriesMap[q.category]) {
-                categoriesMap[q.category] = [];
+              const catKey = q.category.trim();
+              if (!categoriesMap[catKey]) {
+                categoriesMap[catKey] = [];
               }
-              categoriesMap[q.category].push(q);
+              categoriesMap[catKey].push(q);
             }
           });
 
@@ -572,7 +576,7 @@ export default function PublicQuizTaker() {
           }
 
           const shuffledCategories: Question[] = [];
-          Object.entries(categoriesMap).forEach(([catName, questions]) => {
+          Object.entries(categoriesMap).forEach(([, questions]) => {
             const shuffledCat = [...questions];
             for (let i = shuffledCat.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
@@ -587,14 +591,7 @@ export default function PublicQuizTaker() {
           questionsToUse = [...shuffledUncat, ...shuffledCategories];
         }
         setActiveQuestions(questionsToUse);
-        const firstUncatIdx = questionsToUse.findIndex(
-          (quest) => !quest.category || quest.category.trim() === '',
-        );
-        if (firstUncatIdx !== -1) {
-          setCurrentQuestion(firstUncatIdx);
-        } else {
-          setCurrentQuestion(0);
-        }
+        setCurrentQuestion(0);
 
         // Pre-shuffle options
         if (finalQuiz.randomizeOptions) {
@@ -834,9 +831,12 @@ export default function PublicQuizTaker() {
     );
   };
 
+  /* jules edit: Perfect input keyword matching and input branching evaluation */
   const computeIsCorrect = (qId: string, answer: any) => {
     const secureAnswer = correctAnswersRef.current[qId];
-    if (!secureAnswer) return true;
+    const question = activeQuestions.find((quest) => quest.id === qId);
+    if (!question) return false;
+
     let decodedCorrect: any = secureAnswer;
     try {
       if (typeof secureAnswer === 'string' && secureAnswer.length > 5) {
@@ -847,9 +847,6 @@ export default function PublicQuizTaker() {
       decodedCorrect = secureAnswer;
     }
 
-    const question = activeQuestions.find((quest) => quest.id === qId);
-    if (!question) return false;
-
     if (question.type === 'checkbox') {
       const correctIds =
         Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect];
@@ -859,7 +856,21 @@ export default function PublicQuizTaker() {
         answer.every((val: any) => correctIds.includes(val))
       );
     } else if (question.type === 'input') {
-      const userAns = String(formatDetailVars(answer)).trim();
+      const userAns = String(formatDetailVars(answer || '')).trim();
+
+      // Check inputBranchRules first if present
+      if (question.inputBranchRules && question.inputBranchRules.length > 0) {
+        const matchingRule = question.inputBranchRules.find((rule) => {
+          if (!rule.keyword) return false;
+          const kw = String(formatDetailVars(rule.keyword)).trim();
+          return rule.caseSensitive ?
+              userAns.includes(kw)
+            : userAns.toLowerCase().includes(kw.toLowerCase());
+        });
+        if (matchingRule) return true;
+      }
+
+      if (!decodedCorrect && decodedCorrect !== 0) return true;
       const targetAns = String(formatDetailVars(decodedCorrect)).trim();
       return question.caseSensitive ?
           userAns === targetAns
@@ -1019,8 +1030,23 @@ export default function PublicQuizTaker() {
       let branchTarget: string | undefined = undefined;
       let branchCat: string | undefined = undefined;
 
-      // Option-level branching
-      if (q.type !== 'checkbox' && q.type !== 'input') {
+      /* jules edit: Handle option-level and input-rule level branching */
+      if (q.type === 'input') {
+        const userText = String(formatDetailVars(content || '')).trim();
+        if (q.inputBranchRules && q.inputBranchRules.length > 0) {
+          const matchedRule = q.inputBranchRules.find((rule) => {
+            if (!rule.keyword) return false;
+            const kw = String(formatDetailVars(rule.keyword)).trim();
+            return rule.caseSensitive ?
+                userText.includes(kw)
+              : userText.toLowerCase().includes(kw.toLowerCase());
+          });
+          if (matchedRule) {
+            if (matchedRule.skipTo) branchTarget = matchedRule.skipTo;
+            if (matchedRule.skipToCat) branchCat = matchedRule.skipToCat;
+          }
+        }
+      } else if (q.type !== 'checkbox') {
         const currentChoice =
           chosenOptionVal !== undefined ? chosenOptionVal : selectedOption;
 
@@ -1154,10 +1180,20 @@ export default function PublicQuizTaker() {
     return (
       <Card
         key={quest.id}
+        ref={index === 0 ? firstQuestionRef : undefined}
         className={cn(
           'sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300',
           !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
         )}>
+        {/* jules edit: Show Question Category tag if enabled or set */}
+        {(quiz?.showCategory || quest.category) && quest.category && (
+          <div className='mb-2'>
+            <span className='inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-[10px] font-bold uppercase tracking-wider'>
+              <Folder className='h-3 w-3' /> {quest.category}
+            </span>
+          </div>
+        )}
+
         <div className='flex items-start gap-3 mb-4'>
           {isScrollLayout ?
             <div className='flex items-baseline gap-2'>
