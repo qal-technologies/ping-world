@@ -42,19 +42,17 @@ export default function EncryptionDecryptionPage() {
   const searchParams = useSearchParams();
   const decryptSectionRef = useRef<HTMLDivElement>(null);
 
-  const [algo, setAlgo] = useState<"AES" | "TripleDES" | "RC4">("AES");
-
-  /* jules edit: Listen and persist active tab in URL query params ?tab=tabId */
   const urlTab = searchParams.get("tab");
-  const [mobileTab, setMobileTab] = useState<"encrypt" | "decrypt">(
-    urlTab === "decrypt" ? "decrypt" : "encrypt"
-  );
+  const [algo, setAlgo] = useState<"AES" | "TripleDES" | "RC4">("AES");
+  const [mobileTab, setMobileTab] = useState<"encrypt" | "decrypt">((urlTab === "decrypt" || urlTab === "encrypt") ? urlTab : "encrypt");
 
   const handleTabChange = (val: "encrypt" | "decrypt") => {
     setMobileTab(val);
-    const url = new URL(window.location.href);
-    url.searchParams.set("tab", val);
-    window.history.replaceState({}, "", url.pathname + url.search);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", val);
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
   };
 
   // Encrypt states

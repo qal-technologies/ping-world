@@ -1523,7 +1523,7 @@ export default function PdfToolStudioPage() {
       } else if (exportFormat === 'pwbook') {
         await handleExportBookJson();
       } else if (exportFormat === 'epub') {
-        /* jules edit: Valid EPUB manuscript export package generation with JSZip */
+        /* jules edit: Valid EPUB 3.0 ZIP Container package generation via JSZip */
         const JSZip = (await import('jszip')).default;
         const zip = new JSZip();
 
@@ -1531,7 +1531,7 @@ export default function PdfToolStudioPage() {
         const author = frontCoverAuthor || 'PingWorld Author';
         const summary = backCoverSummary || '';
 
-        // 1. mimetype (must be first, uncompressed in standard EPUB specs)
+        // 1. mimetype (must be uncompressed at container root)
         zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
 
         // 2. META-INF/container.xml
@@ -1545,7 +1545,46 @@ export default function PdfToolStudioPage() {
 </container>`
         );
 
-        // 3. Build HTML content chapters
+        // 3. OEBPS/content.opf
+        zip.file(
+          'OEBPS/content.opf',
+          `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>${title}</dc:title>
+    <dc:creator>${author}</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:identifier id="BookId">urn:uuid:${activeBookId}</dc:identifier>
+  </metadata>
+  <manifest>
+    <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="toc">
+    <itemref idref="chapter"/>
+  </spine>
+</package>`
+        );
+
+        // 4. OEBPS/toc.ncx
+        zip.file(
+          'OEBPS/toc.ncx',
+          `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:${activeBookId}"/>
+  </head>
+  <docTitle><text>${title}</text></docTitle>
+  <navMap>
+    <navPoint id="navPoint-1" playOrder="1">
+      <navLabel><text>${title}</text></navLabel>
+      <content src="chapter.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>`
+        );
+
+        // 5. OEBPS/chapter.xhtml
         let chapterSections = '';
         pages.forEach((p, i) => {
           const formattedText = renderFormattedContent(p.content, imagePalette);
