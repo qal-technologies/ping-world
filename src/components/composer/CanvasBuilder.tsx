@@ -238,6 +238,7 @@ export function CanvasBuilder() {
     if (!canvasRef.current) return;
     setDownloading(true);
     try {
+      /* jules edit: Add safe onclone handler to prevent html2canvas capture issues */
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(canvasRef.current, {
         scale: 2,
@@ -246,6 +247,16 @@ export function CanvasBuilder() {
         useCORS: true,
         allowTaint: true,
         imageTimeout: 5000,
+        onclone: (clonedDoc) => {
+          const allCloned = clonedDoc.querySelectorAll('*');
+          allCloned.forEach((node) => {
+            const el = node as HTMLElement;
+            if (el.style) {
+              if (el.style.backdropFilter) el.style.backdropFilter = 'none';
+              if ((el.style as any).webkitBackdropFilter) (el.style as any).webkitBackdropFilter = 'none';
+            }
+          });
+        },
       });
 
       // Add PingWorld watermark
