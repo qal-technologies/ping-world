@@ -34,6 +34,9 @@ import {
   AlertTriangle,
   CheckCircle,
   BarChart2,
+  MoreVertical,
+  XIcon,
+  Ungroup,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -60,6 +63,7 @@ import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
 import { computeExpiry, tierAtLeast } from '@/lib/config/premium';
+import {indexedDBLocalPersistence} from 'firebase/auth';
 
 // --- Types ---
 export type QuestionType =
@@ -75,7 +79,7 @@ export type QuestionType =
 export interface QuizOption {
   id: string; // questionId-index or uuid
   text: string;
-  imageUrl?: string; // jules edit: Image upload URL for option
+  uploadUrl?: string; // Image upload URL for option
   uploadType?: 'image' | 'video' | 'audio';
   skipTo?: string; // ID of the next question to jump to
   skipToCat?: string; // Category name to jump to (jumps to first question in category)
@@ -96,7 +100,7 @@ export interface Question {
   correctExplanation?: string;
   correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
   caseSensitive?: boolean; // for input type
-  inputBranchRules?: InputBranchRule[]; // jules edit: Branching rules for input type questions
+  inputBranchRules?: InputBranchRule[]; // Branching rules for input type questions
   elseSkipTo?: string; // Branching if no input rule matches
   elseSkipToCat?: string;
   min?: number; // for range
@@ -119,7 +123,15 @@ export interface Question {
 
 export interface Details {
   title: string;
-  type: 'sex' | 'input' | 'number' | 'date' | 'tel' | 'email' | 'dropdown' | 'dob';
+  type:
+    | 'sex'
+    | 'input'
+    | 'number'
+    | 'date'
+    | 'tel'
+    | 'email'
+    | 'dropdown'
+    | 'dob';
   allowlist?: string;
   options?: string[];
 }
@@ -145,7 +157,7 @@ export interface Quiz {
   canGoBack?: boolean;
   showScore?: boolean;
   introBgUrl?: string;
-  showCategory?: boolean; // jules edit: Admin setting to display category above question headers
+  showCategory?: boolean; // Admin setting to display category above question headers
   showCategoryInPerformance?: boolean;
   askDetails?: Details[];
   hasTimer?: boolean | string | number;
@@ -213,6 +225,7 @@ const QuizBuilder = ({
   const { premiumTier } = useAppContext();
   const [collapse, setCollapse] = useState<Record<string, boolean>>({});
   const [allowlistArr, setAllowlistArr] = useState<Record<string, boolean>>({});
+  const [showBranchRules, setShowBranchRules] = useState(false);
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
@@ -237,7 +250,9 @@ const QuizBuilder = ({
     ...quiz,
     questions: decodedQuestions,
   });
+
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1 for settings
+
 
   // Pre-calculate groups for sidebar rendering
   const sidebarGroups = useMemo(() => {
@@ -268,6 +283,31 @@ const QuizBuilder = ({
       })),
     };
   }, [editedQuiz.questions]);
+
+  const allQuestions = useMemo(() => {
+    let cat:Question[] = [];
+    let unCat:Question[] = [];
+
+    editedQuiz.questions.forEach((q) => {
+      const catQ =
+        q.category && q.category.trim() !== '' ? q.category.trim() : null;
+
+      if (!catQ) {
+        unCat.push(q);
+      } else {
+        if (!cat.includes(q)) {
+          return;
+        }
+        unCat.push(q);
+      }
+    });
+
+    return {
+      cat,
+      unCat,
+    };
+  }, [editedQuiz.questions]);
+
 
   useEffect(() => {
     // Autosave to draft storage as the user types
@@ -347,7 +387,11 @@ const QuizBuilder = ({
     setEditedQuiz({ ...editedQuiz, questions: newQuestions });
   };
 
-  const moveQuestion = (index: number, direction: 'up' | 'down') => {
+  const moveQuestion = (index: number, direction: 'up' | 'down', catName?: string) => {
+    // const catQ = allQuestions.cat.filter(q=> q.category === catName
+    // );
+    // const uncatQ = allQuestions.unCat;
+
     const newQuestions = [...editedQuiz.questions];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= newQuestions.length) return;
@@ -359,6 +403,161 @@ const QuizBuilder = ({
     setEditedQuiz({ ...editedQuiz, questions: newQuestions });
     setCurrentStep(targetIndex);
   };
+
+  const handleQuestionCategory = (
+    type: 'add' | 'remove',
+    id: string,
+    catName: string,
+  ) => {
+    const qId = id.trim() ?? '';
+    const categoryName = catName ?? '';
+    const idx = editedQuiz.questions.findIndex((q) => q.id === qId);
+    let question = editedQuiz.questions[idx];
+
+    if (!question) return;
+
+    if (type === 'add') {
+      // Find the index of the last question in this category
+      let lastIndex = -1;
+      for (let i = editedQuiz.questions.length - 1; i >= 0; i--) {
+        if (editedQuiz.questions[i].category === categoryName) {
+          lastIndex = i;
+          break;
+        }
+      }
+
+      if (lastIndex !== -1) {
+        // Insert right after the last question of this category
+        question.category = catName;
+
+        const updatedQuestions = [...editedQuiz.questions];
+        updatedQuestions.filter(q => q.id !== qId);
+
+        // updatedQuestions.splice(lastIndex + 1, 0, question);
+        setEditedQuiz({
+          ...editedQuiz,
+          questions: updatedQuestions,
+        });
+        setCurrentStep(lastIndex + 1);
+        console.log('Added');
+
+        return;
+      }
+    } else {
+      question.category = undefined;
+      const updatedQuestions = [...editedQuiz.questions, question];
+      setEditedQuiz({
+        ...editedQuiz,
+        questions: updatedQuestions,
+      });
+
+      console.log('Removed')
+    }
+  };
+
+  
+  
+
+  const QuestionButton = ({q, i, isCat, catName = '', length, idx = 0}: {q: Question, i: number, isCat?: boolean, catName?: string; length?:number, idx?:number}) => {
+    
+  return (
+    <button
+      key={q.id}
+      onClick={(e) => {
+        e.preventDefault();
+        setCurrentStep(i);
+        setShowBranchRules(false);
+      }}
+      className={cn(
+        'flex items-center justify-between p-2 px-3 pr-1 bkblur rounded-xl text-xs font-medium transition-all group border',
+        currentStep === i ?
+          'bg-pw-primary/10 border-pw-primary text-pw-primary'
+        : 'bg-pw-surface/40 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
+      )}>
+      <span className='truncate flex-1 text-left'>
+        {idx + 1}: {q.text || 'New Question...'}
+      </span>
+
+      <div className='ml-1 flex gap-1'>
+        <DropdownMenu>
+          <DropdownMenuTrigger className='p-1 hover:bg-pw-primary/10 rounded-full'>
+            <Plus className='h-4 w-4' />
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
+            {sidebarGroups.categories.map((cat) =>
+               <DropdownMenuItem
+               onClick={(e) => {
+                 e.stopPropagation();
+                 handleQuestionCategory('add', q.id, cat.name);
+               }}
+               className={'h-8 gap-1 px-2'}>
+              <Folder className='w-4 h-4 mx-1' /> {cat.name.toUpperCase()}
+             </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className='p-1 hover:bg-pw-cyan/10 rounded-full'>
+            <MoreVertical className='h-4 w-4' />
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
+            {isCat && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleQuestionCategory(
+                    isCat ? 'remove' : 'add',
+                    q.id,
+                    catName,
+                  );
+                }}
+                className={'h-8 gap-1 px-2'}>
+                <Ungroup className='h-3 w-3 text-pw-success transition-all' />{' '}
+                Ungroup
+              </DropdownMenuItem>
+            )}
+
+            <DropdownMenuItem
+              disabled={idx==0}
+              onClick={(e) => {
+                e.stopPropagation();
+                moveQuestion(i, 'up');
+              }}
+              className={'h-8 gap-1 px-2'} style={{opacity: idx===0 ? 0.5 : 1}}>
+              <ArrowUp className='h-3 w-3 text-pw-cyan transition-all' /> Move
+              Up
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              disabled={idx === length}
+              onClick={(e) => {
+                e.stopPropagation();
+                moveQuestion(i, 'down');
+              }}
+              className={'h-8 gap-1 px-2'}  style={{opacity: idx===length ? 0.5 : 1}}>
+              <ArrowDown className='h-3 w-3 text-pw-cyan transition-all' /> Move
+              Down
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                removeQuestion(i);
+              }}
+              className={'h-8 gap-1 px-2'}>
+              <Trash2 className='h-3 w-3 text-pw-danger transition-all' />{' '}
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </button>
+  );
+};
+
 
   return (
     <div className='flex flex-col gap-8'>
@@ -414,7 +613,7 @@ const QuizBuilder = ({
           <button
             onClick={() => setCurrentStep(-1)}
             className={cn(
-              'flex items-center gap-3 p-4 rounded-xl text-sm font-medium transition-all group',
+              'flex items-center gap-3 p-3 px-4 rounded-xl text-sm font-medium transition-all group',
               currentStep === -1 ?
                 'bg-pw-primary text-white shadow-lg shadow-pw-primary/20'
               : 'bg-pw-surface border border-white/5 text-pw-muted hover:text-pw-text',
@@ -422,29 +621,10 @@ const QuizBuilder = ({
             <Settings2 className='h-4 w-4' /> Quiz Settings
           </button>
 
-          <div className='flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2 pb-3 custom-scrollbar'>
+          <div className='flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2 pb-3 custom-scrollbar'>
             {/* Uncategorized Questions */}
-            {sidebarGroups.uncategorized.map(({ question: q, index: i }) => (
-              <button
-                key={q.id}
-                onClick={() => setCurrentStep(i)}
-                className={cn(
-                  'flex items-center justify-between p-4 rounded-xl text-xs font-medium transition-all group border',
-                  currentStep === i ?
-                    'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                  : 'bg-pw-surface/50 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
-                )}>
-                <span className='truncate flex-1 text-left'>
-                  Q{i + 1}: {q.text || 'New Question...'}
-                </span>
-                <Trash2
-                  className='h-3 w-3 opacity-0 group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeQuestion(i);
-                  }}
-                />
-              </button>
+            {sidebarGroups.uncategorized.map(({ question: q, index: i }, idx) => (
+              <QuestionButton q={q} i={i} idx={idx} length={sidebarGroups.uncategorized.length} />
             ))}
 
             {/* Categorized Questions grouped by Category */}
@@ -455,12 +635,12 @@ const QuizBuilder = ({
                 <div
                   key={cat.name}
                   className={cn(
-                    'flex flex-col gap-1',
+                    'flex flex-col gap-1 mt-1',
                     !isCollapsed && ' border-l border-white/10 pl-2',
                   )}>
                   {/* Category Header */}
                   <div
-                    className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/5 rounded-md cursor-pointer'
+                    className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/3 bkblur rounded-md cursor-pointer'
                     onClick={(e) => {
                       e.stopPropagation();
 
@@ -476,7 +656,8 @@ const QuizBuilder = ({
                           !isCollapsed && 'rotate-90',
                         )}
                       />
-                      <Folder className='w-4 h-4 mx-1' /> {cat.name}
+                      <Folder className='w-4 h-4 mx-1' /> {cat.name} (
+                      {cat.questions.length})
                     </span>
                     <button
                       type='button'
@@ -493,27 +674,15 @@ const QuizBuilder = ({
                   {/* Categorized Questions List (with visual indentation) */}
                   {!isCollapsed && (
                     <div className='flex flex-col gap-1 ml-4'>
-                      {cat.questions.map(({ question: q, index: i }) => (
-                        <button
-                          key={q.id}
-                          onClick={() => setCurrentStep(i)}
-                          className={cn(
-                            'flex items-center justify-between p-3 rounded-xl text-xs font-medium transition-all group border',
-                            currentStep === i ?
-                              'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                            : 'bg-pw-surface/50 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
-                          )}>
-                          <span className='truncate flex-1 text-left'>
-                            Q{i + 1}: {q.text || 'New Question...'}
-                          </span>
-                          <Trash2
-                            className='h-3 w-3 base:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 hover:text-pw-danger transition-all ml-2'
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeQuestion(i);
-                            }}
-                          />
-                        </button>
+                      {cat.questions.map(({ question: q, index: i }, idx) => (
+                        <QuestionButton
+                          q={q}
+                          i={i}
+                          idx={idx}
+                          catName={cat.name}
+                          isCat={!!cat.name}
+                          length={cat.questions.length}
+                        />
                       ))}
                     </div>
                   )}
@@ -795,7 +964,7 @@ const QuizBuilder = ({
                                     'input',
                                     'sex',
                                     'date',
-                                    'dob'
+                                    'dob',
                                   ].map((t) => (
                                     <DropdownMenuItem
                                       key={t}
@@ -955,7 +1124,6 @@ const QuizBuilder = ({
                           </Button>
                         </QuizSettingItem>
 
-                        {/* jules edit: Show Question Category setting for Quiz Taker header */}
                         <QuizSettingItem
                           label='Show Category Tag'
                           description='Displays the category badge above question headers for quiz takers.'>
@@ -1504,6 +1672,40 @@ const QuizBuilder = ({
                       <ArrowDown className='h-4 w-4' />
                     </Button>
 
+                    
+                    <div className='w-[1px] h-9 bg-white/5 mx-2' />
+
+                    <div className='gap-2 flex'>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        title='Previous question'
+                        onClick={() =>
+                          setCurrentStep(Math.max(0, currentStep - 1))
+                        }
+                        disabled={currentStep === 0}>
+                        <ChevronLeft className='h-5 w-5' />
+                      </Button>
+
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        title='Next question'
+                        onClick={() =>
+                          setCurrentStep(
+                            Math.min(
+                              editedQuiz.questions.length - 1,
+                              currentStep + 1,
+                            ),
+                          )
+                        }
+                        disabled={
+                          currentStep === editedQuiz.questions.length - 1
+                        }>
+                        <ChevronRight className='h-5 w-5' />
+                      </Button>
+                    </div>
+
                     <div className='w-[1px] h-9 bg-white/5 mx-2' />
 
                     <DropdownMenu>
@@ -1526,6 +1728,7 @@ const QuizBuilder = ({
                             'dropdown',
                             'checkbox',
                             'input',
+                            premiumTier !== 'flexible' && 'upload',
                             editedQuiz.type === 'survey' && 'rating',
                             editedQuiz.type === 'survey' && 'range',
                           ] as QuestionType[]
@@ -1660,38 +1863,6 @@ const QuizBuilder = ({
                       />
                     </div>
 
-                    <div className='w-[1px] h-9 bg-white/5 mx-2' />
-
-                    <div className='gap-2 flex'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        title='Previous question'
-                        onClick={() =>
-                          setCurrentStep(Math.max(0, currentStep - 1))
-                        }
-                        disabled={currentStep === 0}>
-                        <ChevronLeft className='h-5 w-5' />
-                      </Button>
-
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        title='Next question'
-                        onClick={() =>
-                          setCurrentStep(
-                            Math.min(
-                              editedQuiz.questions.length - 1,
-                              currentStep + 1,
-                            ),
-                          )
-                        }
-                        disabled={
-                          currentStep === editedQuiz.questions.length - 1
-                        }>
-                        <ChevronRight className='h-5 w-5' />
-                      </Button>
-                    </div>
                   </div>
                 </div>
 
@@ -1702,7 +1873,7 @@ const QuizBuilder = ({
                       Question Text
                     </label>
 
-                    <div className='w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm'>
+                    <div className='w-full bg-white/5 border border-white/10 rounded-xl p-2 sm:p-4 text-sm sm:pb-2'>
                       <div className='relative'>
                         <textarea
                           value={editedQuiz.questions[currentStep].text}
@@ -1713,14 +1884,14 @@ const QuizBuilder = ({
                             })
                           }
                           placeholder='Enter your question (Use @ to mention parameters like @name or @email)'
-                          className='w-full h-20 bg-transparent p-0 text-sm no-outline resize-none transition-all'
+                          className='w-full h-20 bg-transparent p-2 sm:p-0 text-sm no-outline resize-none transition-all'
                         />
                         {/* Mention Helper Badge List */}
                         {editedQuiz.askDetails &&
                           editedQuiz.askDetails.length > 0 && (
                             <div className='flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5'>
                               <span className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Mention Detail:
+                                @ Details:
                               </span>
                               {editedQuiz.askDetails.map((d) => (
                                 <button
@@ -1793,7 +1964,7 @@ const QuizBuilder = ({
                               </span>
                             )}
                           </div>
-                          <p className='text-[10px] text-pw-muted/60 pl-1'>
+                          <p className='text-[9px] text-pw-muted/60 pl-1'>
                             Group questions to create automated sequential
                             branches.
                           </p>
@@ -1982,9 +2153,9 @@ const QuizBuilder = ({
                     </label>
 
                     {editedQuiz.questions[currentStep].type === 'input' ?
-                      /* jules edit: Enhanced Input question rules & branching builder */
+                      /* Enhanced Input question rules & branching builder */
                       <div className='space-y-4'>
-                        <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 flex flex-col gap-4 text-left'>
+                        <div className='bg-pw-primary/5 p-3 sm:p-4 rounded-2xl border border-pw-primary/10 flex flex-col gap-4 text-left'>
                           <div className='flex items-center gap-3 border-b border-white/5 pb-3'>
                             <Type className='h-6 w-6 text-pw-primary shrink-0' />
                             <div>
@@ -1992,21 +2163,23 @@ const QuizBuilder = ({
                                 Input Question Matching & Branching
                               </p>
                               <p className='text-[10px] text-pw-muted'>
-                                Match taker responses against keywords and configure dynamic branching routes.
+                                Match taker responses against keywords and
+                                configure dynamic branching routes.
                               </p>
                             </div>
                           </div>
 
                           {/* Default Keyword & Case Sensitivity */}
                           <div className='grid grid-cols-1 md:grid-cols-2 gap-3 items-end'>
-                            <div className='space-y-1.5'>
+                            <div className='space-y-1'>
                               <label className='text-[10px] font-bold text-pw-muted uppercase block'>
                                 Target Keyword (Correct Answer)
                               </label>
                               <Input
                                 placeholder='Target Keyword (Optional)'
                                 value={
-                                  editedQuiz.questions[currentStep].correctIndex || ''
+                                  editedQuiz.questions[currentStep]
+                                    .correctIndex || ''
                                 }
                                 onChange={(e) =>
                                   updateQuestion(currentStep, {
@@ -2018,7 +2191,7 @@ const QuizBuilder = ({
                               />
                             </div>
 
-                            <div className='flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 h-9'>
+                            <div className='flex items-center justify-between p-1 rounded-xl bg-white/5 border border-white/5 h-9'>
                               <span className='text-[10px] font-bold text-pw-muted uppercase'>
                                 Case Sensitive Match
                               </span>
@@ -2029,79 +2202,128 @@ const QuizBuilder = ({
                                 onClick={() =>
                                   updateQuestion(currentStep, {
                                     ...editedQuiz.questions[currentStep],
-                                    caseSensitive: !editedQuiz.questions[currentStep].caseSensitive,
+                                    caseSensitive:
+                                      !editedQuiz.questions[currentStep]
+                                        .caseSensitive,
                                   })
                                 }
                                 className={cn(
                                   'h-6 px-2 text-[9px] font-bold gap-1',
-                                  editedQuiz.questions[currentStep].caseSensitive ?
+                                  (
+                                    editedQuiz.questions[currentStep]
+                                      .caseSensitive
+                                  ) ?
                                     'bg-pw-primary/20 border-pw-primary text-pw-primary'
                                   : 'bg-white/5 border-white/10 text-pw-muted',
                                 )}>
-                                {editedQuiz.questions[currentStep].caseSensitive ? 'ON' : 'OFF'}
+                                {(
+                                  editedQuiz.questions[currentStep]
+                                    .caseSensitive
+                                ) ?
+                                  'ON'
+                                : 'OFF'}
                               </Button>
                             </div>
                           </div>
 
                           {/* Input Branching Rules */}
-                          <div className='space-y-3 pt-2 border-t border-white/5'>
+                          <div className='space-y-2 pt-2 border-t border-white/5'>
                             <div className='flex items-center justify-between'>
-                              <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider'>
-                                Keyword Branching Rules (Optional)
+
+                              <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider flex gap-1 items-center'>
+                                { (editedQuiz?.questions[currentStep]
+                               ?.inputBranchRules || []).length > 0 && <ChevronRight className={cn('text-pw-primary text-xs', showBranchRules && 'rotate-90')} onClick={() => setShowBranchRules(!showBranchRules)} />
+                                }
+                                
+                                Branching Rules (Optional)
                               </span>
                               <Button
                                 type='button'
                                 size='sm'
                                 onClick={() => {
-                                  const curRules = editedQuiz.questions[currentStep].inputBranchRules || [];
-                                  const newRule: InputBranchRule = { keyword: '', caseSensitive: false };
+                                  const curRules =
+                                    editedQuiz.questions[currentStep]
+                                      .inputBranchRules || [];
+                                  const newRule: InputBranchRule = {
+                                    keyword: '',
+                                    caseSensitive: false,
+                                  };
                                   updateQuestion(currentStep, {
                                     ...editedQuiz.questions[currentStep],
                                     inputBranchRules: [...curRules, newRule],
                                   });
+                                  setShowBranchRules(true);
                                 }}
-                                className='btn-ghost h-6 text-[10px] gap-1 px-2 text-pw-primary'>
-                                <Plus className='h-3 w-3' /> Add Branch Rule
+                                className='btn-ghost h-6 text-[10px] gap-1 text-pw-primary'>
+                                <Plus className='h-3 w-3' /> Add
                               </Button>
                             </div>
 
-                            {(editedQuiz.questions[currentStep].inputBranchRules || []).map((rule, rIdx) => (
-                              <div key={rIdx} className='p-3 rounded-xl bg-white/5 border border-white/5 space-y-2 text-xs'>
+                            { showBranchRules && (
+                              editedQuiz.questions[currentStep]
+                                .inputBranchRules || []
+                            ).map((rule, rIdx) => (
+                              <div
+                                key={rIdx}
+                                className='p-2 rounded-xl bg-white/2 bkblur border border-white/5 space-y-2 text-xs'>
                                 <div className='flex items-center gap-2'>
                                   <Input
                                     placeholder='If input contains / matches keyword...'
                                     value={rule.keyword}
                                     onChange={(e) => {
-                                      const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
-                                      curRules[rIdx] = { ...curRules[rIdx], keyword: e.target.value };
+                                      const curRules = [
+                                        ...(editedQuiz.questions[currentStep]
+                                          .inputBranchRules || []),
+                                      ];
+                                      curRules[rIdx] = {
+                                        ...curRules[rIdx],
+                                        keyword: e.target.value,
+                                      };
                                       updateQuestion(currentStep, {
                                         ...editedQuiz.questions[currentStep],
                                         inputBranchRules: curRules,
                                       });
                                     }}
-                                    className='h-8 bg-black/30 border-white/10 text-xs flex-1'
+                                    className='h-8 bg-black/20 bkblur border-white/10 text-xs flex-1'
                                   />
                                   <Button
                                     type='button'
                                     size='sm'
                                     variant='ghost'
                                     onClick={() => {
-                                      const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
-                                      curRules[rIdx] = { ...curRules[rIdx], caseSensitive: !curRules[rIdx].caseSensitive };
+                                      const curRules = [
+                                        ...(editedQuiz.questions[currentStep]
+                                          .inputBranchRules || []),
+                                      ];
+                                      curRules[rIdx] = {
+                                        ...curRules[rIdx],
+                                        caseSensitive:
+                                          !curRules[rIdx].caseSensitive,
+                                      };
                                       updateQuestion(currentStep, {
                                         ...editedQuiz.questions[currentStep],
                                         inputBranchRules: curRules,
                                       });
                                     }}
-                                    className={cn('h-8 px-2 text-[9px] font-bold border', rule.caseSensitive ? 'border-pw-primary text-pw-primary' : 'border-white/10 text-pw-muted')}>
-                                    {rule.caseSensitive ? 'Aa (Exact)' : 'aa (Any Case)'}
+                                    className={cn(
+                                      'h-8 px-2 text-[9px] font-bold border',
+                                      rule.caseSensitive ?
+                                        'border-pw-primary text-pw-primary'
+                                      : 'border-white/10 text-pw-muted',
+                                    )}>
+                                    {rule.caseSensitive ?
+                                      'Aa (Exact)'
+                                    : 'aa (Any Case)'}
                                   </Button>
                                   <Button
                                     type='button'
                                     size='icon'
                                     variant='ghost'
                                     onClick={() => {
-                                      const curRules = (editedQuiz.questions[currentStep].inputBranchRules || []).filter((_, i) => i !== rIdx);
+                                      const curRules = (
+                                        editedQuiz.questions[currentStep]
+                                          .inputBranchRules || []
+                                      ).filter((_, i) => i !== rIdx);
                                       updateQuestion(currentStep, {
                                         ...editedQuiz.questions[currentStep],
                                         inputBranchRules: curRules,
@@ -2116,27 +2338,85 @@ const QuizBuilder = ({
                                   <span>Route to:</span>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant='outline' size='sm' className='h-6 text-[10px] bg-white/5 border-white/10 text-pw-primary font-bold'>
-                                        {rule.skipToCat ? `Group: ${rule.skipToCat}` : rule.skipTo === 'end' ? '⛔ Finish' : rule.skipTo ? `Q${editedQuiz.questions.findIndex(q => q.id === rule.skipTo) + 1}` : 'Next Question'}
+                                      <Button
+                                        variant='outline'
+                                        size='sm'
+                                        className='h-6 text-[10px] bg-white/5 border-white/10 text-pw-primary font-bold'>
+                                        {rule.skipToCat ?
+                                          `Group: ${rule.skipToCat}`
+                                        : rule.skipTo === 'end' ?
+                                          '⛔ Finish'
+                                        : rule.skipTo ?
+                                          `Q${editedQuiz.questions.findIndex((q) => q.id === rule.skipTo) + 1}`
+                                        : 'Next Question'}
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52'>
-                                      <DropdownMenuItem onClick={() => {
-                                        const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
-                                        curRules[rIdx] = { ...curRules[rIdx], skipTo: undefined, skipToCat: undefined };
-                                        updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], inputBranchRules: curRules });
-                                      }}>Next Question (Default)</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => {
-                                        const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
-                                        curRules[rIdx] = { ...curRules[rIdx], skipTo: 'end', skipToCat: undefined };
-                                        updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], inputBranchRules: curRules });
-                                      }}>⛔ Finish Assessment</DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          const curRules = [
+                                            ...(editedQuiz.questions[
+                                              currentStep
+                                            ].inputBranchRules || []),
+                                          ];
+                                          curRules[rIdx] = {
+                                            ...curRules[rIdx],
+                                            skipTo: undefined,
+                                            skipToCat: undefined,
+                                          };
+                                          updateQuestion(currentStep, {
+                                            ...editedQuiz.questions[
+                                              currentStep
+                                            ],
+                                            inputBranchRules: curRules,
+                                          });
+                                        }}>
+                                        Next Question (Default)
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          const curRules = [
+                                            ...(editedQuiz.questions[
+                                              currentStep
+                                            ].inputBranchRules || []),
+                                          ];
+                                          curRules[rIdx] = {
+                                            ...curRules[rIdx],
+                                            skipTo: 'end',
+                                            skipToCat: undefined,
+                                          };
+                                          updateQuestion(currentStep, {
+                                            ...editedQuiz.questions[
+                                              currentStep
+                                            ],
+                                            inputBranchRules: curRules,
+                                          });
+                                        }}>
+                                        ⛔ Finish Assessment
+                                      </DropdownMenuItem>
                                       {editedQuiz.questions.map((qItem, qI) => (
-                                        <DropdownMenuItem key={qItem.id} onClick={() => {
-                                          const curRules = [...(editedQuiz.questions[currentStep].inputBranchRules || [])];
-                                          curRules[rIdx] = { ...curRules[rIdx], skipTo: qItem.id, skipToCat: undefined };
-                                          updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], inputBranchRules: curRules });
-                                        }}>Q{qI + 1}: {qItem.text.slice(0, 18)}</DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          key={qItem.id}
+                                          onClick={() => {
+                                            const curRules = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].inputBranchRules || []),
+                                            ];
+                                            curRules[rIdx] = {
+                                              ...curRules[rIdx],
+                                              skipTo: qItem.id,
+                                              skipToCat: undefined,
+                                            };
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              inputBranchRules: curRules,
+                                            });
+                                          }}>
+                                          Q{qI + 1}: {qItem.text.slice(0, 18)}
+                                        </DropdownMenuItem>
                                       ))}
                                     </DropdownMenuContent>
                                   </DropdownMenu>
@@ -2151,7 +2431,8 @@ const QuizBuilder = ({
                             </label>
                             <textarea
                               value={
-                                editedQuiz.questions[currentStep].correctExplanation || ''
+                                editedQuiz.questions[currentStep]
+                                  .correctExplanation || ''
                               }
                               onChange={(e) =>
                                 updateQuestion(currentStep, {
@@ -2356,20 +2637,26 @@ const QuizBuilder = ({
                                     />
 
                                     {/* jules edit: Option Image Upload button & preview */}
-                                    {opt.imageUrl ?
+                                    {opt.uploadUrl ?
                                       <div className='relative shrink-0 group/img'>
                                         <img
-                                          src={opt.imageUrl}
+                                          src={opt.uploadUrl}
                                           alt='Option'
                                           className='h-8 w-8 object-cover rounded-md border border-white/10'
                                         />
                                         <button
                                           type='button'
                                           onClick={() => {
-                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                            delete newOpts[idx].imageUrl;
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            delete newOpts[idx].uploadUrl;
                                             updateQuestion(currentStep, {
-                                              ...editedQuiz.questions[currentStep],
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
                                               options: newOpts,
                                             });
                                           }}
@@ -2377,7 +2664,9 @@ const QuizBuilder = ({
                                           ✕
                                         </button>
                                       </div>
-                                    : <label className='cursor-pointer text-pw-muted hover:text-pw-primary transition-colors p-1 shrink-0' title='Upload option image'>
+                                    : <label
+                                        className='cursor-pointer text-pw-muted hover:text-pw-primary transition-colors p-1 shrink-0'
+                                        title='Upload option image'>
                                         <Image className='h-4 w-4' />
                                         <input
                                           type='file'
@@ -2388,13 +2677,22 @@ const QuizBuilder = ({
                                             if (file) {
                                               const reader = new FileReader();
                                               reader.onload = (ev) => {
-                                                const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                                newOpts[idx].imageUrl = ev.target?.result as string;
+                                                const newOpts = [
+                                                  ...(editedQuiz.questions[
+                                                    currentStep
+                                                  ].options as QuizOption[]),
+                                                ];
+                                                newOpts[idx].uploadUrl = ev
+                                                  .target?.result as string;
                                                 updateQuestion(currentStep, {
-                                                  ...editedQuiz.questions[currentStep],
+                                                  ...editedQuiz.questions[
+                                                    currentStep
+                                                  ],
                                                   options: newOpts,
                                                 });
-                                                toast.success('Option image uploaded!');
+                                                toast.success(
+                                                  'Option image uploaded!',
+                                                );
                                               };
                                               reader.readAsDataURL(file);
                                             }
@@ -2749,7 +3047,7 @@ export default function QuizPage() {
     const question = quiz.questions?.find((q) => q.id === questionId);
     if (!question) return String(val !== undefined && val !== null ? val : '');
     if (question.type === 'input')
-      return String(val !== undefined && val !== null ? val :  '');
+      return String(val !== undefined && val !== null ? val : '');
 
     const options = question.options || [];
     const findText = (id: any) => {
@@ -2837,7 +3135,12 @@ export default function QuizPage() {
       ...quiz.questions.map((q) => {
         const a = resp.answers.find((ans: any) => ans.questionId === q.id);
         if (!a) return '""';
-        const resolvedText = formatDetailVars(resolveAnswerToText(quiz, q.id, a.answer), resp.userData, true, true);
+        const resolvedText = formatDetailVars(
+          resolveAnswerToText(quiz, q.id, a.answer),
+          resp.userData,
+          true,
+          true,
+        );
         return `"${resolvedText.replace(/"/g, '""')}"`;
       }),
     ]);
@@ -3045,14 +3348,19 @@ export default function QuizPage() {
     window.open(`/quiz/${id}`, '_blank');
   };
 
-  const formatDetailVars = (rawText: string, details:any, showPrev?:boolean, hideBold?:boolean) => {
+  const formatDetailVars = (
+    rawText: string,
+    details: any,
+    showPrev?: boolean,
+    hideBold?: boolean,
+  ) => {
     if (!rawText) return rawText;
     let formatted = rawText;
     Object.entries(details || {}).forEach(([key, val]) => {
       const cleanKey = key.trim().replace(/\s+/g, '');
       const boldVal = `${showPrev ? `@${cleanKey} (<strong class="text-pw-cyan font-bold">${val}</strong>)` : `<strong class="text-pw-cyan font-bold">${val}</strong>`}`;
       const normalVal = `${showPrev ? `@${cleanKey} (${val})` : `${val}`}`;
-      const replText = `${hideBold ? normalVal : boldVal}`
+      const replText = `${hideBold ? normalVal : boldVal}`;
       const regex1 = new RegExp(`@${cleanKey}`, 'gi');
       const regex2 = new RegExp(`@${key.trim()}`, 'gi');
       const regex3 = new RegExp(`\\$${cleanKey}`, 'gi');
@@ -3368,168 +3676,277 @@ export default function QuizPage() {
 
               <div className='space-y-6 pb-20'>
                 {/* jules edit: Comprehensive Collapsible Admin Analytics Overview for Feedback Responses */}
-                {viewingResponses.responses && viewingResponses.responses.length > 0 && (() => {
-                  const responses = viewingResponses.responses;
-                  const totalParticipants = responses.length;
-                  let totalPass = 0;
-                  let totalFail = 0;
-                  let timeouts = 0;
-                  let completions = 0;
-                  let selfSubmits = 0;
-                  let quits = 0;
+                {viewingResponses.responses &&
+                  viewingResponses.responses.length > 0 &&
+                  (() => {
+                    const responses = viewingResponses.responses;
+                    const totalParticipants = responses.length;
+                    let totalPass = 0;
+                    let totalFail = 0;
+                    let timeouts = 0;
+                    let completions = 0;
+                    let selfSubmits = 0;
+                    let quits = 0;
 
-                  const categoryStats: Record<string, { attempts: number; pass: number; fail: number }> = {};
-                  const questionStats: Record<string, { text: string; correct: number; incorrect: number; wrongChoices: Record<string, number> }> = {};
-                  const countriesCount: Record<string, number> = {};
-
-                  let bestTaker = { name: 'None', score: -1 };
-                  let worstTaker = { name: 'None', score: 999999 };
-
-                  responses.forEach((resp) => {
-                    const reason = resp.submissionReason || 'completion';
-                    if (reason === 'timeout') timeouts++;
-                    else if (reason === 'self_submit') selfSubmits++;
-                    else if (reason === 'quit') quits++;
-                    else completions++;
-
-                    if (resp.country) {
-                      countriesCount[resp.country] = (countriesCount[resp.country] || 0) + 1;
-                    }
-
-                    const takerName = resp.userData.name || resp.userData.email || 'Anonymous Taker';
-                    if (resp.score > bestTaker.score) {
-                      bestTaker = { name: takerName, score: resp.score };
-                    }
-                    if (resp.score < worstTaker.score) {
-                      worstTaker = { name: takerName, score: resp.score };
-                    }
-
-                    const passCutoff = Math.ceil((resp.totalQuestions || viewingResponses.questions.length) * 0.5);
-                    if (resp.score >= passCutoff) totalPass++;
-                    else totalFail++;
-
-                    if (resp.categoryScores) {
-                      Object.entries(resp.categoryScores).forEach(([cat, stat]) => {
-                        if (!categoryStats[cat]) categoryStats[cat] = { attempts: 0, pass: 0, fail: 0 };
-                        categoryStats[cat].attempts += stat.total;
-                        categoryStats[cat].pass += stat.correct;
-                        categoryStats[cat].fail += (stat.total - stat.correct);
-                      });
-                    }
-
-                    resp.answers?.forEach((ans) => {
-                      const qObj = viewingResponses.questions.find((q) => q.id === ans.questionId);
-                      if (qObj) {
-                        if (!questionStats[qObj.id]) {
-                          questionStats[qObj.id] = { text: qObj.text, correct: 0, incorrect: 0, wrongChoices: {} };
-                        }
-                        if (ans.correct) {
-                          questionStats[qObj.id].correct++;
-                        } else {
-                          questionStats[qObj.id].incorrect++;
-                          const choiceText = resolveAnswerToText(viewingResponses, qObj.id, ans.answer) || 'Selected Incorrect Option';
-                          questionStats[qObj.id].wrongChoices[choiceText] = (questionStats[qObj.id].wrongChoices[choiceText] || 0) + 1;
-                        }
+                    const categoryStats: Record<
+                      string,
+                      { attempts: number; pass: number; fail: number }
+                    > = {};
+                    const questionStats: Record<
+                      string,
+                      {
+                        text: string;
+                        correct: number;
+                        incorrect: number;
+                        wrongChoices: Record<string, number>;
                       }
+                    > = {};
+                    const countriesCount: Record<string, number> = {};
+
+                    let bestTaker = { name: 'None', score: -1 };
+                    let worstTaker = { name: 'None', score: 999999 };
+
+                    responses.forEach((resp) => {
+                      const reason = resp.submissionReason || 'completion';
+                      if (reason === 'timeout') timeouts++;
+                      else if (reason === 'self_submit') selfSubmits++;
+                      else if (reason === 'quit') quits++;
+                      else completions++;
+
+                      if (resp.country) {
+                        countriesCount[resp.country] =
+                          (countriesCount[resp.country] || 0) + 1;
+                      }
+
+                      const takerName =
+                        resp.userData.name ||
+                        resp.userData.email ||
+                        'Anonymous Taker';
+                      if (resp.score > bestTaker.score) {
+                        bestTaker = { name: takerName, score: resp.score };
+                      }
+                      if (resp.score < worstTaker.score) {
+                        worstTaker = { name: takerName, score: resp.score };
+                      }
+
+                      const passCutoff = Math.ceil(
+                        (resp.totalQuestions ||
+                          viewingResponses.questions.length) * 0.5,
+                      );
+                      if (resp.score >= passCutoff) totalPass++;
+                      else totalFail++;
+
+                      if (resp.categoryScores) {
+                        Object.entries(resp.categoryScores).forEach(
+                          ([cat, stat]) => {
+                            if (!categoryStats[cat])
+                              categoryStats[cat] = {
+                                attempts: 0,
+                                pass: 0,
+                                fail: 0,
+                              };
+                            categoryStats[cat].attempts += stat.total;
+                            categoryStats[cat].pass += stat.correct;
+                            categoryStats[cat].fail +=
+                              stat.total - stat.correct;
+                          },
+                        );
+                      }
+
+                      resp.answers?.forEach((ans) => {
+                        const qObj = viewingResponses.questions.find(
+                          (q) => q.id === ans.questionId,
+                        );
+                        if (qObj) {
+                          if (!questionStats[qObj.id]) {
+                            questionStats[qObj.id] = {
+                              text: qObj.text,
+                              correct: 0,
+                              incorrect: 0,
+                              wrongChoices: {},
+                            };
+                          }
+                          if (ans.correct) {
+                            questionStats[qObj.id].correct++;
+                          } else {
+                            questionStats[qObj.id].incorrect++;
+                            const choiceText =
+                              resolveAnswerToText(
+                                viewingResponses,
+                                qObj.id,
+                                ans.answer,
+                              ) || 'Selected Incorrect Option';
+                            questionStats[qObj.id].wrongChoices[choiceText] =
+                              (questionStats[qObj.id].wrongChoices[
+                                choiceText
+                              ] || 0) + 1;
+                          }
+                        }
+                      });
                     });
-                  });
 
-                  const passPct = Math.round((totalPass / totalParticipants) * 100);
-                  const topFailedQuestion = Object.values(questionStats).sort((a, b) => b.incorrect - a.incorrect)[0];
+                    const passPct = Math.round(
+                      (totalPass / totalParticipants) * 100,
+                    );
+                    const topFailedQuestion = Object.values(questionStats).sort(
+                      (a, b) => b.incorrect - a.incorrect,
+                    )[0];
 
-                  return (
-                    <Card className='p-3 sm:p-4 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
-                      <div className='flex items-center justify-between border-b border-white/5 pb-2'>
-                        <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
-                          <BarChart2 className='h-4 w-4' /> Assessment Analytics
-                        </span>
-                        <span className='text-[10px] font-mono text-pw-muted'>
-                          {totalParticipants} Total Participants
-                        </span>
-                      </div>
-
-                      {/* Visual Pass/Fail Bar */}
-                      <div className='space-y-1.5'>
-                        <div className='flex justify-between text-xs font-mono font-bold'>
-                          <span className='text-pw-success'>{totalPass} Passed ({passPct}%)</span>
-                          <span className='text-pw-danger'>{totalFail} Failed ({100 - passPct}%)</span>
-                        </div>
-                        <div className='w-full bg-white/10 h-2.5 rounded-full overflow-hidden flex'>
-                          <div style={{ width: `${passPct}%` }} className='bg-pw-success h-full transition-all duration-300' />
-                          <div style={{ width: `${100 - passPct}%` }} className='bg-pw-danger h-full transition-all duration-300' />
-                        </div>
-                      </div>
-
-                      {/* Stat Metrics Grid */}
-                      <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
-                        <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Full Finishes</span>
-                          <span className='text-lg font-bold font-mono text-pw-cyan'>{completions}</span>
-                        </div>
-                        <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Timeouts</span>
-                          <span className='text-lg font-bold font-mono text-pw-warning'>{timeouts}</span>
-                        </div>
-                        <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Self-Submits</span>
-                          <span className='text-lg font-bold font-mono text-pw-primary'>{selfSubmits}</span>
-                        </div>
-                        <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                          <span className='text-[8px] font-bold uppercase text-pw-muted block'>Quits</span>
-                          <span className='text-lg font-bold font-mono text-pw-danger'>{quits}</span>
-                        </div>
-                      </div>
-
-                      {/* Participant Insights */}
-                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-white/5 pt-3'>
-                        <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
-                          <span className='text-[9px] text-pw-muted uppercase font-bold block'>Top Scoring Participant</span>
-                          <span className='font-bold text-pw-success block truncate'>{bestTaker.name}</span>
-                        </div>
-                        <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
-                          <span className='text-[9px] text-pw-muted uppercase font-bold block'>Lowest Scoring Participant</span>
-                          <span className='font-bold text-pw-danger block truncate'>{worstTaker.name}</span>
-                        </div>
-                      </div>
-
-                      {/* Most Failed Question Insight */}
-                      {topFailedQuestion && topFailedQuestion.incorrect > 0 && (
-                        <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1'>
-                          <span className='text-[9px] font-bold uppercase text-pw-danger block'>Most Missed Question</span>
-                          <p className='font-bold text-white line-clamp-1'>&quot;{topFailedQuestion.text}&quot;</p>
-                          <p className='text-[10px] text-pw-muted font-mono'>
-                            Missed {topFailedQuestion.incorrect} times out of {topFailedQuestion.correct + topFailedQuestion.incorrect} attempts
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Category Breakdown Table */}
-                      {Object.keys(categoryStats).length > 0 && (
-                        <div className='space-y-2 pt-2 border-t border-white/5'>
-                          <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
-                            Category Performance Analysis
+                    return (
+                      <Card className='p-3 sm:p-4 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
+                        <div className='flex items-center justify-between border-b border-white/5 pb-2'>
+                          <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
+                            <BarChart2 className='h-4 w-4' /> Assessment
+                            Analytics
                           </span>
-                          <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
-                            {Object.entries(categoryStats).map(([cat, stat]) => {
-                              const catPassPct = stat.attempts > 0 ? Math.round((stat.pass / stat.attempts) * 100) : 0;
-                              return (
-                                <div key={cat} className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
-                                  <span className='font-bold text-white uppercase text-[10px]'>{cat}</span>
-                                  <div className='flex items-center gap-3 font-mono text-[10px]'>
-                                    <span>{stat.pass} Pass / {stat.fail} Fail</span>
-                                    <span className={cn('font-bold', catPassPct >= 50 ? 'text-pw-success' : 'text-pw-danger')}>
-                                      {catPassPct}%
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                          <span className='text-[10px] font-mono text-pw-muted'>
+                            {totalParticipants} Total Participants
+                          </span>
+                        </div>
+
+                        {/* Visual Pass/Fail Bar */}
+                        <div className='space-y-1.5'>
+                          <div className='flex justify-between text-xs font-mono font-bold'>
+                            <span className='text-pw-success'>
+                              {totalPass} Passed ({passPct}%)
+                            </span>
+                            <span className='text-pw-danger'>
+                              {totalFail} Failed ({100 - passPct}%)
+                            </span>
+                          </div>
+                          <div className='w-full bg-white/10 h-2.5 rounded-full overflow-hidden flex'>
+                            <div
+                              style={{ width: `${passPct}%` }}
+                              className='bg-pw-success h-full transition-all duration-300'
+                            />
+                            <div
+                              style={{ width: `${100 - passPct}%` }}
+                              className='bg-pw-danger h-full transition-all duration-300'
+                            />
                           </div>
                         </div>
-                      )}
-                    </Card>
-                  );
-                })()}
+
+                        {/* Stat Metrics Grid */}
+                        <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                          <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                              Full Finishes
+                            </span>
+                            <span className='text-lg font-bold font-mono text-pw-cyan'>
+                              {completions}
+                            </span>
+                          </div>
+                          <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                              Timeouts
+                            </span>
+                            <span className='text-lg font-bold font-mono text-pw-warning'>
+                              {timeouts}
+                            </span>
+                          </div>
+                          <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                              Self-Submits
+                            </span>
+                            <span className='text-lg font-bold font-mono text-pw-primary'>
+                              {selfSubmits}
+                            </span>
+                          </div>
+                          <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                              Quits
+                            </span>
+                            <span className='text-lg font-bold font-mono text-pw-danger'>
+                              {quits}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Participant Insights */}
+                        <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-white/5 pt-3'>
+                          <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                            <span className='text-[9px] text-pw-muted uppercase font-bold block'>
+                              Top Scoring Participant
+                            </span>
+                            <span className='font-bold text-pw-success block truncate'>
+                              {bestTaker.name}
+                            </span>
+                          </div>
+                          <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                            <span className='text-[9px] text-pw-muted uppercase font-bold block'>
+                              Lowest Scoring Participant
+                            </span>
+                            <span className='font-bold text-pw-danger block truncate'>
+                              {worstTaker.name}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Most Failed Question Insight */}
+                        {topFailedQuestion &&
+                          topFailedQuestion.incorrect > 0 && (
+                            <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1'>
+                              <span className='text-[9px] font-bold uppercase text-pw-danger block'>
+                                Most Missed Question
+                              </span>
+                              <p className='font-bold text-white line-clamp-1'>
+                                &quot;{topFailedQuestion.text}&quot;
+                              </p>
+                              <p className='text-[10px] text-pw-muted font-mono'>
+                                Missed {topFailedQuestion.incorrect} times out
+                                of{' '}
+                                {topFailedQuestion.correct +
+                                  topFailedQuestion.incorrect}{' '}
+                                attempts
+                              </p>
+                            </div>
+                          )}
+
+                        {/* Category Breakdown Table */}
+                        {Object.keys(categoryStats).length > 0 && (
+                          <div className='space-y-2 pt-2 border-t border-white/5'>
+                            <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                              Category Performance Analysis
+                            </span>
+                            <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
+                              {Object.entries(categoryStats).map(
+                                ([cat, stat]) => {
+                                  const catPassPct =
+                                    stat.attempts > 0 ?
+                                      Math.round(
+                                        (stat.pass / stat.attempts) * 100,
+                                      )
+                                    : 0;
+                                  return (
+                                    <div
+                                      key={cat}
+                                      className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
+                                      <span className='font-bold text-white uppercase text-[10px]'>
+                                        {cat}
+                                      </span>
+                                      <div className='flex items-center gap-3 font-mono text-[10px]'>
+                                        <span>
+                                          {stat.pass} Pass / {stat.fail} Fail
+                                        </span>
+                                        <span
+                                          className={cn(
+                                            'font-bold',
+                                            catPassPct >= 50 ? 'text-pw-success'
+                                            : 'text-pw-danger',
+                                          )}>
+                                          {catPassPct}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })()}
 
                 {(
                   !viewingResponses.responses ||
@@ -3627,7 +4044,11 @@ export default function QuizPage() {
                                     viewingResponses.questions.find(
                                       (q) => q.id === ans.questionId,
                                     );
-                                  const resolvedAnswer = resolveAnswerToText(viewingResponses, ans.questionId, ans.answer)
+                                  const resolvedAnswer = resolveAnswerToText(
+                                    viewingResponses,
+                                    ans.questionId,
+                                    ans.answer,
+                                  );
                                   const resolvedCorrect = resolveCorrectText(
                                     viewingResponses,
                                     ans.questionId,
@@ -3640,11 +4061,18 @@ export default function QuizPage() {
                                       <p className='text-[10px] font-bold text-pw-muted uppercase'>
                                         Question {i + 1}
                                       </p>
-                                      <p className='text-xs font-medium leading-relaxed' dangerouslySetInnerHTML={{__html:
-                                        formatDetailVars(question?.text as string || '', resp.userData, true)
-                                        || 'Question removed.'
-                                      }} />
-                                      
+                                      <p
+                                        className='text-xs font-medium leading-relaxed'
+                                        dangerouslySetInnerHTML={{
+                                          __html:
+                                            formatDetailVars(
+                                              (question?.text as string) || '',
+                                              resp.userData,
+                                              true,
+                                            ) || 'Question removed.',
+                                        }}
+                                      />
+
                                       <div className='flex items-start gap-2 pt-1'>
                                         <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
                                           ANSWER:
@@ -3654,9 +4082,18 @@ export default function QuizPage() {
                                             'text-[11px] font-mono',
                                             ans.correct === undefined ?
                                               'text-white/80'
-                                              : ans.correct ? 'text-pw-success'
-                                                : 'text-pw-danger',
-                                          )} dangerouslySetInnerHTML={{__html: formatDetailVars(resolvedAnswer, resp.userData, false, true)}}/>
+                                            : ans.correct ? 'text-pw-success'
+                                            : 'text-pw-danger',
+                                          )}
+                                          dangerouslySetInnerHTML={{
+                                            __html: formatDetailVars(
+                                              resolvedAnswer,
+                                              resp.userData,
+                                              false,
+                                              true,
+                                            ),
+                                          }}
+                                        />
                                       </div>
                                       {viewingResponses.type === 'quiz' &&
                                         !ans.correct && (
@@ -3667,8 +4104,16 @@ export default function QuizPage() {
                                             <p
                                               className={cn(
                                                 'text-[11px] font-mono text-white/80',
-                                              )} dangerouslySetInnerHTML={{__html: formatDetailVars(resolvedCorrect, resp.userData, false, true) }}
-                                          />
+                                              )}
+                                              dangerouslySetInnerHTML={{
+                                                __html: formatDetailVars(
+                                                  resolvedCorrect,
+                                                  resp.userData,
+                                                  false,
+                                                  true,
+                                                ),
+                                              }}
+                                            />
                                           </div>
                                         )}
                                     </div>

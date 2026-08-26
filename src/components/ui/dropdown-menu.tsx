@@ -28,6 +28,7 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
 function DropdownMenuTrigger({ asChild, ...props }: { asChild?: boolean } & any) {
   return (
     <MenuPrimitive.Trigger
+      onClick={(e) => {e.stopPropagation();}}
       data-slot='dropdown-menu-trigger'
       {...props}
     />

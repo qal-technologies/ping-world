@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -355,7 +355,7 @@ const Calculator = () => {
   );
 };
 
-export default function PublicQuizTaker() {
+function Taker() {
   const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
   const { isLoggedIn } = useAppContext();
   setHideNavbar(true);
@@ -386,7 +386,10 @@ export default function PublicQuizTaker() {
   useEffect(() => {
     if (quiz?.quizScroll && started) {
       setTimeout(() => {
-        firstQuestionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        firstQuestionRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
       }, 150);
     }
   }, [started, quiz?.quizScroll]);
@@ -1178,212 +1181,236 @@ export default function PublicQuizTaker() {
     const formattedQuestionText = formatDetailVars(quest.text);
 
     return (
-      <Card
-        key={quest.id}
-        ref={index === 0 ? firstQuestionRef : undefined}
-        className={cn(
-          'sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300',
-          !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
-        )}>
-        {/* jules edit: Show Question Category tag if enabled or set */}
-        {(quiz?.showCategory || quest.category) && quest.category && (
-          <div className='mb-2'>
-            <span className='inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-[10px] font-bold uppercase tracking-wider'>
-              <Folder className='h-3 w-3' /> {quest.category}
-            </span>
-          </div>
-        )}
-
-        <div className='flex items-start gap-3 mb-4'>
-          {isScrollLayout ?
-            <div className='flex items-baseline gap-2'>
-              <span className='text-pw-primary font-black text-xl select-none shrink-0'>
-                {index + 1}.
+      <motion.div
+        initial={{ opacity: 0.1, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0.1, x: -5 }}
+        className='w-full p-0'
+        key={quest.text + index + 'question-card'}>
+        <Card
+          key={quest.id}
+          ref={index === 0 ? firstQuestionRef : undefined}
+          className={cn(
+            'p-0  rounded-none sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300 space-y-0 self-center',
+            !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
+          )} style={{placeSelf:'center'}}>
+          {/* Show Question Category tag if enabled or set */}
+          {(quiz?.showCategory || quest.category) && quest.category && (
+            <div>
+              <span className='inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pw-primary/10 border border-pw-primary/30 text-pw-primary text-[10px] font-bold bkblur uppercase tracking-wider'>
+                <Folder className='h-3 w-3' /> {quest.category}
               </span>
-              <h2
-                className='text-base font-bold text-white'
-                dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
-              />
             </div>
-          : <div className='flex items-center gap-3'>
-              <div
-                className={cn(
-                  'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner',
-                  quiz?.type === 'quiz' ?
-                    'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
-                  : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
-                )}>
-                {quiz?.type === 'quiz' ?
-                  <Brain
-                    className='text-pw-primary'
-                    size={24}
-                  />
-                : <HelpCircle
-                    className='text-pw-cyan'
-                    size={24}
-                  />
-                }
-              </div>
-              <div>
-                <span className='text-[9px] font-black text-pw-muted uppercase block'>
-                  Question {index + 1}
+          )}
+
+          <div className='flex items-start gap-3 mb-4'>
+            {isScrollLayout ?
+              <div className='flex items-baseline gap-2'>
+                <span className='text-pw-primary font-black text-xl select-none shrink-0'>
+                  {index + 1}.
                 </span>
                 <h2
                   className='text-base font-bold text-white'
                   dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
                 />
               </div>
-            </div>
-          }
-        </div>
-
-        <div className='space-y-2 mt-1'>
-          {quest.type === 'input' ?
-            <textarea
-              value={activeText}
-              onChange={(e) => {
-                if (quiz?.quizScroll) {
-                  setScrollAnswers((prev) => ({
-                    ...prev,
-                    [quest.id]: e.target.value,
-                  }));
-                  // Sync to answers
-                  const correct = computeIsCorrect(quest.id, e.target.value);
-                  const existingIdx = userAnswers.findIndex(
-                    (a) => a.questionId === quest.id,
-                  );
-                  let updated;
-                  if (existingIdx > -1) {
-                    updated = [...userAnswers];
-                    updated[existingIdx] = {
-                      questionId: quest.id,
-                      answer: e.target.value,
-                      correct,
-                    };
-                  } else {
-                    updated = [
-                      ...userAnswers,
-                      { questionId: quest.id, answer: e.target.value, correct },
-                    ];
-                  }
-                  setUserAnswers(updated);
-                } else {
-                  setContent(e.target.value);
-                }
-              }}
-              placeholder='Type your answer here...'
-              className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-pw-primary resize-none'
-            />
-          : <div className='grid gap-2.5'>
-              {currentOptions.map((opt: any, oIdx) => {
-                const optId = opt.id || String(oIdx);
-                const optText = opt.text || String(opt);
-                const optImage = typeof opt === 'object' ? opt.imageUrl : undefined;
-                const formattedOptionText = formatDetailVars(optText);
-
-                const isSelected =
-                  quest.type === 'checkbox' ?
-                    activeChecked.includes(optId)
-                  : activeSelected === optId;
-
-                return (
-                  <button
-                    key={optId}
-                    onClick={() => {
-                      if (quiz?.quizScroll) {
-                        let val;
-                        if (quest.type === 'checkbox') {
-                          val =
-                            activeChecked.includes(optId) ?
-                              activeChecked.filter((i: any) => i !== optId)
-                            : [...activeChecked, optId];
-                        } else {
-                          val = optId;
-                        }
-                        setScrollAnswers((prev) => ({
-                          ...prev,
-                          [quest.id]: val,
-                        }));
-
-                        const correct = computeIsCorrect(quest.id, val);
-                        const existingIdx = userAnswers.findIndex(
-                          (a) => a.questionId === quest.id,
-                        );
-                        let updated;
-                        if (existingIdx > -1) {
-                          updated = [...userAnswers];
-                          updated[existingIdx] = {
-                            questionId: quest.id,
-                            answer: val,
-                            correct,
-                          };
-                        } else {
-                          updated = [
-                            ...userAnswers,
-                            { questionId: quest.id, answer: val, correct },
-                          ];
-                        }
-                        setUserAnswers(updated);
-                      } else {
-                        if (quest.type === 'checkbox') {
-                          setSelectedOptions((p) =>
-                            p.includes(optId) ?
-                              p.filter((i) => i !== optId)
-                            : [...p, optId],
-                          );
-                        } else {
-                          setSelectedOption(optId);
-                        }
-                      }
-                    }}
-                    className={cn(
-                      'w-full min-h-11 p-3 text-left rounded-xl border transition-all text-xs flex flex-col sm:flex-row items-center justify-between gap-3 backdrop-blur-lg',
-                      isSelected ?
-                        'bg-pw-primary/12 border-pw-primary text-white font-bold'
-                      : 'bg-white/5 border-white/10 text-white/80',
-                    )}>
-                    <div className='flex items-center gap-3 flex-1 min-w-0'>
-                      {optImage && (
-                        <img
-                          src={optImage}
-                          alt='Option attachment'
-                          className='h-12 w-12 object-cover rounded-lg border border-white/10 shrink-0'
-                        />
-                      )}
-                      <span
-                        className='whitespace-pre-wrap'
-                        dangerouslySetInnerHTML={{ __html: formattedOptionText }}
-                      />
-                    </div>
-
-                    <CheckCircle
-                      className={cn(
-                        'h-4 w-4 text-pw-primary transition-opacity shrink-0',
-                        isSelected ? 'opacity-100' : 'opacity-0',
-                      )}
+            : <div className='flex items-center gap-3'>
+                <div
+                  className={cn(
+                    'h-12 w-12 rounded-[18px] flex items-center justify-center shrink-0 border shadow-inner',
+                    quiz?.type === 'quiz' ?
+                      'bg-pw-primary/5 text-pw-primary border-pw-primary/10'
+                    : 'bg-pw-cyan/5 text-pw-cyan border-pw-cyan/10',
+                  )}>
+                  {quiz?.type === 'quiz' ?
+                    <Brain
+                      className='text-pw-primary'
+                      size={24}
                     />
-                  </button>
-                );
-              })}
-            </div>
-          }
-        </div>
-      </Card>
+                  : <HelpCircle
+                      className='text-pw-cyan'
+                      size={24}
+                    />
+                  }
+                </div>
+                <div>
+                  <span className='text-[9px] font-black text-pw-muted uppercase block'>
+                    Question {index + 1}
+                  </span>
+                  <h2
+                    className='text-base font-bold text-white'
+                    dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
+                  />
+                </div>
+              </div>
+            }
+          </div>
+
+          <div className='space-y-2'>
+            {quest.type === 'input' ?
+              <textarea
+                value={activeText}
+                onChange={(e) => {
+                  if (quiz?.quizScroll) {
+                    setScrollAnswers((prev) => ({
+                      ...prev,
+                      [quest.id]: e.target.value,
+                    }));
+                    // Sync to answers
+                    const correct = computeIsCorrect(quest.id, e.target.value);
+                    const existingIdx = userAnswers.findIndex(
+                      (a) => a.questionId === quest.id,
+                    );
+                    let updated;
+                    if (existingIdx > -1) {
+                      updated = [...userAnswers];
+                      updated[existingIdx] = {
+                        questionId: quest.id,
+                        answer: e.target.value,
+                        correct,
+                      };
+                    } else {
+                      updated = [
+                        ...userAnswers,
+                        {
+                          questionId: quest.id,
+                          answer: e.target.value,
+                          correct,
+                        },
+                      ];
+                    }
+                    setUserAnswers(updated);
+                  } else {
+                    setContent(e.target.value);
+                  }
+                }}
+                placeholder='Type your answer here...'
+                className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-pw-primary resize-none'
+              />
+            : <div className='grid gap-2.5'>
+                {currentOptions.map((opt: any, oIdx) => {
+                  const optId = opt.id || String(oIdx);
+                  const optText = opt.text || String(opt);
+                  const optImage =
+                    typeof opt === 'object' ? opt.imageUrl : undefined;
+                  const formattedOptionText = formatDetailVars(optText);
+
+                  const isSelected =
+                    quest.type === 'checkbox' ?
+                      activeChecked.includes(optId)
+                    : activeSelected === optId;
+
+                  return (
+                    <button
+                      key={optId}
+                      onClick={() => {
+                        if (quiz?.quizScroll) {
+                          let val;
+                          if (quest.type === 'checkbox') {
+                            val =
+                              activeChecked.includes(optId) ?
+                                activeChecked.filter((i: any) => i !== optId)
+                              : [...activeChecked, optId];
+                          } else {
+                            val = optId;
+                          }
+                          setScrollAnswers((prev) => ({
+                            ...prev,
+                            [quest.id]: val,
+                          }));
+
+                          const correct = computeIsCorrect(quest.id, val);
+                          const existingIdx = userAnswers.findIndex(
+                            (a) => a.questionId === quest.id,
+                          );
+                          let updated;
+                          if (existingIdx > -1) {
+                            updated = [...userAnswers];
+                            updated[existingIdx] = {
+                              questionId: quest.id,
+                              answer: val,
+                              correct,
+                            };
+                          } else {
+                            updated = [
+                              ...userAnswers,
+                              { questionId: quest.id, answer: val, correct },
+                            ];
+                          }
+                          setUserAnswers(updated);
+                        } else {
+                          if (quest.type === 'checkbox') {
+                            setSelectedOptions((p) =>
+                              p.includes(optId) ?
+                                p.filter((i) => i !== optId)
+                              : [...p, optId],
+                            );
+                          } else {
+                            setSelectedOption(optId);
+                          }
+                        }
+                      }}
+                      className={cn(
+                        'w-full min-h-11 p-3 text-left rounded-xl border transition-all text-xs flex items-center justify-between gap-3 backdrop-blur-lg',
+                        isSelected ?
+                          'bg-pw-primary/12 border-pw-primary text-white font-bold'
+                        : 'bg-white/5 border-white/10 text-white/90',
+                      )}>
+                      <div className='flex items-center gap-3 flex-1 min-w-0'>
+                        {optImage && (
+                          <img
+                            src={optImage}
+                            alt='Option attachment'
+                            className='h-12 w-12 object-cover rounded-lg border border-white/10 shrink-0'
+                          />
+                        )}
+                        <span
+                          className='whitespace-pre-wrap'
+                          dangerouslySetInnerHTML={{
+                            __html: formattedOptionText,
+                          }}
+                        />
+                      </div>
+
+                      <CheckCircle
+                        className={cn(
+                          'h-4 w-4 transition-all shrink-0',
+                          isSelected ? 'ttext-pw-primary w-4.5 h-4.5' : 'text-pw-muted',
+                        )}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            }
+          </div>
+        </Card>
+      </motion.div>
     );
   };
 
   if (isLoading) {
     return (
-      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
+      <motion.div
+        initial={{ opacity: 0.1, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0.1, x: -5 }}
+        key='loading-view'
+        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl font-bold mb-2'>Loading Assessment...</h2>
-      </div>
+      </motion.div>
     );
   }
 
   if (isOfflineUncached) {
     return (
-      <div className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
+      <motion.div
+        initial={{ opacity: 0.1, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0.1, x: -5 }}
+        key='not-cached-view'
+        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
         <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 animate-pulse' />
         <h2 className='text-2xl font-bold mb-1'>
           Offline: Quiz Not Cached Yet
@@ -1391,14 +1418,16 @@ export default function PublicQuizTaker() {
         <p className='text-sm text-pw-muted max-w-sm'>
           Please connect to the internet to load this assessment.
         </p>
-      </div>
+      </motion.div>
     );
   }
 
   if (isFinished) {
     const totalQuestions = activeQuestions.length;
     return (
-      <div className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6'>
+      <div
+        key='completion-view'
+        className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6'>
         <div className='max-w-md w-full text-center space-y-6'>
           <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20'>
             <CheckCircle2 className='h-8 w-8 text-pw-success' />
@@ -1454,7 +1483,11 @@ export default function PublicQuizTaker() {
   }
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0.1, x: 10 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0.1, x: -5 }}
+      key='taker-wrapper'
       onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
       className={cn(
         'relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
@@ -1466,7 +1499,9 @@ export default function PublicQuizTaker() {
 
       {/* Intro Gate */}
       {showIntro && !started && (
-        <div className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
+        <div
+          key='intro-view'
+          className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
           {quiz?.introBgUrl && (
             <div
               className='absolute inset-0 z-0 bg-cover bg-center pointer-events-none'
@@ -1504,7 +1539,9 @@ export default function PublicQuizTaker() {
 
           <div className='max-w-sm mx-auto w-full relative z-10'>
             {authRequired ?
-              <div className='bg-pw-danger/5 p-2 py-3 rounded-2xl border border-pw-danger/20 space-y-6'>
+              <div
+                key='auth-view'
+                className='bg-pw-danger/5 p-2 py-3 rounded-2xl border border-pw-danger/20 space-y-6'>
                 <Lock className='h-12 w-12 text-pw-danger mx-auto mt-10' />
                 <h3 className='text-xl font-bold'>Authentication Required</h3>
                 <p className='text-sm text-white/70 '>
@@ -1537,16 +1574,20 @@ export default function PublicQuizTaker() {
           </div>
 
           {/* Terms disclaimer & Reporting Flow */}
-          <div className='border-t border-white/5 pt-6 mt-10 text-xs text-pw-muted leading-relaxed relative z-10'>
-            <p className='mb-2'>
-              Disclaimer: PingWorld is strictly a service provider hosting
-              content and is not responsible for any questions, responses, or
-              outcomes generated in this assessment.
+          <div className='border-t border-white/5 py-6 mt-10 text-pw-muted leading-relaxed z-10 fixed bottom-2 w-[90%] self-center'>
+            <p className='mb-2 text-xs flex gap-1 flex-col'>
+              PingWorld is only a service provider hosting this{' '}
+              {quiz?.type ?? 'assessment'}.
+              <span>
+                We are not responsible for any questions, responses, or outcomes
+                generated in this {quiz?.type ?? 'assessment'}.
+              </span>
             </p>
             <button
               onClick={() => setShowReportModal(true)}
               className='text-pw-primary text-[10px] underline hover:text-pw-primary/80 transition-colors font-bold'>
-              Report this assessment for investigation or takedown
+              Report this {quiz?.type ?? 'assessment'} for investigation or
+              takedown
             </button>
           </div>
         </div>
@@ -1558,7 +1599,9 @@ export default function PublicQuizTaker() {
         showSecurityProtocol &&
         !started &&
         !detailsCollected && (
-          <div className='container relative z-10 mx-auto px-5 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
+          <div
+            key='security-view'
+            className='container relative z-10 mx-auto px-5 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
             <div className='sm:bg-pw-primary/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-pw-primary/20 space-y-8 sm:backdrop-blur-xl'>
               <div className='flex flex-col items-center gap-4 mt-2'>
                 <ShieldCheck className='h-16 w-16 text-pw-primary animate-pulse' />
@@ -1615,7 +1658,9 @@ export default function PublicQuizTaker() {
       {showDetails &&
         !detailsCollected &&
         (quiz?.askDetails || []).length > 0 && (
-          <div className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
+          <div
+            key='details-view'
+            className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
             <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl'>
               <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
                 ENTER YOUR DETAILS
@@ -1696,11 +1741,13 @@ export default function PublicQuizTaker() {
                               [detail.title]: e.target.value,
                             })
                           }
-                        />
-                        <p className='text-xs py-1 pl-1 break-all'>
-                          You are {}
-                          years old.
-                        </p>
+                            />
+                            { userData[detail.title] &&
+                              <p className='text-xs py-1 pl-1 break-all'>
+                                You are {new Date().getFullYear() - parseInt(userData[detail.title].split('-')[0])} {' '}
+                                years old.
+                              </p>
+                            }
                       </>
                     : <input
                         type={
@@ -1777,148 +1824,154 @@ export default function PublicQuizTaker() {
 
       {/* 4. Active Assessment View */}
       {started && quiz && (
-        <>
-          <div
-            className={cn(
-              'container relative z-10 mx-auto px-4 md:px-6 pt-8 pb-10 max-w-7xl',
-              quizTheme === 'dark' ? 'text-white' : 'text-black',
-            )}>
-            <div className='mb-8 flex flex-col gap-2 w-full'>
-              {!isOnline && (
-                <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
-                  <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
-                  <span>
-                    Offline Mode: Your responses will be saved securely on this
-                    device and uploaded once you connect to the internet.
+        <div
+          key='assessment-view'
+          className={cn(
+            'container relative z-10 mx-auto px-4 md:px-6 pt-8 pb-10 max-w-7xl',
+            quizTheme === 'dark' ? 'text-white' : 'text-black',
+          )}>
+          <div className='mb-8 flex flex-col gap-2 w-full'>
+            {!isOnline && (
+              <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
+                <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
+                <span>
+                  Offline Mode: Your responses will be saved securely on this
+                  device and uploaded once you connect to the internet.
+                </span>
+              </div>
+            )}
+
+            {/* Brand Icon */}
+            {quiz?.branding?.icon && (
+              <div className='flex justify-center mb-4'>
+                <img
+                  src={quiz?.branding?.icon}
+                  alt='Brand Logo'
+                  className='h-14 w-auto rounded-xl object-contain drop-shadow-lg'
+                />
+              </div>
+            )}
+
+            {/* Disclaimer Banner */}
+            {quiz?.disclaimer && (
+              <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
+                <AlertTriangle
+                  size={14}
+                  className='text-pw-warning shrink-0 mt-0.5'
+                />
+                <span>{quiz?.disclaimer}</span>
+              </div>
+            )}
+
+            {/* Header Row */}
+            <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-full border border-white/4 bkblur'>
+              <div className='flex items-center gap-4 pl-3'>
+                <div className='flex flex-col'>
+                  <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
+                    {quiz?.title}
+                  </h1>
+                  <span
+                    className='text-[8px] leading-none opacity-40 hidden'
+                    style={{ placeSelf: 'flex-start' }}>
+                    {quiz?.type.toUpperCase()}
                   </span>
-                </div>
-              )}
-
-              {/* Brand Icon */}
-              {quiz?.branding?.icon && (
-                <div className='flex justify-center mb-4'>
-                  <img
-                    src={quiz?.branding?.icon}
-                    alt='Brand Logo'
-                    className='h-14 w-auto rounded-xl object-contain drop-shadow-lg'
-                  />
-                </div>
-              )}
-
-              {/* Disclaimer Banner */}
-              {quiz?.disclaimer && (
-                <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
-                  <AlertTriangle
-                    size={14}
-                    className='text-pw-warning shrink-0 mt-0.5'
-                  />
-                  <span>{quiz?.disclaimer}</span>
-                </div>
-              )}
-
-              {/* Header Row */}
-              <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-full border border-white/4 bkblur'>
-                <div className='flex items-center gap-4 pl-3'>
-                  <div className='flex flex-col'>
-                    <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
-                      {quiz?.title}
-                    </h1>
-                    <span
-                      className='text-[8px] leading-none opacity-40 hidden'
-                      style={{ placeSelf: 'flex-start' }}>
-                      {quiz?.type.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className='flex items-center gap-2'>
-                  <Button
-                    variant='ghost'
-                    title={`Quit ${capFirst(quiz.type)}`}
-                    size='sm'
-                    onClick={() =>
-                      confirmLeaveQuiz(() => (window.location.href = '/quiz'))
-                    }
-                    className='h-10 px-4 gap-2 rounded-full text-pw-danger hover:bg-pw-danger/10 hover:text-pw-danger transition-all active:scale-95 border border-pw-danger/10'>
-                    <LogOut size={16} />
-                    <span className='hidden sm:inline font-bold text-pw-danger'>
-                      Quit
-                    </span>
-                  </Button>
-
-                  {/* Report button */}
-                  <Button
-                    variant='ghost'
-                    size='icon'
-                    title='Report this quiz'
-                    onClick={() => setShowReportModal(true)}
-                    className='h-9 w-9 rounded-full text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 transition-all border border-white/5'>
-                    <Flag size={14} />
-                  </Button>
-
-                  {quiz?.allowEarlySubmit && (
-                    <Button
-                      title={`Submit ${capFirst(quiz.type)}`}
-                      onClick={confirmSubmitQuiz}
-                      className='h-10 px-4 rounded-full gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 hidden md:flex ml-4'>
-                      <CheckCircle2 size={16} />
-                      <span className='font-bold'>SUBMIT</span>
-                    </Button>
-                  )}
                 </div>
               </div>
 
-              <div className='flex flex-col gap-3 mb-2 pt-1 px-2'>
-                {quiz?.type === 'quiz' &&
-                  activeQuestions.some(
-                    (q) => q.category && q.category.trim() !== '',
-                  ) && (
-                    <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm mx-1'>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{
-                          width: `${(answeredCount / activeQuestions.length) * 100}%`,
-                        }}
-                        className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
-                      />
-                    </div>
-                  )}
+              <div className='flex items-center gap-2'>
+                <Button
+                  variant='ghost'
+                  title={`Quit ${capFirst(quiz.type)}`}
+                  size='sm'
+                  onClick={() =>
+                    confirmLeaveQuiz(() => (window.location.href = '/quiz'))
+                  }
+                  className='h-10 px-4 gap-2 rounded-full text-pw-danger hover:bg-pw-danger/10 hover:text-pw-danger transition-all active:scale-95 border border-pw-danger/10'>
+                  <LogOut size={16} />
+                  <span className='hidden sm:inline font-bold text-pw-danger'>
+                    Quit
+                  </span>
+                </Button>
 
-                <div className={cn('flex w-full gap-1 items-center', quiz?.hasTimer && timeLeft !== null ? 'justify-between' : 'justify-end')}>
-                  {quiz?.hasTimer && timeLeft !== null && (
-                    <div
-                      title={`${capFirst(quiz?.type)} Timer`}
-                      className={cn(
-                        'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[12px] font-mono lg:text-base border transition-all',
-                        timeLeft < 60 ?
-                          'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
-                        : 
-                          'bg-white/5 border-white/10 text-pw-primary',
-                      )}>
-                      <Clock
-                        size={18}
-                        className={
-                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
-                        }
-                      />
-                      {Math.floor(timeLeft / 60)}:
-                      {String(timeLeft % 60).padStart(2, '0')} 
-                    </div>
-                  )}
-                  
-                  {quiz?.allowEarlySubmit && (
-                    <Button
-                      title={`Submit ${capFirst(quiz.type)}`}
-                      onClick={confirmSubmitQuiz}
-                      className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden'>
-                      <CheckCircle2 size={18} />
-                      <span className='font-bold'>SUBMIT</span>
-                    </Button>
-                  )}
-                </div>
+                {/* Report button */}
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  title='Report this quiz'
+                  onClick={() => setShowReportModal(true)}
+                  className='h-9 w-9 rounded-full text-pw-muted hover:text-pw-danger hover:bg-pw-danger/10 transition-all border border-white/5'>
+                  <Flag size={14} />
+                </Button>
+
+                {quiz?.allowEarlySubmit && (
+                  <Button
+                    title={`Submit ${capFirst(quiz.type)}`}
+                    onClick={confirmSubmitQuiz}
+                    className='h-10 px-4 rounded-full gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 hidden md:flex ml-4'>
+                    <CheckCircle2 size={16} />
+                    <span className='font-bold'>SUBMIT</span>
+                  </Button>
+                )}
               </div>
             </div>
 
+            <div className='flex flex-col gap-3 mb-2 pt-1 px-2'>
+              {quiz?.type === 'quiz' &&
+                activeQuestions.some(
+                  (q) => q.category && q.category.trim() !== '',
+                ) && (
+                  <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm mx-1'>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${(answeredCount / activeQuestions.length) * 100}%`,
+                      }}
+                      className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
+                    />
+                  </div>
+                )}
+
+              <div
+                className={cn(
+                  'flex w-full gap-1 items-center',
+                  quiz?.hasTimer && timeLeft !== null ?
+                    'justify-between'
+                  : 'justify-end',
+                )}>
+                {quiz?.hasTimer && timeLeft !== null && (
+                  <div
+                    title={`${capFirst(quiz?.type)} Timer`}
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[12px] font-mono lg:text-base border transition-all',
+                      timeLeft < 60 ?
+                        'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
+                      : 'bg-white/5 border-white/10 text-pw-primary',
+                    )}>
+                    <Clock
+                      size={18}
+                      className={
+                        timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
+                      }
+                    />
+                    {Math.floor(timeLeft / 60)}:
+                    {String(timeLeft % 60).padStart(2, '0')}
+                  </div>
+                )}
+
+                {quiz?.allowEarlySubmit && (
+                  <Button
+                    title={`Submit ${capFirst(quiz.type)}`}
+                    onClick={confirmSubmitQuiz}
+                    className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden'>
+                    <CheckCircle2 size={18} />
+                    <span className='font-bold'>SUBMIT</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <AnimatePresence mode='sync'>
             {/* ===== SCROLL MODE: all answered + current question vertically ===== */}
             {(
               quiz?.quizScroll &&
@@ -1986,17 +2039,7 @@ export default function PublicQuizTaker() {
                     </div>
                   : <div className='flex flex-col items-center w-full justify-center gap-2'>
                       <div className='flex items-center gap-2'>
-                        {/* <div className='badge bg-pw-primary/2 text-pw-primary border-pw-primary/5 px-4 py-1.5 rounded-full text-xs font-bold uppercase'>
-                          {(
-                            quiz?.questions.some(
-                              (q) => q.category || q.category !== null,
-                            )
-                          ) ?
-                            `{Question ${currentQuestion + 1}}`
-                          : `Question ${currentQuestion + 1} of ${activeQuestions.length}`
-                          }
-                        </div> */}
-
+                    
                         {questionTimeLeft !== null && (
                           <div className='badge bg-pw-warning/10 text-pw-warning border-pw-warning/20 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1'>
                             <Clock
@@ -2074,14 +2117,14 @@ export default function PublicQuizTaker() {
                 </div>
               </div>
             }
-          </div>
-        </>
+          </AnimatePresence>
+        </div>
       )}
 
       {/* Report Takedown Modal */}
       {showReportModal && (
         <div className='fixed inset-0 z-[100000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4'>
-          <div className='bg-pw-surface border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-pw-text'>
+          <div className='bg-pw-surface border border-white/10 rounded-3xl p-3 max-w-md w-full shadow-2xl space-y-4 text-pw-text'>
             <h3 className='text-xl font-bold font-display text-pw-danger text-left'>
               Report Assessment
             </h3>
@@ -2170,6 +2213,14 @@ export default function PublicQuizTaker() {
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
+  );
+}
+
+export default function PublicQuizTaker() {
+  return (
+    <AnimatePresence mode='wait'>
+      <Taker />
+    </AnimatePresence>
   );
 }
