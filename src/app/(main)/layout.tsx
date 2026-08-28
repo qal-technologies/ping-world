@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  Navbar,
-  Footer,
-  PageLayoutProvider,
-  usePageLayout,
-} from '@/components/layout';
-import { AppProvider } from '@/context/AppContext';
+import { Navbar, Footer, usePageLayout } from '@/components/layout';
 import { cn } from '@/lib/utils';
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
@@ -28,11 +22,5 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <AppProvider>
-      <PageLayoutProvider>
-        <LayoutContent>{children}</LayoutContent>
-      </PageLayoutProvider>
-    </AppProvider>
-  );
+  return <LayoutContent>{children}</LayoutContent>;
 }

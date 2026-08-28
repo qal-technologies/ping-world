@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -35,8 +35,9 @@ import {
   CheckCircle,
   BarChart2,
   MoreVertical,
-  XIcon,
   Ungroup,
+  Crown,
+  CloudCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -56,6 +57,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HybridStorage } from '@/lib/storage-utils';
@@ -63,7 +65,6 @@ import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
 import { computeExpiry, tierAtLeast } from '@/lib/config/premium';
-import {indexedDBLocalPersistence} from 'firebase/auth';
 
 // --- Types ---
 export type QuestionType =
@@ -253,7 +254,6 @@ const QuizBuilder = ({
 
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1 for settings
 
-
   // Pre-calculate groups for sidebar rendering
   const sidebarGroups = useMemo(() => {
     const uncategorized: { question: Question; index: number }[] = [];
@@ -285,8 +285,8 @@ const QuizBuilder = ({
   }, [editedQuiz.questions]);
 
   const allQuestions = useMemo(() => {
-    let cat:Question[] = [];
-    let unCat:Question[] = [];
+    let cat: Question[] = [];
+    let unCat: Question[] = [];
 
     editedQuiz.questions.forEach((q) => {
       const catQ =
@@ -307,7 +307,6 @@ const QuizBuilder = ({
       unCat,
     };
   }, [editedQuiz.questions]);
-
 
   useEffect(() => {
     // Autosave to draft storage as the user types
@@ -373,11 +372,18 @@ const QuizBuilder = ({
     setCurrentStep(editedQuiz?.questions?.length);
   };
 
-  const removeQuestion = (index: number) => {
-    const newQuestions = editedQuiz.questions.filter((_, i) => i !== index);
-    setEditedQuiz({ ...editedQuiz, questions: newQuestions });
-    if (currentStep >= newQuestions.length) {
-      setCurrentStep(newQuestions.length - 1);
+  const removeQuestion = async (index: number) => {
+    const proceed = await showConfirm(
+      `Are you sure you want to delete this question?`,
+      { cancelText: 'No', confirmText: 'Delete', type: 'danger' },
+    );
+
+    if (proceed) {
+      const newQuestions = editedQuiz.questions.filter((_, i) => i !== index);
+      setEditedQuiz({ ...editedQuiz, questions: newQuestions });
+      if (currentStep >= newQuestions.length) {
+        setCurrentStep(newQuestions.length - 1);
+      }
     }
   };
 
@@ -387,10 +393,12 @@ const QuizBuilder = ({
     setEditedQuiz({ ...editedQuiz, questions: newQuestions });
   };
 
-  const moveQuestion = (index: number, direction: 'up' | 'down', catName?: string) => {
-    // const catQ = allQuestions.cat.filter(q=> q.category === catName
-    // );
-    // const uncatQ = allQuestions.unCat;
+  const moveQuestion = (
+    index: number,
+    direction: 'up' | 'down',
+    catName?: string,
+  ) => {
+    // Try to move questions up or down in their respective groups (uncat or cat) too and be able to index them properly.
 
     const newQuestions = [...editedQuiz.questions];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -405,7 +413,7 @@ const QuizBuilder = ({
   };
 
   const handleQuestionCategory = (
-    type: 'add' | 'remove',
+    type: 'add' | 'remove' | 'moveUp' | 'moveDown',
     id: string,
     catName: string,
   ) => {
@@ -414,6 +422,7 @@ const QuizBuilder = ({
     const idx = editedQuiz.questions.findIndex((q) => q.id === qId);
     let question = editedQuiz.questions[idx];
 
+    console.log(question);
     if (!question) return;
 
     if (type === 'add') {
@@ -431,133 +440,215 @@ const QuizBuilder = ({
         question.category = catName;
 
         const updatedQuestions = [...editedQuiz.questions];
-        updatedQuestions.filter(q => q.id !== qId);
+        updatedQuestions.filter((q) => q.id !== qId);
 
-        // updatedQuestions.splice(lastIndex + 1, 0, question);
         setEditedQuiz({
           ...editedQuiz,
           questions: updatedQuestions,
         });
         setCurrentStep(lastIndex + 1);
-        console.log('Added');
 
         return;
+      } else {
+        question.category = catName;
+        const updatedQuestions = [...editedQuiz.questions];
+
+        setEditedQuiz({
+          ...editedQuiz,
+          questions: updatedQuestions,
+        });
+
+        setCurrentStep(idx);
       }
-    } else {
+    } else if (type === 'remove') {
       question.category = undefined;
-      const updatedQuestions = [...editedQuiz.questions, question];
+      const updatedQuestions = [...editedQuiz.questions];
+
       setEditedQuiz({
         ...editedQuiz,
         questions: updatedQuestions,
       });
 
-      console.log('Removed')
+      setCurrentStep(idx - 1);
     }
   };
 
-  
-  
+  const disband = (catName: string) => {
+    const updatedQuestions = [...editedQuiz.questions];
+    const catQs = editedQuiz.questions.filter((q) => q.category === catName);
 
-  const QuestionButton = ({q, i, isCat, catName = '', length, idx = 0}: {q: Question, i: number, isCat?: boolean, catName?: string; length?:number, idx?:number}) => {
-    
-  return (
-    <button
-      key={q.id}
-      onClick={(e) => {
-        e.preventDefault();
-        setCurrentStep(i);
-        setShowBranchRules(false);
-      }}
-      className={cn(
-        'flex items-center justify-between p-2 px-3 pr-1 bkblur rounded-xl text-xs font-medium transition-all group border',
-        currentStep === i ?
-          'bg-pw-primary/10 border-pw-primary text-pw-primary'
-        : 'bg-pw-surface/40 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
-      )}>
-      <span className='truncate flex-1 text-left'>
-        {idx + 1}: {q.text || 'New Question...'}
-      </span>
+    catQs.forEach((q) => {
+      q.category = undefined;
+    });
 
-      <div className='ml-1 flex gap-1'>
-        <DropdownMenu>
-          <DropdownMenuTrigger className='p-1 hover:bg-pw-primary/10 rounded-full'>
-            <Plus className='h-4 w-4' />
-          </DropdownMenuTrigger>
+    // trigger arrangement change
+    setEditedQuiz({
+      ...editedQuiz,
+      questions: updatedQuestions,
+    });
+  };
 
-          <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
-            {sidebarGroups.categories.map((cat) =>
-               <DropdownMenuItem
-               onClick={(e) => {
-                 e.stopPropagation();
-                 handleQuestionCategory('add', q.id, cat.name);
-               }}
-               className={'h-8 gap-1 px-2'}>
-              <Folder className='w-4 h-4 mx-1' /> {cat.name.toUpperCase()}
-             </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+  const handleQuestionScroll = () => {
+    const wait = setTimeout(() => {
+      const input = document.getElementById('question-text-input');
+      const editor = document.getElementById('question-editor');
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className='p-1 hover:bg-pw-cyan/10 rounded-full'>
-            <MoreVertical className='h-4 w-4' />
-          </DropdownMenuTrigger>
+      input?.focus();
+      editor?.scrollIntoView();
 
-          <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
-            {isCat && (
+      clearTimeout(wait);
+    }, 100);
+  };
+
+  const [groupName, setGroupName] = useState('group');
+  const [navWrap, setNavWrap] = useState(false);
+
+  const QuestionButton = ({
+    q,
+    i,
+    isCat,
+    catName = '',
+    length,
+    idx = 0,
+  }: {
+    q: Question;
+    i: number;
+    isCat?: boolean;
+    catName?: string;
+    length?: number;
+    idx?: number;
+  }) => {
+    return (
+      <div
+        key={q.id + idx + catName + i}
+        onClick={(e) => {
+          setCurrentStep(i);
+          handleQuestionScroll();
+          setShowBranchRules(false);
+        }}
+        className={cn(
+          'flex items-center justify-between p-2 px-3 pr-1 bkblur rounded-xl text-xs font-medium transition-all group border cursor-pointer',
+          currentStep === i ?
+            'bg-pw-primary/10 border-pw-primary text-pw-primary'
+          : 'bg-pw-surface/40 border-white/5 text-pw-muted hover:border-white/10 hover:text-pw-text',
+        )}>
+        <span className='truncate flex-1 text-left'>
+          {idx + 1}: {q.text || 'New Question...'}
+        </span>
+
+        <div className='ml-1 flex gap-1'>
+          <DropdownMenu>
+            <DropdownMenuTrigger className='p-1 hover:bg-pw-cyan/10 rounded-full'>
+              <MoreVertical className='h-4 w-4' />
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
+              <DropdownMenuItem className={'h-8 gap-1 px-2'}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className='flex gap-1 items-center'>
+                    <Plus className='h-4 w-4 text-pw-success' />{' '}
+                    {sidebarGroups.categories.length > 0 ?
+                      'Add to Group'
+                    : 'Add Group'}
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
+                    {sidebarGroups.categories.length > 0 ?
+                      sidebarGroups.categories
+                        .filter((c) => c.name !== catName)
+                        .map((cat) => (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuestionCategory('add', q.id, cat.name);
+                            }}
+                            className={'h-8 gap-1 px-2'}>
+                            <Folder className='w-4 h-4 mr-1' />{' '}
+                            {cat.name.toUpperCase()}
+                          </DropdownMenuItem>
+                        ))
+                    : <div className='w-full p-1 flex flex-col items-end justify-center'>
+                        <Input
+                          type='text'
+                          placeholder='Enter Group Name'
+                          value={groupName}
+                          onChange={(e) => setGroupName(e.target.value)}
+                          className='max-w-full mx-1 mb-2 p-1 text-sm'
+                        />
+
+                        <Button
+                          className='self-end'
+                          onClick={() => {
+                            handleQuestionCategory('add', q.id, groupName);
+                            setGroupName('');
+                          }}>
+                          Add
+                        </Button>
+                      </div>
+                    }
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </DropdownMenuItem>
+
+              {isCat && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleQuestionCategory(
+                      isCat ? 'remove' : 'add',
+                      q.id,
+                      catName,
+                    );
+                  }}
+                  className={'h-8 gap-1 px-2'}>
+                  <Ungroup className='h-3 w-3 text-pw-success transition-all' />{' '}
+                  Ungroup
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                disabled={idx == 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveQuestion(i, 'up');
+                }}
+                className={'h-8 gap-1 px-2'}
+                style={{ opacity: idx === 0 ? 0.5 : 1 }}>
+                <ArrowUp className='h-3 w-3 text-pw-cyan transition-all' /> Move
+                Up
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                disabled={idx + 1 === length}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveQuestion(i, 'down');
+                }}
+                className={'h-8 gap-1 px-2'}
+                style={{ opacity: idx + 1 === length ? 0.5 : 1 }}>
+                <ArrowDown className='h-3 w-3 text-pw-cyan transition-all' />{' '}
+                Move Down
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleQuestionCategory(
-                    isCat ? 'remove' : 'add',
-                    q.id,
-                    catName,
-                  );
+                  removeQuestion(i);
                 }}
                 className={'h-8 gap-1 px-2'}>
-                <Ungroup className='h-3 w-3 text-pw-success transition-all' />{' '}
-                Ungroup
+                <Trash2 className='h-3 w-3 text-pw-danger transition-all' />{' '}
+                Delete
               </DropdownMenuItem>
-            )}
-
-            <DropdownMenuItem
-              disabled={idx==0}
-              onClick={(e) => {
-                e.stopPropagation();
-                moveQuestion(i, 'up');
-              }}
-              className={'h-8 gap-1 px-2'} style={{opacity: idx===0 ? 0.5 : 1}}>
-              <ArrowUp className='h-3 w-3 text-pw-cyan transition-all' /> Move
-              Up
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              disabled={idx === length}
-              onClick={(e) => {
-                e.stopPropagation();
-                moveQuestion(i, 'down');
-              }}
-              className={'h-8 gap-1 px-2'}  style={{opacity: idx===length ? 0.5 : 1}}>
-              <ArrowDown className='h-3 w-3 text-pw-cyan transition-all' /> Move
-              Down
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                removeQuestion(i);
-              }}
-              className={'h-8 gap-1 px-2'}>
-              <Trash2 className='h-3 w-3 text-pw-danger transition-all' />{' '}
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </button>
-  );
-};
-
+    );
+  };
 
   return (
     <div className='flex flex-col gap-8'>
@@ -613,86 +704,130 @@ const QuizBuilder = ({
           <button
             onClick={() => setCurrentStep(-1)}
             className={cn(
-              'flex items-center gap-3 p-3 px-4 rounded-xl text-sm font-medium transition-all group',
+              'flex items-center gap-3 p-3 rounded-2xl text-sm font-medium border border-transparent transition-all group justify-between',
               currentStep === -1 ?
                 'bg-pw-primary text-white shadow-lg shadow-pw-primary/20'
-              : 'bg-pw-surface border border-white/5 text-pw-muted hover:text-pw-text',
+              : 'bg-pw-surface border-white/5 text-pw-muted hover:text-pw-text',
             )}>
-            <Settings2 className='h-4 w-4' /> Quiz Settings
+            <div className='flex gap-3 items-center'>
+              <Settings2 className='h-5 w-5' /> Quiz Settings
+            </div>{' '}
+            <ChevronDown
+              onClick={(e) => {
+                e.stopPropagation();
+                setNavWrap(!navWrap);
+              }}
+              className={cn(
+                'text-white w-7 h-7 p-1 hover:bg-white/10 rounded-full',
+                navWrap && 'rotate-90 bg-white/10 rounded-full',
+              )}
+            />
           </button>
 
-          <div className='flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2 pb-3 custom-scrollbar'>
-            {/* Uncategorized Questions */}
-            {sidebarGroups.uncategorized.map(({ question: q, index: i }, idx) => (
-              <QuestionButton q={q} i={i} idx={idx} length={sidebarGroups.uncategorized.length} />
-            ))}
+          {!navWrap && (
+            <div className='flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2 pb-3 custom-scrollbar'>
+              {/* Uncategorized Questions */}
+              {sidebarGroups.uncategorized.map(
+                ({ question: q, index: i }, idx) => (
+                  <QuestionButton
+                    q={q}
+                    i={i}
+                    idx={idx}
+                    length={sidebarGroups.uncategorized.length}
+                  />
+                ),
+              )}
 
-            {/* Categorized Questions grouped by Category */}
-            {sidebarGroups.categories.map((cat) => {
-              const isCollapsed = !!collapse[cat.name];
+              {/* Categorized Questions grouped by Category */}
+              {sidebarGroups.categories.map((cat) => {
+                const isCollapsed = !!collapse[cat.name];
 
-              return (
-                <div
-                  key={cat.name}
-                  className={cn(
-                    'flex flex-col gap-1 mt-1',
-                    !isCollapsed && ' border-l border-white/10 pl-2',
-                  )}>
-                  {/* Category Header */}
+                return (
                   <div
-                    className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/3 bkblur rounded-md cursor-pointer'
-                    onClick={(e) => {
-                      e.stopPropagation();
-
-                      setCollapse((prev) => ({
-                        ...prev,
-                        [cat.name]: !prev[cat.name],
-                      }));
-                    }}>
-                    <span className='truncate flex items-center'>
-                      <ChevronRight
-                        className={cn(
-                          'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
-                          !isCollapsed && 'rotate-90',
-                        )}
-                      />
-                      <Folder className='w-4 h-4 mx-1' /> {cat.name} (
-                      {cat.questions.length})
-                    </span>
-                    <button
-                      type='button'
-                      title={`Add question under ${cat.name.toUpperCase()}`}
+                    key={cat.name}
+                    className={cn(
+                      'flex flex-col gap-1 mt-1',
+                      !isCollapsed && ' border-l border-white/10 pl-2',
+                    )}>
+                    {/* Category Header */}
+                    <div
+                      className='flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase text-pw-primary/80 tracking-wider bg-white/5 bkblur rounded-xl cursor-pointer'
                       onClick={(e) => {
                         e.stopPropagation();
-                        addQuestion(cat.name);
-                      }}
-                      className='p-1 rounded hover:bg-white/10 text-pw-muted hover:text-pw-primary transition-all'>
-                      <Plus className='h-3.5 w-3.5' />
-                    </button>
-                  </div>
 
-                  {/* Categorized Questions List (with visual indentation) */}
-                  {!isCollapsed && (
-                    <div className='flex flex-col gap-1 ml-4'>
-                      {cat.questions.map(({ question: q, index: i }, idx) => (
-                        <QuestionButton
-                          q={q}
-                          i={i}
-                          idx={idx}
-                          catName={cat.name}
-                          isCat={!!cat.name}
-                          length={cat.questions.length}
+                        setCollapse((prev) => ({
+                          ...prev,
+                          [cat.name]: !prev[cat.name],
+                        }));
+                      }}>
+                      <span className='truncate flex items-center'>
+                        <ChevronRight
+                          className={cn(
+                            'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
+                            !isCollapsed && 'rotate-90',
+                          )}
                         />
-                      ))}
+                        <Folder className='w-4 h-4 mx-1' /> {cat.name} (
+                        {cat.questions.length})
+                      </span>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <MoreVertical className='p-1 rounded-xl hover:bg-white/5 text-pw-muted hover:text-pw-primary transition-all' />
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent
+                          className={'w-37 bg-pw-surface/60 bkblur'}>
+                          <DropdownMenuItem>
+                            <div
+                              title={`Add question under ${cat.name.toUpperCase()}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addQuestion(cat.name);
+                              }}
+                              className='w-full flex gap-1 items-center'>
+                              <Plus className='h-3.5 w-3.5 text-pw-success' />{' '}
+                              Add Question
+                            </div>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={() => disband(cat.name)}
+                            className='flex gap-1 items-center'>
+                            <Ungroup className='h-3.5 w-3.5 text-pw-danger' />{' '}
+                            Disband Group
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+
+                    {/* Categorized Questions List (with visual indentation) */}
+                    {!isCollapsed && (
+                      <div className='flex flex-col gap-1 ml-4'>
+                        {cat.questions.map(({ question: q, index: i }, idx) => (
+                          <QuestionButton
+                            q={q}
+                            i={i}
+                            idx={idx}
+                            catName={cat.name}
+                            isCat={!!cat.name}
+                            length={cat.questions.length}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <Button
-            onClick={() => addQuestion()}
+            onClick={() => {
+              addQuestion();
+              navWrap && setNavWrap(false);
+              handleQuestionScroll();
+            }}
             variant='outline'
             className='w-full border-dashed border-white/20 hover:border-pw-primary/50 hover:bg-pw-primary/5 gap-2 h-12'>
             <Plus className='h-4 w-4' /> Add Question
@@ -703,7 +838,7 @@ const QuizBuilder = ({
         <div className='lg:col-span-3'>
           <Card className='bg-transparent p-1 sm:p-4 pb-2 ring-0 sm:ring-1 pt-6 lg:pt-9 lg:p-8 h-full sm:bkblur'>
             {currentStep === -1 ?
-              <div className='space-y-4 mt-1'>
+              <div className='space-y-2 mt-1'>
                 <div className='flex items-center justify-between'>
                   <div>
                     <h3 className='text-xl font-bold flex items-center gap-2'>
@@ -716,7 +851,7 @@ const QuizBuilder = ({
                   </div>
                 </div>
 
-                <div className='divider opacity-50' />
+                <div className='divider opacity-50 my-4' />
 
                 {/* Identity & Basic Info */}
                 <Wrapper
@@ -730,7 +865,7 @@ const QuizBuilder = ({
                       <label className='text-xs font-bold text-pw-muted uppercase tracking-widest mb-1'>
                         Assessment Type
                       </label>
-                      <div className='flex p-0.5 bg-white/5 rounded-full border border-white/5'>
+                      <div className='flex p-0.5 bg-white/5 rounded-full border border-white/2'>
                         <Button
                           variant='ghost'
                           onClick={() =>
@@ -806,7 +941,7 @@ const QuizBuilder = ({
                           </option>
                         </select>
                         {editedQuiz.surveyType === 'form' && (
-                          <p className='text-[10px] text-pw-warning ml-1 mt-1'>
+                          <p className='text-[9px] text-pw-warning ml-1 mt-1'>
                             ⚠ Form type locks layout to Scroll All. Branching
                             is disabled.
                           </p>
@@ -843,7 +978,7 @@ const QuizBuilder = ({
                           })
                         }
                         placeholder='Welcome your takers and explain the rules...'
-                        className='w-full h-20 lg:h-24 bg-white/5 border border-white/10 rounded-lg p-2 px-3 text-sm focus:border-pw-primary focus:outline-none resize-none'
+                        className='w-full h-20 lg:h-24 bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:border-pw-primary focus:outline-none resize-none'
                       />
                     </div>
                   </div>
@@ -1085,7 +1220,7 @@ const QuizBuilder = ({
                         })
                       }
                       className='h-10 w-full border-dashed border-white/20 gap-2 text-xs opacity-70 hover:opacity-100'>
-                      <Plus size={14} /> Add details field
+                      <Plus size={14} /> Add details
                     </Button>
                   </div>
                 </Wrapper>
@@ -1279,7 +1414,7 @@ const QuizBuilder = ({
 
                         <QuizSettingItem
                           label='Active Lifespan (Expiry)'
-                          description={`Select how long this assessment remains active. Free tier max is 2 days.`}>
+                          description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
                           <div className='flex flex-col gap-2 w-full'>
                             <DropdownMenu>
                               <DropdownMenuTrigger>
@@ -1317,7 +1452,7 @@ const QuizBuilder = ({
                                   <ChevronDown className='h-4 w-4 opacity-50' />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 rounded-2xl'>
+                              <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 rounded-2xl'>
                                 {[
                                   { days: 1, tier: 'free' },
                                   { days: 2, tier: 'free' },
@@ -1381,7 +1516,7 @@ const QuizBuilder = ({
                                     ).toLocaleDateString()}
                                   </span>
                                 </>
-                              : <>Default lifespan is 2 days (Free tier)</>}
+                              : <>Default lifespan is 2 days</>}
                             </p>
                           </div>
                         </QuizSettingItem>
@@ -1438,26 +1573,6 @@ const QuizBuilder = ({
                           </Button>
                         </QuizSettingItem>
 
-                        {editedQuiz.questions.some(
-                          (q) =>
-                            q.skipTo ||
-                            q.skipToCat ||
-                            q.options.some(
-                              (o) =>
-                                typeof o === 'object' &&
-                                (o.skipTo || o.skipToCat),
-                            ),
-                        ) && (
-                          <div className='p-3 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs rounded-xl flex items-center gap-2 mb-2'>
-                            <AlertTriangle className='h-4 w-4 shrink-0' />
-                            <span>
-                              Branching Active: Question order randomization is
-                              restricted to internal category shuffling to
-                              maintain valid logical branching paths.
-                            </span>
-                          </div>
-                        )}
-
                         <QuizSettingItem
                           label='Randomization'
                           description='Randomize your questions and options to improve quiz integrity and security.'>
@@ -1495,6 +1610,25 @@ const QuizBuilder = ({
                             : 'OFF'}
                           </Button>
                         </QuizSettingItem>
+                        {editedQuiz.questions.some(
+                          (q) =>
+                            q.skipTo ||
+                            q.skipToCat ||
+                            q.options.some(
+                              (o) =>
+                                typeof o === 'object' &&
+                                (o.skipTo || o.skipToCat),
+                            ),
+                        ) && (
+                          <div className='flex gap-2 items-center px-1'>
+                            <AlertTriangle className='h-4 w-4 shrink-0' />
+                            <span className='text-pw-warning text-[10px] mb-2'>
+                              Branching Active: Question order randomization is
+                              restricted to internal category shuffling to
+                              maintain valid logical branching paths.
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </Wrapper>
 
@@ -1579,67 +1713,65 @@ const QuizBuilder = ({
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
                       color='primary'>
                       <div className='flex flex-col gap-4 pt-2'>
-                        <div className='space-y-4 mt-4 border-t border-white/5 pt-4'>
-                          <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
-                            Institutional Branding (File Uploads)
-                          </h4>
+                        <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
+                          Branding
+                        </h4>
 
-                          <div className='grid grid-cols-2 gap-2'>
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Background Image
-                              </label>
-                              <Input
-                                type='file'
-                                accept='image/*'
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    const r = new FileReader();
-                                    r.onload = (ev) => {
-                                      setEditedQuiz({
-                                        ...editedQuiz,
-                                        branding: {
-                                          ...(editedQuiz.branding || {}),
-                                          image: ev.target?.result as string,
-                                        },
-                                      });
-                                      toast.success('Background image loaded!');
-                                    };
-                                    r.readAsDataURL(file);
-                                  }
-                                }}
-                                className='bg-white/5 border-white/10 h-10'
-                              />
-                            </div>
+                        <div className='grid grid-cols-2 gap-2'>
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Background Image
+                            </label>
+                            <Input
+                              type='file'
+                              accept='image/*'
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const r = new FileReader();
+                                  r.onload = (ev) => {
+                                    setEditedQuiz({
+                                      ...editedQuiz,
+                                      branding: {
+                                        ...(editedQuiz.branding || {}),
+                                        image: ev.target?.result as string,
+                                      },
+                                    });
+                                    toast.success('Background image loaded!');
+                                  };
+                                  r.readAsDataURL(file);
+                                }
+                              }}
+                              className='bg-white/5 border-white/10 h-10'
+                            />
+                          </div>
 
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase'>
-                                Brand Icon / Logo
-                              </label>
-                              <Input
-                                type='file'
-                                accept='image/*'
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    const r = new FileReader();
-                                    r.onload = (ev) => {
-                                      setEditedQuiz({
-                                        ...editedQuiz,
-                                        branding: {
-                                          ...(editedQuiz.branding || {}),
-                                          icon: ev.target?.result as string,
-                                        },
-                                      });
-                                      toast.success('Brand logo loaded!');
-                                    };
-                                    r.readAsDataURL(file);
-                                  }
-                                }}
-                                className='bg-white/5 border-white/10 h-10'
-                              />
-                            </div>
+                          <div className='space-y-2'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Brand Icon / Logo
+                            </label>
+                            <Input
+                              type='file'
+                              accept='image/*'
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const r = new FileReader();
+                                  r.onload = (ev) => {
+                                    setEditedQuiz({
+                                      ...editedQuiz,
+                                      branding: {
+                                        ...(editedQuiz.branding || {}),
+                                        icon: ev.target?.result as string,
+                                      },
+                                    });
+                                    toast.success('Brand logo loaded!');
+                                  };
+                                  r.readAsDataURL(file);
+                                }
+                              }}
+                              className='bg-white/5 border-white/10 h-10'
+                            />
                           </div>
                         </div>
                       </div>
@@ -1647,10 +1779,17 @@ const QuizBuilder = ({
                   </>
                 )}
               </div>
-            : <div className='space-y-8'>
+            : <div
+                className='space-y-8'
+                id='question-editor'>
                 <div className='flex items-center justify-between flex-wrap'>
                   <h3 className='text-xl font-bold'>
-                    Question {currentStep + 1}
+                    Question {currentStep + 1}{' '}
+                    {editedQuiz?.questions[currentStep]?.category && (
+                      <span className='text-sm'>
+                        ({editedQuiz?.questions[currentStep]?.category})
+                      </span>
+                    )}
                   </h3>
                   <div className='flex gap-2 flex-wrap'>
                     <Button
@@ -1672,7 +1811,6 @@ const QuizBuilder = ({
                       <ArrowDown className='h-4 w-4' />
                     </Button>
 
-                    
                     <div className='w-[1px] h-9 bg-white/5 mx-2' />
 
                     <div className='gap-2 flex'>
@@ -1711,158 +1849,192 @@ const QuizBuilder = ({
                     <DropdownMenu>
                       <DropdownMenuTrigger>
                         <Button
-                          variant='outline'
-                          title='Change question type'
-                          className='h-9 gap-2 text-xs bg-white/5 border-white/10'>
-                          {editedQuiz.questions[currentStep].type
-                            .replace('_', ' ')
-                            .toUpperCase()}{' '}
-                          <ChevronDown className='h-3 w-3' />
+                          variant='ghost'
+                          title='Question Settings'
+                          className='bg-transparent h-9 gap-2 text-xs sm:bg-white/5 sm:border sm:border-white/10'>
+                          <MoreVertical className='h-3 w-3' />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-48'>
-                        {(
-                          [
-                            'multiple_choice',
-                            'true_false',
-                            'dropdown',
-                            'checkbox',
-                            'input',
-                            premiumTier !== 'flexible' && 'upload',
-                            editedQuiz.type === 'survey' && 'rating',
-                            editedQuiz.type === 'survey' && 'range',
-                          ] as QuestionType[]
-                        ).map((type) => {
-                          if (!type) return null;
-                          return (
-                            <DropdownMenuItem
-                              key={type}
-                              onClick={() => {
+                      <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-54 p-3 space-y-4 '>
+                        <div className='w-full'>
+                          <p className='uppercase text-xs mb-1 font-bold text-white'>
+                            Type:
+                          </p>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className='w-full'>
+                              <Button
+                                variant='outline'
+                                title='Change question type'
+                                className='h-9 gap-2 text-xs bg-white/5 border-white/10 w-full text-left flex justify-between items-center'>
+                                {editedQuiz.questions[currentStep].type
+                                  .replace('_', ' ')
+                                  .toUpperCase()}{' '}
+                                <ChevronDown className='h-3 w-3' />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-48'>
+                              {(
+                                [
+                                  'multiple_choice',
+                                  'true_false',
+                                  'dropdown',
+                                  'checkbox',
+                                  'input',
+                                  premiumTier !== 'free' && 'upload',
+                                  editedQuiz.type === 'survey' && 'rating',
+                                  editedQuiz.type === 'survey' && 'range',
+                                ] as QuestionType[]
+                              ).map((type) => {
+                                if (!type) return null;
+                                return (
+                                  <DropdownMenuItem
+                                    key={type}
+                                    onClick={() => {
+                                      const q = {
+                                        ...editedQuiz.questions[currentStep],
+                                        type,
+                                      };
+                                      // Reset options/correct Index for new type
+                                      if (type === 'true_false') {
+                                        q.options = [
+                                          { id: 'true', text: 'True' },
+                                          { id: 'false', text: 'False' },
+                                        ];
+                                        q.correctIndex = 'true';
+                                      } else if (type === 'input') {
+                                        q.options = [];
+                                        q.correctIndex = '';
+                                      } else if (type === 'checkbox') {
+                                        q.correctIndex = [];
+                                      } else if (type === 'range') {
+                                        q.options = [];
+                                        q.min = 0;
+                                        q.max = 10;
+                                        q.step = 1;
+                                        q.correctIndex = 5;
+                                      } else if (type === 'rating') {
+                                        q.options = [];
+                                        q.correctIndex = 5;
+                                      } else {
+                                        // For MC/Dropdown, ensure options are objects
+                                        if (
+                                          q.options.length > 0 &&
+                                          typeof q.options[0] === 'string'
+                                        ) {
+                                          q.options = q.options.map(
+                                            (opt, idx) => ({
+                                              id: `${q.id}-opt-${idx}`,
+                                              text: opt as string,
+                                            }),
+                                          );
+                                        }
+                                        q.correctIndex =
+                                          (q.options[0] as QuizOption)?.id ||
+                                          '';
+                                      }
+                                      updateQuestion(currentStep, q);
+                                    }}>
+                                    {type.replace('_', ' ').toUpperCase()}
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        <div className='w-full'>
+                          <p className='uppercase text-xs font-bold mb-1 text-white'>
+                            Assessory:
+                          </p>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className='w-full'>
+                              <Button
+                                variant='outline'
+                                title='Add accessory'
+                                className='h-9 gap-2 text-[10px] bg-white/5 border-white/10 uppercase font-bold tracking-widest w-full text-left flex justify-between items-center'>
+                                {editedQuiz.questions[currentStep].accessory ||
+                                  'No Accessory'}{' '}
+                                <ChevronDown className='h-3 w-3' />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-48'>
+                              {(
+                                [
+                                  'none',
+                                  'calculator',
+                                  'note',
+                                  'periodic_table',
+                                  'formula_sheet',
+                                  'glossary',
+                                ] as const
+                              ).map((acc) => (
+                                <DropdownMenuItem
+                                  key={acc}
+                                  onClick={() => {
+                                    const q = {
+                                      ...editedQuiz.questions[currentStep],
+                                      accessory: acc,
+                                    };
+                                    updateQuestion(currentStep, q);
+                                  }}
+                                  className='text-xs uppercase font-bold'>
+                                  {acc.replace('_', ' ')}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          {editedQuiz.questions[currentStep].accessory ===
+                            'note' && (
+                            <Input
+                              placeholder='Add your note/formula here...'
+                              value={
+                                editedQuiz.questions[currentStep]
+                                  .accessoryNote || ''
+                              }
+                              onChange={(e) => {
                                 const q = {
                                   ...editedQuiz.questions[currentStep],
-                                  type,
+                                  accessoryNote: e.target.value,
                                 };
-                                // Reset options/correct Index for new type
-                                if (type === 'true_false') {
-                                  q.options = [
-                                    { id: 'true', text: 'True' },
-                                    { id: 'false', text: 'False' },
-                                  ];
-                                  q.correctIndex = 'true';
-                                } else if (type === 'input') {
-                                  q.options = [];
-                                  q.correctIndex = '';
-                                } else if (type === 'checkbox') {
-                                  q.correctIndex = [];
-                                } else if (type === 'range') {
-                                  q.options = [];
-                                  q.min = 0;
-                                  q.max = 10;
-                                  q.step = 1;
-                                  q.correctIndex = 5;
-                                } else if (type === 'rating') {
-                                  q.options = [];
-                                  q.correctIndex = 5;
-                                } else {
-                                  // For MC/Dropdown, ensure options are objects
-                                  if (
-                                    q.options.length > 0 &&
-                                    typeof q.options[0] === 'string'
-                                  ) {
-                                    q.options = q.options.map((opt, idx) => ({
-                                      id: `${q.id}-opt-${idx}`,
-                                      text: opt as string,
-                                    }));
-                                  }
-                                  q.correctIndex =
-                                    (q.options[0] as QuizOption)?.id || '';
-                                }
                                 updateQuestion(currentStep, q);
-                              }}>
-                              {type.replace('_', ' ').toUpperCase()}
-                            </DropdownMenuItem>
-                          );
-                        })}
+                              }}
+                              className='h-9 text-xs bg-white/5 border-white/10 min-w-[200px] mt-1'
+                            />
+                          )}
+                        </div>
+
+                        {/* Question Timer */}
+                        <div className='w-full'>
+                          <p className='uppercase text-sm font-bold mb-1 text-white'>
+                            Timer:
+                          </p>
+                          <div className='flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 rounded-md h-9'>
+                            <Clock className='h-3.5 w-3.5 text-pw-muted' />
+                            <input
+                              type='number'
+                              placeholder='Timer (s)'
+                              value={
+                                editedQuiz.questions[currentStep].timer || ''
+                              }
+                              onChange={(e) => {
+                                const val =
+                                  e.target.value ?
+                                    parseInt(e.target.value, 10)
+                                  : undefined;
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  timer: val && val > 0 ? val : undefined,
+                                });
+                              }}
+                              className='w-14 bg-transparent border-none outline-none text-[10px] text-pw-text font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-outline'
+                              title='Set question timer in seconds (optional)'
+                            />
+                          </div>
+                        </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button
-                          variant='outline'
-                          title='Add accessory'
-                          className='h-9 gap-2 text-[10px] bg-white/5 border-white/10 uppercase font-bold tracking-widest'>
-                          {editedQuiz.questions[currentStep].accessory ||
-                            'No Accessory'}{' '}
-                          <ChevronDown className='h-3 w-3' />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className='bg-pw-surface border-white/10 w-48'>
-                        {(
-                          [
-                            'none',
-                            'calculator',
-                            'note',
-                            'periodic_table',
-                            'formula_sheet',
-                            'glossary',
-                          ] as const
-                        ).map((acc) => (
-                          <DropdownMenuItem
-                            key={acc}
-                            onClick={() => {
-                              const q = {
-                                ...editedQuiz.questions[currentStep],
-                                accessory: acc,
-                              };
-                              updateQuestion(currentStep, q);
-                            }}
-                            className='text-xs uppercase font-bold'>
-                            {acc.replace('_', ' ')}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {editedQuiz.questions[currentStep].accessory === 'note' && (
-                      <Input
-                        placeholder='Add your note/formula here...'
-                        value={
-                          editedQuiz.questions[currentStep].accessoryNote || ''
-                        }
-                        onChange={(e) => {
-                          const q = {
-                            ...editedQuiz.questions[currentStep],
-                            accessoryNote: e.target.value,
-                          };
-                          updateQuestion(currentStep, q);
-                        }}
-                        className='h-9 text-xs bg-white/5 border-white/10 min-w-[200px]'
-                      />
-                    )}
-
-                    {/* Question Timer */}
-                    <div className='flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 rounded-md h-9'>
-                      <Clock className='h-3.5 w-3.5 text-pw-muted' />
-                      <input
-                        type='number'
-                        placeholder='Timer (s)'
-                        value={editedQuiz.questions[currentStep].timer || ''}
-                        onChange={(e) => {
-                          const val =
-                            e.target.value ?
-                              parseInt(e.target.value, 10)
-                            : undefined;
-                          updateQuestion(currentStep, {
-                            ...editedQuiz.questions[currentStep],
-                            timer: val && val > 0 ? val : undefined,
-                          });
-                        }}
-                        className='w-14 bg-transparent border-none outline-none text-[10px] text-pw-text font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none no-outline'
-                        title='Set question timer in seconds (optional)'
-                      />
-                    </div>
-
                   </div>
                 </div>
 
@@ -1876,6 +2048,7 @@ const QuizBuilder = ({
                     <div className='w-full bg-white/5 border border-white/10 rounded-xl p-2 sm:p-4 text-sm sm:pb-2'>
                       <div className='relative'>
                         <textarea
+                          id='question-text-input'
                           value={editedQuiz.questions[currentStep].text}
                           onChange={(e) =>
                             updateQuestion(currentStep, {
@@ -1910,7 +2083,7 @@ const QuizBuilder = ({
                                       `Inserted ${mentionTag} tag!`,
                                     );
                                   }}
-                                  className='px-2 py-0.5 rounded bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-[10px] font-bold hover:bg-pw-primary/25 transition-all'>
+                                  className='px-2 py-0.5 rounded-xl bg-pw-primary/8 border border-pw-primary/20 text-pw-primary text-[10px] font-bold hover:bg-pw-primary/25 transition-all'>
                                   @{d.title}
                                 </button>
                               ))}
@@ -1922,7 +2095,7 @@ const QuizBuilder = ({
                       <div className='flex flex-wrap items-center justify-between gap-2 mt-2 border-t border-white/5 pt-2'>
                         {/* Group Tag Input (Combo-box Style) */}
                         <div className='flex flex-col gap-1'>
-                          <div className='flex items-center gap-1.5'>
+                          <div className='flex items-center gap-1.5 flex-wrap'>
                             <span className='text-[11px] text-pw-muted uppercase tracking-wider font-bold shrink-0'>
                               Group
                             </span>
@@ -2018,7 +2191,7 @@ const QuizBuilder = ({
                               </Button>
                             </DropdownMenuTrigger>
 
-                            <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 max-h-[280px] overflow-y-auto'>
+                            <DropdownMenuContent className='bg-pw-surface border-white/10 w-56 max-h-[280px] '>
                               <div className='px-2 pt-1.5 pb-0.5'>
                                 <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
                                   After this question…
@@ -2049,7 +2222,7 @@ const QuizBuilder = ({
                                   });
                                 }}>
                                 <span className='text-xs text-pw-danger'>
-                                  ⛔ Finish Assessment
+                                  ⛔ Finish {editedQuiz.type}
                                 </span>
                               </DropdownMenuItem>
 
@@ -2104,7 +2277,7 @@ const QuizBuilder = ({
                               ).length > 0 && (
                                 <div className='px-2 pt-2 pb-0.5 mt-1 border-t border-white/5'>
                                   <p className='text-[8px] font-black uppercase tracking-widest text-pw-muted'>
-                                    Jump to Group (sequential flow)
+                                    Jump to Group (linear flow)
                                   </p>
                                 </div>
                               )}
@@ -2227,15 +2400,34 @@ const QuizBuilder = ({
                           </div>
 
                           {/* Input Branching Rules */}
-                          <div className='space-y-2 pt-2 border-t border-white/5'>
+                          <div className='space-y-2 pt-2 border-t border-white/10'>
                             <div className='flex items-center justify-between'>
-
                               <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider flex gap-1 items-center'>
-                                { (editedQuiz?.questions[currentStep]
-                               ?.inputBranchRules || []).length > 0 && <ChevronRight className={cn('text-pw-primary text-xs', showBranchRules && 'rotate-90')} onClick={() => setShowBranchRules(!showBranchRules)} />
-                                }
-                                
-                                Branching Rules (Optional)
+                                {(
+                                  editedQuiz?.questions[currentStep]
+                                    ?.inputBranchRules || []
+                                ).length > 0 && (
+                                  <ChevronRight
+                                    className={cn(
+                                      'text-pw-primary h-3 w-3',
+                                      showBranchRules && 'rotate-90',
+                                    )}
+                                    onClick={() =>
+                                      setShowBranchRules(!showBranchRules)
+                                    }
+                                  />
+                                )}
+                                Branching Rules (
+                                {(
+                                  editedQuiz.questions[currentStep]
+                                    .inputBranchRules
+                                ) ?
+                                  `${
+                                    editedQuiz.questions[currentStep]
+                                      .inputBranchRules.length
+                                  }`
+                                : 'Optional'}
+                                )
                               </span>
                               <Button
                                 type='button'
@@ -2254,149 +2446,117 @@ const QuizBuilder = ({
                                   });
                                   setShowBranchRules(true);
                                 }}
-                                className='btn-ghost h-6 text-[10px] gap-1 text-pw-primary'>
-                                <Plus className='h-3 w-3' /> Add
+                                className='btn-ghost h-7 w-7 rounded-full text-[10px] gap-1 text-pw-primary'>
+                                <Plus className='h-3 w-3' />
                               </Button>
                             </div>
+                            {showBranchRules &&
+                              (
+                                editedQuiz.questions[currentStep]
+                                  .inputBranchRules || []
+                              ).map((rule, rIdx) => (
+                                <div
+                                  key={rIdx}
+                                  className={cn(
+                                    'py-2 space-y-2 text-xs',
+                                    (
+                                      editedQuiz?.questions[currentStep]
+                                        ?.inputBranchRules &&
+                                        rIdx ===
+                                          editedQuiz?.questions[currentStep]
+                                            ?.inputBranchRules.length -
+                                            1
+                                    ) ?
+                                      'border-none'
+                                    : 'border-b border-white/5',
+                                  )}>
+                                  <div className='flex items-center gap-2'>
+                                    <Input
+                                      placeholder='If input contains / matches keyword...'
+                                      value={rule.keyword}
+                                      onChange={(e) => {
+                                        const curRules = [
+                                          ...(editedQuiz.questions[currentStep]
+                                            .inputBranchRules || []),
+                                        ];
+                                        curRules[rIdx] = {
+                                          ...curRules[rIdx],
+                                          keyword: e.target.value,
+                                        };
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          inputBranchRules: curRules,
+                                        });
+                                      }}
+                                      className='h-8 bg-black/20 bkblur border-white/10 text-xs flex-1'
+                                    />
+                                    <Button
+                                      type='button'
+                                      size='sm'
+                                      variant='ghost'
+                                      onClick={() => {
+                                        const curRules = [
+                                          ...(editedQuiz.questions[currentStep]
+                                            .inputBranchRules || []),
+                                        ];
+                                        curRules[rIdx] = {
+                                          ...curRules[rIdx],
+                                          caseSensitive:
+                                            !curRules[rIdx].caseSensitive,
+                                        };
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          inputBranchRules: curRules,
+                                        });
+                                      }}
+                                      className={cn(
+                                        'h-8 px-2 text-[9px] font-bold border',
+                                        rule.caseSensitive ?
+                                          'border-pw-primary text-pw-primary'
+                                        : 'border-white/10 text-pw-muted',
+                                      )}>
+                                      {rule.caseSensitive ?
+                                        'Aa (Exact)'
+                                      : 'aa (Any Case)'}
+                                    </Button>
+                                    <Button
+                                      type='button'
+                                      size='icon'
+                                      variant='ghost'
+                                      onClick={() => {
+                                        const curRules = (
+                                          editedQuiz.questions[currentStep]
+                                            .inputBranchRules || []
+                                        ).filter((_, i) => i !== rIdx);
+                                        updateQuestion(currentStep, {
+                                          ...editedQuiz.questions[currentStep],
+                                          inputBranchRules: curRules,
+                                        });
+                                      }}
+                                      className='h-8 w-8 text-pw-danger sm:text-pw-muted sm:hover:text-pw-danger'>
+                                      <Trash2 className='h-3.5 w-3.5' />
+                                    </Button>
+                                  </div>
 
-                            { showBranchRules && (
-                              editedQuiz.questions[currentStep]
-                                .inputBranchRules || []
-                            ).map((rule, rIdx) => (
-                              <div
-                                key={rIdx}
-                                className='p-2 rounded-xl bg-white/2 bkblur border border-white/5 space-y-2 text-xs'>
-                                <div className='flex items-center gap-2'>
-                                  <Input
-                                    placeholder='If input contains / matches keyword...'
-                                    value={rule.keyword}
-                                    onChange={(e) => {
-                                      const curRules = [
-                                        ...(editedQuiz.questions[currentStep]
-                                          .inputBranchRules || []),
-                                      ];
-                                      curRules[rIdx] = {
-                                        ...curRules[rIdx],
-                                        keyword: e.target.value,
-                                      };
-                                      updateQuestion(currentStep, {
-                                        ...editedQuiz.questions[currentStep],
-                                        inputBranchRules: curRules,
-                                      });
-                                    }}
-                                    className='h-8 bg-black/20 bkblur border-white/10 text-xs flex-1'
-                                  />
-                                  <Button
-                                    type='button'
-                                    size='sm'
-                                    variant='ghost'
-                                    onClick={() => {
-                                      const curRules = [
-                                        ...(editedQuiz.questions[currentStep]
-                                          .inputBranchRules || []),
-                                      ];
-                                      curRules[rIdx] = {
-                                        ...curRules[rIdx],
-                                        caseSensitive:
-                                          !curRules[rIdx].caseSensitive,
-                                      };
-                                      updateQuestion(currentStep, {
-                                        ...editedQuiz.questions[currentStep],
-                                        inputBranchRules: curRules,
-                                      });
-                                    }}
-                                    className={cn(
-                                      'h-8 px-2 text-[9px] font-bold border',
-                                      rule.caseSensitive ?
-                                        'border-pw-primary text-pw-primary'
-                                      : 'border-white/10 text-pw-muted',
-                                    )}>
-                                    {rule.caseSensitive ?
-                                      'Aa (Exact)'
-                                    : 'aa (Any Case)'}
-                                  </Button>
-                                  <Button
-                                    type='button'
-                                    size='icon'
-                                    variant='ghost'
-                                    onClick={() => {
-                                      const curRules = (
-                                        editedQuiz.questions[currentStep]
-                                          .inputBranchRules || []
-                                      ).filter((_, i) => i !== rIdx);
-                                      updateQuestion(currentStep, {
-                                        ...editedQuiz.questions[currentStep],
-                                        inputBranchRules: curRules,
-                                      });
-                                    }}
-                                    className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
-                                    <Trash2 className='h-3.5 w-3.5' />
-                                  </Button>
-                                </div>
-
-                                <div className='flex items-center gap-2 text-[10px] text-pw-muted'>
-                                  <span>Route to:</span>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant='outline'
-                                        size='sm'
-                                        className='h-6 text-[10px] bg-white/5 border-white/10 text-pw-primary font-bold'>
-                                        {rule.skipToCat ?
-                                          `Group: ${rule.skipToCat}`
-                                        : rule.skipTo === 'end' ?
-                                          '⛔ Finish'
-                                        : rule.skipTo ?
-                                          `Q${editedQuiz.questions.findIndex((q) => q.id === rule.skipTo) + 1}`
-                                        : 'Next Question'}
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52'>
-                                      <DropdownMenuItem
-                                        onClick={() => {
-                                          const curRules = [
-                                            ...(editedQuiz.questions[
-                                              currentStep
-                                            ].inputBranchRules || []),
-                                          ];
-                                          curRules[rIdx] = {
-                                            ...curRules[rIdx],
-                                            skipTo: undefined,
-                                            skipToCat: undefined,
-                                          };
-                                          updateQuestion(currentStep, {
-                                            ...editedQuiz.questions[
-                                              currentStep
-                                            ],
-                                            inputBranchRules: curRules,
-                                          });
-                                        }}>
-                                        Next Question (Default)
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() => {
-                                          const curRules = [
-                                            ...(editedQuiz.questions[
-                                              currentStep
-                                            ].inputBranchRules || []),
-                                          ];
-                                          curRules[rIdx] = {
-                                            ...curRules[rIdx],
-                                            skipTo: 'end',
-                                            skipToCat: undefined,
-                                          };
-                                          updateQuestion(currentStep, {
-                                            ...editedQuiz.questions[
-                                              currentStep
-                                            ],
-                                            inputBranchRules: curRules,
-                                          });
-                                        }}>
-                                        ⛔ Finish Assessment
-                                      </DropdownMenuItem>
-                                      {editedQuiz.questions.map((qItem, qI) => (
+                                  <div className='flex items-center gap-2 text-[10px] text-pw-muted'>
+                                    <span>Route to:</span>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant='outline'
+                                          size='sm'
+                                          className='h-6 text-[10px] bg-white/5 border-white/10 text-pw-primary font-bold'>
+                                          {rule.skipToCat ?
+                                            `Group: ${rule.skipToCat}`
+                                          : rule.skipTo === 'end' ?
+                                            '⛔ Finish'
+                                          : rule.skipTo ?
+                                            `Q${editedQuiz.questions.findIndex((q) => q.id === rule.skipTo) + 1}`
+                                          : 'Next Question'}
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52'>
                                         <DropdownMenuItem
-                                          key={qItem.id}
                                           onClick={() => {
                                             const curRules = [
                                               ...(editedQuiz.questions[
@@ -2405,7 +2565,7 @@ const QuizBuilder = ({
                                             ];
                                             curRules[rIdx] = {
                                               ...curRules[rIdx],
-                                              skipTo: qItem.id,
+                                              skipTo: undefined,
                                               skipToCat: undefined,
                                             };
                                             updateQuestion(currentStep, {
@@ -2415,14 +2575,61 @@ const QuizBuilder = ({
                                               inputBranchRules: curRules,
                                             });
                                           }}>
-                                          Q{qI + 1}: {qItem.text.slice(0, 18)}
+                                          Next Question (Default)
                                         </DropdownMenuItem>
-                                      ))}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            const curRules = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].inputBranchRules || []),
+                                            ];
+                                            curRules[rIdx] = {
+                                              ...curRules[rIdx],
+                                              skipTo: 'end',
+                                              skipToCat: undefined,
+                                            };
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              inputBranchRules: curRules,
+                                            });
+                                          }}>
+                                          ⛔ Finish {editedQuiz.type}
+                                        </DropdownMenuItem>
+                                        {editedQuiz.questions.map(
+                                          (qItem, qI) => (
+                                            <DropdownMenuItem
+                                              key={qItem.id}
+                                              onClick={() => {
+                                                const curRules = [
+                                                  ...(editedQuiz.questions[
+                                                    currentStep
+                                                  ].inputBranchRules || []),
+                                                ];
+                                                curRules[rIdx] = {
+                                                  ...curRules[rIdx],
+                                                  skipTo: qItem.id,
+                                                  skipToCat: undefined,
+                                                };
+                                                updateQuestion(currentStep, {
+                                                  ...editedQuiz.questions[
+                                                    currentStep
+                                                  ],
+                                                  inputBranchRules: curRules,
+                                                });
+                                              }}>
+                                              Q{qI + 1}:{' '}
+                                              {qItem.text.slice(0, 18)}
+                                            </DropdownMenuItem>
+                                          ),
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
                           </div>
 
                           <div className='space-y-2 mt-2 border-t border-white/5 pt-3'>
@@ -2463,7 +2670,7 @@ const QuizBuilder = ({
                             max={editedQuiz.questions[currentStep].max || 10}
                             step={editedQuiz.questions[currentStep].step || 1}
                             className='w-full accent-pw-primary cursor-pointer'
-                            disabled
+                            // disabled
                           />
                           <div className='grid grid-cols-3 gap-2'>
                             <div className='space-y-1'>
@@ -2567,58 +2774,60 @@ const QuizBuilder = ({
                               <div
                                 key={opt.id}
                                 className={cn(
-                                  'group flex flex-col gap-1 p-3 rounded-xl border transition-all',
+                                  'group flex flex-col gap-1 p-2 rounded-xl border transition-all',
                                   isCorrect ?
                                     'bg-pw-success/10 border-pw-success/50 shadow-md shadow-pw-success/5'
                                   : 'bg-white/5 border-white/5 hover:border-pw-primary/30',
                                 )}>
-                                <div className='flex items-center gap-3'>
-                                  {editedQuiz.type === 'quiz' && (
-                                    <button
-                                      onClick={() => {
-                                        if (isCheckbox) {
-                                          const currentCorrect =
-                                            (
-                                              Array.isArray(
+                                <div className='flex items-center gap-2 flex-wrap'>
+                                  <div className='flex items-center gap-3 flex-1'>
+                                    {editedQuiz.type === 'quiz' && (
+                                      <button
+                                        onClick={() => {
+                                          if (isCheckbox) {
+                                            const currentCorrect =
+                                              (
+                                                Array.isArray(
+                                                  editedQuiz.questions[
+                                                    currentStep
+                                                  ].correctIndex,
+                                                )
+                                              ) ?
                                                 editedQuiz.questions[
                                                   currentStep
-                                                ].correctIndex,
-                                              )
-                                            ) ?
-                                              editedQuiz.questions[currentStep]
-                                                .correctIndex
-                                            : [];
-                                          const newCorrect =
-                                            currentCorrect.includes(opt.id) ?
-                                              currentCorrect.filter(
-                                                (id: string) => id !== opt.id,
-                                              )
-                                            : [...currentCorrect, opt.id];
-                                          updateQuestion(currentStep, {
-                                            ...editedQuiz.questions[
-                                              currentStep
-                                            ],
-                                            correctIndex: newCorrect,
-                                          });
-                                        } else {
-                                          updateQuestion(currentStep, {
-                                            ...editedQuiz.questions[
-                                              currentStep
-                                            ],
-                                            correctIndex: opt.id,
-                                          });
-                                        }
-                                      }}
-                                      className={cn(
-                                        'h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-transform active:scale-95',
-                                        isCorrect ?
-                                          'bg-pw-success border-pw-success text-white scale-110'
-                                        : 'bg-black/20 border-white/20 text-transparent hover:border-pw-primary hover:text-pw-primary/50',
-                                      )}>
-                                      <Check className='h-3 w-3' />
-                                    </button>
-                                  )}
-                                  <div className='flex items-center gap-2 flex-1 min-w-0'>
+                                                ].correctIndex
+                                              : [];
+                                            const newCorrect =
+                                              currentCorrect.includes(opt.id) ?
+                                                currentCorrect.filter(
+                                                  (id: string) => id !== opt.id,
+                                                )
+                                              : [...currentCorrect, opt.id];
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              correctIndex: newCorrect,
+                                            });
+                                          } else {
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              correctIndex: opt.id,
+                                            });
+                                          }
+                                        }}
+                                        className={cn(
+                                          'h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-transform active:scale-95',
+                                          isCorrect ?
+                                            'bg-pw-success border-pw-success text-white scale-110'
+                                          : 'bg-black/20 border-white/20 text-transparent hover:border-pw-primary hover:text-pw-primary/50',
+                                        )}>
+                                        <Check className='h-3 w-3' />
+                                      </button>
+                                    )}
+
                                     <Input
                                       value={opt.text}
                                       onChange={(e) => {
@@ -2633,12 +2842,14 @@ const QuizBuilder = ({
                                         });
                                       }}
                                       placeholder={`Option ${idx + 1}`}
-                                      className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1'
+                                      className='bg-transparent border-none rounded-none p-0 h-auto text-sm focus-visible:ring-0 no-outline flex-1 min-w-5'
                                     />
+                                  </div>
 
-                                    {/* jules edit: Option Image Upload button & preview */}
+                                  <div className='flex items-center flex-wrap gap-0.5'>
+                                    {/* Option Image Upload button & preview */}
                                     {opt.uploadUrl ?
-                                      <div className='relative shrink-0 group/img'>
+                                      <div className='relative shrink-0 group/img mr-1'>
                                         <img
                                           src={opt.uploadUrl}
                                           alt='Option'
@@ -2700,9 +2911,7 @@ const QuizBuilder = ({
                                         />
                                       </label>
                                     }
-                                  </div>
 
-                                  <div className='flex items-center gap-1 shrink-0'>
                                     {/* Branching Logic for Option */}
                                     {(
                                       editedQuiz.quizScroll ||
@@ -2740,7 +2949,7 @@ const QuizBuilder = ({
                                                 {opt.skipToCat ?
                                                   `To Grp: ${opt.skipToCat}`
                                                 : opt.skipTo === 'end' ?
-                                                  'Finish Assessment'
+                                                  `Finish ${editedQuiz.type}`
                                                 : `To Q${editedQuiz.questions.findIndex((q) => q.id === opt.skipTo) + 1}`
                                                 }
                                               </>
@@ -2750,7 +2959,7 @@ const QuizBuilder = ({
                                             }
                                           </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent className='bg-pw-surface border-white/10 w-56'>
+                                        <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56'>
                                           <div className='px-2 py-1.5 border-b border-white/5'>
                                             <p className='text-[10px] font-black uppercase text-pw-muted tracking-widest'>
                                               Route this answer to:
@@ -2798,7 +3007,7 @@ const QuizBuilder = ({
                                               });
                                             }}>
                                             <span className='text-xs text-pw-danger'>
-                                              ⛔ Finish Assessment
+                                              ⛔ Finish {editedQuiz.type}
                                             </span>
                                           </DropdownMenuItem>
 
@@ -2937,7 +3146,7 @@ const QuizBuilder = ({
                                           options: newOpts,
                                         });
                                       }}
-                                      className='h-7 w-7 hidden group-hover:inline-flex text-pw-danger transition-all duration-200'>
+                                      className='h-7 w-7 sm:hidden sm:group-hover:inline-flex text-pw-danger transition-all duration-200'>
                                       <Trash2 size={12} />
                                     </Button>
                                   </div>
@@ -3374,8 +3583,15 @@ export default function QuizPage() {
     return formatted;
   };
 
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
   return (
-    <div className='container mx-auto px-4 py-12 max-w-8xl min-h-[calc(100vh-64px)] pb-20'>
+    <div
+      className={cn(
+        'container mx-auto px-4 py-12 max-w-8xl min-h-[calc(100vh-64px)] pb-20',
+        premiumTier !== 'free' &&
+          'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
+      )}>
       <AnimatePresence mode='wait'>
         {!isCreating ?
           <motion.div
@@ -3387,10 +3603,24 @@ export default function QuizPage() {
               <div>
                 <div className='badge mb-4'>
                   <Puzzle className='h-3.5 w-3.5' />
-                  Quizzable
+                  Quizzable{' '}
+                  {premiumTier !== 'free' && (
+                    <span className='ml-1 flex items-center gap-0.5 text-pw-warning'>
+                      <Crown className='h-3 w-3' />
+                      Premium
+                    </span>
+                  )}
                 </div>
                 <h1 className='text-4xl font-extrabold font-display leading-[1.1]'>
-                  Quiz <span className='gradient-text'>Builder.</span>
+                  Quiz{' '}
+                  <span
+                    className={
+                      premiumTier !== 'free' ? 'gradient-text-warm' : (
+                        'gradient-text'
+                      )
+                    }>
+                    Builder.
+                  </span>
                 </h1>
                 <p className='mt-2 text-pw-muted'>
                   Create interactive quizzes, export to JSON, and share with
@@ -3410,7 +3640,8 @@ export default function QuizPage() {
                     variant='outline'
                     title='Import Quiz'
                     className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
-                    <Upload className='h-4 w-4' /> Import JSON
+                    <Upload className='h-4 w-4' /> Import{' '}
+                    <span className='hidden sm:inline-flex'> JSON</span>
                     <input
                       type='file'
                       accept='.json'
@@ -3423,7 +3654,8 @@ export default function QuizPage() {
                   title='Create New Quiz'
                   onClick={handleStartNew}
                   className='btn-primary gap-2 h-11 px-8'>
-                  <Plus className='h-5 w-5' /> Create New Quiz
+                  <Plus className='h-5 w-5' /> Create{' '}
+                  <span className='hidden sm:inline-flex'> New Quiz</span>
                 </Button>
               </div>
             </div>
@@ -3436,17 +3668,17 @@ export default function QuizPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}>
-                    <Card className='card-glow h-full flex flex-col p-6 group'>
-                      <div className='flex justify-between items-start mb-4 flex-wrap gap-2'>
+                    <Card className='card-glow h-full flex flex-col p-5 gap-2 group'>
+                      <div className='flex justify-between items-start mb-2 flex-wrap gap-2'>
                         <div
                           className={cn(
-                            'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest',
+                            'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest flex-wrap',
                           )}>
                           {(quiz as any).is_synced ?
                             <span
                               className='text-pw-success flex items-center gap-1.5'
                               title='Synced'>
-                              <ShieldCheck className='h-3 w-3' />
+                              <CloudCheck className='h-3 w-3' />
                             </span>
                           : <span
                               className='text-pw-warning flex items-center gap-1.5'
@@ -3483,7 +3715,7 @@ export default function QuizPage() {
                             })()}
                         </div>
 
-                        <div className='flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity'>
+                        <div className='flex flex-wrap gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity'>
                           <Button
                             variant='ghost'
                             title='View Feedback'
@@ -3546,13 +3778,14 @@ export default function QuizPage() {
                           </Button>
                         </div>
                       </div>
-                      <h3 className='text-xl font-bold font-display mb-2 group-hover:text-pw-primary transition-colors'>
+
+                      <h3 className='text-xl font-bold font-display mb-1'>
                         {quiz.title}
                       </h3>
-                      <p className='text-sm text-pw-muted line-clamp-2 mb-8 flex-1'>
+                      <p className='text-sm text-pw-muted line-clamp-2 mb-5 py-0 my-0 flex-1'>
                         {quiz.description || 'No description provided.'}
                       </p>
-                      <div className='flex gap-3 flex-wrap sm:flex-nowrap'>
+                      <div className='flex gap-3 flex-wrap'>
                         <Button
                           title='Start Assessment'
                           onClick={() => playQuiz(quiz.id)}
@@ -3596,9 +3829,9 @@ export default function QuizPage() {
           </motion.div>
         : <motion.div
             key='editor'
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
+            initial={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.8, filter: 'blur(0px)' }}
             className='min-w-full flex-1 flex flex-col p-0'>
             <QuizBuilder
               quiz={activeQuiz!}
@@ -3626,8 +3859,8 @@ export default function QuizPage() {
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className='relative h-full w-full max-w-2xl bg-pw-surface border-l border-white/10 p-8 shadow-2xl overflow-y-auto'>
-              <div className='flex justify-between items-center mb-8 flex-wrap'>
+              className='relative h-full w-full max-w-2xl bg-pw-surface/80 bkblur sm:border-l sm:border-white/10 p-3 sm:p-6 sm:shadow-2xl overflow-y-auto'>
+              <div className='flex justify-between items-center mb-8 flex-wrap pt-4'>
                 <div>
                   <h2 className='text-2xl font-bold'>
                     Feedback{' '}
@@ -3644,6 +3877,7 @@ export default function QuizPage() {
                       <>
                         <Button
                           variant='outline'
+                          title='Download Feedback'
                           size='sm'
                           onClick={() => exportResponsesAsCSV(viewingResponses)}
                           className='bg-pw-success/10 border-pw-success/20 text-pw-success hover:bg-pw-success/20 h-9'>
@@ -3675,7 +3909,7 @@ export default function QuizPage() {
               </div>
 
               <div className='space-y-6 pb-20'>
-                {/* jules edit: Comprehensive Collapsible Admin Analytics Overview for Feedback Responses */}
+                {/* Comprehensive Collapsible Admin Analytics Overview for Feedback Responses */}
                 {viewingResponses.responses &&
                   viewingResponses.responses.length > 0 &&
                   (() => {
@@ -3721,6 +3955,9 @@ export default function QuizPage() {
                       const takerName =
                         resp.userData.name ||
                         resp.userData.email ||
+                        resp.userData.pingAuthName ||
+                        resp.userData.pingAuthEmail ||
+                        resp.userData[0] ||
                         'Anonymous Taker';
                       if (resp.score > bestTaker.score) {
                         bestTaker = { name: takerName, score: resp.score };
@@ -3793,156 +4030,182 @@ export default function QuizPage() {
                     )[0];
 
                     return (
-                      <Card className='p-3 sm:p-4 bg-black/40 border border-white/10 rounded-2xl space-y-4'>
-                        <div className='flex items-center justify-between border-b border-white/5 pb-2'>
+                      <Card className='p-3 sm:p-4 bg-black/20 bkblur border border-white/10 rounded-2xl space-y-4'>
+                        <div className='flex items-center justify-between border-b border-white/5 p-1 pb-2'>
                           <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
                             <BarChart2 className='h-4 w-4' /> Assessment
                             Analytics
                           </span>
-                          <span className='text-[10px] font-mono text-pw-muted'>
-                            {totalParticipants} Total Participants
-                          </span>
-                        </div>
 
-                        {/* Visual Pass/Fail Bar */}
-                        <div className='space-y-1.5'>
-                          <div className='flex justify-between text-xs font-mono font-bold'>
-                            <span className='text-pw-success'>
-                              {totalPass} Passed ({passPct}%)
+                          <div className='flex items-center justify-between'>
+                            <span className='text-[10px] font-mono text-pw-muted'>
+                              {totalParticipants} Total Participants
                             </span>
-                            <span className='text-pw-danger'>
-                              {totalFail} Failed ({100 - passPct}%)
-                            </span>
-                          </div>
-                          <div className='w-full bg-white/10 h-2.5 rounded-full overflow-hidden flex'>
-                            <div
-                              style={{ width: `${passPct}%` }}
-                              className='bg-pw-success h-full transition-all duration-300'
-                            />
-                            <div
-                              style={{ width: `${100 - passPct}%` }}
-                              className='bg-pw-danger h-full transition-all duration-300'
-                            />
-                          </div>
-                        </div>
-
-                        {/* Stat Metrics Grid */}
-                        <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
-                          <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                              Full Finishes
-                            </span>
-                            <span className='text-lg font-bold font-mono text-pw-cyan'>
-                              {completions}
-                            </span>
-                          </div>
-                          <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                              Timeouts
-                            </span>
-                            <span className='text-lg font-bold font-mono text-pw-warning'>
-                              {timeouts}
-                            </span>
-                          </div>
-                          <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                              Self-Submits
-                            </span>
-                            <span className='text-lg font-bold font-mono text-pw-primary'>
-                              {selfSubmits}
-                            </span>
-                          </div>
-                          <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                            <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                              Quits
-                            </span>
-                            <span className='text-lg font-bold font-mono text-pw-danger'>
-                              {quits}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Participant Insights */}
-                        <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-white/5 pt-3'>
-                          <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
-                            <span className='text-[9px] text-pw-muted uppercase font-bold block'>
-                              Top Scoring Participant
-                            </span>
-                            <span className='font-bold text-pw-success block truncate'>
-                              {bestTaker.name}
-                            </span>
-                          </div>
-                          <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
-                            <span className='text-[9px] text-pw-muted uppercase font-bold block'>
-                              Lowest Scoring Participant
-                            </span>
-                            <span className='font-bold text-pw-danger block truncate'>
-                              {worstTaker.name}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Most Failed Question Insight */}
-                        {topFailedQuestion &&
-                          topFailedQuestion.incorrect > 0 && (
-                            <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1'>
-                              <span className='text-[9px] font-bold uppercase text-pw-danger block'>
-                                Most Missed Question
-                              </span>
-                              <p className='font-bold text-white line-clamp-1'>
-                                &quot;{topFailedQuestion.text}&quot;
-                              </p>
-                              <p className='text-[10px] text-pw-muted font-mono'>
-                                Missed {topFailedQuestion.incorrect} times out
-                                of{' '}
-                                {topFailedQuestion.correct +
-                                  topFailedQuestion.incorrect}{' '}
-                                attempts
-                              </p>
-                            </div>
-                          )}
-
-                        {/* Category Breakdown Table */}
-                        {Object.keys(categoryStats).length > 0 && (
-                          <div className='space-y-2 pt-2 border-t border-white/5'>
-                            <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
-                              Category Performance Analysis
-                            </span>
-                            <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
-                              {Object.entries(categoryStats).map(
-                                ([cat, stat]) => {
-                                  const catPassPct =
-                                    stat.attempts > 0 ?
-                                      Math.round(
-                                        (stat.pass / stat.attempts) * 100,
-                                      )
-                                    : 0;
-                                  return (
-                                    <div
-                                      key={cat}
-                                      className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
-                                      <span className='font-bold text-white uppercase text-[10px]'>
-                                        {cat}
-                                      </span>
-                                      <div className='flex items-center gap-3 font-mono text-[10px]'>
-                                        <span>
-                                          {stat.pass} Pass / {stat.fail} Fail
-                                        </span>
-                                        <span
-                                          className={cn(
-                                            'font-bold',
-                                            catPassPct >= 50 ? 'text-pw-success'
-                                            : 'text-pw-danger',
-                                          )}>
-                                          {catPassPct}%
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                },
+                            <ChevronDown
+                              onClick={() => setShowAnalytics(!showAnalytics)}
+                              className={cn(
+                                'cursor-pointer w-3.5 h-3.5 ml-1',
+                                showAnalytics && 'rotate-180',
                               )}
-                            </div>
+                            />
                           </div>
+                        </div>
+
+                        {showAnalytics && (
+                          <>
+                            {/* Visual Pass/Fail Bar */}
+                            <div className='space-y-1.5'>
+                              <div className='flex justify-between text-xs font-mono font-bold'>
+                                <span className='text-pw-success'>
+                                  {totalPass} Passed ({passPct}%)
+                                </span>
+                                <span className='text-pw-danger'>
+                                  {totalFail} Failed ({100 - passPct}%)
+                                </span>
+                              </div>
+                              <div className='w-full bg-white/5 bkblur h-2.5 rounded-full overflow-hidden flex'>
+                                <div
+                                  style={{ width: `${passPct}%` }}
+                                  className='bg-pw-success h-full transition-all duration-300'
+                                />
+                                <div
+                                  style={{ width: `${100 - passPct}%` }}
+                                  className='bg-pw-danger h-full transition-all duration-300'
+                                />
+                              </div>
+                            </div>
+
+                            {/* Stat Metrics Grid */}
+                            <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                              <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                                <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                  Full Finishes
+                                </span>
+                                <span className='text-lg font-bold font-mono text-pw-cyan'>
+                                  {completions}
+                                </span>
+                              </div>
+                              {
+                                <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
+                                  <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                    Timeouts
+                                  </span>
+                                  <span className='text-lg font-bold font-mono text-pw-warning'>
+                                    {timeouts}
+                                  </span>
+                                </div>
+                              }
+
+                              {
+                                <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                                  <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                    Self-Submits
+                                  </span>
+                                  <span className='text-lg font-bold font-mono text-pw-primary'>
+                                    {selfSubmits}
+                                  </span>
+                                </div>
+                              }
+
+                              {
+                                <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
+                                  <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                    Quits
+                                  </span>
+                                  <span className='text-lg font-bold font-mono text-pw-danger'>
+                                    {quits}
+                                  </span>
+                                </div>
+                              }
+                            </div>
+
+                            {/* Participant Insights */}
+                            {viewingResponses.type === 'quiz' && (
+                              <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-white/5 pt-3'>
+                                <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                                  <span className='text-[9px] text-pw-muted uppercase font-bold block'>
+                                    Top Scoring Participant
+                                  </span>
+                                  <span className='font-bold text-pw-success block truncate'>
+                                    {bestTaker.name}
+                                  </span>
+                                </div>
+                                <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                                  <span className='text-[9px] text-pw-muted uppercase font-bold block'>
+                                    Lowest Scoring Participant
+                                  </span>
+                                  <span className='font-bold text-pw-danger block truncate'>
+                                    {worstTaker.name}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Most Failed Question Insight */}
+                            {topFailedQuestion &&
+                              topFailedQuestion.incorrect > 0 && (
+                                <div className='p-2 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1'>
+                                  <span className='text-[9px] font-bold uppercase text-pw-danger block'>
+                                    Most Missed Question
+                                  </span>
+                                  <p className='font-bold text-white line-clamp-1'>
+                                    &quot;{topFailedQuestion.text}&quot;
+                                  </p>
+                                  <p className='text-[10px] text-pw-muted font-mono'>
+                                    Missed {topFailedQuestion.incorrect} times
+                                    out of{' '}
+                                    {topFailedQuestion.correct +
+                                      topFailedQuestion.incorrect}{' '}
+                                    attempts
+                                  </p>
+                                </div>
+                              )}
+
+                            {/* Category Breakdown Table */}
+                            {Object.keys(categoryStats).length > 0 && (
+                              <div className='space-y-2 pt-2 border-t border-white/5'>
+                                <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                                  Category Performance Analysis
+                                </span>
+                                <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
+                                  {Object.entries(categoryStats).map(
+                                    ([cat, stat]) => {
+                                      const catPassPct =
+                                        stat.attempts > 0 ?
+                                          Math.round(
+                                            (stat.pass / stat.attempts) * 100,
+                                          )
+                                        : 0;
+                                      return (
+                                        <div
+                                          key={cat}
+                                          className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
+                                          <span className='font-bold text-white uppercase text-[10px]'>
+                                            {cat}
+                                          </span>
+                                          <div className='flex items-center gap-3 font-mono text-[10px]'>
+                                            <span>
+                                              {stat.pass} Pass / {stat.fail}{' '}
+                                              Fail
+                                            </span>
+                                            <span
+                                              className={cn(
+                                                'font-bold',
+                                                catPassPct >= 50 ?
+                                                  'text-pw-success'
+                                                : 'text-pw-danger',
+                                              )}>
+                                              {catPassPct}%
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    },
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </>
                         )}
                       </Card>
                     );
@@ -3964,14 +4227,15 @@ export default function QuizPage() {
                     .map((resp, idx) => (
                       <Card
                         key={idx}
-                        className='p-4 bg-white/5 border-white/10 space-y-0.5 relative overflow-hidden'>
-                        <div className='flex justify-between items-start'>
+                        className='p-3 bg-white/5 bkblur ring-0 gap-0 space-y-2 relative overflow-hidden'>
+                        <div className='flex justify-between items-start px-2'>
                           <div>
                             <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
                               {resp.userData.name ||
                                 resp.userData.email ||
                                 resp.userData.pingAuthName ||
                                 resp.userData.pingAuthEmail ||
+                                resp.userData[0] ||
                                 `Taker ${idx + 1}`}
                             </p>
                             <p className='text-[10px] text-pw-muted italic'>
@@ -3986,7 +4250,7 @@ export default function QuizPage() {
                           )}
                         </div>
 
-                        <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5'>
+                        <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5 px-1 mb-1'>
                           {Object.entries(resp.userData).map(([key, val]) => (
                             <div
                               key={key}
@@ -4020,7 +4284,7 @@ export default function QuizPage() {
                             <Button
                               variant='ghost'
                               size='sm'
-                              className='h-7 text-[10px] text-pw-cyan font-bold p-0 px-2'
+                              className='h-7 text-[10px] text-pw-cyan font-bold p-0 px-2 rounded-xl'
                               onClick={() =>
                                 setExpandedResponse(
                                   expandedResponse === idx ? null : idx,
@@ -4038,7 +4302,7 @@ export default function QuizPage() {
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
-                                className='overflow-hidden space-y-1 pt-2'>
+                                className='overflow-hidden bg-pw-surface/70 rounded-xl bkblur p-1 mt-2'>
                                 {resp.answers.map((ans, i) => {
                                   const question =
                                     viewingResponses.questions.find(
@@ -4057,7 +4321,12 @@ export default function QuizPage() {
                                   return (
                                     <div
                                       key={i}
-                                      className='p-2.5 bg-black/40 rounded-xl border border-white/5 space-y-0.5'>
+                                      className={cn(
+                                        'p-1 py-2 space-y-0.5',
+                                        i == resp.answers.length - 1 ?
+                                          ''
+                                        : 'border-b border-white/10',
+                                      )}>
                                       <p className='text-[10px] font-bold text-pw-muted uppercase'>
                                         Question {i + 1}
                                       </p>

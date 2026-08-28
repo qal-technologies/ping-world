@@ -38,16 +38,16 @@ export default function Wrapper({
 
   return (
     <Card
-      className='w-full flex flex-col gap-0 overflow-hidden border-white/5 bg-white/[0.02] mb-3 p-0 bkblur'
-      key={title + '-wrapper'}>
+      className='w-full flex flex-col gap-0 overflow-hidden border-white/4 bg-white/[0.02] p-0 bkblur rounded-2xl'
+      key={title + '-pw-wrapper'}>
       <div
         onClick={() => setOpen(!open)}
-        className='w-full cursor-pointer flex items-center justify-between p-4 hover:bg-white/5 transition-colors group'>
+        className='w-full cursor-pointer flex items-center justify-between p-2 sm:p-4 hover:bg-white/4 transition-colors group'>
         <div className='flex items-center gap-3'>
           {icon && (
             <div
               className={cn(
-                'h-8 w-8 rounded-lg flex items-center justify-center transition-all',
+                'h-8 w-8 rounded-lg flex items-center justify-center transition-all text-xl',
                 `bg-${activeColor}/10 text-${activeColor} group-hover:scale-110`,
               )}>
               {icon}
@@ -77,7 +77,7 @@ export default function Wrapper({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}>
-            <div className='p-2 pt-0 border-t border-white/5'>
+            <div className='p-1 sm:p-2 pt-0 border-t border-white/5'>
               {children}
             </div>
           </motion.div>

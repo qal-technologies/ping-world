@@ -15,7 +15,7 @@ export default function QuizSettingItem({
   className,
 }: QuizSettingItemProps) {
   return (
-    <div className={cn('flex flex-col md:flex-row md:items-center justify-between gap-4 p-2 px-2.5 rounded-xl bg-white/[0.03] border border-white/5 transition-all hover:bg-white/[0.05]', className)}>
+    <div className={cn('flex flex-col md:flex-row md:items-center justify-between gap-4 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-all hover:bg-white/[0.05]', className)}>
       <div className='flex-1'>
         <p className='text-sm font-bold text-pw-text'>{label}</p>
         <p className='text-[10px] text-pw-muted leading-relaxed max-w-md mt-[2px]' style={{lineHeight:'14px'}}>

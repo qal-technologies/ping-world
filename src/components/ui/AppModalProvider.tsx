@@ -144,8 +144,8 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
       {children}
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
-        <DialogContent className="max-w-md w-full bg-[#0c0d1c] border border-white/10 text-pw-text p-6 rounded-2xl shadow-2xl">
-          <DialogHeader className="space-y-3">
+        <DialogContent className="max-w-md w-full bg-pw-surface/60 bkblur border border-white/6 text-pw-text rounded-2xl shadow-2xl">
+          <DialogHeader className="space-y-3 p-4 sm:p-6">
             <div className="flex items-center gap-3">
               <div className={`p-2.5 rounded-xl bg-white/5 border border-white/10 ${iconColor}`}>
                 <IconComponent className="h-5 w-5" />
@@ -177,7 +177,7 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          <DialogFooter className="flex flex-row justify-end gap-2 pt-3">
+          <DialogFooter className="flex flex-row justify-end gap-2 mt-2 p-3 sm:p-4 sm:px-6 rounded-2xl">
             {modalMode !== 'alert' && (
               <Button
                 variant="outline"

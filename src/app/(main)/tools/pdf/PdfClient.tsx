@@ -1523,7 +1523,7 @@ export default function PdfToolStudioPage() {
       } else if (exportFormat === 'pwbook') {
         await handleExportBookJson();
       } else if (exportFormat === 'epub') {
-        /* jules edit: Valid EPUB 3.0 ZIP Container package generation via JSZip */
+        /* Valid EPUB 3.0 ZIP Container package generation via JSZip */
         const JSZip = (await import('jszip')).default;
         const zip = new JSZip();
 

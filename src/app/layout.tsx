@@ -1,4 +1,4 @@
-import {COMPANY} from '@/lib/config/company';
+import { COMPANY } from '@/lib/config/company';
 import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 import { fontDisplay, fontBody, fontMono } from '@/lib/fonts';
@@ -6,6 +6,7 @@ import { AppProvider } from '@/context/AppContext';
 import { AppModalProvider } from '@/components/ui/AppModalProvider';
 import { ComposerProvider } from '@/lib/composer/useComposerStore';
 import './globals.css';
+import { PageLayoutProvider } from '@/components/layout';
 
 export const metadata: Metadata = {
   title: {
@@ -103,7 +104,7 @@ export default function RootLayout({
     '@type': 'SoftwareApplication',
     name: 'Ping World',
     operatingSystem: 'All',
-    applicationCategory: 'BusinessApplication, Utilities',
+    applicationCategory: 'BusinessApplication, Utilities, Productivity, Tools',
     offers: {
       '@type': 'Offer',
       price: '0',
@@ -114,7 +115,7 @@ export default function RootLayout({
   return (
     <html
       lang='en'
-      data-scroll-behavior="smooth"
+      data-scroll-behavior='smooth'
       className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}>
       <head>
         <script
@@ -128,18 +129,22 @@ export default function RootLayout({
       </head>
       <body className='min-h-dvh flex flex-col antialiased'>
         <AppProvider>
-          <AppModalProvider>
-            <ComposerProvider>{children}</ComposerProvider>
-          </AppModalProvider>
+          <PageLayoutProvider>
+            <AppModalProvider>
+              <ComposerProvider>{children}</ComposerProvider>
+            </AppModalProvider>
+          </PageLayoutProvider>
         </AppProvider>
         <Toaster
           position='bottom-right'
           toastOptions={{
             style: {
-              background: '#12152E',
-              border: '1px solid rgba(92,111,255,0.3)',
+              background: '#12152EC7',
+              border: '1px solid rgba(92,111,255,0.2)',
+              backdropFilter: 'blur(8px)',
               color: '#F8F9FF',
               fontFamily: 'var(--font-body)',
+              boxShadow: '0px 1px 10px rgba(23, 23, 23, 0.3)',
             },
           }}
         />

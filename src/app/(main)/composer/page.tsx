@@ -2,16 +2,28 @@
 
 import { useState, useEffect } from 'react';
 import { ComposerLayout } from '@/components/composer/ComposerLayout';
-import { ComposerProvider } from '@/lib/composer/useComposerStore';
+import { ComposerProvider, useComposer } from '@/lib/composer/useComposerStore';
 import { HybridStorage } from '@/lib/storage-utils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { PenTool, History, Plus, FileText, ArrowLeft, Clock, Trash2 } from 'lucide-react';
+import {
+  PenTool,
+  History,
+  Plus,
+  FileText,
+  ArrowLeft,
+  Clock,
+  Trash2,
+  Pen,
+} from 'lucide-react';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 function ComposerPageClient() {
   const [posts, setPosts] = useState<any[]>([]);
   const [viewState, setViewState] = useState<'landing' | 'editor'>('landing');
+  const { state } = useComposer();
+  const isPremiumUI = state.isPremium;
 
   const loadPosts = async () => {
     try {
@@ -35,16 +47,16 @@ function ComposerPageClient() {
 
   if (viewState === 'editor') {
     return (
-      <div className='relative'>
-        <div className='container mx-auto px-4 pt-6 max-w-[1400px] flex items-center justify-between'>
+      <div className='relative space-y-2'>
+        <div className='container mx-auto p-4 max-w-[1400px] flex items-center justify-between'>
           <Button
             variant='outline'
             onClick={() => {
               loadPosts();
               setViewState('landing');
             }}
-            className='h-9 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
-            <ArrowLeft className='h-4 w-4' /> Back to Posts List
+            className='h-9 border-white/10 bg-white/2 bkblur hover:bg-white/5 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
+            <ArrowLeft className='h-4 w-4' /> Back to Posts
           </Button>
         </div>
         <ComposerLayout />
@@ -53,18 +65,30 @@ function ComposerPageClient() {
   }
 
   return (
-    <div className='container mx-auto px-4 md:px-6 pt-12 pb-24 max-w-5xl space-y-8 min-h-[calc(100vh-64px)]'>
+    <div
+      className={cn(
+        'container mx-auto px-4 md:px-6 pt-12 pb-24 max-w-5xl space-y-8 min-h-[calc(100vh-64px)]',
+        isPremiumUI &&
+          'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
+      )}>
       {/* Header */}
-      <div className='flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5'>
+      <div className='flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6'>
         <div>
           <div className='badge mb-3'>
             <PenTool className='h-3.5 w-3.5' /> Social Media Hub
           </div>
           <h1 className='text-3xl sm:text-4xl font-extrabold font-display leading-[1.1] text-white'>
-            Social Post <span className='gradient-text'>Composer.</span>
+            Social Post{' '}
+            <span
+              className={cn(
+                isPremiumUI ? 'gradient-text-warm' : 'gradient-text',
+              )}>
+              Composer.
+            </span>
           </h1>
           <p className='mt-2 text-pw-muted text-xs sm:text-sm max-w-lg'>
-            Craft, schedule, and publish posts to X, Instagram, Facebook, and LinkedIn with live AI assistance.
+            Craft, schedule, and publish posts to X, Instagram, Facebook, and
+            LinkedIn with live AI assistance.
           </p>
         </div>
 
@@ -87,29 +111,35 @@ function ComposerPageClient() {
         </div>
       </div>
 
+      <div className='divider' />
+
       {/* Landing View: Empty State vs Recent Posts List */}
-      {posts.length === 0 ? (
-        <Card className='p-12 text-center bg-[#0c0d1c]/60 bkblur border border-white/5 rounded-3xl space-y-6 max-w-2xl mx-auto shadow-2xl'>
+      {posts.length === 0 ?
+        <div className='p-12 pb-10 text-center bg-[#0c0d1c]/50 bkblur border border-dashed border-white/20 rounded-3xl space-y-6 max-w-2xl mx-auto shadow-2xl'>
           <div className='w-16 h-16 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center mx-auto shadow-inner'>
             <PenTool className='h-8 w-8' />
           </div>
           <div className='space-y-2'>
-            <h3 className='text-xl font-bold font-display text-white'>No Social Posts Created Yet</h3>
-            <p className='text-xs text-pw-muted max-w-md mx-auto leading-relaxed'>
-              You haven&apos;t created or scheduled any social posts yet. Click the button below to open the rich multi-platform editor and start publishing!
+            <h3 className='text-xl font-bold font-display text-white'>
+              No Posts Created Yet
+            </h3>
+            <p className='text-xs text-pw-muted sm:max-w-md mx-auto leading-relaxed mx-1'>
+              You haven&apos;t created or scheduled any social posts yet. Click
+              the button below to open the rich multi-platform editor and start
+              publishing!
             </p>
           </div>
           <Button
             onClick={() => setViewState('editor')}
             className='btn-primary h-11 px-8 text-xs font-bold gap-2'>
-            <Plus className='h-4 w-4' /> Start Posting Now
+            <Pen className='h-4 w-4' /> Start Posting Now
           </Button>
-        </Card>
-      ) : (
-        <div className='space-y-4'>
+        </div>
+      : <div className='space-y-4'>
           <div className='flex items-center justify-between'>
             <h3 className='text-lg font-bold text-white flex items-center gap-2'>
-              <FileText className='h-4 w-4 text-pw-primary' /> Recent Posts ({posts.length})
+              <FileText className='h-4 w-4 text-pw-primary' /> Recent Posts (
+              {posts.length})
             </h3>
             <Button
               onClick={() => setViewState('editor')}
@@ -128,7 +158,9 @@ function ComposerPageClient() {
                   <div className='flex items-center justify-between text-[10px] font-mono text-pw-muted'>
                     <span className='flex items-center gap-1'>
                       <Clock className='h-3 w-3 text-pw-primary' />
-                      {new Date(post.created_at || post.timestamp || Date.now()).toLocaleDateString(undefined, {
+                      {new Date(
+                        post.created_at || post.timestamp || Date.now(),
+                      ).toLocaleDateString(undefined, {
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',
@@ -138,6 +170,7 @@ function ComposerPageClient() {
                     <div className='flex items-center gap-1'>
                       {Array.isArray(post.platforms) &&
                         post.platforms.map((p: string) => (
+                          //use icon instead:::::::::
                           <span
                             key={p}
                             className='px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-white/5 text-pw-primary border border-white/5'>
@@ -153,6 +186,7 @@ function ComposerPageClient() {
                 </div>
 
                 <div className='flex items-center justify-between pt-3 border-t border-white/5'>
+                  {/** Set the exact post id to display only that particular post */}
                   <Button
                     onClick={() => setViewState('editor')}
                     size='sm'
@@ -171,7 +205,7 @@ function ComposerPageClient() {
             ))}
           </div>
         </div>
-      )}
+      }
     </div>
   );
 }

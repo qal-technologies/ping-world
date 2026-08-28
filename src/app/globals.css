@@ -1036,12 +1036,9 @@ button,
 .no-border {
   border: none !important;
   border-style: none !important;
-  border-color: transparent !important;
+  border-color: none !important;
 }
 
-a:disabled,
-button:disabled,
-div:disabled,
-span:disabled {
+*:disabled, *:-moz-user-disabled {
   cursor: not-allowed !important;
 }

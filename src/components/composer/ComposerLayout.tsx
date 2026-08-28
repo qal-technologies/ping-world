@@ -98,11 +98,12 @@ function ToolPanel({ activeTab }: { activeTab: ToolTab }) {
   }
 }
 
+//Add post prop passed down or default to the first post in the history, pass down the back button funciton
 export function ComposerLayout() {
   const { state, dispatch, user, premiumTier } = useComposer();
   const [activeTab, setActiveTab] = useState<ToolTab>('analysis');
   const [isPosting, setIsPosting] = useState(false);
-  // jules edit: Scheduled post states
+  // Scheduled post states
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('12:00');
@@ -246,7 +247,7 @@ export function ComposerLayout() {
       <PrivacyPermissionModal />
 
       {/* Page header */}
-      <div className='container mx-auto px-4 md:px-6 pt-10 pb-6 max-w-[1400px]'>
+      <div className='container mx-auto px-4 md:px-6 pb-6 max-w-[1400px]'>
         <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6'>
           <div>
             <div className='badge mb-3'>

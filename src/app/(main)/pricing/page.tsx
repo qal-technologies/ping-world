@@ -587,7 +587,7 @@ export default function PricingPage() {
                   </ul>
 
               
-                      {premiumTier === 'flexible' && (
+                      {tierId === 'flexible' && (
                         <div className='pt-3 border-t border-white/5 space-y-2.5'>
                           {/* Purchased Tools List */}
                           {(user?.user_metadata?.purchased_tools || []).length > 0 && (
