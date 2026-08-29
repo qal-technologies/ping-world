@@ -27,7 +27,6 @@ import {
   Brain,
   Play,
   Star,
-  File,
   Folder,
   Lock,
   Image,
@@ -135,6 +134,8 @@ export interface Details {
     | 'dob';
   allowlist?: string;
   options?: string[];
+  maxLength?: number;
+  minLength?: number;
 }
 
 export interface QuizTakerResponse {
@@ -1057,7 +1058,8 @@ const QuizBuilder = ({
                   icon={<Type className='h-4 w-4' />}
                   color='primary'>
                   <div className='flex flex-col gap-3 py-2'>
-                    {editedQuiz?.askDetails && editedQuiz?.askDetails?.length > 0 &&
+                    {editedQuiz?.askDetails &&
+                      editedQuiz?.askDetails?.length > 0 &&
                       editedQuiz?.askDetails?.some((d) =>
                         d?.allowlist?.trim(),
                       ) && (
@@ -1208,6 +1210,59 @@ const QuizBuilder = ({
                               </p>
                             </div>
                           )}
+
+                          {(detail.type === 'number' ||
+                            detail.type === 'tel' || detail.type === 'input') && (
+                              <div className='space-y-1 mt-1 grid grid-cols-2 gap-1'>
+                                <div className='flex flex-col'>
+                                  <Input
+                                    placeholder='Min'
+                                  type='number'
+                                    value={detail.minLength}
+                                    onChange={(e) => {
+                                      const newDetails = [
+                                        ...(editedQuiz.askDetails || []),
+                                      ];
+                                      newDetails[idx].minLength =
+                                        parseInt(e.target.value);
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        askDetails: newDetails,
+                                      });
+                                    }}
+                                    className='h-8 text-[10px] bg-black/20'
+                                  />
+                                  <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
+                                    Minimum length
+                                  </p>
+                                </div>
+
+                                <div className='flex flex-col'>
+                                  <Input
+                                  placeholder='Max'
+                                  type='number'
+                                    value={detail.maxLength}
+                                    onChange={(e) => {
+                                      const newDetails = [
+                                        ...(editedQuiz.askDetails || []),
+                                      ];
+                                      
+                                      newDetails[idx].maxLength =
+                                        parseInt(e.target.value);
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        askDetails: newDetails,
+                                      });
+                                    }}
+                                    className='h-8 text-[10px] bg-black/20'
+                                  />
+                                  <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
+                                    Maximum length
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
                           {showAllow && (
                             <div className='space-y-1 mt-1'>
                               <Input
@@ -3226,7 +3281,7 @@ const QuizBuilder = ({
 
 export default function QuizPage() {
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
-  const {showAlert, showConfirm, showPrompt} = useAppModal();
+  const { showAlert, showConfirm, showPrompt } = useAppModal();
   const [filenameInput, setFilenameInput] = useState('');
   const [filenameExtension, setFilenameExtension] = useState('');
   const [onConfirmFilename, setOnConfirmFilename] = useState<
@@ -3411,7 +3466,7 @@ export default function QuizPage() {
   const clearResponses = async (quizId: string) => {
     if (
       !showConfirm(
-        'Are you sure you want to clear all responses? This cannot be undone.', 
+        'Are you sure you want to clear all responses? This cannot be undone.',
       )
     )
       return;
@@ -3454,7 +3509,8 @@ export default function QuizPage() {
       questions: [],
       endScreen: {
         title: 'Assessment Completed!',
-        message: 'You have completed this accessment. Thank you for using PingWorld.',
+        message:
+          'You have completed this accessment. Thank you for using PingWorld.',
       },
       createdAt: Date.now(),
     };
@@ -3698,7 +3754,7 @@ export default function QuizPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}>
                     <Card className='card-glow h-full flex flex-col p-5 gap-2 group'>
-                      <div className='flex justify-between items-start mb-2 flex-wrap gap-2'>
+                      <div className='flex justify-between items-start mb-4 flex-wrap gap-2'>
                         <div
                           className={cn(
                             'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest flex-wrap',
@@ -3808,7 +3864,7 @@ export default function QuizPage() {
                         </div>
                       </div>
 
-                      <h3 className='text-xl font-bold font-display mb-1'>
+                      <h3 className='text-xl font-bold font-display mt-1'>
                         {quiz.title}
                       </h3>
                       <p className='text-sm text-pw-muted line-clamp-2 mb-5 py-0 my-0 flex-1'>
@@ -4059,7 +4115,7 @@ export default function QuizPage() {
                     )[0];
 
                     return (
-                      <Card className='p-3 sm:p-4 bg-black/20 bkblur border border-white/10 rounded-2xl space-y-4'>
+                      <Card className='p-3 sm:p-4 bg-black/20 bkblur border border-white/10 rounded-2xl space-y-4 hidden'>
                         <div className='flex items-center justify-between border-b border-white/5 p-1 pb-2'>
                           <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
                             <BarChart2 className='h-4 w-4' /> Assessment

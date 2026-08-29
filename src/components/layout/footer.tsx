@@ -65,7 +65,8 @@ export const Footer = () => {
   ];
 
   return (
-    <footer className='border-t border-pw-primary/10 bg-pw-bg/80 backdrop-blur-sm'>
+    <footer className='bg-pw-bg/80 backdrop-blur-lg bg-to-br bg-to-bg-pw-cyan'>
+      <div className='divider'/>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-12'>
         <div className='grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-5'>
           {/* Brand column */}
@@ -182,7 +183,7 @@ export const Footer = () => {
                 <Link
                   href='/api'
                   className='text-xs text-pw-primary font-bold hover:underline transition-all block mt-2'>
-                  All 18 Dev APIs &rarr;
+                  All Dev APIs &rarr;
                 </Link>
               </li>
             </ul>

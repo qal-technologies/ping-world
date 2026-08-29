@@ -47,7 +47,7 @@ import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
-import {useAppModal} from '../ui/AppModalProvider';
+import { useAppModal } from '../ui/AppModalProvider';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -358,8 +358,8 @@ const Calculator = () => {
 
 function Taker() {
   const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
-  const {isLoggedIn} = useAppContext();
-  const { showAlert, showConfirm, showPrompt, } = useAppModal();
+  const { isLoggedIn } = useAppContext();
+  const { showAlert, showConfirm, showPrompt } = useAppModal();
   setHideNavbar(true);
   setHideFooter(true);
   setPaddingTop('pt-0');
@@ -595,7 +595,8 @@ function Taker() {
           });
           setShuffledOptions(shuffled);
         }
-        if (quiz?.title) document.title = `${capFirst(quiz.title)} | Ping World`;
+        if (quiz?.title)
+          document.title = `${capFirst(quiz.title)} | Ping World`;
       }
       setLoading(false);
     };
@@ -1429,8 +1430,8 @@ function Taker() {
       <div
         key='completion-view'
         className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6'>
-        <div className='max-w-md w-full text-center space-y-6'>
-          <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20'>
+        <div className='max-w-md w-full text-center space-y-3'>
+          <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20 mb-2'>
             <CheckCircle2 className='h-8 w-8 text-pw-success' />
           </div>
           <h1 className='text-lg font-extrabold font-display'>
@@ -1442,7 +1443,7 @@ function Taker() {
           </p>
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4'>
+            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-2'>
               <div>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
                   ASSESSMENT SUMMARY
@@ -1480,7 +1481,7 @@ function Taker() {
                 Close Quiz
               </Button>
             </Link>
-            {quiz?.allowRetry &&
+            {quiz?.allowRetry && (
               <Button
                 onClick={() => {
                   window.location.reload();
@@ -1488,7 +1489,7 @@ function Taker() {
                 className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
                 Retry {capFirst(quiz?.type || 'Assessment')}
               </Button>
-            }
+            )}
           </div>
         </div>
       </div>
@@ -1542,7 +1543,7 @@ function Taker() {
               <img
                 src={quiz?.branding?.icon}
                 alt='Intro Logo'
-                className='h-24 w-24 object-contain rounded-2xl mb-6 mx-auto border-2 border-white/20 shadow-2xl bg-black/40'
+                className='h-24 w-24 object-contain rounded-2xl mb-4 mx-auto border-1 border-white/20 shadow-2xl bg-black/40 bkblur'
               />
             : <div className='flex justify-center mb-6 text-pw-primary'>
                 {quiz?.type === 'quiz' ?
@@ -1553,9 +1554,7 @@ function Taker() {
             <h1 className='text-2xl sm:text-4xl font-extrabold font-display mb-4 tracking-tight'>
               {quiz?.title?.toUpperCase()}
             </h1>
-            <p
-              className='text-pw-muted leading-relaxed mb-10 max-h-[300px] text-sm overflow-auto px-4'
-              style={{ lineHeight: '20px' }}>
+            <p className='text-pw-muted leading-relaxed mb-10 max-h-[300px] text-xs overflow-auto px-2'>
               {quiz?.description}
             </p>
           </div>
@@ -1597,8 +1596,9 @@ function Taker() {
           </div>
 
           {/* Terms disclaimer & Reporting Flow */}
-          <div className='border-t border-white/5 py-6 mt-10 text-pw-muted leading-relaxed z-10 fixed bottom-1 sm:bottom-2 w-[90%] self-center max-w-2xl'>
-            <p className='mb-2 text-[12px] flex flex-col'>
+          <div className='text-pw-muted leading-relaxed z-10 pb-4 fixed bottom-0 sm:bottom-1 w-[95%] self-center max-w-2xl'>
+            <div className='divider mb-4 mt-10' />
+            <p className='mb-1 text-[10px] flex flex-col'>
               PingWorld is only a service provider hosting this{' '}
               {quiz?.type ?? 'assessment'}.
               <span>
@@ -1789,6 +1789,24 @@ function Taker() {
                             'number'
                           : 'text'
                         }
+                        minLength={
+                          (
+                            detail.type === 'tel' ||
+                            detail.type === 'number' ||
+                            detail.type === 'input'
+                          ) ?
+                            detail.minLength
+                          : undefined
+                        }
+                        maxLength={
+                          (
+                            detail.type === 'tel' ||
+                            detail.type === 'number' ||
+                            detail.type === 'input'
+                          ) ?
+                            detail.maxLength
+                          : undefined
+                        }
                         className='w-full h-12 bg-black/20 bkblur border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
                         placeholder={`Enter ${detail.title}...`}
                         value={userData[detail.title] || ''}
@@ -1820,7 +1838,7 @@ function Taker() {
                         ...userData,
                         [d.title]: String(d.title.trim()),
                       });
-                      
+
                       if (d.allowlist && d.allowlist.trim() !== '') {
                         const val = String(userData[d.title] || '').trim();
                         const rawAllow = d.allowlist.trim();
@@ -1840,8 +1858,9 @@ function Taker() {
 
                         if (!matched) {
                           mismatch = true;
-                          showAlert(quiz?.allowlistMessage ||
-                            `Access Denied: The entered ${d.title} ("${val}") does not match the required administrative allowlist.`,
+                          showAlert(
+                            quiz?.allowlistMessage ||
+                              `Access Denied: The entered ${d.title} ("${val}") does not match the required administrative allowlist.`,
                           );
                         }
                       }
@@ -1852,7 +1871,7 @@ function Taker() {
                     setDetailsCollected(true);
                     setStart(true);
                   }}>
-                  START {quiz?.type?.toUpperCase() || 'AssESSMENT'} 
+                  START {quiz?.type?.toUpperCase() || 'AssESSMENT'}
                 </Button>
               </div>
             </div>

@@ -195,10 +195,10 @@ function SettingsContent() {
     }
   };
 
-  // jules edit: Handle account deletion and clearance in both Supabase and Firebase
+  // Handle account deletion and clearance in both Supabase and Firebase
   const handleDeleteAccount = async () => {
     const confirmation = await showPrompt(
-      'DANGER: Deleting your account will permanently wipe all your quizzes, messages, books, and Firebase data. Type "DELETE" to confirm:',
+      'DANGER: Deleting your account will permanently wipe all your quizzes, messages, books, and cloud data. Type "DELETE" to confirm:',
       {
         title: 'Permanently Delete Account',
         placeholder: 'DELETE',
@@ -270,7 +270,7 @@ function SettingsContent() {
 
   const handleSignOut = async () => {
     const confirmed = await showConfirm(
-      'Cloud Sync Guard: Are you sure you want to log out? Please ensure any offline drafts or unsynced manuscript changes have been synchronized with your cloud workspace before signing out.',
+      'Are you sure you want to log out? Please ensure any offline drafts or unsynced changes have been synchronized with your cloud workspace before signing out.',
       {
         title: 'Confirm Sign Out & Cloud Sync',
         confirmText: 'Sign Out Now',

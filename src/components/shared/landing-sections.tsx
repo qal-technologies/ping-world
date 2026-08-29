@@ -47,7 +47,7 @@ export const HeroSection = () => {
       <div className='orb orb-accent w-[500px] h-[500px] -top-40 -left-40 opacity-40 blur-all' />
       <div className='orb orb-secondary w-[400px] h-[400px] -bottom-20 -right-20 opacity-30 blur-all' />
 
-      <div className='relative mx-auto max-w-7xl px-6 py-24 md:py-36 lg:py-44'>
+      <div className='relative mx-auto max-w-7xl px-6 py-24 md:py-34 lg:py-42'>
         <motion.div
           initial='hidden'
           animate='visible'

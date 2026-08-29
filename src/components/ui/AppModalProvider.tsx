@@ -143,8 +143,8 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
     <AppModalContext.Provider value={{ showAlert, showConfirm, showPrompt }}>
       {children}
 
-      <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
-        <DialogContent className="max-w-md w-[95%] bg-pw-surface/60 bkblur border border-white/4 text-pw-text rounded-3xl shadow-2xl pt-5 overflow-hidden">
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()} > 
+        <DialogContent className="max-w-md w-[95%] bg-pw-surface/40 bkblur border border-white/4 text-pw-text rounded-3xl shadow-2xl pt-5 overflow-hidden">
           <DialogHeader className="space-y-3 py-4 p-2 sm:p-3 sm:py-6">
             <div className="flex items-center gap-3">
               <div className={`p-2.5 rounded-xl bg-white/5 border border-white/10 ${iconColor}`}>

@@ -244,9 +244,10 @@ export const Navbar = () => {
             aria-label='Toggle Search'
             className={cn(
               'hidden sm:flex h-9 w-9 items-center justify-center rounded-lg hover:text-pw-text',
-              searchInput ? 'text-pw-text' : 'text-pw-muted',
+              searchInput ? 'p-1' : 'text-pw-muted',
             )}>
-            <SearchIcon className='h-6 w-6' />
+            {searchInput ? <X className='h-5 w-5 text-pw-danger rounded-full bg-pw-danger/10 bkblur' /> :
+            <SearchIcon className='h-6 w-6' />}
           </button>
 
           {isLoggedIn ?
@@ -290,7 +291,7 @@ export const Navbar = () => {
             className='relative pointer-events-auto w-90'>
             <div className='flex items-center gap-2 bg-[#0c0d1c]/40 border border-white/5 p-1 px-4 rounded-2xl shadow-xl focus-within:border-pw-primary/50 transition-all bkblur'>
               <Search className='h-4 w-4 text-pw-muted shrink-0' />
-              {/* jules edit: Add enter key handling to select first search result */}
+              {/* Add enter key handling to select first search result */}
               <input
                 type='text'
                 value={searchQuery}
@@ -339,6 +340,7 @@ export const Navbar = () => {
                           setSearchQuery('');
                         }}
                         className='p-1 px-1.5 rounded-xl hover:bg-white/2 border border-transparent hover:border-white/1 flex items-center gap-2 transition-all group block'>
+                        
                         <div className='p-1 rounded-lg bg-pw-primary/10 text-pw-primary shrink-0 group-hover:scale-105 transition-transform flex align-center justify-center h-full'>
                           {item.category === 'Page' ?
                             <Layout className='h-5 w-5' />
@@ -361,6 +363,8 @@ export const Navbar = () => {
                             {item.description}
                           </p>
                         </div>
+
+                        <ChevronRight className='hidden group-hover:inline-flex h-3 w-3'/>
                       </Link>
                     ))}
                   </div>
