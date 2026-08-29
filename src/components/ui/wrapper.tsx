@@ -1,8 +1,9 @@
 import { capFirst, cn } from '@/lib/utils';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Crown } from 'lucide-react';
 import React, { useState } from 'react';
 import { Card } from './card';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 
 interface WrapperT {
   title: string;
@@ -12,6 +13,7 @@ interface WrapperT {
   children: React.ReactNode;
   color?: 'primary' | 'cyan' | 'success' | 'danger' | 'warning';
   defaultOpen?: boolean;
+  premium?: boolean;
 }
 
 export default function Wrapper({
@@ -22,6 +24,7 @@ export default function Wrapper({
   children,
   color = 'primary',
   defaultOpen = false,
+  premium=false,
 }: WrapperT) {
   const headerText = capTitle ? title.toUpperCase() : capFirst(title);
   const [open, setOpen] = useState(defaultOpen);
@@ -62,22 +65,39 @@ export default function Wrapper({
             )}
           </div>
         </div>
-        <ChevronDown
-          className={cn(
-            'h-4 w-4 text-pw-muted transition-transform duration-300',
-            open && 'rotate-180 text-pw-text',
+
+        <div className='flex items-center gap-2'>
+            {premium && (
+                              <span className='flex items-center gap-0.5 text-pw-warning' title='Premium feature'>
+                                <Crown className='h-3.5 w-3.5' />
+                              </span>
           )}
-        />
+          
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-pw-muted transition-transform duration-300',
+              open && 'rotate-180 text-pw-text',
+            )}
+          />
+        </div>
       </div>
 
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
+            aria-disabled={premium}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}>
-            <div className='p-1 sm:p-2 pt-0 border-t border-white/5'>
+            transition={{duration: 0.3, ease: 'easeInOut'}}
+          className='relative'>
+            {premium && <div className='inset-0 absolute w-full h-full p-2 bg-black/50 flex items-center justify-center text-center font-bold font-display'><Link href='/pricing' target='_self' className='text-pw-primary underline mr-1'>Upgrade {' '}</Link>to use this feature</div>}
+            <div
+              className={cn(
+                'p-1 sm:p-2 pt-0 border-t border-white/5 relative',
+                premium && 'select-none pointer-events-none opacity-50 blur-[2px]',
+              )}
+              aria-disabled={premium}>
               {children}
             </div>
           </motion.div>

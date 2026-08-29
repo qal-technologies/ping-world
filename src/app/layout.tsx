@@ -139,12 +139,13 @@ export default function RootLayout({
           position='bottom-right'
           toastOptions={{
             style: {
-              background: '#12152EC7',
-              border: '1px solid rgba(92,111,255,0.2)',
-              backdropFilter: 'blur(8px)',
+              background: '#05011385',
+              border: '0.5px solid rgba(92,111,255,0.1)',
+              backdropFilter: 'blur(10px)',
               color: '#F8F9FF',
               fontFamily: 'var(--font-body)',
-              boxShadow: '0px 1px 10px rgba(23, 23, 23, 0.3)',
+              boxShadow: '0px 1px 10px rgba(7, 0, 11, 0.3)',
+              borderRadius:'18px',
             },
           }}
         />

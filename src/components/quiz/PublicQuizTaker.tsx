@@ -47,6 +47,7 @@ import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
+import {useAppModal} from '../ui/AppModalProvider';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -357,7 +358,8 @@ const Calculator = () => {
 
 function Taker() {
   const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
-  const { isLoggedIn } = useAppContext();
+  const {isLoggedIn} = useAppContext();
+  const { showAlert, showConfirm, showPrompt, } = useAppModal();
   setHideNavbar(true);
   setHideFooter(true);
   setPaddingTop('pt-0');
@@ -379,7 +381,7 @@ function Taker() {
     Record<string, (string | QuizOption)[]>
   >({});
 
-  /* jules edit: Ref for auto-scroll to the first question on scroll layout start */
+  /* Ref for auto-scroll to the first question on scroll layout start */
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const firstQuestionRef = React.useRef<HTMLDivElement>(null);
 
@@ -431,7 +433,6 @@ function Taker() {
 
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
-  const [lastUncatIndex, setLastUncatIndex] = useState<number>(0);
   const [questionTimeLeft, setQuestionTimeLeft] = useState<number | null>(null);
   const [quizTheme, setQuizTheme] = useState<'dark' | 'light'>('dark');
   const [cheatAttempts, setCheatAttempts] = useState(0);
@@ -443,7 +444,6 @@ function Taker() {
   // Custom states for reporting quizzes
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportCategory, setReportCategory] = useState('Spam');
-  const [reportNotes, setReportNotes] = useState('');
 
   // 1. Initial Load
   useEffect(() => {
@@ -538,21 +538,7 @@ function Taker() {
           setHasAlreadyCompleted(true);
         }
 
-        const hasBranching = migratedQuestions.some(
-          (q) =>
-            q.skipTo ||
-            q.skipToCat ||
-            q.options?.some(
-              (o: any) => typeof o === 'object' && (o.skipTo || o.skipToCat),
-            ),
-        );
-        if (hasBranching && finalQuiz.randomizeQuestions) {
-          toast.info(
-            'Branching Active: Question order shuffling is restricted to internal category blocks.',
-          );
-        }
-
-        /* jules edit: Map questions by category and independence on load with strict category isolation */
+        /* Map questions by category and independence on load with strict category isolation */
         let questionsToUse = [...migratedQuestions];
         if (finalQuiz.randomizeQuestions) {
           const uncategorized = migratedQuestions.filter(
@@ -609,9 +595,9 @@ function Taker() {
           });
           setShuffledOptions(shuffled);
         }
+        if (quiz?.title) document.title = `${capFirst(quiz.title)} | Ping World`;
       }
       setLoading(false);
-      if (quiz?.title) document.title = `${capFirst(quiz.title)} | Ping World`;
     };
     loadQuiz();
   }, [quizId]);
@@ -681,14 +667,14 @@ function Taker() {
         const nextAttempts = cheatAttempts + 1;
         setCheatAttempts(nextAttempts);
 
-        if (nextAttempts >= 3) {
+        if (nextAttempts >= 2) {
           toast.error(
-            'Multiple security violations detected. Auto-submitting assessment.',
+            `Multiple security violations detected. Auto-submitting ${capFirst(quiz?.type || 'Assessment')}`,
           );
           finalizeQuiz(userAnswers);
         } else {
           toast.warning(
-            `Security Violation (${nextAttempts}/3): Tab switching is strictly prohibited!`,
+            `Security Violation (${nextAttempts}/2): Tab switching is strictly prohibited!`,
             { duration: 5000 },
           );
         }
@@ -834,7 +820,7 @@ function Taker() {
     );
   };
 
-  /* jules edit: Perfect input keyword matching and input branching evaluation */
+  /* Perfect input keyword matching and input branching evaluation */
   const computeIsCorrect = (qId: string, answer: any) => {
     const secureAnswer = correctAnswersRef.current[qId];
     const question = activeQuestions.find((quest) => quest.id === qId);
@@ -859,13 +845,13 @@ function Taker() {
         answer.every((val: any) => correctIds.includes(val))
       );
     } else if (question.type === 'input') {
-      const userAns = String(formatDetailVars(answer || '')).trim();
+      const userAns = String(answer || '').trim();
 
       // Check inputBranchRules first if present
       if (question.inputBranchRules && question.inputBranchRules.length > 0) {
         const matchingRule = question.inputBranchRules.find((rule) => {
           if (!rule.keyword) return false;
-          const kw = String(formatDetailVars(rule.keyword)).trim();
+          const kw = String(formatDetailVars(rule.keyword, false, true)).trim();
           return rule.caseSensitive ?
               userAns.includes(kw)
             : userAns.toLowerCase().includes(kw.toLowerCase());
@@ -874,7 +860,9 @@ function Taker() {
       }
 
       if (!decodedCorrect && decodedCorrect !== 0) return true;
-      const targetAns = String(formatDetailVars(decodedCorrect)).trim();
+      const targetAns = String(
+        formatDetailVars(decodedCorrect, false, true),
+      ).trim();
       return question.caseSensitive ?
           userAns === targetAns
         : userAns.toLowerCase() === targetAns.toLowerCase();
@@ -1033,13 +1021,17 @@ function Taker() {
       let branchTarget: string | undefined = undefined;
       let branchCat: string | undefined = undefined;
 
-      /* jules edit: Handle option-level and input-rule level branching */
+      /* Handle option-level and input-rule level branching */
       if (q.type === 'input') {
-        const userText = String(formatDetailVars(content || '')).trim();
+        const userText = String(
+          formatDetailVars(content || '', false, true),
+        ).trim();
         if (q.inputBranchRules && q.inputBranchRules.length > 0) {
           const matchedRule = q.inputBranchRules.find((rule) => {
             if (!rule.keyword) return false;
-            const kw = String(formatDetailVars(rule.keyword)).trim();
+            const kw = String(
+              formatDetailVars(rule.keyword, false, true),
+            ).trim();
             return rule.caseSensitive ?
                 userText.includes(kw)
               : userText.toLowerCase().includes(kw.toLowerCase());
@@ -1142,21 +1134,27 @@ function Taker() {
   };
 
   // Replace detail variable placeholders using @ (@name, @email) with bold styling
-  const formatDetailVars = (rawText: string) => {
+  const formatDetailVars = (
+    rawText: string,
+    showPrev?: boolean,
+    hideBold?: boolean,
+  ) => {
     if (!rawText) return rawText;
     let formatted = rawText;
     Object.entries(userData || {}).forEach(([key, val]) => {
       const cleanKey = key.trim().replace(/\s+/g, '');
-      const boldVal = `<strong class="text-pw-cyan font-bold">${val}</strong>`;
+      const boldVal = `${showPrev ? `@${cleanKey} (<strong class="text-pw-cyan font-bold">${val}</strong>)` : `<strong class="text-pw-cyan font-bold">${val}</strong>`}`;
+      const normalVal = `${showPrev ? `@${cleanKey} (${val})` : `${val}`}`;
+      const replText = `${hideBold ? normalVal : boldVal}`;
       const regex1 = new RegExp(`@${cleanKey}`, 'gi');
       const regex2 = new RegExp(`@${key.trim()}`, 'gi');
       const regex3 = new RegExp(`\\$${cleanKey}`, 'gi');
       const regex4 = new RegExp(`\\$${key.trim()}`, 'gi');
       formatted = formatted
-        .replace(regex1, boldVal)
-        .replace(regex2, boldVal)
-        .replace(regex3, boldVal)
-        .replace(regex4, boldVal);
+        .replace(regex1, replText)
+        .replace(regex2, replText)
+        .replace(regex3, replText)
+        .replace(regex4, replText);
     });
     return formatted;
   };
@@ -1193,7 +1191,8 @@ function Taker() {
           className={cn(
             'p-0  rounded-none sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300 space-y-0 self-center',
             !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
-          )} style={{placeSelf:'center'}}>
+          )}
+          style={{ placeSelf: 'center' }}>
           {/* Show Question Category tag if enabled or set */}
           {(quiz?.showCategory || quest.category) && quest.category && (
             <div>
@@ -1375,7 +1374,9 @@ function Taker() {
                       <CheckCircle
                         className={cn(
                           'h-4 w-4 transition-all shrink-0',
-                          isSelected ? 'ttext-pw-primary w-4.5 h-4.5' : 'text-pw-muted',
+                          isSelected ?
+                            'ttext-pw-primary w-4.5 h-4.5'
+                          : 'text-pw-muted',
                         )}
                       />
                     </button>
@@ -1432,14 +1433,15 @@ function Taker() {
           <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20'>
             <CheckCircle2 className='h-8 w-8 text-pw-success' />
           </div>
-          <h1 className='text-3xl font-extrabold font-display'>
-            Assessment Completed!
+          <h1 className='text-lg font-extrabold font-display'>
+            {quiz?.endScreen.title || 'Assessment Completed!'}
           </h1>
-          <p className='text-pw-muted text-sm'>
-            Your responses have been successfully submitted.
+          <p className='text-pw-muted text-xs'>
+            {quiz?.endScreen.message ||
+              'Thank you for attempting the assessment and using pingword...'}
           </p>
 
-          {quiz?.type === 'quiz' && (
+          {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
             <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4'>
               <div>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
@@ -1472,11 +1474,22 @@ function Taker() {
             </Card>
           )}
 
-          <Link href={isLoggedIn ? '/quiz' : '/'}>
-            <Button className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
-              Close Quiz
-            </Button>
-          </Link>
+          <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full flex-1'>
+            <Link href={isLoggedIn ? '/quiz' : '/tools'}>
+              <Button className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
+                Close Quiz
+              </Button>
+            </Link>
+            {quiz?.allowRetry &&
+              <Button
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
+                Retry {capFirst(quiz?.type || 'Assessment')}
+              </Button>
+            }
+          </div>
         </div>
       </div>
     );
@@ -1494,30 +1507,40 @@ function Taker() {
         quiz?.enforceSecurity && 'select-none',
       )}>
       {/* Sleek Glowing Background Objects */}
-      <div className='absolute top-1/4 left-1/4 w-80 h-80 rounded-full bg-pw-primary/10 blur-[100px] pointer-events-none' />
-      <div className='absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-pw-secondary/10 blur-[120px] pointer-events-none' />
+      <div
+        className={cn(
+          'absolute top-1/4 left-1/4 w-80 h-80 rounded-full bg-pw-primary/15 blur-[100px] pointer-events-none',
+          !started && 'animate-float',
+        )}
+      />
+      <div
+        className={cn(
+          'absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-pw-cyan/10 blur-[120px] pointer-events-none',
+          !started && 'animate-float',
+        )}
+      />
 
       {/* Intro Gate */}
       {showIntro && !started && (
         <div
           key='intro-view'
           className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
-          {quiz?.introBgUrl && (
+          {quiz?.branding?.image && (
             <div
               className='absolute inset-0 z-0 bg-cover bg-center pointer-events-none'
               style={{
-                backgroundImage: `url(${quiz?.introBgUrl})`,
+                backgroundImage: `url(${quiz?.branding?.image})`,
                 opacity: 0.1,
-                filter: 'blur(8px)',
+                filter: 'blur(1px)',
               }}
             />
           )}
 
           <div className='relative z-10'>
             {/* Show clear foreground image/logo if configured */}
-            {quiz?.introBgUrl ?
+            {quiz?.branding?.icon ?
               <img
-                src={quiz?.introBgUrl}
+                src={quiz?.branding?.icon}
                 alt='Intro Logo'
                 className='h-24 w-24 object-contain rounded-2xl mb-6 mx-auto border-2 border-white/20 shadow-2xl bg-black/40'
               />
@@ -1527,11 +1550,11 @@ function Taker() {
                 : <MessageCircle size={60} />}
               </div>
             }
-            <h1 className='text-4xl font-extrabold font-display mb-4 tracking-tight'>
+            <h1 className='text-2xl sm:text-4xl font-extrabold font-display mb-4 tracking-tight'>
               {quiz?.title?.toUpperCase()}
             </h1>
             <p
-              className='text-pw-muted leading-relaxed mb-10 max-h-[300px] overflow-auto px-4'
+              className='text-pw-muted leading-relaxed mb-10 max-h-[300px] text-sm overflow-auto px-4'
               style={{ lineHeight: '20px' }}>
               {quiz?.description}
             </p>
@@ -1574,8 +1597,8 @@ function Taker() {
           </div>
 
           {/* Terms disclaimer & Reporting Flow */}
-          <div className='border-t border-white/5 py-6 mt-10 text-pw-muted leading-relaxed z-10 fixed bottom-2 w-[90%] self-center'>
-            <p className='mb-2 text-xs flex gap-1 flex-col'>
+          <div className='border-t border-white/5 py-6 mt-10 text-pw-muted leading-relaxed z-10 fixed bottom-1 sm:bottom-2 w-[90%] self-center max-w-2xl'>
+            <p className='mb-2 text-[12px] flex flex-col'>
               PingWorld is only a service provider hosting this{' '}
               {quiz?.type ?? 'assessment'}.
               <span>
@@ -1585,7 +1608,7 @@ function Taker() {
             </p>
             <button
               onClick={() => setShowReportModal(true)}
-              className='text-pw-primary text-[10px] underline hover:text-pw-primary/80 transition-colors font-bold'>
+              className='text-pw-danger text-[10px] hover:underline transition-colors font-bold tracking-wide'>
               Report this {quiz?.type ?? 'assessment'} for investigation or
               takedown
             </button>
@@ -1602,11 +1625,13 @@ function Taker() {
           <div
             key='security-view'
             className='container relative z-10 mx-auto px-5 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
-            <div className='sm:bg-pw-primary/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-pw-primary/20 space-y-8 sm:backdrop-blur-xl'>
+            <div className='sm:bg-pw-primary/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-pw-primary/20 space-y-8 sm:bkblur'>
               <div className='flex flex-col items-center gap-4 mt-2'>
                 <ShieldCheck className='h-16 w-16 text-pw-primary animate-pulse' />
                 <div className='text-center'>
-                  <h3 className='text-2xl font-bold'>Security Protocol</h3>
+                  <h3 className='text-xl sm:text-2xl font-bold'>
+                    Security Protocol
+                  </h3>
                   <p className='text-xs text-pw-muted uppercase font-bold tracking-[0.2em] mt-1'>
                     Active Monitoring Enabled
                   </p>
@@ -1616,7 +1641,7 @@ function Taker() {
               <div className='divider' />
 
               <div className='space-y-6 text-left text-sm leading-relaxed'>
-                <div className='flex gap-4 p-2 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
+                <div className='flex gap-4 p-2 px-4 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
                   <EyeOff className='h-6 w-6 text-pw-primary shrink-0' />
                   <p>
                     <span className='font-bold text-pw-text'>
@@ -1626,7 +1651,7 @@ function Taker() {
                     violation. 3 violations result in immediate submission.
                   </p>
                 </div>
-                <div className='flex gap-4 p-2 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
+                <div className='flex gap-4 p-2 px-4 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
                   <Lock className='h-6 w-6 text-pw-primary shrink-0' />
                   <p>
                     <span className='font-bold text-pw-text'>
@@ -1661,7 +1686,7 @@ function Taker() {
           <div
             key='details-view'
             className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
-            <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl'>
+            <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl sm:bkblur'>
               <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
                 ENTER YOUR DETAILS
               </h3>
@@ -1671,13 +1696,13 @@ function Taker() {
                     key={(detail?.title as string) + idx}
                     className='space-y-2'>
                     <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
-                      {detail.title}
+                      {detail.title || 'Enter Detail'}
                     </label>
                     {detail.type === 'sex' ?
                       <div className='flex gap-3'>
                         {['Male', 'Female'].map((s) => (
                           <Button
-                            key={s + '990087g87g7f7'}
+                            key={s + 'detail-field'}
                             variant='outline'
                             onClick={() =>
                               setUserData({ ...userData, [detail.title]: s })
@@ -1741,13 +1766,17 @@ function Taker() {
                               [detail.title]: e.target.value,
                             })
                           }
-                            />
-                            { userData[detail.title] &&
-                              <p className='text-xs py-1 pl-1 break-all'>
-                                You are {new Date().getFullYear() - parseInt(userData[detail.title].split('-')[0])} {' '}
-                                years old.
-                              </p>
-                            }
+                        />
+                        {userData[detail.title] && (
+                          <p className='text-xs py-1 pl-1 break-all'>
+                            You are{' '}
+                            {new Date().getFullYear() -
+                              parseInt(
+                                userData[detail.title].split('-')[0],
+                              )}{' '}
+                            years old.
+                          </p>
+                        )}
                       </>
                     : <input
                         type={
@@ -1760,7 +1789,7 @@ function Taker() {
                             'number'
                           : 'text'
                         }
-                        className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
+                        className='w-full h-12 bg-black/20 bkblur border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
                         placeholder={`Enter ${detail.title}...`}
                         value={userData[detail.title] || ''}
                         onChange={(e) =>
@@ -1786,6 +1815,12 @@ function Taker() {
 
                     let mismatch = false;
                     quiz?.askDetails?.forEach((d) => {
+                      String(userData[d.title] || '').trim();
+                      setUserData({
+                        ...userData,
+                        [d.title]: String(d.title.trim()),
+                      });
+                      
                       if (d.allowlist && d.allowlist.trim() !== '') {
                         const val = String(userData[d.title] || '').trim();
                         const rawAllow = d.allowlist.trim();
@@ -1793,7 +1828,9 @@ function Taker() {
                           .split(',')
                           .map((item) => item.trim().toLowerCase());
 
-                        let matched = allowedItems.includes(val.toLowerCase());
+                        // Not strong!, it needs to match the exact allowlist text (both in casing and length), so avoid fooling the system.
+                        let matched = allowedItems.includes(val);
+
                         if (!matched) {
                           try {
                             const regex = new RegExp(rawAllow, 'i');
@@ -1803,7 +1840,7 @@ function Taker() {
 
                         if (!matched) {
                           mismatch = true;
-                          toast.error(
+                          showAlert(quiz?.allowlistMessage ||
                             `Access Denied: The entered ${d.title} ("${val}") does not match the required administrative allowlist.`,
                           );
                         }
@@ -1815,7 +1852,7 @@ function Taker() {
                     setDetailsCollected(true);
                     setStart(true);
                   }}>
-                  START {quiz?.type?.toUpperCase()}
+                  START {quiz?.type?.toUpperCase() || 'AssESSMENT'} 
                 </Button>
               </div>
             </div>
@@ -1830,7 +1867,7 @@ function Taker() {
             'container relative z-10 mx-auto px-4 md:px-6 pt-8 pb-10 max-w-7xl',
             quizTheme === 'dark' ? 'text-white' : 'text-black',
           )}>
-          <div className='mb-8 flex flex-col gap-2 w-full'>
+          <div className='mb-6 flex flex-col gap-2 w-full'>
             {!isOnline && (
               <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
                 <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
@@ -1847,7 +1884,7 @@ function Taker() {
                 <img
                   src={quiz?.branding?.icon}
                   alt='Brand Logo'
-                  className='h-14 w-auto rounded-xl object-contain drop-shadow-lg'
+                  className='h-15 w-auto rounded-xl object-contain drop-shadow-md'
                 />
               </div>
             )}
@@ -1864,7 +1901,7 @@ function Taker() {
             )}
 
             {/* Header Row */}
-            <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-full border border-white/4 bkblur'>
+            <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-full border border-white/4 bkblur sticky top-1'>
               <div className='flex items-center gap-4 pl-3'>
                 <div className='flex flex-col'>
                   <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
@@ -1971,7 +2008,7 @@ function Taker() {
             </div>
           </div>
 
-          <AnimatePresence mode='sync'>
+          <AnimatePresence mode='wait'>
             {/* ===== SCROLL MODE: all answered + current question vertically ===== */}
             {(
               quiz?.quizScroll &&
@@ -1991,7 +2028,7 @@ function Taker() {
                     onClick={() => handleNext()}
                     className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
                     {currentQuestion + 1 === activeQuestions.length ?
-                      'Finish Assessment'
+                      `Finish ${quiz?.type || 'Assessment'}`
                     : 'Next Question'}
                     <ChevronRight className='h-4 w-4' />
                   </Button>
@@ -2009,7 +2046,7 @@ function Taker() {
                     onClick={() => finalizeQuiz(userAnswers)}
                     disabled={userAnswers.length < activeQuestions.length}
                     className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none'>
-                    FINISH ASSESSMENT
+                    FINISH {quiz?.type || 'Assessment'}
                     <CheckCircle2 className='h-5 w-5' />
                   </Button>
                 </div>
@@ -2039,7 +2076,6 @@ function Taker() {
                     </div>
                   : <div className='flex flex-col items-center w-full justify-center gap-2'>
                       <div className='flex items-center gap-2'>
-                    
                         {questionTimeLeft !== null && (
                           <div className='badge bg-pw-warning/10 text-pw-warning border-pw-warning/20 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1'>
                             <Clock

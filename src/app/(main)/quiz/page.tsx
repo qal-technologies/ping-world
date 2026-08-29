@@ -161,6 +161,7 @@ export interface Quiz {
   showCategory?: boolean; // Admin setting to display category above question headers
   showCategoryInPerformance?: boolean;
   askDetails?: Details[];
+  allowlistMessage?: string;
   hasTimer?: boolean | string | number;
   randomizeOptions?: boolean;
   randomizeQuestions?: boolean;
@@ -712,16 +713,18 @@ const QuizBuilder = ({
             <div className='flex gap-3 items-center'>
               <Settings2 className='h-5 w-5' /> Quiz Settings
             </div>{' '}
-            <ChevronDown
-              onClick={(e) => {
-                e.stopPropagation();
-                setNavWrap(!navWrap);
-              }}
-              className={cn(
-                'text-white w-7 h-7 p-1 hover:bg-white/10 rounded-full',
-                navWrap && 'rotate-90 bg-white/10 rounded-full',
-              )}
-            />
+            {editedQuiz?.questions.length > 0 && (
+              <ChevronDown
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNavWrap(!navWrap);
+                }}
+                className={cn(
+                  'text-white w-7 h-7 p-1 hover:bg-white/10 rounded-full',
+                  navWrap && 'rotate-90 bg-white/10 rounded-full',
+                )}
+              />
+            )}
           </button>
 
           {!navWrap && (
@@ -1054,6 +1057,30 @@ const QuizBuilder = ({
                   icon={<Type className='h-4 w-4' />}
                   color='primary'>
                   <div className='flex flex-col gap-3 py-2'>
+                    {editedQuiz?.askDetails && editedQuiz?.askDetails?.length > 0 &&
+                      editedQuiz?.askDetails?.some((d) =>
+                        d?.allowlist?.trim(),
+                      ) && (
+                        <div className='flex-col flex w-full mb-2'>
+                          <label className='text-sm'>Allowlist Message</label>
+                          <p className='text-[10px] text-pw-muted px-1 mb-2'>
+                            A message or alert for when taker's detail doesn't
+                            match the allowlist for a particular detail.
+                          </p>
+                          <Input
+                            value={editedQuiz?.allowlistMessage}
+                            onChange={(e) => {
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                allowlistMessage: e.target.value,
+                              });
+                            }}
+                            className='flex-1 bg-transparent focus-visible:border focus-visible:border-pw-primary/5 h-8 text-xs'
+                            placeholder='Allowlist Message'
+                          />
+                        </div>
+                      )}
+
                     {(editedQuiz.askDetails || []).map((detail, idx) => {
                       const showAllow = allowlistArr[idx];
                       const hasAllow =
@@ -1708,9 +1735,10 @@ const QuizBuilder = ({
                     </Wrapper>
 
                     <Wrapper
-                      title='Branding & Layout'
+                      title='Branding'
                       description='Customize background image, logo, and scrolling layout'
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
+                      premium={premiumTier === 'free'}
                       color='primary'>
                       <div className='flex flex-col gap-4 pt-2'>
                         <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
@@ -3198,6 +3226,7 @@ const QuizBuilder = ({
 
 export default function QuizPage() {
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
+  const {showAlert, showConfirm, showPrompt} = useAppModal();
   const [filenameInput, setFilenameInput] = useState('');
   const [filenameExtension, setFilenameExtension] = useState('');
   const [onConfirmFilename, setOnConfirmFilename] = useState<
@@ -3381,8 +3410,8 @@ export default function QuizPage() {
 
   const clearResponses = async (quizId: string) => {
     if (
-      !confirm(
-        'Are you sure you want to clear all responses? This cannot be undone.',
+      !showConfirm(
+        'Are you sure you want to clear all responses? This cannot be undone.', 
       )
     )
       return;
@@ -3424,8 +3453,8 @@ export default function QuizPage() {
       type: 'quiz',
       questions: [],
       endScreen: {
-        title: 'Thank You!',
-        message: 'You have completed the task.',
+        title: 'Assessment Completed!',
+        message: 'You have completed this accessment. Thank you for using PingWorld.',
       },
       createdAt: Date.now(),
     };
@@ -3504,7 +3533,7 @@ export default function QuizPage() {
   };
 
   const deleteQuiz = async (id: string) => {
-    const check = confirm(
+    const check = await showConfirm(
       'Do you want to delete this assessment? This cannot be undone',
     );
 
@@ -3588,7 +3617,7 @@ export default function QuizPage() {
   return (
     <div
       className={cn(
-        'container mx-auto px-4 py-12 max-w-8xl min-h-[calc(100vh-64px)] pb-20',
+        'container mx-auto px-4 py-12 max-w-8xl min-h-screen pb-20 transition-all duration-500',
         premiumTier !== 'free' &&
           'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
       )}>
@@ -3701,14 +3730,14 @@ export default function QuizPage() {
                                 <span
                                   title='Quiz expiry'
                                   className={cn(
-                                    'inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md border',
+                                    'flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded-md border',
                                     label === 'Expired' ?
                                       'text-red-400 border-red-400/30 bg-red-400/10'
                                     : urgent ?
                                       'text-amber-400 border-amber-400/30 bg-amber-400/10'
                                     : 'text-pw-success border-pw-success/30 bg-pw-success/10',
                                   )}>
-                                  <Clock className='h-2.5 w-2.5' />
+                                  <Clock className='h-2.5 w-2.5 mr-1' />
                                   {label}
                                 </span>
                               );
