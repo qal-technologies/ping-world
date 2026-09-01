@@ -38,7 +38,6 @@ import { AiContextPanel } from './AiContextPanel';
 import { TranslationPanel } from './TranslationPanel';
 import { MediaEditor } from './MediaEditor';
 import { CanvasBuilder } from './CanvasBuilder';
-import { LivePreview } from './LivePreview';
 import { SavePreviewPanel } from './SavePreviewPanel';
 import { InstagramCanvasSettings } from './InstagramCanvasSettings';
 import { PostHistoryPanel } from './PostHistoryPanel';

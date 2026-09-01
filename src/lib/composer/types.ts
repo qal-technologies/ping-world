@@ -189,4 +189,5 @@ export type ComposerAction =
   | { type: 'INCREMENT_USAGE'; payload: keyof PremiumUsageCounters }
   | { type: 'SET_TRANSLATION'; payload: TranslationResult | null }
   | { type: 'SET_ONLINE'; payload: boolean }
-  | { type: 'SET_INSTA_CANVAS_SETTINGS'; payload: { themeIdx?: number; font?: string } };
+  | { type: 'SET_INSTA_CANVAS_SETTINGS'; payload: { themeIdx?: number; font?: string } }
+  | { type: 'RESET_COMPOSER_STATE' };

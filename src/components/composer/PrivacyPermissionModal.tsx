@@ -79,11 +79,10 @@ export function PrivacyPermissionModal() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className='fixed inset-0 z-50 flex items-center justify-center p-4'
-      >
+        className='fixed inset-0 z-50 flex items-center justify-center p-4'>
         {/* Backdrop */}
         <div
-          className='absolute inset-0 bg-black/70 backdrop-blur-md'
+          className='absolute inset-0 bg-black/40 backdrop-blur-md'
           onClick={handleClose}
         />
 
@@ -91,8 +90,7 @@ export function PrivacyPermissionModal() {
           initial={{ scale: 0.95, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 20 }}
-          className='relative w-full max-w-md bg-pw-surface rounded-2xl border border-pw-primary/20 shadow-2xl overflow-hidden'
-        >
+          className='relative w-full max-w-md bg-pw-surface/70 rounded-2xl border border-pw-primary/20 shadow-2xl overflow-hidden'>
           {/* Header */}
           <div className='p-6 border-b border-white/5'>
             <div className='flex items-start justify-between gap-4'>
@@ -111,8 +109,7 @@ export function PrivacyPermissionModal() {
               </div>
               <button
                 onClick={handleClose}
-                className='text-pw-muted hover:text-pw-text transition-colors p-1'
-              >
+                className='text-pw-muted hover:text-pw-text transition-colors p-1'>
                 <X className='h-4 w-4' />
               </button>
             </div>
@@ -120,23 +117,29 @@ export function PrivacyPermissionModal() {
 
           {/* Platform permissions list */}
           <div className='p-6 space-y-4 max-h-[50vh] overflow-y-auto custom-scrollbar'>
-            <div className='flex items-center gap-2 p-3 rounded-lg bg-pw-warning/10 border border-pw-warning/20'>
+            <div className='flex items-center gap-2 p-2 rounded-xl bg-pw-warning/10 border border-pw-warning/20'>
               <AlertTriangle className='h-4 w-4 text-pw-warning shrink-0' />
               <p className='text-xs text-pw-warning'>
                 PingWorld never stores your social credentials. OAuth tokens are
-                held securely and only used to publish on your behalf.
+                held securely and only used for publishing.
               </p>
             </div>
+
+            <p className='text-xs text-pw-muted'>
+              This is a read/write access for post creation, image/video upload,
+              and analytics retrieval.
+            </p>
 
             {(Object.entries(PERMISSIONS) as [Platform, string[]][]).map(
               ([platform, perms]) => {
                 const meta = getPlatform(platform);
                 return (
-                  <div key={platform} className='space-y-2'>
+                  <div
+                    key={platform}
+                    className='space-y-2'>
                     <p
                       className='text-xs font-bold uppercase tracking-widest'
-                      style={{ color: meta.iconHex }}
-                    >
+                      style={{ color: meta.iconHex }}>
                       {meta.name}
                     </p>
                     {perms.map((perm) => {
@@ -144,8 +147,7 @@ export function PrivacyPermissionModal() {
                       return (
                         <label
                           key={perm}
-                          className='flex items-start gap-2 cursor-pointer group'
-                        >
+                          className='flex items-start gap-2 cursor-pointer group'>
                           <input
                             type='checkbox'
                             checked={checkedItems.has(key)}
@@ -176,11 +178,15 @@ export function PrivacyPermissionModal() {
               />
               <span className='text-xs text-pw-muted group-hover:text-pw-text transition-colors'>
                 I agree to PingWorld&apos;s{' '}
-                <a href='/terms' className='text-pw-primary hover:underline'>
+                <a
+                  href='/terms'
+                  className='text-pw-primary hover:underline'>
                   Terms of Service
                 </a>{' '}
                 and{' '}
-                <a href='/privacy' className='text-pw-primary hover:underline'>
+                <a
+                  href='/privacy'
+                  className='text-pw-primary hover:underline'>
                   Privacy Policy
                 </a>
               </span>
@@ -196,27 +202,25 @@ export function PrivacyPermissionModal() {
                 }}
               />
               <span className='text-xs text-pw-muted group-hover:text-pw-text transition-colors'>
-                I understand I can revoke access at any time from each platform&apos;s
-                connected apps settings
+                I understand I can revoke access at any time from each
+                platform&apos;s connected apps settings
               </span>
             </label>
           </div>
 
           {/* Footer */}
-          <div className='p-6 border-t border-white/5 flex gap-3'>
+          <div className='p-4 border-t border-white/5 flex gap-3'>
             <Button
               variant='outline'
               onClick={handleClose}
-              className='flex-1 border-white/10 hover:bg-white/5'
-            >
+              className='flex-1 h-10 border-white/10 hover:bg-white/5'>
               Cancel
             </Button>
             <Button
               onClick={handleAccept}
-              className='flex-1 btn-primary gap-2'
-            >
+              className='flex-1 h-10 btn-primary gap-2'>
               <CheckCircle2 className='h-4 w-4' />
-              Accept & Continue
+              Accept
             </Button>
           </div>
         </motion.div>

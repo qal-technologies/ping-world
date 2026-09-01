@@ -147,6 +147,7 @@ export interface QuizTakerResponse {
   timestamp: string;
   submissionReason?: 'completion' | 'timeout' | 'self_submit' | 'quit';
   country?: string;
+  continent?: string; // Continent-level geo tag (free tier)
 }
 
 export interface Quiz {
@@ -164,6 +165,7 @@ export interface Quiz {
   askDetails?: Details[];
   allowlistMessage?: string;
   hasTimer?: boolean | string | number;
+  timerUnit?: 'seconds' | 'minutes' | 'hours'; // Unit for hasTimer value
   randomizeOptions?: boolean;
   randomizeQuestions?: boolean;
   allowRetry?: boolean;
@@ -178,7 +180,9 @@ export interface Quiz {
   createdAt: number;
   responses?: QuizTakerResponse[];
   allowEarlySubmit?: boolean;
-  expires_at?: string; // ISO date - max 3 days from creation, cleaned by cron
+  expires_at?: string; // ISO date
+  expiryHistory?: string[]; // Previous expiry values (max 3 changes allowed)
+  isExpiryLocked?: boolean; // Locked after 3 expiry changes
   quizScroll?: boolean;
   quizLayout?: string;
   branding?: {
@@ -189,6 +193,11 @@ export interface Quiz {
     icon?: string;
   };
   disclaimer?: string;
+  customDisclaimer?: string;       // Pro: replaces default PingWorld disclaimer
+  hidePingWorldDisclaimer?: boolean; // Pro: hide PingWorld branding disclaimer
+  showRealtimeScore?: boolean;     // Pro: show live score badge during quiz
+  nextButtonText?: string;         // Pro: custom Next button label
+  prevButtonText?: string;         // Pro: custom Previous button label
 }
 
 // Helper: compute a capped expiry date max 3 days out
@@ -286,30 +295,6 @@ const QuizBuilder = ({
     };
   }, [editedQuiz.questions]);
 
-  const allQuestions = useMemo(() => {
-    let cat: Question[] = [];
-    let unCat: Question[] = [];
-
-    editedQuiz.questions.forEach((q) => {
-      const catQ =
-        q.category && q.category.trim() !== '' ? q.category.trim() : null;
-
-      if (!catQ) {
-        unCat.push(q);
-      } else {
-        if (!cat.includes(q)) {
-          return;
-        }
-        unCat.push(q);
-      }
-    });
-
-    return {
-      cat,
-      unCat,
-    };
-  }, [editedQuiz.questions]);
-
   useEffect(() => {
     // Autosave to draft storage as the user types
     const timer = setTimeout(async () => {
@@ -400,94 +385,106 @@ const QuizBuilder = ({
     direction: 'up' | 'down',
     catName?: string,
   ) => {
-    // Try to move questions up or down in their respective groups (uncat or cat) too and be able to index them properly.
+    const questions = [...editedQuiz.questions];
+    const currentQ = questions[index];
+    if (!currentQ) return;
 
-    const newQuestions = [...editedQuiz.questions];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newQuestions.length) return;
+    const targetCat = catName !== undefined ? catName : currentQ.category;
 
-    [newQuestions[index], newQuestions[targetIndex]] = [
-      newQuestions[targetIndex],
-      newQuestions[index],
-    ];
-    setEditedQuiz({ ...editedQuiz, questions: newQuestions });
-    setCurrentStep(targetIndex);
-  };
+    if (targetCat) {
+      // Find all questions in this category and their indices
+      const catIndices = questions
+        .map((q, idx) => (q.category === targetCat ? idx : -1))
+        .filter((idx) => idx !== -1);
 
-  const handleQuestionCategory = (
-    type: 'add' | 'remove' | 'moveUp' | 'moveDown',
-    id: string,
-    catName: string,
-  ) => {
-    const qId = id.trim() ?? '';
-    const categoryName = catName ?? '';
-    const idx = editedQuiz.questions.findIndex((q) => q.id === qId);
-    let question = editedQuiz.questions[idx];
+      const posInCat = catIndices.indexOf(index);
+      if (posInCat === -1) return;
 
-    console.log(question);
-    if (!question) return;
+      const targetPosInCat = direction === 'up' ? posInCat - 1 : posInCat + 1;
+      if (targetPosInCat < 0 || targetPosInCat >= catIndices.length) return;
 
-    if (type === 'add') {
-      // Find the index of the last question in this category
-      let lastIndex = -1;
-      for (let i = editedQuiz.questions.length - 1; i >= 0; i--) {
-        if (editedQuiz.questions[i].category === categoryName) {
-          lastIndex = i;
-          break;
-        }
-      }
+      const targetIndex = catIndices[targetPosInCat];
+      [questions[index], questions[targetIndex]] = [
+        questions[targetIndex],
+        questions[index],
+      ];
 
-      if (lastIndex !== -1) {
-        // Insert right after the last question of this category
-        question.category = catName;
+      setEditedQuiz({ ...editedQuiz, questions });
+      setCurrentStep(targetIndex);
+    } else {
+      // Uncategorized or sequential movement
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= questions.length) return;
 
-        const updatedQuestions = [...editedQuiz.questions];
-        updatedQuestions.filter((q) => q.id !== qId);
-
-        setEditedQuiz({
-          ...editedQuiz,
-          questions: updatedQuestions,
-        });
-        setCurrentStep(lastIndex + 1);
-
-        return;
-      } else {
-        question.category = catName;
-        const updatedQuestions = [...editedQuiz.questions];
-
-        setEditedQuiz({
-          ...editedQuiz,
-          questions: updatedQuestions,
-        });
-
-        setCurrentStep(idx);
-      }
-    } else if (type === 'remove') {
-      question.category = undefined;
-      const updatedQuestions = [...editedQuiz.questions];
-
-      setEditedQuiz({
-        ...editedQuiz,
-        questions: updatedQuestions,
-      });
-
-      setCurrentStep(idx - 1);
+      [questions[index], questions[targetIndex]] = [
+        questions[targetIndex],
+        questions[index],
+      ];
+      setEditedQuiz({ ...editedQuiz, questions });
+      setCurrentStep(targetIndex);
     }
   };
 
+  const moveCategory = (catName: string, direction: 'up' | 'down') => {
+    const questions = [...editedQuiz.questions];
+    const uniqueCats = Array.from(
+      new Set(questions.map((q) => q.category).filter(Boolean)),
+    ) as string[];
+
+    const catIdx = uniqueCats.indexOf(catName);
+    if (catIdx === -1) return;
+
+    const targetCatIdx = direction === 'up' ? catIdx - 1 : catIdx + 1;
+    if (targetCatIdx < 0 || targetCatIdx >= uniqueCats.length) return;
+
+    const targetCatName = uniqueCats[targetCatIdx];
+
+    // Partition questions into catName block, targetCatName block, and others
+    const catQs = questions.filter((q) => q.category === catName);
+    const targetQs = questions.filter((q) => q.category === targetCatName);
+    const otherQs = questions.filter(
+      (q) => q.category !== catName && q.category !== targetCatName,
+    );
+
+    let reordered: Question[] = [];
+    if (direction === 'up') {
+      reordered = [...catQs, ...targetQs, ...otherQs];
+    } else {
+      reordered = [...targetQs, ...catQs, ...otherQs];
+    }
+
+    setEditedQuiz({ ...editedQuiz, questions: reordered });
+    toast.success(`Moved group "${catName}" ${direction}`);
+  };
+
   const disband = (catName: string) => {
-    const updatedQuestions = [...editedQuiz.questions];
-    const catQs = editedQuiz.questions.filter((q) => q.category === catName);
+    const updatedQuestions = editedQuiz.questions.map((q) =>
+      q.category === catName ? { ...q, category: undefined } : q,
+    );
+    setEditedQuiz({ ...editedQuiz, questions: updatedQuestions });
+  };
 
-    catQs.forEach((q) => {
-      q.category = undefined;
+  /**
+   * Add or remove a category tag on a single question.
+   * 'add'    → sets q.category = newCat (or groupName)
+   * 'remove' → clears q.category
+   */
+  const handleQuestionCategory = (
+    action: 'add' | 'remove',
+    questionId: string,
+    newCat?: string,
+  ) => {
+    const updated = editedQuiz.questions.map((q) => {
+      if (q.id !== questionId) return q;
+      if (action === 'remove') return { ...q, category: undefined };
+      return { ...q, category: newCat || '' };
     });
-
-    // trigger arrangement change
-    setEditedQuiz({
-      ...editedQuiz,
-      questions: updatedQuestions,
-    });
+    setEditedQuiz({ ...editedQuiz, questions: updated });
+    toast.success(
+      action === 'add'
+        ? `Question added to group "${newCat}"`
+        : 'Question removed from group',
+    );
   };
 
   const handleQuestionScroll = () => {
@@ -555,26 +552,29 @@ const QuizBuilder = ({
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
-                    {sidebarGroups.categories.length > 0 ?
-                      sidebarGroups.categories
-                        .filter((c) => c.name !== catName)
-                        .map((cat) => (
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuestionCategory('add', q.id, cat.name);
-                            }}
-                            className={'h-8 gap-1 px-2'}>
-                            <Folder className='w-4 h-4 mr-1' />{' '}
-                            {cat.name.toUpperCase()}
-                          </DropdownMenuItem>
-                        ))
-                    : <div className='w-full p-1 flex flex-col items-end justify-center'>
+                    {sidebarGroups.categories && sidebarGroups.categories
+                      .filter((c) => c.name !== catName)
+                      .map((cat) => (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuestionCategory('add', q.id, cat.name);
+                          }}
+                          className={'h-8 gap-1 px-2'}>
+                          <Folder className='w-4 h-4 mr-1' />{' '}
+                          {cat.name.toUpperCase()}
+                        </DropdownMenuItem>
+                      ))
+                    }
+                    
+                      <div className='w-full p-1 flex flex-col items-end justify-center'>
                         <Input
                           type='text'
                           placeholder='Enter Group Name'
                           value={groupName}
-                          onChange={(e) => setGroupName(e.target.value)}
+                        onChange={(e) =>
+                          setGroupName(e.target.value)
+                        }
                           className='max-w-full mx-1 mb-2 p-1 text-sm'
                         />
 
@@ -585,9 +585,8 @@ const QuizBuilder = ({
                             setGroupName('');
                           }}>
                           Add
-                        </Button>
+                    </Button>
                       </div>
-                    }
                   </DropdownMenuContent>
                 </DropdownMenu>
               </DropdownMenuItem>
@@ -1468,8 +1467,8 @@ const QuizBuilder = ({
 
                         <QuizSettingItem
                           label='Time Limit'
-                          description='Auto-submits when time expires. Set to minutes.'>
-                          <div className='flex gap-2 items-center'>
+                          description={`Auto-submits when time expires. ${editedQuiz.timerUnit === 'seconds' ? 'Set in seconds (min 30s).' : editedQuiz.timerUnit === 'hours' ? 'Set in hours. Pro plan required for hours.' : 'Set in minutes.'}`}>
+                          <div className='flex gap-2 items-center flex-wrap'>
                             <Input
                               type='number'
                               value={
@@ -1486,9 +1485,39 @@ const QuizBuilder = ({
                                     : false,
                                 })
                               }
-                              placeholder='Min'
+                              placeholder={editedQuiz.timerUnit === 'seconds' ? 'Sec' : editedQuiz.timerUnit === 'hours' ? 'Hrs' : 'Min'}
                               className='h-8 w-16 bg-white/5 border-white/10 text-center text-xs'
                             />
+                            {/* Unit selector */}
+                            <div className='flex gap-1'>
+                              {(['seconds', 'minutes', 'hours'] as const).map((unit) => {
+                                const needsPro = unit === 'hours';
+                                const isEligible = !needsPro || tierAtLeast(premiumTier, 'pro');
+                                return (
+                                  <button
+                                    key={unit}
+                                    type='button'
+                                    disabled={!isEligible}
+                                    onClick={() => {
+                                      if (!isEligible) {
+                                        toast.info('Hours timer requires Pro plan.');
+                                        return;
+                                      }
+                                      setEditedQuiz({ ...editedQuiz, timerUnit: unit });
+                                    }}
+                                    className={cn(
+                                      'h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-all',
+                                      (editedQuiz.timerUnit ?? 'minutes') === unit
+                                        ? 'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                                        : 'bg-white/5 border-white/10 text-pw-muted hover:bg-white/10',
+                                      !isEligible && 'opacity-40 cursor-not-allowed',
+                                    )}>
+                                    {unit === 'seconds' ? 'sec' : unit === 'minutes' ? 'min' : 'hr'}
+                                    {needsPro && !isEligible && <Lock className='inline ml-0.5 h-2.5 w-2.5' />}
+                                  </button>
+                                );
+                              })}
+                            </div>
                             {editedQuiz.hasTimer && (
                               <Button
                                 variant='ghost'
@@ -1510,107 +1539,126 @@ const QuizBuilder = ({
                           label='Active Lifespan (Expiry)'
                           description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
                           <div className='flex flex-col gap-2 w-full'>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger>
-                                <Button
-                                  variant='outline'
-                                  className='h-10 w-full justify-between bg-white/5 border-white/10 text-xs text-pw-text px-4 rounded-xl'>
-                                  <span>
-                                    {(() => {
-                                      let currentDays = 2; // Default
-                                      if (editedQuiz.expires_at) {
-                                        const diff =
-                                          new Date(
-                                            editedQuiz.expires_at,
-                                          ).getTime() - Date.now();
-                                        currentDays = Math.max(
-                                          1,
-                                          Math.round(
-                                            diff / (1000 * 60 * 60 * 24),
-                                          ),
-                                        );
-                                      }
-                                      const closestSelected = [
-                                        1, 2, 3, 5, 7, 14, 30,
-                                      ].reduce((prev, curr) =>
-                                        (
-                                          Math.abs(curr - currentDays) <
-                                          Math.abs(prev - currentDays)
-                                        ) ?
-                                          curr
-                                        : prev,
-                                      );
-                                      return `${closestSelected} ${closestSelected === 1 ? 'Day' : 'Days'} ${closestSelected <= 2 ? ' (Free)' : ''}`;
-                                    })()}
-                                  </span>
-                                  <ChevronDown className='h-4 w-4 opacity-50' />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 rounded-2xl'>
-                                {[
-                                  { days: 1, tier: 'free' },
-                                  { days: 2, tier: 'free' },
-                                  { days: 3, tier: 'flexible' },
-                                  { days: 5, tier: 'flexible' },
-                                  { days: 7, tier: 'flexible' },
-                                  { days: 14, tier: 'standard' },
-                                  { days: 30, tier: 'pro' },
-                                ].map(({ days, tier }) => {
-                                  const isEligible = tierAtLeast(
-                                    premiumTier,
-                                    tier as any,
-                                  );
-                                  return (
-                                    <DropdownMenuItem
-                                      key={`exp-select-${days}`}
-                                      disabled={!isEligible}
-                                      onClick={() => {
-                                        if (isEligible) {
-                                          const newExpiry = computeExpiry(
-                                            premiumTier,
-                                            days,
-                                          );
-                                          setEditedQuiz({
-                                            ...editedQuiz,
-                                            expires_at: newExpiry.toISOString(),
-                                          });
-                                          toast.success(
-                                            `Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`,
-                                          );
-                                        } else {
-                                          toast.info(
-                                            `Unlock ${days} days expiry with the ${tier} tier.`,
+                            {editedQuiz.isExpiryLocked ? (
+                              <div className='flex items-center gap-2 p-3 rounded-xl bg-pw-warning/10 border border-pw-warning/30'>
+                                <Lock className='h-4 w-4 text-pw-warning shrink-0' />
+                                <div>
+                                  <p className='text-xs font-bold text-pw-warning'>Expiry setter locked</p>
+                                  <p className='text-[10px] text-pw-muted'>Maximum 3 expiry changes reached. Upgrade your plan to extend.</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger>
+                                  <Button
+                                    variant='outline'
+                                    className='h-10 w-full justify-between bg-white/5 border-white/10 text-xs text-pw-text px-4 rounded-xl'>
+                                    <span>
+                                      {(() => {
+                                        let currentDays = 2; // Default
+                                        if (editedQuiz.expires_at) {
+                                          const diff =
+                                            new Date(
+                                              editedQuiz.expires_at,
+                                            ).getTime() - Date.now();
+                                          currentDays = Math.max(
+                                            1,
+                                            Math.round(
+                                              diff / (1000 * 60 * 60 * 24),
+                                            ),
                                           );
                                         }
-                                      }}
-                                      className={cn(
-                                        'h-10 text-xs rounded-xl flex items-center justify-between cursor-pointer px-4',
-                                        !isEligible &&
-                                          'opacity-40 grayscale pointer-events-none',
-                                      )}>
-                                      <span>
-                                        {days} {days === 1 ? 'Day' : 'Days'}
-                                      </span>
-                                      {!isEligible && (
-                                        <Lock className='h-3.5 w-3.5 opacity-60 text-pw-warning' />
-                                      )}
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                        const closestSelected = [
+                                          1, 2, 3, 5, 7, 14, 30,
+                                        ].reduce((prev, curr) =>
+                                          (
+                                            Math.abs(curr - currentDays) <
+                                            Math.abs(prev - currentDays)
+                                          ) ?
+                                            curr
+                                          : prev,
+                                        );
+                                        return `${closestSelected} ${closestSelected === 1 ? 'Day' : 'Days'} ${closestSelected <= 2 ? ' (Free)' : ''}`;
+                                      })()}
+                                    </span>
+                                    <ChevronDown className='h-4 w-4 opacity-50' />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 rounded-2xl'>
+                                  {[
+                                    { days: 1, tier: 'free' },
+                                    { days: 2, tier: 'free' },
+                                    { days: 3, tier: 'flexible' },
+                                    { days: 5, tier: 'flexible' },
+                                    { days: 7, tier: 'flexible' },
+                                    { days: 14, tier: 'standard' },
+                                    { days: 30, tier: 'pro' },
+                                  ].map(({ days, tier }) => {
+                                    const isEligible = tierAtLeast(
+                                      premiumTier,
+                                      tier as any,
+                                    );
+                                    return (
+                                      <DropdownMenuItem
+                                        key={`exp-select-${days}`}
+                                        disabled={!isEligible}
+                                        onClick={() => {
+                                          if (isEligible) {
+                                            const newExpiry = computeExpiry(
+                                              premiumTier,
+                                              days,
+                                            );
+                                            setEditedQuiz({
+                                              ...editedQuiz,
+                                              expires_at: newExpiry.toISOString(),
+                                            });
+                                            toast.success(
+                                              `Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`,
+                                            );
+                                          } else {
+                                            toast.info(
+                                              `Unlock ${days} days expiry with the ${tier} tier.`,
+                                            );
+                                          }
+                                        }}
+                                        className={cn(
+                                          'h-10 text-xs rounded-xl flex items-center justify-between cursor-pointer px-4',
+                                          !isEligible &&
+                                            'opacity-40 grayscale pointer-events-none',
+                                        )}>
+                                        <span>
+                                          {days} {days === 1 ? 'Day' : 'Days'}
+                                        </span>
+                                        {!isEligible && (
+                                          <Lock className='h-3.5 w-3.5 opacity-60 text-pw-warning' />
+                                        )}
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
 
                             <p className='text-[10px] text-pw-muted pl-1'>
                               {editedQuiz.expires_at ?
                                 <>
-                                  Currently expires on:{' '}
+                                  Expires:{' '}
                                   <span className='text-pw-primary font-bold'>
                                     {new Date(
                                       editedQuiz.expires_at,
                                     ).toLocaleDateString()}
                                   </span>
+                                  {(editedQuiz.expiryHistory?.length ?? 0) > 0 && (
+                                    <span className='ml-1 text-pw-warning'>
+                                      {' '}({editedQuiz.expiryHistory!.length}/3 changes used
+                                      {editedQuiz.expiryHistory!.length >= 2 ? ' - 1 change remaining!' : ''})
+                                    </span>
+                                  )}
                                 </>
                               : <>Default lifespan is 2 days</>}
+                              <span className='block mt-0.5 text-pw-error/70'>
+                                ⚠ Expired quizzes are auto-deleted after 48 hours.
+                              </span>
                             </p>
                           </div>
                         </QuizSettingItem>
@@ -1712,9 +1760,9 @@ const QuizBuilder = ({
                               (o) =>
                                 typeof o === 'object' &&
                                 (o.skipTo || o.skipToCat),
-                            ) &&
-                              editedQuiz.randomizeOptions),
-                        ) && (
+                            )
+                        )) && 
+                        editedQuiz.randomizeOptions  && (
                           <div className='flex gap-2 items-center px-1'>
                             <AlertTriangle className='h-4 w-4 shrink-0' />
                             <span className='text-pw-warning text-[10px] mb-2'>
@@ -1805,7 +1853,7 @@ const QuizBuilder = ({
 
                     <Wrapper
                       title='Branding'
-                      description='Customize background image, logo, and scrolling layout'
+                      description='Customize background image and logo'
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
                       premium={premiumTier === 'free'}
                       color='primary'>
@@ -2499,7 +2547,10 @@ const QuizBuilder = ({
                           {/* Input Branching Rules */}
                           <div className='space-y-2 pt-2 border-t border-white/10'>
                             <div className='flex items-center justify-between'>
-                              <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider flex gap-1 items-center'>
+                              <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider flex gap-1 items-center' 
+                                    onClick={() =>
+                                      setShowBranchRules(!showBranchRules)
+                                    }>
                                 {(
                                   editedQuiz?.questions[currentStep]
                                     ?.inputBranchRules || []
@@ -2509,9 +2560,6 @@ const QuizBuilder = ({
                                       'text-pw-primary h-3 w-3',
                                       showBranchRules && 'rotate-90',
                                     )}
-                                    onClick={() =>
-                                      setShowBranchRules(!showBranchRules)
-                                    }
                                   />
                                 )}
                                 Branching Rules (
@@ -3500,11 +3548,36 @@ export default function QuizPage() {
 
   const loadQuizzes = async () => {
     // 1. Serve local cache immediately
-    const localData = await HybridStorage.getAll('quiz', (freshItems) => {
+    const localData = await HybridStorage.getAll('quiz', async (freshItems) => {
       // 2. Called in background when remote data arrives — silently refresh
-      setQuizzes(freshItems);
+      const processed = await processExpiryStatus(freshItems);
+      setQuizzes(processed);
     });
-    setQuizzes(localData);
+    const processed = await processExpiryStatus(localData);
+    setQuizzes(processed);
+  };
+
+  // Auto-tag expired quizzes & purge those expired for > 48h
+  const processExpiryStatus = async (items: Quiz[]): Promise<Quiz[]> => {
+    const now = Date.now();
+    const twoDaysMs = 48 * 60 * 60 * 1000;
+    const toKeep: Quiz[] = [];
+    for (const quiz of items) {
+      if (quiz.expires_at) {
+        const expiresAt = new Date(quiz.expires_at).getTime();
+        const isExpired = expiresAt < now;
+        const isPurgeEligible = now - expiresAt > twoDaysMs;
+        if (isPurgeEligible) {
+          // Auto-delete quizzes expired for more than 48 hours
+          await HybridStorage.delete(quiz.id, 'quiz');
+          continue; // Skip adding to toKeep
+        }
+        toKeep.push({ ...quiz, _isExpired: isExpired } as any);
+      } else {
+        toKeep.push(quiz);
+      }
+    }
+    return toKeep;
   };
 
   // Load from hybrid storage (offline-first)
@@ -3565,10 +3638,24 @@ export default function QuizPage() {
       finalExpiry = computeExpiry(premiumTier, 2).toISOString();
     }
 
+    // Track expiry history and enforce 3-change lock
+    const prevExpiry = quizzes.find((q) => q.id === quiz.id)?.expires_at;
+    let expiryHistory = quiz.expiryHistory ?? [];
+    let isExpiryLocked = quiz.isExpiryLocked ?? false;
+    if (prevExpiry && prevExpiry !== finalExpiry && !isExpiryLocked) {
+      expiryHistory = [...expiryHistory, prevExpiry];
+      if (expiryHistory.length >= 3) {
+        isExpiryLocked = true;
+        toast.warning('Expiry setter locked - maximum 3 changes reached.');
+      }
+    }
+
     const quizToSave = {
       ...quiz,
       questions: securedQuestions,
       expires_at: finalExpiry,
+      expiryHistory,
+      isExpiryLocked,
     };
 
     try {
@@ -3618,18 +3705,25 @@ export default function QuizPage() {
   const exportQuiz = (quiz: Quiz) => {
     triggerExport(
       quiz.title.replace(/\s+/g, '-').toLowerCase(),
-      'json',
+      'pwquiz',
       (filename) => {
+        const payload = {
+          __pwquiz: true,
+          app: 'PingWorldQuizStudio',
+          version: '1.0',
+          exportedAt: new Date().toISOString(),
+          ...quiz,
+        };
         const dataStr =
           'data:text/json;charset=utf-8,' +
-          encodeURIComponent(JSON.stringify(quiz));
+          encodeURIComponent(JSON.stringify(payload, null, 2));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute('href', dataStr);
-        downloadAnchorNode.setAttribute('download', `${filename}.json`);
+        downloadAnchorNode.setAttribute('download', `${filename}.pwquiz`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
-        toast.success('Quiz exported to JSON!');
+        toast.success('Quiz exported as .pwquiz package!');
       },
     );
   };
@@ -3642,11 +3736,14 @@ export default function QuizPage() {
     reader.onload = (event) => {
       try {
         const quiz = JSON.parse(event.target?.result as string);
-        if (!quiz.title || !quiz?.questions) throw new Error('Invalid format');
-        quiz.id = Math.random().toString(36).substr(2, 9); // New ID for import
+        if (!quiz.title || !quiz?.questions) throw new Error('Invalid quiz file structure.');
+        if (!quiz.__pwquiz && quiz.app !== 'PingWorldQuizStudio') {
+          throw new Error('Rejected: File is not a valid PingWorld .pwquiz package.');
+        }
+        quiz.id = Math.random().toString(36).substr(2, 9); // New fresh ID for import
         handleSaveQuiz(quiz);
-      } catch {
-        toast.error('Invalid quiz file format.');
+      } catch (err: any) {
+        toast.error(err?.message || 'Invalid .pwquiz format.');
       }
     };
     reader.readAsText(file);
@@ -4035,29 +4132,50 @@ export default function QuizPage() {
                       }
                     > = {};
                     const countriesCount: Record<string, number> = {};
+                    const isProTier = premiumTier !== 'free';
+
+                    const getTakerIdentifier = (resp: any, fallbackIdx: number) => {
+                      const ud = resp.userData;
+                      if (!ud) return `Taker #${fallbackIdx + 1}`;
+                      if (typeof ud === 'object') {
+                        return (
+                          ud.name ||
+                          ud.fullName ||
+                          ud.pingAuthName ||
+                          ud.pingAuthEmail ||
+                          ud.email ||
+                          ud.username ||
+                          ud.phone ||
+                          ud.userId ||
+                          (Array.isArray(ud) ? ud[0] : null) ||
+                          (Object.values(ud).length > 0 ? String(Object.values(ud)[0]) : null) ||
+                          `Taker #${fallbackIdx + 1}`
+                        );
+                      }
+                      return String(ud) || `Taker #${fallbackIdx + 1}`;
+                    };
 
                     let bestTaker = { name: 'None', score: -1 };
                     let worstTaker = { name: 'None', score: 999999 };
 
-                    responses.forEach((resp) => {
+                    // Survey Question stats
+                    const surveyStats: Record<string, { text: string; attempts: number; skipped: number }> = {};
+                    viewingResponses.questions.forEach((q) => {
+                      surveyStats[q.id] = { text: q.text, attempts: 0, skipped: 0 };
+                    });
+
+                    responses.forEach((resp, rIdx) => {
                       const reason = resp.submissionReason || 'completion';
                       if (reason === 'timeout') timeouts++;
                       else if (reason === 'self_submit') selfSubmits++;
                       else if (reason === 'quit') quits++;
                       else completions++;
 
-                      if (resp.country) {
-                        countriesCount[resp.country] =
-                          (countriesCount[resp.country] || 0) + 1;
-                      }
+                      const geoKey = isProTier ? (resp.country || resp.continent || 'Unknown') : (resp.continent || 'Global');
+                      countriesCount[geoKey] = (countriesCount[geoKey] || 0) + 1;
 
-                      const takerName =
-                        resp.userData.name ||
-                        resp.userData.email ||
-                        resp.userData.pingAuthName ||
-                        resp.userData.pingAuthEmail ||
-                        resp.userData[0] ||
-                        'Anonymous Taker';
+                      const takerName = getTakerIdentifier(resp, rIdx);
+
                       if (resp.score > bestTaker.score) {
                         bestTaker = { name: takerName, score: resp.score };
                       }
@@ -4088,6 +4206,19 @@ export default function QuizPage() {
                           },
                         );
                       }
+
+                      // Track question stats
+                      const answeredQIds = new Set((resp.answers || []).map((a: any) => a.questionId));
+
+                      viewingResponses.questions.forEach((q) => {
+                        if (surveyStats[q.id]) {
+                          if (answeredQIds.has(q.id)) {
+                            surveyStats[q.id].attempts++;
+                          } else {
+                            surveyStats[q.id].skipped++;
+                          }
+                        }
+                      });
 
                       resp.answers?.forEach((ans) => {
                         const qObj = viewingResponses.questions.find(
@@ -4127,6 +4258,10 @@ export default function QuizPage() {
                     const topFailedQuestion = Object.values(questionStats).sort(
                       (a, b) => b.incorrect - a.incorrect,
                     )[0];
+
+                    const sortedSurveyByAttempts = Object.values(surveyStats).sort((a, b) => b.attempts - a.attempts);
+                    const mostAttemptedSurveyQ = sortedSurveyByAttempts[0];
+                    const mostSkippedSurveyQ = [...sortedSurveyByAttempts].sort((a, b) => b.skipped - a.skipped)[0];
 
                     const isQuizType = viewingResponses.type === 'quiz';
 
@@ -4339,6 +4474,36 @@ export default function QuizPage() {
                                   </div>
                                 </div>
 
+                                {/* Survey Most Attempted and Most Skipped Insights */}
+                                <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs'>
+                                  {mostAttemptedSurveyQ && (
+                                    <div className='p-2.5 rounded-xl bg-pw-success/10 border border-pw-success/20 space-y-1'>
+                                      <span className='text-[9px] text-pw-success uppercase font-bold block'>
+                                        Most Attempted Question
+                                      </span>
+                                      <p className='font-bold text-white line-clamp-1'>
+                                        &quot;{mostAttemptedSurveyQ.text}&quot;
+                                      </p>
+                                      <span className='text-[10px] font-mono text-pw-muted block'>
+                                        {mostAttemptedSurveyQ.attempts} out of {totalParticipants} respondents ({Math.round((mostAttemptedSurveyQ.attempts / totalParticipants) * 100)}%)
+                                      </span>
+                                    </div>
+                                  )}
+                                  {mostSkippedSurveyQ && (
+                                    <div className='p-2.5 rounded-xl bg-pw-warning/10 border border-pw-warning/20 space-y-1'>
+                                      <span className='text-[9px] text-pw-warning uppercase font-bold block'>
+                                        Most Skipped Question
+                                      </span>
+                                      <p className='font-bold text-white line-clamp-1'>
+                                        &quot;{mostSkippedSurveyQ.text}&quot;
+                                      </p>
+                                      <span className='text-[10px] font-mono text-pw-muted block'>
+                                        {mostSkippedSurveyQ.skipped} skipped ({Math.round((mostSkippedSurveyQ.skipped / totalParticipants) * 100)}%)
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
                                 <div className='space-y-2 pt-2 border-t border-white/5'>
                                   <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
                                     Survey Questions Overview ({viewingResponses.questions.length})
@@ -4368,18 +4533,25 @@ export default function QuizPage() {
                               </div>
                             )}
 
-                            {/* Geographic Countries Breakdown Tags */}
+                            {/* Geographic Locations Breakdown Tags */}
                             {Object.keys(countriesCount).length > 0 && (
                               <div className='pt-2 border-t border-white/5 space-y-1.5'>
-                                <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
-                                  Participant Locations ({Object.keys(countriesCount).length})
-                                </span>
+                                <div className='flex items-center justify-between'>
+                                  <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                                    Participant Locations ({Object.keys(countriesCount).length})
+                                  </span>
+                                  {!isProTier && (
+                                    <span className='text-[9px] text-pw-warning font-bold'>
+                                      Upgrade to Pro for Specific Country Breakdown
+                                    </span>
+                                  )}
+                                </div>
                                 <div className='flex items-center flex-wrap gap-1.5'>
-                                  {Object.entries(countriesCount).map(([country, cnt]) => (
+                                  {Object.entries(countriesCount).map(([loc, cnt]) => (
                                     <span
-                                      key={country}
+                                      key={loc}
                                       className='px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 border border-white/10 text-pw-cyan font-bold'>
-                                      📍 {country} ({cnt})
+                                      📍 {loc} ({cnt})
                                     </span>
                                   ))}
                                 </div>

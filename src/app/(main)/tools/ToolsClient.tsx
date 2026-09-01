@@ -121,12 +121,12 @@ export default function ToolsHubPage() {
                 if (e.target.value) setActiveCategory('All');
               }}
               placeholder='Search tools...'
-              className='card-glow pl-10 z-0 h-10 bg-transparent border-none focus-visible:ring-0'
+              className='card-glow pl-10 z-0 h-10 bg-transparent border-none'
             />
 
             {/* Absolute floating search overlay prioritizing titles */}
             {search.trim().length > 0 && (
-              <div className='absolute top-full left-0 right-0 mt-2 z-50 max-h-80 overflow-y-auto bg-[#0a0c1b]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1 custom-scrollbar'>
+              <div className='absolute top-full left-0 right-0 mt-2 z-50 max-h-80 overflow-y-auto bg-[#0a0c1b]/60 bkblur border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1 custom-scrollbar'>
                 {filteredTools.length === 0 ? (
                   <p className='p-3 text-xs text-pw-muted text-center italic'>
                     No tools found matching &quot;{search}&quot;

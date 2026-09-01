@@ -49,6 +49,8 @@ import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
 import { useAppModal } from '../ui/AppModalProvider';
 
+import { resolvePipedText } from '@/lib/quiz/quiz-piping';
+
 export type QuestionType =
   | 'multiple_choice'
   | 'true_false'
@@ -56,7 +58,8 @@ export type QuestionType =
   | 'checkbox'
   | 'input'
   | 'range'
-  | 'rating';
+  | 'rating'
+  | 'upload';
 
 const NoteSheet = ({ note }: { note: string }) => (
   <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
@@ -430,6 +433,9 @@ function Taker() {
   const [reportedStatus, setReportedStatus] = useState(false);
 
   const [scrollAnswers, setScrollAnswers] = useState<Record<string, any>>({});
+  const [branchVisitCounts, setBranchVisitCounts] = useState<
+    Record<string, number>
+  >({});
 
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
@@ -610,8 +616,12 @@ function Taker() {
         (sum, q) => sum + (q.timer || 0),
         0,
       );
+      const timerValue = typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10;
+      const timerUnit = (quiz as any).timerUnit ?? 'minutes';
       let generalTimerSeconds =
-        (typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10) * 60;
+        timerUnit === 'seconds' ? timerValue
+        : timerUnit === 'hours' ? timerValue * 3600
+        : timerValue * 60; // default: minutes
       if (totalQuestionTimers > generalTimerSeconds) {
         const remainder = totalQuestionTimers - generalTimerSeconds;
         generalTimerSeconds += remainder;
@@ -988,12 +998,15 @@ function Taker() {
       try {
         const finalScore = finalAnswers.filter((a) => a.correct).length;
 
-        // Detect taker's country
+        // Detect taker's country & continent
         let detectedCountry = 'Unknown';
+        let detectedContinent = 'Global';
         try {
           const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
           if (tz.includes('/')) {
-            detectedCountry = tz.split('/')[0].replace(/_/g, ' ');
+            const parts = tz.split('/');
+            detectedContinent = parts[0].replace(/_/g, ' ');
+            detectedCountry = parts[1] ? parts[1].replace(/_/g, ' ') : parts[0];
           }
         } catch (e) {
           // timezone fallback
@@ -1007,6 +1020,7 @@ function Taker() {
           totalQuestions: activeQuestions.length,
           answeredQuestions: finalAnswers.length,
           country: detectedCountry,
+          continent: detectedContinent,
         });
       } catch (e) {
         console.error('Failed to save response:', e);
@@ -1014,7 +1028,7 @@ function Taker() {
     }
   };
 
-  // Strict category branching isolation engine
+  // Strict category branching isolation & 3x loop-protected routing engine
   const proceedToNext = (
     latestAnswers?: any[],
     chosenOptionVal?: string | null,
@@ -1092,7 +1106,7 @@ function Taker() {
         if (q.skipToCat) branchCat = q.skipToCat;
       }
 
-      // 4. Evaluate explicit routing target
+      // 4. Evaluate explicit routing target with 3x Loop Limiter Protection
       if (branchTarget === 'end') {
         finalizeQuiz(answersToSave);
         return;
@@ -1101,7 +1115,18 @@ function Taker() {
           (quest) => quest.id === branchTarget,
         );
         if (targetIdx !== -1) {
-          nextIdx = targetIdx;
+          const targetQId = activeQuestions[targetIdx]?.id;
+          const visits = branchVisitCounts[targetQId] || 0;
+          if (visits >= 3) {
+            // Loop limit reached: break loop and continue sequentially
+            nextIdx = currentQuestion + 1;
+          } else {
+            setBranchVisitCounts((prev) => ({
+              ...prev,
+              [targetQId]: visits + 1,
+            }));
+            nextIdx = targetIdx;
+          }
         }
       } else if (branchCat) {
         const cleanCat = branchCat.trim().toLowerCase();
@@ -1110,7 +1135,17 @@ function Taker() {
             quest.category && quest.category.trim().toLowerCase() === cleanCat,
         );
         if (targetIdx !== -1) {
-          nextIdx = targetIdx;
+          const targetQId = activeQuestions[targetIdx]?.id;
+          const visits = branchVisitCounts[targetQId] || 0;
+          if (visits >= 3) {
+            nextIdx = currentQuestion + 1;
+          } else {
+            setBranchVisitCounts((prev) => ({
+              ...prev,
+              [targetQId]: visits + 1,
+            }));
+            nextIdx = targetIdx;
+          }
         }
       } else {
         // 5. Strict Sequential Category Isolation
@@ -1190,30 +1225,39 @@ function Taker() {
     }
   };
 
-  // Replace detail variable placeholders using @ (@name, @email) with bold styling
+  // Dynamic variable mention & cross-question piping engine
   const formatDetailVars = (
     rawText: string,
     showPrev?: boolean,
     hideBold?: boolean,
   ) => {
     if (!rawText) return rawText;
-    let formatted = rawText;
-    Object.entries(userData || {}).forEach(([key, val]) => {
-      const cleanKey = key.trim().replace(/\s+/g, '');
-      const boldVal = `${showPrev ? `@${cleanKey} (<strong class="text-pw-cyan font-bold">${val}</strong>)` : `<strong class="text-pw-cyan font-bold">${val}</strong>`}`;
-      const normalVal = `${showPrev ? `@${cleanKey} (${val})` : `${val}`}`;
-      const replText = `${hideBold ? normalVal : boldVal}`;
-      const regex1 = new RegExp(`@${cleanKey}`, 'gi');
-      const regex2 = new RegExp(`@${key.trim()}`, 'gi');
-      const regex3 = new RegExp(`\\$${cleanKey}`, 'gi');
-      const regex4 = new RegExp(`\\$${key.trim()}`, 'gi');
-      formatted = formatted
-        .replace(regex1, replText)
-        .replace(regex2, replText)
-        .replace(regex3, replText)
-        .replace(regex4, replText);
-    });
-    return formatted;
+
+    // First resolve cross-question, category, and taker mentions
+    let piped = resolvePipedText(
+      rawText,
+      {
+        userData,
+        userAnswers,
+        questions: activeQuestions,
+        score,
+        totalQuestions: activeQuestions.length,
+      },
+      false,
+    );
+
+    // Apply bold highlighting if requested
+    if (!hideBold && typeof piped === 'string') {
+      Object.entries(userData || {}).forEach(([key, val]) => {
+        if (!val) return;
+        const cleanKey = key.trim().replace(/\s+/g, '');
+        const boldVal = `${showPrev ? `@${cleanKey} (<strong class="text-pw-cyan font-bold">${val}</strong>)` : `<strong class="text-pw-cyan font-bold">${val}</strong>`}`;
+        const regex1 = new RegExp(`@${cleanKey}`, 'gi');
+        piped = piped.replace(regex1, boldVal);
+      });
+    }
+
+    return piped;
   };
 
   const renderQuestionCard = (quest: Question, index: number) => {
@@ -1343,12 +1387,69 @@ function Taker() {
                 placeholder='Type your answer here...'
                 className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-pw-primary resize-none'
               />
+            : quest.type === 'upload' ?
+              <div className='space-y-3 p-4 bg-white/5 border border-dashed border-white/20 rounded-2xl text-center'>
+                <input
+                  type='file'
+                  accept='image/*,.pdf,.doc,.docx,.txt'
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const base64Url = reader.result as string;
+                      if (quiz?.quizScroll) {
+                        setScrollAnswers((prev) => ({
+                          ...prev,
+                          [quest.id]: base64Url,
+                        }));
+                      } else {
+                        setContent(base64Url);
+                      }
+                      const existingIdx = userAnswers.findIndex(
+                        (a) => a.questionId === quest.id,
+                      );
+                      let updated;
+                      if (existingIdx > -1) {
+                        updated = [...userAnswers];
+                        updated[existingIdx] = {
+                          questionId: quest.id,
+                          answer: file.name,
+                          fileUrl: base64Url,
+                          correct: true,
+                        };
+                      } else {
+                        updated = [
+                          ...userAnswers,
+                          {
+                            questionId: quest.id,
+                            answer: file.name,
+                            fileUrl: base64Url,
+                            correct: true,
+                          },
+                        ];
+                      }
+                      setUserAnswers(updated);
+                      toast.success(`Uploaded: ${file.name}`);
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                  className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/20 file:text-pw-primary hover:file:bg-pw-primary/30 cursor-pointer w-full'
+                />
+                {(content || scrollAnswers[quest.id]) && (
+                  <p className='text-[10px] text-pw-success font-mono font-bold mt-2'>
+                    ✓ Attachment Ready
+                  </p>
+                )}
+              </div>
             : <div className='grid gap-2.5'>
                 {currentOptions.map((opt: any, oIdx) => {
                   const optId = opt.id || String(oIdx);
                   const optText = opt.text || String(opt);
                   const optImage =
-                    typeof opt === 'object' ? opt.imageUrl : undefined;
+                    typeof opt === 'object' ?
+                      opt.uploadUrl || opt.imageUrl
+                    : undefined;
                   const formattedOptionText = formatDetailVars(optText);
 
                   const isSelected =
@@ -1412,12 +1513,16 @@ function Taker() {
                           'bg-pw-primary/12 border-pw-primary text-white font-bold'
                         : 'bg-white/5 border-white/10 text-white/90',
                       )}>
-                      <div className='flex items-center gap-3 flex-1 min-w-0'>
+                      <div
+                        className={cn(
+                          'flex items-center gap-3 flex-1 min-w-0',
+                          optImage ? 'flex-col' : 'flex-row',
+                        )}>
                         {optImage && (
                           <img
                             src={optImage}
                             alt='Option attachment'
-                            className='h-12 w-12 object-cover rounded-lg border border-white/10 shrink-0'
+                            className='h-15 w-15 object-cover rounded-lg border border-white/10 shrink-0'
                           />
                         )}
                         <span
@@ -1482,6 +1587,14 @@ function Taker() {
 
   if (isFinished) {
     const totalQuestions = activeQuestions.length;
+    const endTitle = formatDetailVars(
+      quiz?.endScreen?.title || 'Assessment Completed!',
+    );
+    const endMsg = formatDetailVars(
+      quiz?.endScreen?.message ||
+        'Thank you for completing this assessment, @name! You scored @score out of @total (@percentage).',
+    );
+
     return (
       <div
         key='completion-view'
@@ -1490,13 +1603,8 @@ function Taker() {
           <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20 mb-3'>
             <CheckCircle2 className='h-8 w-8 text-pw-success' />
           </div>
-          <h1 className='text-lg font-extrabold font-display'>
-            {quiz?.endScreen.title || 'Assessment Completed!'}
-          </h1>
-          <p className='text-pw-muted text-xs mb-1'>
-            {quiz?.endScreen.message ||
-              'Thank you for attempting the assessment and using pingword...'}
-          </p>
+          <h1 className='text-lg font-extrabold font-display'>{endTitle}</h1>
+          <p className='text-pw-muted text-xs mb-1'>{endMsg}</p>
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
             <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4'>
@@ -1540,7 +1648,7 @@ function Taker() {
                     )}>
                     <span className='font-bold text-white'>Others</span>
                     <span className='font-mono text-pw-cyan font-bold'>
-                      {score }
+                      {score}
                     </span>
                   </div>
                 </div>
@@ -2062,30 +2170,40 @@ function Taker() {
 
               <div
                 className={cn(
-                  'flex w-full gap-1 items-center',
+                  'flex w-full gap-2 items-center flex-wrap',
                   quiz?.hasTimer && timeLeft !== null ?
                     'justify-between'
                   : 'justify-end',
                 )}>
-                {quiz?.hasTimer && timeLeft !== null && (
-                  <div
-                    title={`${capFirst(quiz?.type)} Timer`}
-                    className={cn(
-                      'flex items-center gap-2 px-2 py-1 rounded-full pr-3 text-[12px] font-mono lg:text-base border transition-all',
-                      timeLeft < 60 ?
-                        'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
-                      : 'bg-white/5 border-white/10 text-pw-primary',
-                    )}>
-                    <Clock
-                      size={18}
-                      className={
-                        timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
-                      }
-                    />
-                    {Math.floor(timeLeft / 60)}:
-                    {String(timeLeft % 60).padStart(2, '0')}
-                  </div>
-                )}
+                <div className='flex items-center gap-2'>
+                  {quiz?.hasTimer && timeLeft !== null && (
+                    <div
+                      title={`${capFirst(quiz?.type)} Timer`}
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-mono lg:text-sm border transition-all',
+                        timeLeft < 60 ?
+                          'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
+                        : 'bg-white/5 border-white/10 text-pw-primary',
+                      )}>
+                      <Clock
+                        size={16}
+                        className={
+                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
+                        }
+                      />
+                      {Math.floor(timeLeft / 60)}:
+                      {String(timeLeft % 60).padStart(2, '0')}
+                    </div>
+                  )}
+
+                  {/* Realtime Live Score Display */}
+                  {quiz?.showScore && quiz?.type === 'quiz' && (
+                    <div className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md'>
+                      <Brain className='w-3.5 h-3.5' /> {score} /{' '}
+                      {activeQuestions.length}
+                    </div>
+                  )}
+                </div>
 
                 {quiz?.allowEarlySubmit && (
                   <Button
@@ -2120,8 +2238,9 @@ function Taker() {
                     onClick={() => handleNext()}
                     className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
                     {currentQuestion + 1 === activeQuestions.length ?
+                      quiz?.nextButtonText ||
                       `Finish ${quiz?.type || 'Assessment'}`
-                    : 'Next Question'}
+                    : quiz?.nextButtonText || 'Next Question'}
                     <ChevronRight className='h-4 w-4' />
                   </Button>
                 </div>
@@ -2138,7 +2257,8 @@ function Taker() {
                     onClick={() => finalizeQuiz(userAnswers)}
                     disabled={userAnswers.length < activeQuestions.length}
                     className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none'>
-                    FINISH {quiz?.type || 'Assessment'}
+                    {quiz?.nextButtonText ||
+                      `FINISH ${quiz?.type || 'Assessment'}`}
                     <CheckCircle2 className='h-5 w-5' />
                   </Button>
                 </div>
@@ -2187,22 +2307,22 @@ function Taker() {
                             {quiz.canGoBack && currentQuestion > 0 && (
                               <Button
                                 onClick={GoBack}
-                                className='btn-ghost h-10 px-8 text-lg rounded-2xl gap-2 font-bold'>
-                                <ChevronLeft className='h-5 w-5' />
-                                Previous
+                                className='btn-ghost h-10 px-8 text-sm rounded-2xl gap-2 font-bold'>
+                                <ChevronLeft className='h-4 w-4' />
+                                {quiz?.prevButtonText || 'Previous'}
                               </Button>
                             )}
 
                             <div className='flex items-center gap-3 ml-auto'>
                               <Button
                                 onClick={handleNext}
-                                className='btn-primary h-10 px-8 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
+                                className='btn-primary h-10 px-8 rounded-2xl font-black gap-2 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
                                 {(
                                   currentQuestion + 1 === activeQuestions.length
                                 ) ?
-                                  'FINISH'
-                                : 'NEXT'}
-                                <ChevronRight className='h-5 w-5' />
+                                  quiz?.nextButtonText || 'FINISH'
+                                : quiz?.nextButtonText || 'NEXT'}
+                                <ChevronRight className='h-4 w-4' />
                               </Button>
                             </div>
                           </AnimatePresence>

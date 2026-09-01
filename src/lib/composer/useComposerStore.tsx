@@ -286,6 +286,23 @@ function composerReducer(
         instaCanvasFont: action.payload.font !== undefined ? action.payload.font : state.instaCanvasFont,
       };
 
+    case 'RESET_COMPOSER_STATE':
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('pw_composer_base_content');
+      }
+      return {
+        ...initialState,
+        connectedAccounts: state.connectedAccounts,
+        privacyAccepted: state.privacyAccepted,
+        isPremium: state.isPremium,
+        selectedPlatforms: ['x'],
+        baseContent: '',
+        postTitle: '',
+        mediaAssets: [],
+        platformVariants: [],
+        canvasTextOverlays: [],
+      };
+
     default:
       return state;
   }

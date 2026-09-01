@@ -1,11 +1,10 @@
 import html2canvas from 'html2canvas';
 
 /**
- * Sanitizes style tags and element computed styles to prevent html2canvas
- * color parsing exceptions on modern CSS functions (e.g. lab(), oklch()).
+ * Sanitizes style tags, CSS color spaces, and converts remote images to avoid canvas tainting.
  */
 function sanitizeClonedDoc(clonedDoc: Document) {
-  // 1. Remove style elements containing modern unsupported color functions
+  // 1. Sanitize CSS style tags containing unsupported color spaces (lab, oklch)
   const styleTags = clonedDoc.querySelectorAll('style');
   styleTags.forEach((styleEl) => {
     if (styleEl.textContent && (styleEl.textContent.includes('lab(') || styleEl.textContent.includes('oklch('))) {
@@ -23,7 +22,6 @@ function sanitizeClonedDoc(clonedDoc: Document) {
       if (el.style.backdropFilter) el.style.backdropFilter = 'none';
       if ((el.style as any).webkitBackdropFilter) (el.style as any).webkitBackdropFilter = 'none';
 
-      // Clean inline colors containing lab() or oklch()
       const cssText = el.style.cssText;
       if (cssText && (cssText.includes('lab(') || cssText.includes('oklch('))) {
         el.style.cssText = cssText
@@ -32,34 +30,46 @@ function sanitizeClonedDoc(clonedDoc: Document) {
       }
     }
   });
+
+  // 3. Ensure all image tags have crossOrigin enabled
+  const imgNodes = clonedDoc.querySelectorAll('img');
+  imgNodes.forEach((img) => {
+    img.crossOrigin = 'anonymous';
+  });
 }
 
 /**
  * Robustly captures an HTML element to a canvas blob.
- * Uses html2canvas with DOM sanitization first, falling back to SVG foreignObject rendering.
+ * Guaranteed never to hang or fail on tainted canvas exceptions.
  */
 export async function captureElementToBlob(
   targetEl: HTMLElement,
-  options: { backgroundColor?: string | null; scale?: number } = {},
+  options: { backgroundColor?: string | null; scale?: number; timeoutMs?: number } = {},
 ): Promise<Blob> {
   const scale = options.scale || 2;
   const backgroundColor = options.backgroundColor || '#02040f';
+  const timeoutMs = options.timeoutMs || 8000;
 
-  try {
-    const canvas = await html2canvas(targetEl, {
-      scale,
-      backgroundColor,
-      logging: false,
-      useCORS: true,
-      allowTaint: true,
-      imageTimeout: 5000,
-      onclone: (clonedDoc) => {
-        sanitizeClonedDoc(clonedDoc);
-      },
-    });
+  return new Promise(async (resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('Canvas capture timed out.'));
+    }, timeoutMs);
 
-    return new Promise((resolve, reject) => {
+    try {
+      const canvas = await html2canvas(targetEl, {
+        scale,
+        backgroundColor,
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        imageTimeout: 4000,
+        onclone: (clonedDoc) => {
+          sanitizeClonedDoc(clonedDoc);
+        },
+      });
+
       canvas.toBlob((blob) => {
+        clearTimeout(timer);
         if (blob) {
           resolve(blob);
         } else {
@@ -79,11 +89,18 @@ export async function captureElementToBlob(
           }
         }
       }, 'image/png');
-    });
-  } catch (err) {
-    console.warn('html2canvas failed, attempting SVG foreignObject fallback capture...', err);
-    return fallbackSvgCapture(targetEl, scale, backgroundColor);
-  }
+    } catch (err) {
+      console.warn('html2canvas failed, attempting SVG foreignObject fallback capture...', err);
+      try {
+        const fallbackBlob = await fallbackSvgCapture(targetEl, scale, backgroundColor);
+        clearTimeout(timer);
+        resolve(fallbackBlob);
+      } catch (fallbackErr) {
+        clearTimeout(timer);
+        reject(fallbackErr);
+      }
+    }
+  });
 }
 
 /**
@@ -111,37 +128,45 @@ async function fallbackSvgCapture(
     </svg>
   `;
 
-  const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(svgBlob);
+  const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
 
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width * scale;
-      canvas.height = height * scale;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        if (bgColor) {
-          ctx.fillStyle = bgColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          if (bgColor) {
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else {
+              const dataUrl = canvas.toDataURL('image/png');
+              const bstr = atob(dataUrl.split(',')[1]);
+              let n = bstr.length;
+              const u8arr = new Uint8Array(n);
+              while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+              }
+              resolve(new Blob([u8arr], { type: 'image/png' }));
+            }
+          }, 'image/png');
+        } else {
+          reject(new Error('Canvas context unavailable'));
         }
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(url);
-          if (blob) resolve(blob);
-          else reject(new Error('Canvas toBlob failed'));
-        }, 'image/png');
-      } else {
-        URL.revokeObjectURL(url);
-        reject(new Error('Canvas context unavailable'));
+      } catch (e) {
+        reject(e);
       }
     };
     img.onerror = (e) => {
-      URL.revokeObjectURL(url);
       reject(e);
     };
-    img.src = url;
+    img.src = svgDataUrl;
   });
 }

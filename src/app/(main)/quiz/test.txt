@@ -1,0 +1,80 @@
+fix these errors:
+1. [browser] Grammar check failed: TypeError: Failed to fetch
+    at checkGrammar (src/lib/composer/ai-utils.ts:217:26)
+    at runChecks (src/lib/composer/useTextChecks.ts:36:25)
+    at useTextChecks.useEffect (src/lib/composer/useTextChecks.ts:102:16)
+  215 |     (w) => `#${w.toLowerCase()}`,
+  216 |   );
+> 217 |   return [...new Set([...existingTags, ...capitalized])].slice(0, 8);
+      |                          ^
+  218 | }
+  219 |
+  220 | /** (src/lib/composer/ai-utils.ts:235:11)
+[browser] Text check hook error: TypeError: Failed to fetch
+    at checkGrammar (src/lib/composer/ai-utils.ts:217:26)
+    at runChecks (src/lib/composer/useTextChecks.ts:36:25)
+    at useTextChecks.useEffect (src/lib/composer/useTextChecks.ts:102:16)
+  215 |     (w) => `#${w.toLowerCase()}`,
+  216 |   );
+> 217 |   return [...new Set([...existingTags, ...capitalized])].slice(0, 8);
+      |                          ^
+  218 | }
+  219 |
+  220 | /** (src/lib/composer/useTextChecks.ts:98:16)
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[browser] Grammar check failed: TypeError: Failed to fetch
+    at checkGrammar (src/lib/composer/ai-utils.ts:217:26)
+    at runChecks (src/lib/composer/useTextChecks.ts:36:25)
+    at useTextChecks.useEffect (src/lib/composer/useTextChecks.ts:102:16)
+  215 |     (w) => `#${w.toLowerCase()}`,
+  216 |   );
+> 217 |   return [...new Set([...existingTags, ...capitalized])].slice(0, 8);
+      |                          ^
+  218 | }
+  219 |
+  220 | /** (src/lib/composer/ai-utils.ts:235:11)
+[browser] Text check hook error: TypeError: Failed to fetch
+    at checkGrammar (src/lib/composer/ai-utils.ts:217:26)
+    at runChecks (src/lib/composer/useTextChecks.ts:36:25)
+    at useTextChecks.useEffect (src/lib/composer/useTextChecks.ts:102:16)
+  215 |     (w) => `#${w.toLowerCase()}`,
+  216 |   );
+> 217 |   return [...new Set([...existingTags, ...capitalized])].slice(0, 8);
+      |                          ^
+  218 | }
+  219 |
+  220 | /** (src/lib/composer/useTextChecks.ts:98:16)
+[browser] Encountered two children with the same key, ``. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+mostly occuring when typing inside the platform editor.
+2. no schedule or it was removed.
+3. no permission handler api tht actually asks for permisiion.
+4. Find a way to wrap the instagram canvas editor so not to tweak the app ui wen entering, user decides to open and edit or not.
+5. Still doesnt expiry check on import and import file type doesnt accept .pwquiz yet, fix that.
+6. In add to group button, add an input to eaily add groups to questions direclt. and still know that the inputs in the dropdown still doesnt receive jtyping when typed.
+7. the index of the questions in the group doesnt match the index in the main flow, as when all group is disbanded the questions scatter arround which is not supposed. 
+8. in input checking and detail allowlist checks, make sure not to use just include, add a strong parsing and check that it must be the exact vaule in the allow list, it must match exactly not just be included to avoid cheats and hacks, again make sure to chck case sensitivity when needed
+9. The disclaimer setting, and display ui inetgration is not implementted. 
+10. Actual expiry gating and calculation to make sure setter doesnt misuse and extend quiz life passed it supposed time.
+11. Activityindicator wAS created but not incorprated inro rhe website. no use at all. Add to: payment processing, permisiion syncing or requesting, in cases where something is saving or processing but the inputs or parameter doesnt need to be mutated, so use the blur and make the pointer event none.
+12. Craete a default quiz, highlit=ghting all the features, mentions, image uploads and be a template that shows when someone goes to quiz, they can optionally delete and dont add again, add only when first time in the quiz section. The quiz should be focused on pingworld and it's tools in general and also handle all options, imput types and option types and all features.
+13. sanitize all types and if any type exists but has never been used, remove it to avoid errors and redundancy, same goes to inputs.
+14. On quiz start for the taker, use the buffer audio built in to play a soothing tone and same goes when the endScreen sjows, two different should frequencies, one for readiness, one for completion and the end vibes. 
+15.For the online and offline and nack online and all that, just add a think color typed elemnt at the top of the whole website and turn on and off depedninf on the online state, also add a timeout to it, so it doesnt stay forever. also remove all those related toast, it's becoming buggy.
+16. for details item in the data collection wrapper, create a dropdown for toggles, only input(title), type, and more button, so the morevert, would open a dropdown, for setting, allowlist, edleting and min/max for inputs and also more fetaures for detials, detect the exact detail and open mpre fpr only it, and handle setting data for just that obne. the toggle should be only for that detail item alone. 
+17. Use a more reliable way to get country and continent data, as the current one, doesnt get anything accurate.
+18. The response userData, especially the gender (or dropdown) is getting errors in saving the right data.
+19. Look into other critical issues and remove functions that are not being used to avoid website load bloat and all that.

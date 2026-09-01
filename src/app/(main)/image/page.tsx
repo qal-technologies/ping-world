@@ -18,13 +18,18 @@ import {
   RotateCw,
   Sparkles,
   Crop as CropIcon,
-  Eraser
+  Eraser,
+  UserCircle,
+  CreditCard,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import ProfilePicMaker from '@/components/image/ProfilePicMaker';
+import BusinessCardMaker from '@/components/image/BusinessCardMaker';
 
 interface Filter {
   name: string;
@@ -91,7 +96,10 @@ const PRESET_FILTERS: Filter[] = [
   },
 ];
 
+type StudioMode = 'editor' | 'profile' | 'bizcard';
+
 export default function ImageToolkitPage() {
+  const [studioMode, setStudioMode] = useState<StudioMode>('editor');
   const [image, setImage] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'adjust' | 'filters' | 'transform' | 'crop' | 'bg'>(
@@ -347,21 +355,20 @@ export default function ImageToolkitPage() {
 
   return (
     <div className='container mx-auto px-6 py-12 max-w-7xl min-h-[calc(100vh-64px)] pb-20'>
-      <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12'>
+      <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8'>
         <div>
           <div className='badge mb-4'>
             <ImageIcon className='h-3.5 w-3.5' />
-            Image Toolkit
+            Image Studio
           </div>
           <h1 className='text-4xl font-extrabold font-display leading-[1.1]'>
-            Visual <span className='gradient-text'>Enhancer.</span>
+            Visual <span className='gradient-text'>Studio.</span>
           </h1>
           <p className='mt-2 text-pw-muted'>
-            Professional filters, background removal, custom cropping, resizing
-            & rotation &mdash; 100% in-browser privacy.
+            Professional filters, avatar maker, business cards &amp; more &mdash; 100% in-browser.
           </p>
         </div>
-        {image && (
+        {image && studioMode === 'editor' && (
           <div className='flex flex-wrap gap-3'>
             <Button
               variant='outline'
@@ -382,7 +389,38 @@ export default function ImageToolkitPage() {
         )}
       </div>
 
-      {!image ?
+      {/* ─── Studio Mode Switcher ─── */}
+      <div className='flex gap-1 bg-white/5 border border-white/5 rounded-2xl p-1 mb-8 w-fit'>
+        {([
+          { id: 'editor',  label: 'Image Editor',      icon: <Wand2 className='h-4 w-4' /> },
+          { id: 'profile', label: 'Profile Pic Maker',  icon: <UserCircle className='h-4 w-4' /> },
+          { id: 'bizcard', label: 'Business Card',      icon: <CreditCard className='h-4 w-4' /> },
+        ] as { id: StudioMode; label: string; icon: React.ReactNode }[]).map((m) => (
+          <Button key={m.id} variant='ghost' onClick={() => setStudioMode(m.id)}
+            className={cn(
+              'h-9 gap-2 rounded-xl text-xs font-bold px-4 transition-all',
+              studioMode === m.id
+                ? 'bg-pw-primary text-white shadow-lg shadow-pw-primary/25'
+                : 'text-pw-muted hover:text-white hover:bg-white/10',
+            )}>
+            {m.icon}{m.label}
+          </Button>
+        ))}
+      </div>
+
+      {studioMode === 'profile' && (
+        <motion.div key='profile' initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <ProfilePicMaker />
+        </motion.div>
+      )}
+
+      {studioMode === 'bizcard' && (
+        <motion.div key='bizcard' initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <BusinessCardMaker />
+        </motion.div>
+      )}
+
+      {studioMode === 'editor' && (!image ?
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -859,7 +897,7 @@ export default function ImageToolkitPage() {
             </div>
           </div>
         </div>
-      }
+      )}
     </div>
   );
 }
