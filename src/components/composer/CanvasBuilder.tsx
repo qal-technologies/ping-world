@@ -233,84 +233,37 @@ export function CanvasBuilder() {
     setDraggingShapeId(null);
   };
 
-  // jules edit: Convert canvas export directly via native toBlob & DataURL fallback
   const handleDownload = async () => {
     if (!canvasRef.current) return;
     setDownloading(true);
     try {
-      /* jules edit: Add safe onclone handler to prevent html2canvas capture issues */
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(canvasRef.current, {
+      const { captureElementToBlob } = await import('@/lib/composer/canvas-capture-utils');
+      const blob = await captureElementToBlob(canvasRef.current, {
         scale: 2,
         backgroundColor: null,
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        imageTimeout: 5000,
-        onclone: (clonedDoc) => {
-          const allCloned = clonedDoc.querySelectorAll('*');
-          allCloned.forEach((node) => {
-            const el = node as HTMLElement;
-            if (el.style) {
-              if (el.style.backdropFilter) el.style.backdropFilter = 'none';
-              if ((el.style as any).webkitBackdropFilter) (el.style as any).webkitBackdropFilter = 'none';
-            }
-          });
-        },
       });
 
-      // Add PingWorld watermark
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.font = '14px Syne, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.fillText('pingwrld.com', canvas.width - 120, canvas.height - 12);
+      const downloadUrl = URL.createObjectURL(blob);
+      setCanvasPreview(downloadUrl);
+
+      try {
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `pingworld-instagram-canvas-${Date.now()}.png`);
+        toast.success('Canvas image saved to your device!');
+      } catch (e) {
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `pingworld-instagram-canvas-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+        toast.success('Canvas downloaded!');
       }
-
-      const processBlob = async (blob: Blob) => {
-        const downloadUrl = URL.createObjectURL(blob);
-        setCanvasPreview(downloadUrl);
-
-        try {
-          const { saveAs } = await import('file-saver');
-          saveAs(blob, `pingworld-instagram-canvas-${Date.now()}.png`);
-          toast.success('Canvas image saved to your device!');
-        } catch (e) {
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `pingworld-instagram-canvas-${Date.now()}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
-          toast.success('Canvas downloaded!');
-        }
-        setDownloading(false);
-      };
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          processBlob(blob);
-        } else {
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
-            const arr = dataUrl.split(',');
-            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
-            const bstr = atob(arr[1]);
-            let n = bstr.length;
-            const u8arr = new Uint8Array(n);
-            while (n--) u8arr[n] = bstr.charCodeAt(n);
-            const fallbackBlob = new Blob([u8arr], { type: mime });
-            processBlob(fallbackBlob);
-          } catch (e) {
-            toast.error('Download failed - could not capture canvas blob');
-            setDownloading(false);
-          }
-        }
-      }, 'image/png');
+      setDownloading(false);
     } catch (err) {
-      console.error(err);
-      toast.error('Download failed - try again');
+      console.error('Canvas capture failed:', err);
+      toast.error('Failed to export canvas image.');
       setDownloading(false);
     }
   };

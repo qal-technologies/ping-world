@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import SimilarTools from '@/components/shared/SimilarTools';
 import {
   QrCode,
@@ -27,11 +28,29 @@ import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function QrCodeGeneratorPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const tabParam = searchParams.get('tab');
+
   const [data, setData] = useState('');
-  const [qrType, setQrType] = useState('url');
+  const [qrType, setQrType] = useState(tabParam || 'url');
   const [fgColor, setFgColor] = useState('#4500bbff');
   const [bgColor, setBgColor] = useState('transparent');
   const [isCopied, setIsCopied] = useState(false);
+
+  useEffect(() => {
+    if (tabParam && ['url', 'text', 'wifi', 'mail', 'sms', 'phone'].includes(tabParam)) {
+      setQrType(tabParam);
+    }
+  }, [tabParam]);
+
+  const handleTabChange = (val: string) => {
+    setQrType(val);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', val);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const [wifiSsid, setWifiSsid] = useState('');
   const [wifiPassword, setWifiPassword] = useState('');
@@ -204,11 +223,8 @@ export default function QrCodeGeneratorPage() {
         <div className='lg:col-span-7 space-y-6'>
           <Card className='bg-transparent ring-0 sm:ring-1 sm:card-glow sm:p-6'>
             <Tabs
-              defaultValue='url'
-              onValueChange={(val) => {
-                setQrType(val);
-                setData('');
-              }}
+              value={qrType}
+              onValueChange={handleTabChange}
               className='w-full flex flex-col max-w-[700px]'>
               <TabsList
                 className='flex bg-white/5 mb-8 gap-2 px-1 min-h-10 w-full sm:min-w-full rounded-full gap-1 overflow-x-auto'

@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 function ComposerPageClient() {
   const [posts, setPosts] = useState<any[]>([]);
   const [viewState, setViewState] = useState<'landing' | 'editor'>('landing');
-  const { state } = useComposer();
+  const { state,dispatch } = useComposer();
   const isPremiumUI = state.isPremium;
 
   const loadPosts = async () => {
@@ -45,17 +45,99 @@ function ComposerPageClient() {
     setPosts((prev) => prev.filter((p) => p.id !== id));
   };
 
+    const handleOpenPostInEditor = (post: any) => {
+    dispatch({ type: 'SET_BASE_CONTENT', payload: post.content || post.baseContent || '' });
+    if (Array.isArray(post.platforms) && post.platforms.length > 0) {
+      post.platforms.forEach((p: any) => {
+        if (!state.selectedPlatforms.includes(p)) {
+          dispatch({ type: 'TOGGLE_PLATFORM', payload: p });
+        }
+      });
+      dispatch({ type: 'SET_ACTIVE_EDITOR_PLATFORM', payload: post.platforms[0] });
+    }
+    setViewState('editor');
+  };
+
+  const handleStartNewPost = () => {
+    dispatch({ type: 'SET_BASE_CONTENT', payload: '' });
+    setViewState('editor');
+  };
+
+  const handleBackToList = () => {
+    dispatch({ type: 'SET_BASE_CONTENT', payload: '' });
+    loadPosts();
+    setViewState('landing');
+  };
+
+  const renderPlatformIcon = (platform: string) => {
+    const p = platform.toLowerCase();
+    switch (p) {
+      case 'x':
+      case 'twitter':
+        return (
+          <span key={p} title='X (Twitter)' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/10 text-white text-[10px] font-bold'>
+            𝕏
+          </span>
+        );
+      case 'instagram':
+        return (
+          <span key={p} title='Instagram' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white text-[9px] font-bold'>
+            📷
+          </span>
+        );
+      case 'facebook':
+        return (
+          <span key={p} title='Facebook' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1877F2] text-white text-[10px] font-bold'>
+            f
+          </span>
+        );
+      case 'linkedin':
+        return (
+          <span key={p} title='LinkedIn' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0A66C2] text-white text-[9px] font-bold'>
+            in
+          </span>
+        );
+      case 'youtube':
+        return (
+          <span key={p} title='YouTube' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#FF0000] text-white text-[9px] font-bold'>
+            ▶
+          </span>
+        );
+      case 'tiktok':
+        return (
+          <span key={p} title='TikTok' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-black border border-white/20 text-[#25F4EE] text-[9px] font-bold'>
+            ♪
+          </span>
+        );
+      case 'threads':
+        return (
+          <span key={p} title='Threads' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/15 text-white text-[10px] font-bold'>
+            @
+          </span>
+        );
+      case 'pinterest':
+        return (
+          <span key={p} title='Pinterest' className='inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#E60023] text-white text-[9px] font-bold'>
+            P
+          </span>
+        );
+      default:
+        return (
+          <span key={p} className='px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-white/5 text-pw-primary border border-white/5'>
+            {p}
+          </span>
+        );
+    }
+  };
+
   if (viewState === 'editor') {
     return (
       <div className='relative space-y-2'>
         <div className='container mx-auto p-4 max-w-[1400px] flex items-center justify-between'>
           <Button
             variant='outline'
-            onClick={() => {
-              loadPosts();
-              setViewState('landing');
-            }}
-            className='h-9 border-white/10 bg-white/2 bkblur hover:bg-white/5 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
+            onClick={handleBackToList}
+            className='h-9 border-white/10 bg-white/5 backdrop-blur-md hover:bg-white/10 text-xs font-bold gap-2 text-pw-muted hover:text-white'>
             <ArrowLeft className='h-4 w-4' /> Back to Posts
           </Button>
         </div>
@@ -94,17 +176,17 @@ function ComposerPageClient() {
 
         <div className='flex items-center gap-3 flex-wrap'>
           {posts.length > 0 && (
-            <Link href='/composer/history'>
-              <Button
-                variant='outline'
-                className='h-11 px-5 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-primary'>
-                <History className='h-4 w-4' /> Full History
-              </Button>
-            </Link>
+          <Link href='/composer/history'>
+            <Button
+              variant='outline'
+              className='h-11 px-5 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-primary'>
+              <History className='h-4 w-4' /> Full History
+            </Button>
+          </Link>
           )}
 
           <Button
-            onClick={() => setViewState('editor')}
+            onClick={handleStartNewPost}
             className='btn-primary h-11 px-6 text-sm font-bold gap-2 shadow-xl shadow-pw-primary/20'>
             <Plus className='h-5 w-5' /> Start New Post
           </Button>
@@ -129,11 +211,20 @@ function ComposerPageClient() {
               publishing!
             </p>
           </div>
-          <Button
-            onClick={() => setViewState('editor')}
-            className='btn-primary h-11 px-8 text-xs font-bold gap-2'>
-            <Pen className='h-4 w-4' /> Start Posting Now
-          </Button>
+          <div className='flex items-center justify-center gap-3 flex-wrap'>
+            <Button
+              onClick={handleStartNewPost}
+              className='btn-primary h-11 px-8 text-xs font-bold gap-2'>
+              <Pen className='h-4 w-4' /> Start Posting Now
+            </Button>
+            <Link href='/composer/history'>
+              <Button
+                variant='outline'
+                className='h-11 px-6 border-white/10 hover:bg-white/5 text-xs font-bold gap-2 text-pw-primary'>
+                <History className='h-4 w-4' /> View History
+              </Button>
+            </Link>
+          </div>
         </div>
       : <div className='space-y-4'>
           <div className='flex items-center justify-between'>
@@ -142,7 +233,7 @@ function ComposerPageClient() {
               {posts.length})
             </h3>
             <Button
-              onClick={() => setViewState('editor')}
+              onClick={handleStartNewPost}
               variant='ghost'
               className='h-8 text-xs font-bold text-pw-primary hover:text-white gap-1'>
               <Plus className='h-3.5 w-3.5' /> New Post
@@ -167,16 +258,9 @@ function ComposerPageClient() {
                         minute: '2-digit',
                       })}
                     </span>
-                    <div className='flex items-center gap-1'>
+                    <div className='flex items-center gap-1.5'>
                       {Array.isArray(post.platforms) &&
-                        post.platforms.map((p: string) => (
-                          //use icon instead:::::::::
-                          <span
-                            key={p}
-                            className='px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-white/5 text-pw-primary border border-white/5'>
-                            {p}
-                          </span>
-                        ))}
+                        post.platforms.map((p: string) => renderPlatformIcon(p))}
                     </div>
                   </div>
 
@@ -186,9 +270,8 @@ function ComposerPageClient() {
                 </div>
 
                 <div className='flex items-center justify-between pt-3 border-t border-white/5'>
-                  {/** Set the exact post id to display only that particular post */}
                   <Button
-                    onClick={() => setViewState('editor')}
+                    onClick={() => handleOpenPostInEditor(post)}
                     size='sm'
                     className='btn-primary h-8 px-4 text-xs font-bold'>
                     Open in Editor

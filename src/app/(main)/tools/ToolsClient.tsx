@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { tools } from '@/lib/general/data';
 import FeedbackWidget from '@/components/shared/FeedbackWidget';
@@ -29,6 +30,7 @@ export default function ToolsHubPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [viewCat, setViewCat] = useState(false);
   const [large, setLarge] = useState(false);
+  const router = useRouter();
   const [wrappedCategories, setWrappedCategories] = useState<
     Record<string, boolean>
   >({});
@@ -38,11 +40,11 @@ export default function ToolsHubPage() {
   const TOOLS = tools;
 
   const matchesSearchText = (t: (typeof tools)[0], query: string) => {
-    return (
-      t.title.toLowerCase().includes(query.toLowerCase()) ||
-      t.description.toLowerCase().includes(query.toLowerCase()) ||
-      t.tag.toLowerCase().includes(query.toLowerCase())
-    );
+    const q = query.toLowerCase();
+    const titleMatch = t.title.toLowerCase().includes(q);
+    const descMatch = t.description.toLowerCase().includes(q);
+    const tagMatch = t.tag.toLowerCase().includes(q);
+    return titleMatch || descMatch || tagMatch;
   };
 
   useEffect(() => {
@@ -65,19 +67,26 @@ export default function ToolsHubPage() {
   };
 
   const groupedTools: Record<string, typeof tools> = {};
-  if (!search.trim()) {
-    TOOLS.forEach((t) => {
-      const cat = t.category;
-      if (!groupedTools[cat]) groupedTools[cat] = [];
-      groupedTools[cat].push(t);
-    });
-  }
-  // Matching tools list (for flat search display)
+  TOOLS.forEach((t) => {
+    const cat = t.category;
+    if (!groupedTools[cat]) groupedTools[cat] = [];
+    groupedTools[cat].push(t);
+  });
+
+  // Matching tools list prioritizing title match first
   const filteredTools = TOOLS.filter((t) => {
     const matchesSearch = matchesSearchText(t, search);
     const matchesCategory =
       activeCategory === 'All' || t.category === activeCategory;
     return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
+    if (!search.trim()) return 0;
+    const q = search.toLowerCase();
+    const aTitle = a.title.toLowerCase().includes(q);
+    const bTitle = b.title.toLowerCase().includes(q);
+    if (aTitle && !bTitle) return -1;
+    if (!aTitle && bTitle) return 1;
+    return 0;
   });
 
   const categories = [
@@ -102,7 +111,7 @@ export default function ToolsHubPage() {
           </p>
         </div>
 
-        <div className='w-full md:min-w-[200px] flex flex-wrap gap-2 items-center flex-1 px-4'>
+        <div className='w-full md:min-w-[280px] flex flex-wrap gap-2 items-center flex-1 px-4 relative'>
           <div className='relative flex-1'>
             <Search className='absolute left-3 top-5 z-10 -translate-y-1/2 h-5 w-5 text-pw-muted transition-colors' />
             <Input
@@ -114,26 +123,71 @@ export default function ToolsHubPage() {
               placeholder='Search tools...'
               className='card-glow pl-10 z-0 h-10 bg-transparent border-none focus-visible:ring-0'
             />
+
+            {/* Absolute floating search overlay prioritizing titles */}
+            {search.trim().length > 0 && (
+              <div className='absolute top-full left-0 right-0 mt-2 z-50 max-h-80 overflow-y-auto bg-[#0a0c1b]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1 custom-scrollbar'>
+                {filteredTools.length === 0 ? (
+                  <p className='p-3 text-xs text-pw-muted text-center italic'>
+                    No tools found matching &quot;{search}&quot;
+                  </p>
+                ) : (
+                  filteredTools.slice(0, 10).map((tool) => (
+                    <Link
+                      key={tool.href}
+                      href={tool.href}
+                      onClick={(e) => handleToolClick(e, tool)}
+                      className='flex items-center justify-between p-2.5 rounded-xl hover:bg-pw-primary/10 border border-transparent hover:border-pw-primary/20 transition-all group'>
+                      <div className='min-w-0 pr-2'>
+                        <p className='text-xs font-bold text-white group-hover:text-pw-primary transition-colors truncate'>
+                          {tool.title}
+                        </p>
+                        <p className='text-[10px] text-pw-muted truncate'>
+                          {tool.description}
+                        </p>
+                      </div>
+                      <span className='text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 text-pw-primary border border-white/5 shrink-0'>
+                        {tool.category}
+                      </span>
+                    </Link>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Category Dropdown and Quick Sort Panel */}
+      {/* Category Dropdown and Direct Tool Launcher */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-4 w-full">
         <div className="flex items-center gap-2.5 w-full sm:w-auto">
-          <span className="text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0">Filter Category:</span>
+          <span className="text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0">Quick Tool:</span>
           <select
-            value={activeCategory}
             onChange={e => {
-              setActiveCategory(e.target.value);
-              setSearch('');
+              if (e.target.value) {
+                const targetHref = e.target.value;
+                const toolObj = TOOLS.find(t => t.href === targetHref);
+                if (toolObj && (toolObj as any).proOnly && premiumTier !== 'pro') {
+                  toast.info(`⭐ PRO Tool: "${toolObj.title}" is exclusive to Pro subscribers.`);
+                  return;
+                }
+                router.push(targetHref);
+              }
             }}
-            className="h-10 rounded-xl bg-pw-surface/50 border border-white/10 px-4 font-mono text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer w-full sm:w-56"
+            defaultValue=""
+            className="h-10 rounded-xl bg-pw-surface/50 border border-white/10 px-4 font-mono text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer w-full sm:w-64"
           >
-            {categories.map(cat => (
-              <option key={cat} value={cat} className="bg-pw-surface text-pw-text">
-                {cat.toUpperCase()}
-              </option>
+            <option value="" disabled className="bg-pw-surface text-pw-muted">
+              Select Tool...
+            </option>
+            {Object.entries(groupedTools).map(([cat, categoryTools]) => (
+              <optgroup key={cat} label={cat.toUpperCase()} className="bg-pw-surface text-pw-primary font-bold">
+                {categoryTools.map(t => (
+                  <option key={t.href} value={t.href} className="bg-pw-surface text-pw-text font-normal">
+                    {t.title}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

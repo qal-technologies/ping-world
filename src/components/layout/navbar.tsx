@@ -111,6 +111,7 @@ export const Navbar = () => {
     }).slice(0, 6);
   }, [debouncedQuery]);
 
+
   // Click outside to close search dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -146,6 +147,7 @@ export const Navbar = () => {
         {/* Logo */}
         <Link
           href='/'
+
           className='flex items-center gap-1 group'>
           <Image
             width={40}

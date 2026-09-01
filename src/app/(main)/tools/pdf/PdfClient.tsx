@@ -153,15 +153,25 @@ interface Book {
   updatedAt?: string;
 }
 
-type FormatType = 'pdf' | 'word' | 'excel' | 'txt' | 'images';
+export type CoverTemplateType =
+  | 'minimal'
+  | 'bold'
+  | 'split'
+  | 'center'
+  | 'modern_gradient'
+  | 'editorial_classic'
+  | 'cyberpunk_dark'
+  | 'luxury_gold';
+
+type FormatType = 'pdf' | 'word' | 'excel' | 'txt' | 'images' | 'pptx';
 
 const FORMAT_ACCEPT_MAP: Record<FormatType, string> = {
   pdf: '.pdf,application/pdf',
   word: '.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  excel:
-    '.xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  excel: '.xlsx,.csv,application/vnd.ms-excel,text/csv',
   txt: '.txt,text/plain',
   images: 'image/*',
+  pptx: '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
 
 const BRAND_SEED_BOOK: Book = {
@@ -301,12 +311,10 @@ export default function PdfToolStudioPage() {
   const [hasBackCover, setHasBackCover] = useState(
     BRAND_SEED_BOOK.hasBackCover,
   );
-  const [frontCoverTemplate, setFrontCoverTemplate] = useState<
-    'minimal' | 'bold' | 'split' | 'center'
-  >('minimal');
-  const [backCoverTemplate, setBackCoverTemplate] = useState<
-    'minimal' | 'bold' | 'split' | 'center'
-  >('minimal');
+  const [frontCoverTemplate, setFrontCoverTemplate] =
+    useState<CoverTemplateType>('minimal');
+  const [backCoverTemplate, setBackCoverTemplate] =
+    useState<CoverTemplateType>('minimal');
   const [pageMargin, setPageMargin] = useState<'compact' | 'normal' | 'wide'>(
     'normal',
   );
@@ -391,9 +399,8 @@ export default function PdfToolStudioPage() {
   // Unified Export Modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState('');
-  // jules edit: Add epub export format option
   const [exportFormat, setExportFormat] = useState<
-    'pdf' | 'doc' | 'txt' | 'pwbook' | 'epub'
+    'pdf' | 'doc' | 'txt' | 'pwbook' | 'epub' | 'pptx'
   >('pdf');
 
   // Merge state
@@ -1346,37 +1353,195 @@ export default function PdfToolStudioPage() {
     try {
       if (exportFormat === 'pdf') {
         const { jsPDF } = await import('jspdf');
+        const { compressImageForPdf } = await import('@/lib/pdf/image-compressor');
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
 
-        // 1. Front Cover
+        // 1. Front Cover with Selected Template Style
         if (hasFrontCover) {
-          doc.setFillColor(15, 23, 42);
-          doc.rect(0, 0, 210, 297, 'F');
+          const tpl = frontCoverTemplate || 'minimal';
+          if (tpl === 'minimal') {
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, 210, 297, 'F');
+            doc.setDrawColor(255, 255, 255);
+            doc.setLineWidth(0.5);
+            doc.rect(10, 10, 190, 277, 'S');
 
-          doc.setFontSize(26);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          doc.text(frontCoverTitle.toUpperCase(), 15, 90);
+            doc.setFontSize(26);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text(frontCoverTitle.toUpperCase(), 20, 90);
 
-          doc.setFontSize(13);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(200, 200, 200);
-          doc.text(frontCoverSubtitle, 15, 110);
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(200, 200, 200);
+            doc.text(frontCoverSubtitle, 20, 110);
 
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'italic');
-          doc.setTextColor(255, 255, 255);
-          doc.text(`Written by ${frontCoverAuthor}`, 15, 240);
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`Written by ${frontCoverAuthor}`, 20, 240);
+          } else if (tpl === 'bold') {
+            // Bold header banner
+            doc.setFillColor(92, 111, 255);
+            doc.rect(0, 0, 210, 100, 'F');
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 100, 210, 197, 'F');
+
+            doc.setFontSize(28);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text(frontCoverTitle.toUpperCase(), 105, 55, { align: 'center' });
+
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(220, 220, 240);
+            doc.text(frontCoverSubtitle, 105, 130, { align: 'center' });
+
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(92, 111, 255);
+            doc.text(`BY ${frontCoverAuthor.toUpperCase()}`, 105, 230, { align: 'center' });
+          } else if (tpl === 'split') {
+            // Split vertical stripe on left
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, 210, 297, 'F');
+            doc.setFillColor(92, 111, 255);
+            doc.rect(0, 0, 20, 297, 'F');
+
+            doc.setFontSize(26);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text(frontCoverTitle.toUpperCase(), 35, 90);
+
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(200, 200, 200);
+            doc.text(frontCoverSubtitle, 35, 110);
+
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(92, 111, 255);
+            doc.text(`Written by ${frontCoverAuthor}`, 35, 240);
+          } else if (tpl === 'center') {
+            // Center canvas with decorative lines
+            doc.setFillColor(18, 21, 46);
+            doc.rect(0, 0, 210, 297, 'F');
+
+            doc.setDrawColor(92, 111, 255);
+            doc.setLineWidth(1);
+            doc.line(30, 70, 180, 70);
+            doc.line(30, 150, 180, 150);
+
+            doc.setFontSize(28);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text(frontCoverTitle.toUpperCase(), 105, 105, { align: 'center' });
+
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(180, 190, 220);
+            doc.text(frontCoverSubtitle, 105, 125, { align: 'center' });
+
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`Written by ${frontCoverAuthor}`, 105, 230, { align: 'center' });
+          } else if (tpl === 'modern_gradient') {
+            doc.setFillColor(46, 16, 101);
+            doc.rect(0, 0, 210, 297, 'F');
+
+            doc.setFontSize(28);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text(frontCoverTitle.toUpperCase(), 105, 95, { align: 'center' });
+
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(6, 182, 212);
+            doc.text(frontCoverSubtitle, 105, 118, { align: 'center' });
+
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`By ${frontCoverAuthor}`, 105, 235, { align: 'center' });
+          } else if (tpl === 'editorial_classic') {
+            // Warm ivory background and vintage borders
+            doc.setFillColor(253, 251, 247);
+            doc.rect(0, 0, 210, 297, 'F');
+            doc.setDrawColor(41, 37, 36);
+            doc.setLineWidth(1);
+            doc.rect(12, 12, 186, 273, 'S');
+            doc.rect(14, 14, 182, 269, 'S');
+
+            doc.setFontSize(26);
+            doc.setFont('times', 'bold');
+            doc.setTextColor(28, 25, 23);
+            doc.text(frontCoverTitle.toUpperCase(), 105, 95, { align: 'center' });
+
+            doc.setFontSize(13);
+            doc.setFont('times', 'italic');
+            doc.setTextColor(87, 83, 78);
+            doc.text(frontCoverSubtitle, 105, 118, { align: 'center' });
+
+            doc.setFontSize(12);
+            doc.setFont('times', 'normal');
+            doc.setTextColor(28, 25, 23);
+            doc.text(`By ${frontCoverAuthor}`, 105, 235, { align: 'center' });
+          } else if (tpl === 'cyberpunk_dark') {
+            // Cyberpunk black & neon cyan
+            doc.setFillColor(0, 0, 0);
+            doc.rect(0, 0, 210, 297, 'F');
+            doc.setDrawColor(6, 182, 212);
+            doc.setLineWidth(1.5);
+            doc.rect(10, 10, 190, 277, 'S');
+
+            doc.setFontSize(26);
+            doc.setFont('courier', 'bold');
+            doc.setTextColor(6, 182, 212);
+            doc.text(frontCoverTitle.toUpperCase(), 20, 90);
+
+            doc.setFontSize(12);
+            doc.setFont('courier', 'normal');
+            doc.setTextColor(255, 255, 255);
+            doc.text(frontCoverSubtitle, 20, 110);
+
+            doc.setFontSize(11);
+            doc.setFont('courier', 'bold');
+            doc.setTextColor(6, 182, 212);
+            doc.text(`AUTHOR: ${frontCoverAuthor.toUpperCase()}`, 20, 240);
+          } else if (tpl === 'luxury_gold') {
+            // Luxury gold & obsidian
+            doc.setFillColor(10, 8, 6);
+            doc.rect(0, 0, 210, 297, 'F');
+            doc.setDrawColor(217, 119, 6);
+            doc.setLineWidth(1);
+            doc.rect(12, 12, 186, 273, 'S');
+
+            doc.setFontSize(26);
+            doc.setFont('times', 'bold');
+            doc.setTextColor(251, 191, 36);
+            doc.text(frontCoverTitle.toUpperCase(), 105, 95, { align: 'center' });
+
+            doc.setFontSize(13);
+            doc.setFont('times', 'italic');
+            doc.setTextColor(217, 119, 6);
+            doc.text(frontCoverSubtitle, 105, 118, { align: 'center' });
+
+            doc.setFontSize(12);
+            doc.setFont('times', 'normal');
+            doc.setTextColor(251, 191, 36);
+            doc.text(`By ${frontCoverAuthor}`, 105, 235, { align: 'center' });
+          }
 
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(150, 150, 150);
-          doc.text('Compiled with Ping World Book Studio', 15, 275);
+          doc.text('Compiled with PingWorld Book Studio', 105, 280, { align: 'center' });
           doc.addPage();
         }
 
-        // 2. Pages & Chapters with image rendering
+        // 2. Pages & Chapters with Inline Image Flow, Compressed JPEGs & Alt Text
         for (let idx = 0; idx < pages.length; idx++) {
           const page = pages[idx];
           if (idx > 0 || hasFrontCover) doc.addPage();
@@ -1387,6 +1552,8 @@ export default function PdfToolStudioPage() {
           const isFirstPageOfChapter =
             page.chapterId &&
             pages.findIndex((p) => p.chapterId === page.chapterId) === idx;
+
+          let startY = 25;
 
           if (page.showTitle) {
             doc.setTextColor(59, 130, 246);
@@ -1406,9 +1573,11 @@ export default function PdfToolStudioPage() {
               doc.text(belongsToChapter.name.toUpperCase(), 15, 20);
               doc.setFontSize(20);
               doc.setFont('helvetica', 'bold');
-              doc.text(page.title, titleX, 30);
+              doc.text(page.title, titleX, 32);
+              startY = 44;
             } else {
               doc.text(page.title, titleX, 25);
+              startY = 36;
             }
           }
 
@@ -1416,33 +1585,94 @@ export default function PdfToolStudioPage() {
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
 
-          let startY = page.showTitle ? 42 : 25;
-          let contentText = page.content;
+          // Parse page content into ordered blocks: text paragraphs and images
+          const lines = page.content.split('\n');
+          for (const line of lines) {
+            const trimmed = line.trim();
 
-          /* jules edit: Embed palette images directly into PDF canvas */
-          if (Array.isArray(imagePalette)) {
-            imagePalette.forEach((item) => {
-              if (item && item.src && (contentText.includes(`[img:${item.id}]`) || contentText.includes(`[img:${item.name}]`))) {
+            // Match [img:id] or [img:name]
+            const paletteMatch = trimmed.match(/\[img:([^\]]+)\]/i);
+            // Match markdown ![caption](url)
+            const mdImageMatch = trimmed.match(/!\[([^\]]*)\]\(([^)]+)\)/i);
+
+            if (paletteMatch) {
+              const palIdOrName = paletteMatch[1].trim();
+              const palItem = imagePalette?.find(
+                (p) => p.id === palIdOrName || p.name === palIdOrName,
+              );
+              if (palItem && palItem.src) {
                 try {
-                  doc.addImage(item.src, 'PNG', 15, startY, 40, 40);
-                  startY += 45;
+                  const comp = await compressImageForPdf(palItem.src, 600, 600, 0.75);
+                  const imgWidth = 90;
+                  const imgHeight = Math.min(65, Math.max(30, (comp.height / comp.width) * imgWidth));
+                  if (startY + imgHeight + 15 > 265) {
+                    doc.addPage();
+                    startY = 25;
+                  }
+                  const imgX = (pageWidth - imgWidth) / 2;
+                  doc.addImage(comp.dataUrl, 'JPEG', imgX, startY, imgWidth, imgHeight);
+                  startY += imgHeight + 4;
+                  const captionText = palItem.altText || palItem.name;
+                  if (captionText) {
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'italic');
+                    doc.setTextColor(120, 120, 120);
+                    doc.text(captionText, pageWidth / 2, startY, { align: 'center' });
+                    startY += 7;
+                  }
                 } catch (e) {
-                  // image add fallback
+                  // image fallback
                 }
               }
-            });
+            } else if (mdImageMatch) {
+              const altText = mdImageMatch[1];
+              const imgSrc = mdImageMatch[2];
+              try {
+                const comp = await compressImageForPdf(imgSrc, 600, 600, 0.75);
+                const imgWidth = 90;
+                const imgHeight = Math.min(65, Math.max(30, (comp.height / comp.width) * imgWidth));
+                if (startY + imgHeight + 15 > 265) {
+                  doc.addPage();
+                  startY = 25;
+                }
+                const imgX = (pageWidth - imgWidth) / 2;
+                doc.addImage(comp.dataUrl, 'JPEG', imgX, startY, imgWidth, imgHeight);
+                startY += imgHeight + 4;
+                if (altText) {
+                  doc.setFontSize(8);
+                  doc.setFont('helvetica', 'italic');
+                  doc.setTextColor(120, 120, 120);
+                  doc.text(altText, pageWidth / 2, startY, { align: 'center' });
+                  startY += 7;
+                }
+              } catch (e) {
+                // image fallback
+              }
+            } else {
+              const cleanText = trimmed.replace(/<[^>]*>/g, '');
+              if (cleanText.length > 0) {
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(30, 41, 59);
+                const splitText = doc.splitTextToSize(cleanText, 180);
+                if (startY + splitText.length * 5 > 265) {
+                  doc.addPage();
+                  startY = 25;
+                }
+                doc.text(splitText, 15, startY);
+                startY += splitText.length * 5 + 3;
+              }
+            }
           }
-
-          const cleanLines = contentText.replace(/\[img:[^\]]+\]/gi, '').replace(/<[^>]*>/g, '');
-          const splitBody = doc.splitTextToSize(cleanLines, 180);
-          doc.text(splitBody, 15, startY);
 
           // Footnotes
           if (page.footnotes && page.footnotes.length > 0) {
             let fnY = 250;
+            doc.setDrawColor(200, 200, 200);
             doc.line(15, fnY - 3, 80, fnY - 3);
             page.footnotes.forEach((fn) => {
               doc.setFontSize(8);
+              doc.setTextColor(100, 100, 100);
               doc.text(`[${fn.number}] ${fn.text}`, 15, fnY);
               fnY += 5;
             });
@@ -1458,22 +1688,41 @@ export default function PdfToolStudioPage() {
           );
         }
 
-        // 3. Back Cover
+        // 3. Back Cover with Template Design
         if (hasBackCover) {
           doc.addPage();
-          doc.setFillColor(15, 23, 42);
-          doc.rect(0, 0, 210, 297, 'F');
+          const tpl = backCoverTemplate || 'minimal';
+          if (tpl === 'editorial_classic') {
+            doc.setFillColor(253, 251, 247);
+            doc.rect(0, 0, 210, 297, 'F');
+            doc.setDrawColor(41, 37, 36);
+            doc.rect(12, 12, 186, 273, 'S');
 
-          doc.setFontSize(13);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(220, 220, 220);
-          const splitSummary = doc.splitTextToSize(backCoverSummary, 160);
-          doc.text(splitSummary, 25, 100);
+            doc.setFontSize(13);
+            doc.setFont('times', 'italic');
+            doc.setTextColor(41, 37, 36);
+            const splitSummary = doc.splitTextToSize(`"${backCoverSummary}"`, 160);
+            doc.text(splitSummary, 105, 120, { align: 'center' });
 
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(59, 130, 246);
-          doc.text('PING WORLD CREATIVE STUDIOS', 25, 240);
+            doc.setFontSize(10);
+            doc.setFont('times', 'bold');
+            doc.setTextColor(28, 25, 23);
+            doc.text('PING WORLD CREATIVE STUDIOS', 105, 240, { align: 'center' });
+          } else {
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, 210, 297, 'F');
+
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(220, 220, 220);
+            const splitSummary = doc.splitTextToSize(backCoverSummary, 160);
+            doc.text(splitSummary, 25, 100);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(59, 130, 246);
+            doc.text('PING WORLD CREATIVE STUDIOS', 25, 240);
+          }
         }
 
         doc.save(`${finalFilename}.pdf`);
@@ -1546,45 +1795,44 @@ export default function PdfToolStudioPage() {
         );
 
         // 3. OEBPS/content.opf
-        zip.file(
-          'OEBPS/content.opf',
-          `<?xml version="1.0" encoding="UTF-8"?>
+        const opfContent = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="BookId">urn:uuid:${activeBookId || 'book-' + Date.now()}</dc:identifier>
     <dc:title>${title}</dc:title>
     <dc:creator>${author}</dc:creator>
     <dc:language>en</dc:language>
-    <dc:identifier id="BookId">urn:uuid:${activeBookId}</dc:identifier>
   </metadata>
   <manifest>
+    <item id="xhtml" href="content.xhtml" media-type="application/xhtml+xml"/>
     <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
   <spine toc="toc">
-    <itemref idref="chapter"/>
+    <itemref idref="xhtml"/>
   </spine>
-</package>`
-        );
+</package>`;
+        zip.file('OEBPS/content.opf', opfContent);
 
         // 4. OEBPS/toc.ncx
-        zip.file(
-          'OEBPS/toc.ncx',
-          `<?xml version="1.0" encoding="UTF-8"?>
+        const ncxContent = `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
-    <meta name="dtb:uid" content="urn:uuid:${activeBookId}"/>
+    <meta name="dtb:uid" content="urn:uuid:${activeBookId || 'book-' + Date.now()}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
   </head>
   <docTitle><text>${title}</text></docTitle>
   <navMap>
     <navPoint id="navPoint-1" playOrder="1">
       <navLabel><text>${title}</text></navLabel>
-      <content src="chapter.xhtml"/>
+      <content src="content.xhtml"/>
     </navPoint>
   </navMap>
-</ncx>`
-        );
+</ncx>`;
+        zip.file('OEBPS/toc.ncx', ncxContent);
 
-        // 5. OEBPS/chapter.xhtml
+        // 5. OEBPS/content.xhtml
         let chapterSections = '';
         pages.forEach((p, i) => {
           const formattedText = renderFormattedContent(p.content, imagePalette);
@@ -1644,49 +1892,57 @@ export default function PdfToolStudioPage() {
 
         zip.file('OEBPS/content.xhtml', mainXhtml);
 
-        // 4. OEBPS/content.opf
-        const opfContent = `<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="BookId">urn:uuid:${activeBookId || 'book-' + Date.now()}</dc:identifier>
-    <dc:title>${title}</dc:title>
-    <dc:creator>${author}</dc:creator>
-    <dc:language>en</dc:language>
-  </metadata>
-  <manifest>
-    <item id="xhtml" href="content.xhtml" media-type="application/xhtml+xml"/>
-    <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-  </manifest>
-  <spine toc="toc">
-    <itemref idref="xhtml"/>
-  </spine>
-</package>`;
-        zip.file('OEBPS/content.opf', opfContent);
-
-        // 5. OEBPS/toc.ncx
-        const ncxContent = `<?xml version="1.0" encoding="UTF-8"?>
-<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-  <head>
-    <meta name="dtb:uid" content="urn:uuid:${activeBookId || 'book-' + Date.now()}"/>
-    <meta name="dtb:depth" content="1"/>
-    <meta name="dtb:totalPageCount" content="0"/>
-    <meta name="dtb:maxPageNumber" content="0"/>
-  </head>
-  <docTitle><text>${title}</text></docTitle>
-  <navMap>
-    <navPoint id="navPoint-1" playOrder="1">
-      <navLabel><text>${title}</text></navLabel>
-      <content src="content.xhtml"/>
-    </navPoint>
-  </navMap>
-</ncx>`;
-        zip.file('OEBPS/toc.ncx', ncxContent);
-
         // Generate zipped Blob
         const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.epub`);
         toast.success('🎉 Valid EPUB manuscript ZIP package exported!');
+      } else if (exportFormat === 'pptx') {
+        /* OpenXML PowerPoint (.pptx) Slide Presentation Export */
+        const { generatePptxPackage } = await import('@/lib/pdf/pptx-generator');
+        const slides: any[] = [];
+
+        if (hasFrontCover) {
+          slides.push({
+            title: frontCoverTitle || 'Manuscript Presentation',
+            subtitle: frontCoverSubtitle,
+            author: frontCoverAuthor,
+            type: 'cover',
+          });
+        }
+
+        pages.forEach((p, idx) => {
+          const ch = chapters.find((c) => c.id === p.chapterId);
+          const isFirstOfChapter =
+            ch && pages.findIndex((pg) => pg.chapterId === ch.id) === idx;
+
+          if (ch && isFirstOfChapter) {
+            slides.push({
+              title: ch.name,
+              type: 'chapter',
+            });
+          }
+
+          slides.push({
+            title: p.title || `Page ${idx + 1}`,
+            chapter: ch?.name,
+            body: p.content.replace(/\[img:[^\]]+\]/gi, '').replace(/<[^>]*>/g, ''),
+            type: 'content',
+          });
+        });
+
+        if (hasBackCover) {
+          slides.push({
+            title: 'Thank You',
+            body: backCoverSummary,
+            type: 'back_cover',
+          });
+        }
+
+        const blob = await generatePptxPackage(frontCoverTitle || 'Manuscript', slides);
+        const { saveAs } = await import('file-saver');
+        saveAs(blob, `${finalFilename}.pptx`);
+        toast.success('🎉 PowerPoint (.pptx) presentation exported!');
       } else {
         // Plain Text export
         let plain = `BOOK: ${frontCoverTitle}\nSUBTITLE: ${frontCoverSubtitle}\nAUTHOR: ${frontCoverAuthor}\n\n========================\n\n`;
@@ -1709,7 +1965,10 @@ export default function PdfToolStudioPage() {
 
   // Export Book JSON / .pwbook
   const handleExportBookJson = async () => {
-    const activeBook: Book = {
+    const activeBook: any = {
+      __pwbook: true,
+      app: 'PingWorldBookStudio',
+      version: '1.0',
       id: activeBookId,
       name: frontCoverTitle || 'Untitled Book',
       chapters,
@@ -1722,6 +1981,8 @@ export default function PdfToolStudioPage() {
       backCoverBgColor,
       hasFrontCover,
       hasBackCover,
+      frontCoverTemplate,
+      backCoverTemplate,
       pageMargin,
       fontFamily,
       fontSize,
@@ -2247,17 +2508,37 @@ export default function PdfToolStudioPage() {
                                   <option
                                     value='bold'
                                     className='bg-[#0a0c1b]'>
-                                    Bold Header
+                                    Bold Gradient Header
                                   </option>
                                   <option
                                     value='split'
                                     className='bg-[#0a0c1b]'>
-                                    Split Accent
+                                    Split Accent Stripe
                                   </option>
                                   <option
                                     value='center'
                                     className='bg-[#0a0c1b]'>
-                                    Center Canvas
+                                    Modern Center Canvas
+                                  </option>
+                                  <option
+                                    value='modern_gradient'
+                                    className='bg-[#0a0c1b]'>
+                                    Vibrant Cosmic Gradient
+                                  </option>
+                                  <option
+                                    value='editorial_classic'
+                                    className='bg-[#0a0c1b]'>
+                                    Editorial Vintage Classic
+                                  </option>
+                                  <option
+                                    value='cyberpunk_dark'
+                                    className='bg-[#0a0c1b]'>
+                                    Cyberpunk Neon Slate
+                                  </option>
+                                  <option
+                                    value='luxury_gold'
+                                    className='bg-[#0a0c1b]'>
+                                    Luxury Obsidian &amp; Gold
                                   </option>
                                 </select>
                               </div>
@@ -2319,17 +2600,71 @@ export default function PdfToolStudioPage() {
                           </div>
 
                           {hasBackCover && (
-                            <div className='space-y-2'>
-                              <label className='text-[10px] font-bold text-pw-muted uppercase block'>
-                                Back Cover Summary
-                              </label>
-                              <textarea
-                                value={backCoverSummary}
-                                onChange={(e) =>
-                                  setBackCoverSummary(e.target.value)
-                                }
-                                className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
-                              />
+                            <div className='space-y-3'>
+                              <div className='space-y-2'>
+                                <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                  Back Cover Design Template
+                                </label>
+                                <select
+                                  value={backCoverTemplate}
+                                  onChange={(e) =>
+                                    setBackCoverTemplate(e.target.value as any)
+                                  }
+                                  className='w-full h-8 bg-white/5 border border-white/10 rounded-lg text-xs px-2 text-white'>
+                                  <option
+                                    value='minimal'
+                                    className='bg-[#0a0c1b]'>
+                                    Classic Minimal
+                                  </option>
+                                  <option
+                                    value='bold'
+                                    className='bg-[#0a0c1b]'>
+                                    Bold Gradient Frame
+                                  </option>
+                                  <option
+                                    value='split'
+                                    className='bg-[#0a0c1b]'>
+                                    Split Accent Edge
+                                  </option>
+                                  <option
+                                    value='center'
+                                    className='bg-[#0a0c1b]'>
+                                    Modern Center Canvas
+                                  </option>
+                                  <option
+                                    value='modern_gradient'
+                                    className='bg-[#0a0c1b]'>
+                                    Vibrant Cosmic Gradient
+                                  </option>
+                                  <option
+                                    value='editorial_classic'
+                                    className='bg-[#0a0c1b]'>
+                                    Editorial Vintage Classic
+                                  </option>
+                                  <option
+                                    value='cyberpunk_dark'
+                                    className='bg-[#0a0c1b]'>
+                                    Cyberpunk Neon Slate
+                                  </option>
+                                  <option
+                                    value='luxury_gold'
+                                    className='bg-[#0a0c1b]'>
+                                    Luxury Obsidian &amp; Gold
+                                  </option>
+                                </select>
+                              </div>
+                              <div className='space-y-2'>
+                                <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                                  Back Cover Summary
+                                </label>
+                                <textarea
+                                  value={backCoverSummary}
+                                  onChange={(e) =>
+                                    setBackCoverSummary(e.target.value)
+                                  }
+                                  className='w-full h-16 p-2 bg-white/5 border border-white/10 rounded-xl text-xs resize-none'
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -3455,6 +3790,7 @@ export default function PdfToolStudioPage() {
                     { id: 'txt', label: 'Text (.txt)' },
                     { id: 'pwbook', label: 'Pwbook (.pwbook)' },
                     { id: 'epub', label: 'EPUB (.epub)' },
+                    { id: 'pptx', label: 'PowerPoint (.pptx)' },
                   ] as const
                 ).map((fmt) => (
                   <Button

@@ -66,89 +66,17 @@ export function SavePreviewPanel() {
     if (!previewRef.current) return;
     setIsCapturing(true);
     try {
-      const targetEl = previewRef.current;
-      const filterEls = targetEl.querySelectorAll('*');
-      const originalFilters: { el: HTMLElement; filter: string }[] = [];
-      filterEls.forEach((node) => {
-        const el = node as HTMLElement;
-        if (el.style && (el.style.backdropFilter || (window.getComputedStyle(el) as any).backdropFilter !== 'none')) {
-          originalFilters.push({ el, filter: el.style.backdropFilter });
-          el.style.backdropFilter = 'none';
-        }
-      });
-
-      /* jules edit: Add safe onclone handler to prevent html2canvas color parsing issues */
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(targetEl, {
+      const { captureElementToBlob } = await import('@/lib/composer/canvas-capture-utils');
+      const blob = await captureElementToBlob(previewRef.current, {
         scale: 2,
-        backgroundColor: '#02040f',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        imageTimeout: 5000,
-        onclone: (clonedDoc) => {
-          const allCloned = clonedDoc.querySelectorAll('*');
-          allCloned.forEach((node) => {
-            const el = node as HTMLElement;
-            if (el.style) {
-              if (el.style.backdropFilter) el.style.backdropFilter = 'none';
-              if ((el.style as any).webkitBackdropFilter) (el.style as any).webkitBackdropFilter = 'none';
-            }
-          });
-        },
+        backgroundColor: darkMode ? '#02040f' : '#ffffff',
       });
 
-      // Restore backdrop filters
-      originalFilters.forEach(({ el, filter }) => {
-        el.style.backdropFilter = filter;
-      });
-
-      const ctx = canvas.getContext('2d');
-      if (ctx && !state.isPremium) {
-        // Add watermark for free users
-        ctx.font = 'bold 16px Syne, sans-serif';
-        ctx.fillStyle = 'rgba(152, 92, 255, 0.8)';
-        ctx.fillText('Made with PingWorld', 12, canvas.height - 12);
-
-        // PingWorld logo badge
-        ctx.fillStyle = 'rgba(92, 111, 255, 0.5)';
-        ctx.fillRect(canvas.width - 130, canvas.height - 28, 128, 24);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '12px Space Grotesk, sans-serif';
-        ctx.fillText('pingwrld.com', canvas.width - 118, canvas.height - 12);
-      }
-
-      const handleCapturedBlob = (blob: Blob) => {
-        const downloadUrl = URL.createObjectURL(blob);
-        setPreviewBlob(downloadUrl);
-        setRawBlob(blob);
-        toast.success('Preview captured successfully!');
-        setIsCapturing(false);
-      };
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          handleCapturedBlob(blob);
-        } else {
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
-            const arr = dataUrl.split(',');
-            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
-            const bstr = atob(arr[1]);
-            let n = bstr.length;
-            const u8arr = new Uint8Array(n);
-            while (n--) {
-              u8arr[n] = bstr.charCodeAt(n);
-            }
-            const fallbackBlob = new Blob([u8arr], { type: mime });
-            handleCapturedBlob(fallbackBlob);
-          } catch (err) {
-            console.error('Blob conversion error:', err);
-            toast.error('Could not export image. Please try again.');
-            setIsCapturing(false);
-          }
-        }
-      }, 'image/png');
+      const downloadUrl = URL.createObjectURL(blob);
+      setPreviewBlob(downloadUrl);
+      setRawBlob(blob);
+      toast.success('Preview captured successfully!');
+      setIsCapturing(false);
     } catch (e) {
       console.error('Capture error:', e);
       toast.error('Failed to capture preview image.');

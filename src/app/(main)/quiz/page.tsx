@@ -1212,56 +1212,59 @@ const QuizBuilder = ({
                           )}
 
                           {(detail.type === 'number' ||
-                            detail.type === 'tel' || detail.type === 'input') && (
-                              <div className='space-y-1 mt-1 grid grid-cols-2 gap-1'>
-                                <div className='flex flex-col'>
-                                  <Input
-                                    placeholder='Min'
+                            detail.type === 'tel' ||
+                            detail.type === 'input') && (
+                            <div className='space-y-1 mt-1 grid grid-cols-2 gap-1'>
+                              <div className='flex flex-col'>
+                                <Input
+                                  placeholder='Min'
                                   type='number'
-                                    value={detail.minLength}
-                                    onChange={(e) => {
-                                      const newDetails = [
-                                        ...(editedQuiz.askDetails || []),
-                                      ];
-                                      newDetails[idx].minLength =
-                                        parseInt(e.target.value);
-                                      setEditedQuiz({
-                                        ...editedQuiz,
-                                        askDetails: newDetails,
-                                      });
-                                    }}
-                                    className='h-8 text-[10px] bg-black/20'
-                                  />
-                                  <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
-                                    Minimum length
-                                  </p>
-                                </div>
+                                  value={detail.minLength}
+                                  onChange={(e) => {
+                                    const newDetails = [
+                                      ...(editedQuiz.askDetails || []),
+                                    ];
+                                    newDetails[idx].minLength = parseInt(
+                                      e.target.value,
+                                    );
+                                    setEditedQuiz({
+                                      ...editedQuiz,
+                                      askDetails: newDetails,
+                                    });
+                                  }}
+                                  className='h-8 text-[10px] bg-black/20'
+                                />
+                                <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
+                                  Minimum length
+                                </p>
+                              </div>
 
-                                <div className='flex flex-col'>
-                                  <Input
+                              <div className='flex flex-col'>
+                                <Input
                                   placeholder='Max'
                                   type='number'
-                                    value={detail.maxLength}
-                                    onChange={(e) => {
-                                      const newDetails = [
-                                        ...(editedQuiz.askDetails || []),
-                                      ];
-                                      
-                                      newDetails[idx].maxLength =
-                                        parseInt(e.target.value);
-                                      setEditedQuiz({
-                                        ...editedQuiz,
-                                        askDetails: newDetails,
-                                      });
-                                    }}
-                                    className='h-8 text-[10px] bg-black/20'
-                                  />
-                                  <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
-                                    Maximum length
-                                  </p>
-                                </div>
+                                  value={detail.maxLength}
+                                  onChange={(e) => {
+                                    const newDetails = [
+                                      ...(editedQuiz.askDetails || []),
+                                    ];
+
+                                    newDetails[idx].maxLength = parseInt(
+                                      e.target.value,
+                                    );
+                                    setEditedQuiz({
+                                      ...editedQuiz,
+                                      askDetails: newDetails,
+                                    });
+                                  }}
+                                  className='h-8 text-[10px] bg-black/20'
+                                />
+                                <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
+                                  Maximum length
+                                </p>
                               </div>
-                            )}
+                            </div>
+                          )}
 
                           {showAllow && (
                             <div className='space-y-1 mt-1'>
@@ -1391,14 +1394,23 @@ const QuizBuilder = ({
                             }}
                             className={cn(
                               'h-6 min-w-[80px] gap-2',
-                              editedQuiz.showCategoryInPerformance ?
+                              (
+                                editedQuiz.endScreen.showPerformance &&
+                                  editedQuiz.showCategoryInPerformance
+                              ) ?
                                 'bg-pw-primary/10 border-pw-primary text-pw-primary'
                               : 'bg-white/5 border-white/10',
                             )}>
-                            {editedQuiz.showCategoryInPerformance ?
+                            {(
+                              editedQuiz.endScreen.showPerformance &&
+                              editedQuiz.showCategoryInPerformance
+                            ) ?
                               <Check className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
-                            {editedQuiz.showCategoryInPerformance ?
+                            {(
+                              editedQuiz.endScreen.showPerformance &&
+                              editedQuiz.showCategoryInPerformance
+                            ) ?
                               'ON'
                             : 'OFF'}
                           </Button>
@@ -1696,11 +1708,12 @@ const QuizBuilder = ({
                           (q) =>
                             q.skipTo ||
                             q.skipToCat ||
-                            q.options.some(
+                            (q.options.some(
                               (o) =>
                                 typeof o === 'object' &&
                                 (o.skipTo || o.skipToCat),
-                            ),
+                            ) &&
+                              editedQuiz.randomizeOptions),
                         ) && (
                           <div className='flex gap-2 items-center px-1'>
                             <AlertTriangle className='h-4 w-4 shrink-0' />
@@ -1729,6 +1742,7 @@ const QuizBuilder = ({
                             onClick={() =>
                               setEditedQuiz({
                                 ...editedQuiz,
+                                showCategoryInPerformance: editedQuiz.endScreen.showPerformance ? false : editedQuiz.showCategoryInPerformance,
                                 endScreen: {
                                   ...editedQuiz.endScreen,
                                   showPerformance:
@@ -4114,22 +4128,24 @@ export default function QuizPage() {
                       (a, b) => b.incorrect - a.incorrect,
                     )[0];
 
+                    const isQuizType = viewingResponses.type === 'quiz';
+
                     return (
-                      <Card className='p-3 sm:p-4 bg-black/20 bkblur border border-white/10 rounded-2xl space-y-4 hidden'>
+                      <Card className='p-3 sm:p-4 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl space-y-4 shadow-xl'>
                         <div className='flex items-center justify-between border-b border-white/5 p-1 pb-2'>
                           <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
-                            <BarChart2 className='h-4 w-4' /> Assessment
-                            Analytics
+                            <BarChart2 className='h-4 w-4' />{' '}
+                            {isQuizType ? 'Quiz Analytics' : 'Survey Response Analytics'}
                           </span>
 
-                          <div className='flex items-center justify-between'>
+                          <div className='flex items-center gap-2'>
                             <span className='text-[10px] font-mono text-pw-muted'>
-                              {totalParticipants} Total Participants
+                              {totalParticipants} {isQuizType ? 'Takers' : 'Respondents'}
                             </span>
                             <ChevronDown
                               onClick={() => setShowAnalytics(!showAnalytics)}
                               className={cn(
-                                'cursor-pointer w-3.5 h-3.5 ml-1',
+                                'cursor-pointer w-4 h-4 text-pw-muted hover:text-white transition-transform',
                                 showAnalytics && 'rotate-180',
                               )}
                             />
@@ -4137,160 +4153,239 @@ export default function QuizPage() {
                         </div>
 
                         {showAnalytics && (
-                          <>
-                            {/* Visual Pass/Fail Bar */}
-                            <div className='space-y-1.5'>
-                              <div className='flex justify-between text-xs font-mono font-bold'>
-                                <span className='text-pw-success'>
-                                  {totalPass} Passed ({passPct}%)
-                                </span>
-                                <span className='text-pw-danger'>
-                                  {totalFail} Failed ({100 - passPct}%)
-                                </span>
-                              </div>
-                              <div className='w-full bg-white/5 bkblur h-2.5 rounded-full overflow-hidden flex'>
-                                <div
-                                  style={{ width: `${passPct}%` }}
-                                  className='bg-pw-success h-full transition-all duration-300'
-                                />
-                                <div
-                                  style={{ width: `${100 - passPct}%` }}
-                                  className='bg-pw-danger h-full transition-all duration-300'
-                                />
-                              </div>
-                            </div>
-
-                            {/* Stat Metrics Grid */}
-                            <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
-                              <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                                <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                                  Full Finishes
-                                </span>
-                                <span className='text-lg font-bold font-mono text-pw-cyan'>
-                                  {completions}
-                                </span>
-                              </div>
-                              {
-                                <div className='p-3 bg-white/5 rounded-xl border border-white/5'>
-                                  <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                                    Timeouts
-                                  </span>
-                                  <span className='text-lg font-bold font-mono text-pw-warning'>
-                                    {timeouts}
-                                  </span>
+                          <div className='space-y-4 pt-1'>
+                            {/* Quiz Type Specific Pass/Fail Analytics */}
+                            {isQuizType ? (
+                              <>
+                                <div className='space-y-1.5'>
+                                  <div className='flex justify-between text-xs font-mono font-bold'>
+                                    <span className='text-pw-success'>
+                                      {totalPass} Passed ({passPct}%)
+                                    </span>
+                                    <span className='text-pw-danger'>
+                                      {totalFail} Failed ({100 - passPct}%)
+                                    </span>
+                                  </div>
+                                  <div className='w-full bg-white/10 h-2.5 rounded-full overflow-hidden flex'>
+                                    <div
+                                      style={{ width: `${passPct}%` }}
+                                      className='bg-pw-success h-full transition-all duration-300'
+                                    />
+                                    <div
+                                      style={{ width: `${100 - passPct}%` }}
+                                      className='bg-pw-danger h-full transition-all duration-300'
+                                    />
+                                  </div>
                                 </div>
-                              }
 
-                              {
-                                <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                                  <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                                    Self-Submits
-                                  </span>
-                                  <span className='text-lg font-bold font-mono text-pw-primary'>
-                                    {selfSubmits}
-                                  </span>
+                                {/* Metrics Grid */}
+                                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Full Finishes
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-cyan'>
+                                      {completions}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Timeouts
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-warning'>
+                                      {timeouts}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Self-Submits
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-primary'>
+                                      {selfSubmits}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Quits
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-danger'>
+                                      {quits}
+                                    </span>
+                                  </div>
                                 </div>
-                              }
 
-                              {
-                                <div className='p-2 bg-white/5 rounded-xl border border-white/5'>
-                                  <span className='text-[8px] font-bold uppercase text-pw-muted block'>
-                                    Quits
-                                  </span>
-                                  <span className='text-lg font-bold font-mono text-pw-danger'>
-                                    {quits}
-                                  </span>
+                                {/* Participant Performance Leaders */}
+                                <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs'>
+                                  <div className='p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                                    <span className='text-[9px] text-pw-muted uppercase font-bold block'>
+                                      Top Scoring Participant
+                                    </span>
+                                    <span className='font-bold text-pw-success block truncate'>
+                                      {bestTaker.name} ({bestTaker.score} pts)
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-1'>
+                                    <span className='text-[9px] text-pw-muted uppercase font-bold block'>
+                                      Lowest Scoring Participant
+                                    </span>
+                                    <span className='font-bold text-pw-danger block truncate'>
+                                      {worstTaker.name} ({worstTaker.score} pts)
+                                    </span>
+                                  </div>
                                 </div>
-                              }
-                            </div>
 
-                            {/* Participant Insights */}
-                            {viewingResponses.type === 'quiz' && (
-                              <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-white/5 pt-3'>
-                                <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
-                                  <span className='text-[9px] text-pw-muted uppercase font-bold block'>
-                                    Top Scoring Participant
-                                  </span>
-                                  <span className='font-bold text-pw-success block truncate'>
-                                    {bestTaker.name}
-                                  </span>
-                                </div>
-                                <div className='p-2 rounded-xl bg-white/5 border border-white/5 space-y-1'>
-                                  <span className='text-[9px] text-pw-muted uppercase font-bold block'>
-                                    Lowest Scoring Participant
-                                  </span>
-                                  <span className='font-bold text-pw-danger block truncate'>
-                                    {worstTaker.name}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
+                                {/* Most Failed Question & Top Wrong Choice */}
+                                {topFailedQuestion && topFailedQuestion.incorrect > 0 && (
+                                  <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1.5'>
+                                    <span className='text-[9px] font-bold uppercase text-pw-danger block'>
+                                      Most Missed Question
+                                    </span>
+                                    <p className='font-bold text-white line-clamp-1'>
+                                      &quot;{topFailedQuestion.text}&quot;
+                                    </p>
+                                    <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono flex-wrap gap-1'>
+                                      <span>
+                                        Missed {topFailedQuestion.incorrect} times out of{' '}
+                                        {topFailedQuestion.correct + topFailedQuestion.incorrect} attempts
+                                      </span>
+                                      {Object.keys(topFailedQuestion.wrongChoices || {}).length > 0 && (
+                                        <span className='text-pw-danger font-bold'>
+                                          Top Wrong Option: {
+                                            Object.entries(topFailedQuestion.wrongChoices).sort(
+                                              (a, b) => (b[1] as number) - (a[1] as number),
+                                            )[0][0]
+                                          }
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
 
-                            {/* Most Failed Question Insight */}
-                            {topFailedQuestion &&
-                              topFailedQuestion.incorrect > 0 && (
-                                <div className='p-2 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1'>
-                                  <span className='text-[9px] font-bold uppercase text-pw-danger block'>
-                                    Most Missed Question
-                                  </span>
-                                  <p className='font-bold text-white line-clamp-1'>
-                                    &quot;{topFailedQuestion.text}&quot;
-                                  </p>
-                                  <p className='text-[10px] text-pw-muted font-mono'>
-                                    Missed {topFailedQuestion.incorrect} times
-                                    out of{' '}
-                                    {topFailedQuestion.correct +
-                                      topFailedQuestion.incorrect}{' '}
-                                    attempts
-                                  </p>
-                                </div>
-                              )}
-
-                            {/* Category Breakdown Table */}
-                            {Object.keys(categoryStats).length > 0 && (
-                              <div className='space-y-2 pt-2 border-t border-white/5'>
-                                <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
-                                  Category Performance Analysis
-                                </span>
-                                <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
-                                  {Object.entries(categoryStats).map(
-                                    ([cat, stat]) => {
-                                      const catPassPct =
-                                        stat.attempts > 0 ?
-                                          Math.round(
-                                            (stat.pass / stat.attempts) * 100,
-                                          )
-                                        : 0;
-                                      return (
-                                        <div
-                                          key={cat}
-                                          className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
-                                          <span className='font-bold text-white uppercase text-[10px]'>
-                                            {cat}
-                                          </span>
-                                          <div className='flex items-center gap-3 font-mono text-[10px]'>
-                                            <span>
-                                              {stat.pass} Pass / {stat.fail}{' '}
-                                              Fail
+                                {/* Category Performance Analysis */}
+                                {Object.keys(categoryStats).length > 0 && (
+                                  <div className='space-y-2 pt-2 border-t border-white/5'>
+                                    <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                                      Category Performance Analysis
+                                    </span>
+                                    <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
+                                      {Object.entries(categoryStats).map(([cat, stat]) => {
+                                        const catPassPct =
+                                          stat.attempts > 0 ?
+                                            Math.round((stat.pass / stat.attempts) * 100)
+                                          : 0;
+                                        return (
+                                          <div
+                                            key={cat}
+                                            className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
+                                            <span className='font-bold text-white uppercase text-[10px]'>
+                                              {cat}
                                             </span>
-                                            <span
-                                              className={cn(
-                                                'font-bold',
-                                                catPassPct >= 50 ?
-                                                  'text-pw-success'
-                                                : 'text-pw-danger',
-                                              )}>
-                                              {catPassPct}%
-                                            </span>
+                                            <div className='flex items-center gap-3 font-mono text-[10px]'>
+                                              <span>
+                                                {stat.pass} Pass / {stat.fail} Fail
+                                              </span>
+                                              <span
+                                                className={cn(
+                                                  'font-bold',
+                                                  catPassPct >= 50 ?
+                                                    'text-pw-success'
+                                                  : 'text-pw-danger',
+                                                )}>
+                                                {catPassPct}%
+                                              </span>
+                                            </div>
                                           </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              /* Survey Specific Response Distribution & Averages */
+                              <div className='space-y-3'>
+                                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Completed
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-cyan'>
+                                      {completions}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Self-Submits
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-primary'>
+                                      {selfSubmits}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Timeouts
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-warning'>
+                                      {timeouts}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Quits
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-danger'>
+                                      {quits}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className='space-y-2 pt-2 border-t border-white/5'>
+                                  <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                                    Survey Questions Overview ({viewingResponses.questions.length})
+                                  </span>
+                                  <div className='space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar'>
+                                    {viewingResponses.questions.map((quest, qIdx) => (
+                                      <div
+                                        key={quest.id}
+                                        className='p-2 bg-white/5 rounded-xl text-xs flex items-center justify-between gap-2'>
+                                        <div className='min-w-0 flex-1'>
+                                          <p className='font-bold text-white truncate'>
+                                            Q{qIdx + 1}: {quest.text}
+                                          </p>
+                                          <span className='text-[9px] text-pw-muted uppercase font-mono'>
+                                            Type: {quest.type}
+                                          </span>
                                         </div>
-                                      );
-                                    },
-                                  )}
+                                        {quest.category && (
+                                          <span className='px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-pw-primary/10 text-pw-primary border border-pw-primary/20 shrink-0'>
+                                            {quest.category}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             )}
-                          </>
+
+                            {/* Geographic Countries Breakdown Tags */}
+                            {Object.keys(countriesCount).length > 0 && (
+                              <div className='pt-2 border-t border-white/5 space-y-1.5'>
+                                <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
+                                  Participant Locations ({Object.keys(countriesCount).length})
+                                </span>
+                                <div className='flex items-center flex-wrap gap-1.5'>
+                                  {Object.entries(countriesCount).map(([country, cnt]) => (
+                                    <span
+                                      key={country}
+                                      className='px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 border border-white/10 text-pw-cyan font-bold'>
+                                      📍 {country} ({cnt})
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </Card>
                     );

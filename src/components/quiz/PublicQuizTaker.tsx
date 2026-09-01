@@ -987,6 +987,18 @@ function Taker() {
       }
       try {
         const finalScore = finalAnswers.filter((a) => a.correct).length;
+
+        // Detect taker's country
+        let detectedCountry = 'Unknown';
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+          if (tz.includes('/')) {
+            detectedCountry = tz.split('/')[0].replace(/_/g, ' ');
+          }
+        } catch (e) {
+          // timezone fallback
+        }
+
         await HybridStorage.saveResponse(quiz.id, {
           userData,
           answers: finalAnswers,
@@ -994,6 +1006,7 @@ function Taker() {
           categoryScores,
           totalQuestions: activeQuestions.length,
           answeredQuestions: finalAnswers.length,
+          country: detectedCountry,
         });
       } catch (e) {
         console.error('Failed to save response:', e);
@@ -1001,8 +1014,7 @@ function Taker() {
     }
   };
 
-  // Proceed to the next question, taking logical branching configuration into account
-  // Strict category branching isolation to prevent category question leaking
+  // Strict category branching isolation engine
   const proceedToNext = (
     latestAnswers?: any[],
     chosenOptionVal?: string | null,
@@ -1022,7 +1034,7 @@ function Taker() {
       let branchTarget: string | undefined = undefined;
       let branchCat: string | undefined = undefined;
 
-      /* Handle option-level and input-rule level branching */
+      // 1. Input Question Branching
       if (q.type === 'input') {
         const userText = String(
           formatDetailVars(content || '', false, true),
@@ -1040,9 +1052,14 @@ function Taker() {
           if (matchedRule) {
             if (matchedRule.skipTo) branchTarget = matchedRule.skipTo;
             if (matchedRule.skipToCat) branchCat = matchedRule.skipToCat;
+          } else {
+            // Else fallback rules
+            if ((q as any).elseSkipTo) branchTarget = (q as any).elseSkipTo;
+            if ((q as any).elseSkipToCat) branchCat = (q as any).elseSkipToCat;
           }
         }
       } else if (q.type !== 'checkbox') {
+        // 2. Choice-level Branching
         const currentChoice =
           chosenOptionVal !== undefined ? chosenOptionVal : selectedOption;
 
@@ -1069,12 +1086,13 @@ function Taker() {
         }
       }
 
-      // Question-level branching fallback
+      // 3. Question-level fallback routing
       if (!branchTarget && !branchCat) {
         if (q.skipTo) branchTarget = q.skipTo;
         if (q.skipToCat) branchCat = q.skipToCat;
       }
 
+      // 4. Evaluate explicit routing target
       if (branchTarget === 'end') {
         finalizeQuiz(answersToSave);
         return;
@@ -1087,17 +1105,55 @@ function Taker() {
         }
       } else if (branchCat) {
         const cleanCat = branchCat.trim().toLowerCase();
-        const catQuestions = activeQuestions.filter(
-          (quest) =>
-            quest.category && quest.category.trim().toLowerCase() === cleanCat,
-        );
         const targetIdx = activeQuestions.findIndex(
           (quest) =>
             quest.category && quest.category.trim().toLowerCase() === cleanCat,
         );
-
         if (targetIdx !== -1) {
           nextIdx = targetIdx;
+        }
+      } else {
+        // 5. Strict Sequential Category Isolation
+        // If question belongs to a category, advance to next question IN THAT CATEGORY
+        if (q.category && q.category.trim() !== '') {
+          const curCatName = q.category.trim().toLowerCase();
+          const sameCatQuestions = activeQuestions.filter(
+            (quest) =>
+              quest.category &&
+              quest.category.trim().toLowerCase() === curCatName,
+          );
+          const currentCatPos = sameCatQuestions.findIndex(
+            (quest) => quest.id === q.id,
+          );
+
+          if (
+            currentCatPos !== -1 &&
+            currentCatPos < sameCatQuestions.length - 1
+          ) {
+            // Next question in current category
+            const nextCatQ = sameCatQuestions[currentCatPos + 1];
+            nextIdx = activeQuestions.findIndex(
+              (quest) => quest.id === nextCatQ.id,
+            );
+          } else {
+            // Current category completed: fallback to index flow (next category or next standalone question)
+            const remainingQuestions = activeQuestions.slice(
+              currentQuestion + 1,
+            );
+            const nextUnrelated = remainingQuestions.find(
+              (quest) =>
+                !quest.category ||
+                quest.category.trim().toLowerCase() !== curCatName,
+            );
+            if (nextUnrelated) {
+              nextIdx = activeQuestions.findIndex(
+                (quest) => quest.id === nextUnrelated.id,
+              );
+            } else {
+              finalizeQuiz(answersToSave);
+              return;
+            }
+          }
         }
       }
     }
@@ -1430,20 +1486,20 @@ function Taker() {
       <div
         key='completion-view'
         className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6'>
-        <div className='max-w-md w-full text-center space-y-3'>
-          <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20 mb-2'>
+        <div className='max-w-md w-full text-center space-y-2'>
+          <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20 mb-3'>
             <CheckCircle2 className='h-8 w-8 text-pw-success' />
           </div>
           <h1 className='text-lg font-extrabold font-display'>
             {quiz?.endScreen.title || 'Assessment Completed!'}
           </h1>
-          <p className='text-pw-muted text-xs'>
+          <p className='text-pw-muted text-xs mb-1'>
             {quiz?.endScreen.message ||
               'Thank you for attempting the assessment and using pingword...'}
           </p>
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-2'>
+            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4'>
               <div>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
                   ASSESSMENT SUMMARY
@@ -1458,10 +1514,15 @@ function Taker() {
                   <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-2'>
                     Category Breakdown
                   </span>
-                  {Object.entries(categoryScores).map(([cat, stats]) => (
+
+                  {Object.entries(categoryScores).map(([cat, stats], idx) => (
                     <div
                       key={cat}
-                      className='flex items-center justify-between text-xs py-1 border-b border-white/5'>
+                      className={cn(
+                        'flex items-center justify-between text-xs py-1',
+                        idx !== Object.keys(categoryScores).length - 1 &&
+                          'border-b border-white/5',
+                      )}>
                       <span className='font-bold text-white'>
                         {capFirst(cat)}
                       </span>
@@ -1470,26 +1531,38 @@ function Taker() {
                       </span>
                     </div>
                   ))}
+
+                  <div
+                    key={'others'}
+                    className={cn(
+                      'flex items-center justify-between text-xs py-1',
+                      'border-t border-white/5',
+                    )}>
+                    <span className='font-bold text-white'>Others</span>
+                    <span className='font-mono text-pw-cyan font-bold'>
+                      {score }
+                    </span>
+                  </div>
                 </div>
               )}
             </Card>
           )}
 
-          <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full flex-1'>
-            <Link href={isLoggedIn ? '/quiz' : '/tools'}>
-              <Button className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
-                Close Quiz
-              </Button>
-            </Link>
+          <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full mt-4 items-center justify-center'>
             {quiz?.allowRetry && (
               <Button
                 onClick={() => {
                   window.location.reload();
                 }}
-                className='btn-primary w-full h-11 rounded-xl font-bold mt-4'>
+                className='btn-primary h-11 rounded-xl font-bold hidden'>
                 Retry {capFirst(quiz?.type || 'Assessment')}
               </Button>
             )}
+            <Link href={isLoggedIn ? '/quiz' : '/tools'}>
+              <Button className='btn-primary h-11 rounded-xl font-bold'>
+                Close Quiz
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
