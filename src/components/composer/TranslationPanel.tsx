@@ -209,9 +209,9 @@ export function TranslationPanel() {
             value={selectedLang}
             onChange={(e) => setSelectedLang(e.target.value)}
             className='w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-pw-text focus:outline-none focus:border-pw-primary/40 no-outline transition-all appearance-none'>
-            {LANGUAGES.map((lang) => (
+            {LANGUAGES.map((lang, idx) => (
               <option
-                key={lang.code}
+                key={lang.code + idx}
                 value={lang.code}
                 className='bg-pw-surface'>
                 {lang.name}

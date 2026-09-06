@@ -101,7 +101,7 @@ export const PREMIUM_TIERS: Record<PremiumTier, TierConfig> = {
 
 /**
  * Compute expiry date based on user tier and requested days.
- * Enforces tier caps silently — clamps to min/max.
+ * Enforces tier caps silently - clamps to min/max.
  */
 export function computeExpiry(tier: PremiumTier, requestedDays: number): Date {
   const config = PREMIUM_TIERS[tier];

@@ -154,9 +154,7 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
                 <DialogTitle className="text-lg font-bold font-display text-white">
                   {options.title}
                 </DialogTitle>
-                <DialogDescription className="text-xs text-pw-muted mt-1 leading-relaxed">
-                  {options.message}
-                </DialogDescription>
+                <DialogDescription className="text-xs text-pw-muted mt-1 leading-relaxed" dangerouslySetInnerHTML={{__html: options.message}}/>
               </div>
             </div>
           </DialogHeader>

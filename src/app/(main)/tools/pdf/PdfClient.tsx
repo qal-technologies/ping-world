@@ -2314,9 +2314,10 @@ export default function PdfToolStudioPage() {
                       className='bg-[#0c0d1c]/70 bkblur border border-white/5 hover:border-pw-primary/30 rounded-2xl shadow-xl transition-all flex flex-col justify-between group p-0'>
                       <div className='sapce-y-2 p-3 sm:p-4 pb-1'>
                         <div className='flex items-start justify-between gap-2'>
-                          <div className='p-2.5 rounded-xl bg-pw-primary/10 text-pw-primary border border-pw-primary/20 shrink-0'>
-                            <BookOpen className='h-5 w-5' />
-                          </div>
+                        <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1 pt-2'>
+                          {book.name}
+                        </h3>
+                         
                           <span className='text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-white/5 text-pw-muted font-bold'>
                             {book.pages?.length === 0 ?
                               ''
@@ -2326,9 +2327,6 @@ export default function PdfToolStudioPage() {
                           </span>
                         </div>
 
-                        <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1 pt-2'>
-                          {book.name}
-                        </h3>
                         <p className='text-xs text-pw-muted line-clamp-2 leading-relaxed'>
                           {book.frontCoverSubtitle ||
                             book.backCoverSummary ||
@@ -2336,16 +2334,16 @@ export default function PdfToolStudioPage() {
                         </p>
                       </div>
 
-                      <div className='border-t border-white/5 p-2 sm:p-4 pt-3 space-y-3'>
+                      <div className='border-t border-white/5 p-2 sm:p-4'>
                         <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono px-1 flex-wrap'>
                           <span>{book.chapters?.length || 1} Chapters</span>
                           <span>~{totalWords} Words</span>
                         </div>
 
-                        <div className='flex items-center gap-2 flex-wrap'>
+                        <div className='flex items-center gap-2 flex-wrap mt-1'>
                           <Button
                             onClick={() => handleOpenBookWorkspace(book.id)}
-                            className='btn-primary h-9 flex-1 text-xs font-bold'>
+                            className='btn-primary h-9 flex-1 text-xs font-bold hover:bg-transparent'>
                             Open
                           </Button>
                           <Button
@@ -3399,6 +3397,7 @@ export default function PdfToolStudioPage() {
                     {/* Main Content Textarea */}
                     <textarea
                       id='book-editor-textarea'
+                      // dangerouslySetInnerHTML={{__html: activePage.content}}
                       value={activePage.content}
                       onChange={(e) => {
                         const val = e.target.value;

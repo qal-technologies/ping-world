@@ -257,9 +257,9 @@ export function MediaEditor() {
       {state.mediaAssets.length > 0 && (
         <div className='grid grid-cols-3 gap-2'>
           <AnimatePresence>
-            {ImageToShow.map((asset) => (
+            {ImageToShow.map((asset, idx) => (
               <motion.div
-                key={asset.id}
+                key={asset.id + idx}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}

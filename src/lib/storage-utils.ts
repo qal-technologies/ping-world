@@ -25,7 +25,7 @@ const tableName = (type: StorageItem['type']) =>
 
 function readLocal(type: StorageItem['type']): StorageItem[] {
   try {
-    const raw = localStorage.getItem(`pingworld_${keyPrefix(type)}`);
+    const raw = localStorage.getItem(`pw_${keyPrefix(type)}`);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -33,7 +33,7 @@ function readLocal(type: StorageItem['type']): StorageItem[] {
 }
 
 function writeLocal(type: StorageItem['type'], list: StorageItem[]) {
-  localStorage.setItem(`pingworld_${keyPrefix(type)}`, JSON.stringify(list));
+  localStorage.setItem(`pw_${keyPrefix(type)}`, JSON.stringify(list));
 }
 
 function mergeIntoLocal(type: StorageItem['type'], remoteRows: any[]) {
@@ -549,7 +549,7 @@ export const HybridStorage = {
     try {
       const types: ('quiz' | 'message')[] = ['quiz', 'message'];
       for (const t of types) {
-        const key = `pingworld_${t === 'quiz' ? 'quizzes' : 'messages'}`;
+        const key = `pw_${t === 'quiz' ? 'quizzes' : 'messages'}`;
         const raw = localStorage.getItem(key);
         if (!raw) continue;
         const list = JSON.parse(raw);

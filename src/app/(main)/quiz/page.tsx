@@ -64,6 +64,7 @@ import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
 import { computeExpiry, tierAtLeast } from '@/lib/config/premium';
+import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
 
 // --- Types ---
 export type QuestionType =
@@ -193,11 +194,11 @@ export interface Quiz {
     icon?: string;
   };
   disclaimer?: string;
-  customDisclaimer?: string;       // Pro: replaces default PingWorld disclaimer
+  customDisclaimer?: string; // Pro: replaces default PingWorld disclaimer
   hidePingWorldDisclaimer?: boolean; // Pro: hide PingWorld branding disclaimer
-  showRealtimeScore?: boolean;     // Pro: show live score badge during quiz
-  nextButtonText?: string;         // Pro: custom Next button label
-  prevButtonText?: string;         // Pro: custom Previous button label
+  showRealtimeScore?: boolean; // Pro: show live score badge during quiz
+  nextButtonText?: string; // Pro: custom Next button label
+  prevButtonText?: string; // Pro: custom Previous button label
 }
 
 // Helper: compute a capped expiry date max 3 days out
@@ -439,18 +440,27 @@ const QuizBuilder = ({
 
     const targetCatName = uniqueCats[targetCatIdx];
 
-    // Partition questions into catName block, targetCatName block, and others
     const catQs = questions.filter((q) => q.category === catName);
     const targetQs = questions.filter((q) => q.category === targetCatName);
-    const otherQs = questions.filter(
-      (q) => q.category !== catName && q.category !== targetCatName,
-    );
 
-    let reordered: Question[] = [];
-    if (direction === 'up') {
-      reordered = [...catQs, ...targetQs, ...otherQs];
-    } else {
-      reordered = [...targetQs, ...catQs, ...otherQs];
+    // Swap in place without scattering other questions
+    const reordered: Question[] = [];
+    let insertedSwap = false;
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (q.category === catName || q.category === targetCatName) {
+        if (!insertedSwap) {
+          if (direction === 'up') {
+            reordered.push(...catQs, ...targetQs);
+          } else {
+            reordered.push(...targetQs, ...catQs);
+          }
+          insertedSwap = true;
+        }
+      } else {
+        reordered.push(q);
+      }
     }
 
     setEditedQuiz({ ...editedQuiz, questions: reordered });
@@ -458,33 +468,66 @@ const QuizBuilder = ({
   };
 
   const disband = (catName: string) => {
+    // Retain exact array positions for all questions when disbanding
     const updatedQuestions = editedQuiz.questions.map((q) =>
       q.category === catName ? { ...q, category: undefined } : q,
     );
     setEditedQuiz({ ...editedQuiz, questions: updatedQuestions });
+    toast.success(
+      `Group "${catName}" disbanded without altering question order.`,
+    );
   };
 
   /**
    * Add or remove a category tag on a single question.
-   * 'add'    → sets q.category = newCat (or groupName)
-   * 'remove' → clears q.category
+   * When added to an existing group, pushes right after the index of the last question in that group.
    */
   const handleQuestionCategory = (
     action: 'add' | 'remove',
     questionId: string,
     newCat?: string,
   ) => {
-    const updated = editedQuiz.questions.map((q) => {
-      if (q.id !== questionId) return q;
-      if (action === 'remove') return { ...q, category: undefined };
-      return { ...q, category: newCat || '' };
-    });
-    setEditedQuiz({ ...editedQuiz, questions: updated });
-    toast.success(
-      action === 'add'
-        ? `Question added to group "${newCat}"`
-        : 'Question removed from group',
-    );
+    const cleanCat = newCat?.trim() || '';
+    const currentList = [...editedQuiz.questions];
+    const targetIdx = currentList.findIndex((q) => q.id === questionId);
+    if (targetIdx === -1) return;
+
+    if (action === 'remove' || !cleanCat) {
+      currentList[targetIdx] = {
+        ...currentList[targetIdx],
+        category: undefined,
+      };
+      setEditedQuiz({ ...editedQuiz, questions: currentList });
+      toast.success('Question removed from group');
+      return;
+    }
+
+    // Adding to group: extract question and update category
+    const [targetQuestion] = currentList.splice(targetIdx, 1);
+    const updatedQuestion = { ...targetQuestion, category: cleanCat };
+
+    // Find the last index of cleanCat in the remaining array
+    let lastGroupIdx = -1;
+    for (let i = currentList.length - 1; i >= 0; i--) {
+      if (currentList[i].category === cleanCat) {
+        lastGroupIdx = i;
+        break;
+      }
+    }
+
+    if (lastGroupIdx !== -1) {
+      // Insert right after the last question of that group
+      currentList.splice(lastGroupIdx + 1, 0, updatedQuestion);
+      const newIndex = lastGroupIdx + 1;
+      setEditedQuiz({ ...editedQuiz, questions: currentList });
+      setCurrentStep(newIndex);
+    } else {
+      // First question in this group: restore at original position
+      currentList.splice(targetIdx, 0, updatedQuestion);
+      setEditedQuiz({ ...editedQuiz, questions: currentList });
+    }
+
+    toast.success(`Question added to group "${cleanCat}"`);
   };
 
   const handleQuestionScroll = () => {
@@ -522,7 +565,7 @@ const QuizBuilder = ({
         key={q.id + idx + catName + i}
         onClick={(e) => {
           setCurrentStep(i);
-          handleQuestionScroll();
+          // handleQuestionScroll();
           setShowBranchRules(false);
         }}
         className={cn(
@@ -541,52 +584,79 @@ const QuizBuilder = ({
               <MoreVertical className='h-4 w-4' />
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
-              <DropdownMenuItem className={'h-8 gap-1 px-2'}>
+            <DropdownMenuContent className='w-48 bg-pw-surface/90 bkblur border-white/10 p-1'>
+              <DropdownMenuItem
+                className='h-8 gap-1 px-2'
+                onSelect={(e) => e.preventDefault()}>
                 <DropdownMenu>
-                  <DropdownMenuTrigger className='flex gap-1 items-center'>
-                    <Plus className='h-4 w-4 text-pw-success' />{' '}
-                    {sidebarGroups.categories.length > 0 ?
-                      'Add to Group'
-                    : 'Add Group'}
+                  <DropdownMenuTrigger className='flex gap-1.5 items-center w-full'>
+                    <Plus className='h-3.5 w-3.5 text-pw-success' />{' '}
+                    <span>
+                      {sidebarGroups.categories.length > 0 ?
+                        'Add to Group'
+                      : 'New Group'}
+                    </span>
                   </DropdownMenuTrigger>
 
-                  <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
-                    {sidebarGroups.categories && sidebarGroups.categories
-                      .filter((c) => c.name !== catName)
-                      .map((cat) => (
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleQuestionCategory('add', q.id, cat.name);
-                          }}
-                          className={'h-8 gap-1 px-2'}>
-                          <Folder className='w-4 h-4 mr-1' />{' '}
-                          {cat.name.toUpperCase()}
-                        </DropdownMenuItem>
-                      ))
-                    }
-                    
-                      <div className='w-full p-1 flex flex-col items-end justify-center'>
-                        <Input
-                          type='text'
-                          placeholder='Enter Group Name'
-                          value={groupName}
-                        onChange={(e) =>
-                          setGroupName(e.target.value)
-                        }
-                          className='max-w-full mx-1 mb-2 p-1 text-sm'
-                        />
+                  <DropdownMenuContent
+                    className='w-48 bg-[#0c0d1c]/80 bkblur border-white/15 p-2 shadow-2xl rounded-xl space-y-1'
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}>
+                    {sidebarGroups.categories &&
+                      sidebarGroups.categories
+                        .filter((c) => c.name !== catName)
+                        .map((cat, idx) => (
+                          <DropdownMenuItem
+                            key={cat.name + idx}
+                            onClick={() => {
+                              handleQuestionCategory('add', q.id, cat.name);
+                            }}
+                            className='h-7 gap-1 px-2 text-xs cursor-pointer'>
+                            <Folder className='w-3.5 h-3.5 mr-1 text-pw-cyan' />{' '}
+                            <span className='truncate'>{cat.name}</span>
+                          </DropdownMenuItem>
+                        ))}
 
-                        <Button
-                          className='self-end'
-                          onClick={() => {
-                            handleQuestionCategory('add', q.id, groupName);
+                    <div
+                      className='w-full pt-1 mt-1 border-t border-white/10 flex flex-col gap-1.5'
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}>
+                      <Input
+                        onKeyDown={(e) => e.stopPropagation()}
+                        type='text'
+                        placeholder='Enter Group Name'
+                        value={groupName}
+                        // onKeyDown={(e) => {
+                        //   e.stopPropagation();
+                        //   if (e.key === 'Enter' && groupName.trim()) {
+                        //     e.preventDefault();
+                        //     handleQuestionCategory('add', q.id, groupName.trim());
+                        //     setGroupName('');
+                        //   }
+                        // }}
+                        onChange={(e) => setGroupName(e.target.value)}
+                        className='w-full h-7 text-xs bg-black/40 border-white/10 px-2'
+                      />
+
+                      <Button
+                        size='sm'
+                        className='h-6 px-2.5 text-[10px] self-end btn-primary'
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (groupName.trim()) {
+                            handleQuestionCategory(
+                              'add',
+                              q.id,
+                              groupName.trim(),
+                            );
                             setGroupName('');
-                          }}>
-                          Add
-                    </Button>
-                      </div>
+                          }
+                        }}>
+                        Create
+                      </Button>
+                    </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </DropdownMenuItem>
@@ -735,6 +805,7 @@ const QuizBuilder = ({
                   <QuestionButton
                     q={q}
                     i={i}
+                    key={idx}
                     idx={idx}
                     length={sidebarGroups.uncategorized.length}
                   />
@@ -742,12 +813,12 @@ const QuizBuilder = ({
               )}
 
               {/* Categorized Questions grouped by Category */}
-              {sidebarGroups.categories.map((cat) => {
+              {sidebarGroups.categories.map((cat, i) => {
                 const isCollapsed = !!collapse[cat.name];
 
                 return (
                   <div
-                    key={cat.name}
+                    key={cat.name + i}
                     className={cn(
                       'flex flex-col gap-1 mt-1',
                       !isCollapsed && ' border-l border-white/10 pl-2',
@@ -809,6 +880,7 @@ const QuizBuilder = ({
                       <div className='flex flex-col gap-1 ml-4'>
                         {cat.questions.map(({ question: q, index: i }, idx) => (
                           <QuestionButton
+                            key={q.text + i + idx}
                             q={q}
                             i={i}
                             idx={idx}
@@ -1056,237 +1128,306 @@ const QuizBuilder = ({
                   description='Required identify/details fields for participants'
                   icon={<Type className='h-4 w-4' />}
                   color='primary'>
-                  <div className='flex flex-col gap-3 py-2'>
+                  <div className='flex flex-col gap-2.5 py-2'>
                     {editedQuiz?.askDetails &&
                       editedQuiz?.askDetails?.length > 0 &&
                       editedQuiz?.askDetails?.some((d) =>
                         d?.allowlist?.trim(),
                       ) && (
-                        <div className='flex-col flex w-full mb-2'>
-                          <label className='text-sm'>Allowlist Message</label>
-                          <p className='text-[10px] text-pw-muted px-1 mb-2'>
-                            A message or alert for when taker's detail doesn't
-                            match the allowlist for a particular detail.
+                        <div className='flex-col flex w-full mb-2 bg-white/5 p-2 rounded-xl border border-white/5'>
+                          <label className='text-xs font-bold text-pw-muted uppercase'>
+                            Allowlist Reject Message
+                          </label>
+                          <p className='text-[10px] text-pw-muted mb-1.5'>
+                            Message displayed when a participant's input does
+                            not match an allowlist.
                           </p>
                           <Input
-                            value={editedQuiz?.allowlistMessage}
+                            value={editedQuiz?.allowlistMessage || ''}
                             onChange={(e) => {
                               setEditedQuiz({
                                 ...editedQuiz,
                                 allowlistMessage: e.target.value,
                               });
                             }}
-                            className='flex-1 bg-transparent focus-visible:border focus-visible:border-pw-primary/5 h-8 text-xs'
-                            placeholder='Allowlist Message'
+                            className='w-full bg-black/20 h-8 text-xs'
+                            placeholder='e.g. Access Denied: Entered detail is not authorized.'
                           />
                         </div>
                       )}
 
                     {(editedQuiz.askDetails || []).map((detail, idx) => {
-                      const showAllow = allowlistArr[idx];
-                      const hasAllow =
-                        detail.allowlist && detail.allowlist.length > 0;
-
                       return (
                         <div
-                          key={idx}
-                          className='flex flex-col gap-2 bg-white/5 lg:p-2 p-1 rounded-xl border border-white/5'>
-                          <div className='flex gap-2 items-center flex-wrap'>
+                          key={`detail-item-${idx}`}
+                          className='flex flex-col gap-1.5 bg-white/5 p-1 rounded-xl border border-white/5'>
+                          <div className='flex gap-1 items-center'>
                             <Input
                               value={detail.title}
                               onChange={(e) => {
                                 const newDetails = [
                                   ...(editedQuiz.askDetails || []),
                                 ];
-                                newDetails[idx].title = e.target.value;
+                                newDetails[idx] = {
+                                  ...newDetails[idx],
+                                  title: e.target.value,
+                                };
                                 setEditedQuiz({
                                   ...editedQuiz,
                                   askDetails: newDetails,
                                 });
                               }}
-                              className='flex-1 bg-transparent focus-visible:border focus-visible:border-pw-primary/5 h-8 text-xs'
-                              placeholder='Detail Label'
+                              className='flex-1 bg-transparent focus-visible:border focus-visible:border-pw-primary/20 h-8 text-xs'
+                              placeholder='Field Title (e.g. Full Name, Email...)'
                             />
-                            <div className='flex'>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger>
-                                  <Button
-                                    title={'Type of detail required'}
-                                    variant='ghost'
-                                    size='sm'
-                                    className='h-7 sm:h-8 text-[10px] font-bold uppercase tracking-tighter bg-white/5'>
-                                    {detail.type}
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className='w-40 bg-pw-surface/70 bkblur border-white/10'>
-                                  {[
-                                    'email',
-                                    'tel',
-                                    'number',
-                                    'dropdown',
-                                    'input',
-                                    'sex',
-                                    'date',
-                                    'dob',
-                                  ].map((t) => (
-                                    <DropdownMenuItem
-                                      key={t}
-                                      onClick={() => {
+
+                            {/* Type selector */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  title='Type of detail required'
+                                  variant='ghost'
+                                  size='sm'
+                                  className='h-7 text-[10px] font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-white/10 px-2 shrink-0'>
+                                  {detail.type === 'input' ?
+                                    'Text'
+                                  : detail.type === 'sex' ?
+                                    'Gender'
+                                  : detail.type === 'dob' ?
+                                    'DOB'
+                                  : detail.type}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className='w-45 bg-pw-surface/60 bkblur border-white/10'>
+                                {[
+                                  { id: 'input', label: 'TEXT INPUT' },
+                                  { id: 'email', label: 'EMAIL' },
+                                  { id: 'sex', label: 'GENDER (M/F)' },
+                                  { id: 'dropdown', label: 'DROPDOWN' },
+                                  { id: 'date', label: 'DATE' },
+                                  { id: 'dob', label: 'DATE OF BIRTH' },
+                                  { id: 'tel', label: 'PHONE (TEL)' },
+                                  { id: 'number', label: 'NUMBER' },
+                                ].map((t, i) => (
+                                  <DropdownMenuItem
+                                    key={t.id + i}
+                                    onClick={() => {
+                                      const newDetails = [
+                                        ...(editedQuiz.askDetails || []),
+                                      ];
+                                      newDetails[idx] = {
+                                        ...newDetails[idx],
+                                        type: t.id as any,
+                                      };
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        askDetails: newDetails,
+                                      });
+                                    }}
+                                    className='h-6 px-2.5 text-xs font-semibold cursor-pointer'>
+                                    {t.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            {/* More Menu for THIS specific detail */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                asChild
+                                className='items-center'>
+                                <div
+                                  title='Detail Configuration'
+                                  className='hover:bg-white/10 h-full p-1 rounded-xl text-pw-muted hover:text-white shrink-0'>
+                                  <MoreVertical size={14} />
+                                </div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align='end'
+                                className='w-64 p-2 bg-[#0c0d1c]/60 bkblur border border-white/15 shadow-2xl rounded-xl space-y-2 z-50'
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}>
+                                <p className='text-[10px] font-bold uppercase tracking-wider text-pw-muted border-b border-white/5 pb-1'>
+                                  {detail.title || 'Detail'} Settings
+                                </p>
+
+                                {/* Allowlist */}
+                                <div className='space-y-1'>
+                                  <label className='text-[10px] font-semibold text-white'>
+                                    Allowlist (Exact Matches)
+                                  </label>
+                                  <Input
+                                    placeholder='e.g. Alice, Bob, Charlie'
+                                    value={detail.allowlist || ''}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const newDetails = [
+                                        ...(editedQuiz.askDetails || []),
+                                      ];
+                                      newDetails[idx] = {
+                                        ...newDetails[idx],
+                                        allowlist: e.target.value,
+                                      };
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        askDetails: newDetails,
+                                      });
+                                    }}
+                                    className='h-7 text-[10px] bg-black/40 border-white/10 font-mono'
+                                  />
+                                  <p className='text-[9px] text-pw-muted mt-[-2px]'>
+                                    Comma-separated values required to take
+                                    quiz.
+                                  </p>
+                                </div>
+
+                                {/* Options list for Dropdown type */}
+                                {detail.type === 'dropdown' && (
+                                  <div className='space-y-1 pt-1 border-t border-white/5'>
+                                    <label className='text-[10px] font-semibold text-white'>
+                                      Options List
+                                    </label>
+                                    <Input
+                                      placeholder='Option A, Option B, Option C'
+                                      value={detail.options?.join(', ') || ''}
+                                      onKeyDown={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
                                         const newDetails = [
                                           ...(editedQuiz.askDetails || []),
                                         ];
-                                        newDetails[idx].type = t as any;
+                                        newDetails[idx] = {
+                                          ...newDetails[idx],
+                                          options: e.target.value.split(', '),
+                                        };
                                         setEditedQuiz({
                                           ...editedQuiz,
                                           askDetails: newDetails,
                                         });
                                       }}
-                                      className={'h-8 px-2'}>
-                                      {t.toUpperCase()}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                                      className='h-7 text-[10px] bg-black/40 border-white/10'
+                                    />
+                                    <p className='text-[8px] text-pw-muted italic'>
+                                      Comma-separated options.
+                                    </p>
+                                  </div>
+                                )}
 
-                              <Button
-                                variant='ghost'
-                                size='icon'
-                                title='Add Allowlist'
-                                onClick={() => {
-                                  setAllowlistArr((prev) => ({
-                                    [idx]: !prev[idx],
-                                  }));
-                                }}
-                                className={cn(
-                                  'h-8 w-8',
-                                  hasAllow ?
-                                    'text-pw-primary bg-pw-primary/6'
-                                  : 'text-pw-muted',
-                                )}>
-                                <CheckCircle size={14} />
-                              </Button>
+                                {/* Min/Max for input/number/tel */}
+                                {(detail.type === 'input' ||
+                                  detail.type === 'number' ||
+                                  detail.type === 'tel') && (
+                                  <div className='grid grid-cols-2 gap-1.5 pt-1 border-t border-white/5'>
+                                    <div>
+                                      <label className='text-[9px] text-pw-muted'>
+                                        Min length
+                                      </label>
+                                      <Input
+                                        type='number'
+                                        placeholder='Min'
+                                        value={detail.minLength ?? ''}
+                                        onKeyDown={(e) => e.stopPropagation()}
+                                        onChange={(e) => {
+                                          const newDetails = [
+                                            ...(editedQuiz.askDetails || []),
+                                          ];
+                                          newDetails[idx] = {
+                                            ...newDetails[idx],
+                                            minLength:
+                                              e.target.value ?
+                                                parseInt(e.target.value)
+                                              : undefined,
+                                          };
+                                          setEditedQuiz({
+                                            ...editedQuiz,
+                                            askDetails: newDetails,
+                                          });
+                                        }}
+                                        className='h-7 text-[10px] bg-black/40 border-white/10'
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className='text-[9px] text-pw-muted'>
+                                        Max length
+                                      </label>
+                                      <Input
+                                        type='number'
+                                        placeholder='Max'
+                                        value={detail.maxLength ?? ''}
+                                        onKeyDown={(e) => e.stopPropagation()}
+                                        onChange={(e) => {
+                                          const newDetails = [
+                                            ...(editedQuiz.askDetails || []),
+                                          ];
+                                          newDetails[idx] = {
+                                            ...newDetails[idx],
+                                            maxLength:
+                                              e.target.value ?
+                                                parseInt(e.target.value)
+                                              : undefined,
+                                          };
+                                          setEditedQuiz({
+                                            ...editedQuiz,
+                                            askDetails: newDetails,
+                                          });
+                                        }}
+                                        className='h-7 text-[10px] bg-black/40 border-white/10'
+                                      />
+                                    </div>
+                                  </div>
+                                )}
 
-                              <Button
-                                variant='ghost'
-                                title='Delete Detail'
-                                size='icon'
-                                onClick={() => {
-                                  const newDetails = (
-                                    editedQuiz.askDetails || []
-                                  ).filter((_, i) => i !== idx);
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    askDetails: newDetails,
-                                  });
-                                }}
-                                className='h-8 w-8 text-pw-danger'>
-                                <Trash2 size={14} />
-                              </Button>
-                            </div>
+                                <div className='pt-1.5 border-t border-white/5'>
+                                  <Button
+                                    variant='ghost'
+                                    size='sm'
+                                    onClick={() => {
+                                      const newDetails = (
+                                        editedQuiz.askDetails || []
+                                      ).filter((_, i) => i !== idx);
+                                      setEditedQuiz({
+                                        ...editedQuiz,
+                                        askDetails: newDetails,
+                                      });
+                                      toast.success('Detail removed');
+                                    }}
+                                    className='h-7 px-2 text-[10px] text-pw-danger hover:bg-pw-danger/10 hover:text-pw-danger w-full justify-start gap-1.5'>
+                                    <Trash2 size={12} /> Delete detail
+                                  </Button>
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
 
-                          {detail.type === 'dropdown' && (
-                            <div className='space-y-1 mt-1'>
-                              <Input
-                                placeholder='Option 1, Option 2...'
-                                value={detail.options?.join(', ') || ''}
-                                onChange={(e) => {
-                                  const newDetails = [
-                                    ...(editedQuiz.askDetails || []),
-                                  ];
-                                  newDetails[idx].options = e.target.value
-                                    .split(',')
-                                    .map((s) => s.trim());
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    askDetails: newDetails,
-                                  });
-                                }}
-                                className='h-8 text-[10px] bg-black/20'
-                              />
-                              <p className='text-[8px] text-pw-muted italic ml-1'>
-                                Separate options with commas
-                              </p>
-                            </div>
-                          )}
-
-                          {(detail.type === 'number' ||
-                            detail.type === 'tel' ||
-                            detail.type === 'input') && (
-                            <div className='space-y-1 mt-1 grid grid-cols-2 gap-1'>
-                              <div className='flex flex-col'>
-                                <Input
-                                  placeholder='Min'
-                                  type='number'
-                                  value={detail.minLength}
-                                  onChange={(e) => {
-                                    const newDetails = [
-                                      ...(editedQuiz.askDetails || []),
-                                    ];
-                                    newDetails[idx].minLength = parseInt(
-                                      e.target.value,
-                                    );
-                                    setEditedQuiz({
-                                      ...editedQuiz,
-                                      askDetails: newDetails,
-                                    });
-                                  }}
-                                  className='h-8 text-[10px] bg-black/20'
-                                />
-                                <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
-                                  Minimum length
-                                </p>
-                              </div>
-
-                              <div className='flex flex-col'>
-                                <Input
-                                  placeholder='Max'
-                                  type='number'
-                                  value={detail.maxLength}
-                                  onChange={(e) => {
-                                    const newDetails = [
-                                      ...(editedQuiz.askDetails || []),
-                                    ];
-
-                                    newDetails[idx].maxLength = parseInt(
-                                      e.target.value,
-                                    );
-                                    setEditedQuiz({
-                                      ...editedQuiz,
-                                      askDetails: newDetails,
-                                    });
-                                  }}
-                                  className='h-8 text-[10px] bg-black/20'
-                                />
-                                <p className='text-[8px] text-pw-muted italic ml-1 mt-1'>
-                                  Maximum length
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {showAllow && (
-                            <div className='space-y-1 mt-1'>
-                              <Input
-                                placeholder='Allowlist / Allowed Values'
-                                value={detail.allowlist || ''}
-                                onChange={(e) => {
-                                  const newDetails = [
-                                    ...(editedQuiz.askDetails || []),
-                                  ];
-                                  newDetails[idx].allowlist = e.target.value;
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    askDetails: newDetails,
-                                  });
-                                }}
-                                className='h-8 text-[10px] bg-black/10 bkblur font-mono'
-                              />
-                              <p className='text-[9px] text-pw-muted italic ml-1'>
-                                Restrict access: Comma-separated allowed values
-                              </p>
-                            </div>
-                          )}
+                          {/* Detail badges */}
+                          <div
+                            className={cn(
+                              (
+                                detail.allowlist ||
+                                  detail.type === 'dropdown' ||
+                                  detail.minLength ||
+                                  detail.maxLength
+                              ) ?
+                                'flex items-center text-[9px] text-pw-muted flex-wrap gap-2 px-1 '
+                              : 'hidden p-0',
+                            )}>
+                            {detail.allowlist && (
+                              <span className='text-pw-primary flex items-center gap-1 font-mono'>
+                                <CheckCircle size={10} /> Allowlist Active
+                              </span>
+                            )}
+                            {detail.type === 'dropdown' &&
+                              detail.options &&
+                              detail.options.length > 0 && (
+                                <span>{detail.options.length} options</span>
+                              )}
+                            {(detail.minLength || detail.maxLength) && (
+                              <span>
+                                Length: {detail.minLength || 0}-
+                                {detail.maxLength || '∞'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1303,8 +1444,8 @@ const QuizBuilder = ({
                           ],
                         })
                       }
-                      className='h-10 w-full border-dashed border-white/20 gap-2 text-xs opacity-70 hover:opacity-100'>
-                      <Plus size={14} /> Add details
+                      className='h-9 w-full border-dashed border-white/20 gap-2 text-xs opacity-70 hover:opacity-100 mt-1'>
+                      <Plus size={14} /> Add detail
                     </Button>
                   </div>
                 </Wrapper>
@@ -1467,7 +1608,13 @@ const QuizBuilder = ({
 
                         <QuizSettingItem
                           label='Time Limit'
-                          description={`Auto-submits when time expires. ${editedQuiz.timerUnit === 'seconds' ? 'Set in seconds (min 30s).' : editedQuiz.timerUnit === 'hours' ? 'Set in hours. Pro plan required for hours.' : 'Set in minutes.'}`}>
+                          description={`Auto-submits when time expires. ${
+                            editedQuiz.timerUnit === 'seconds' ?
+                              'Set in seconds (min 30s).'
+                            : editedQuiz.timerUnit === 'hours' ?
+                              'Set in hours. Pro plan required for hours.'
+                            : 'Set in minutes.'
+                          }`}>
                           <div className='flex gap-2 items-center flex-wrap'>
                             <Input
                               type='number'
@@ -1485,38 +1632,62 @@ const QuizBuilder = ({
                                     : false,
                                 })
                               }
-                              placeholder={editedQuiz.timerUnit === 'seconds' ? 'Sec' : editedQuiz.timerUnit === 'hours' ? 'Hrs' : 'Min'}
+                              placeholder={
+                                editedQuiz.timerUnit === 'seconds' ? 'Sec'
+                                : editedQuiz.timerUnit === 'hours' ?
+                                  'Hrs'
+                                : 'Min'
+                              }
                               className='h-8 w-16 bg-white/5 border-white/10 text-center text-xs'
                             />
                             {/* Unit selector */}
                             <div className='flex gap-1'>
-                              {(['seconds', 'minutes', 'hours'] as const).map((unit) => {
-                                const needsPro = unit === 'hours';
-                                const isEligible = !needsPro || tierAtLeast(premiumTier, 'pro');
-                                return (
-                                  <button
-                                    key={unit}
-                                    type='button'
-                                    disabled={!isEligible}
-                                    onClick={() => {
-                                      if (!isEligible) {
-                                        toast.info('Hours timer requires Pro plan.');
-                                        return;
-                                      }
-                                      setEditedQuiz({ ...editedQuiz, timerUnit: unit });
-                                    }}
-                                    className={cn(
-                                      'h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-all',
-                                      (editedQuiz.timerUnit ?? 'minutes') === unit
-                                        ? 'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                              {(['seconds', 'minutes', 'hours'] as const).map(
+                                (unit, i) => {
+                                  const needsPro = unit === 'hours';
+                                  const isEligible =
+                                    !needsPro ||
+                                    tierAtLeast(premiumTier, 'pro');
+                                  return (
+                                    <button
+                                      key={unit + i}
+                                      type='button'
+                                      disabled={!isEligible}
+                                      onClick={() => {
+                                        if (!isEligible) {
+                                          toast.info(
+                                            'Hours timer requires Pro plan.',
+                                          );
+                                          return;
+                                        }
+                                        setEditedQuiz({
+                                          ...editedQuiz,
+                                          timerUnit: unit,
+                                        });
+                                      }}
+                                      className={cn(
+                                        'h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-all',
+                                        (
+                                          (editedQuiz.timerUnit ??
+                                            'minutes') === unit
+                                        ) ?
+                                          'bg-pw-primary/10 border-pw-primary text-pw-primary'
                                         : 'bg-white/5 border-white/10 text-pw-muted hover:bg-white/10',
-                                      !isEligible && 'opacity-40 cursor-not-allowed',
-                                    )}>
-                                    {unit === 'seconds' ? 'sec' : unit === 'minutes' ? 'min' : 'hr'}
-                                    {needsPro && !isEligible && <Lock className='inline ml-0.5 h-2.5 w-2.5' />}
-                                  </button>
-                                );
-                              })}
+                                        !isEligible &&
+                                          'opacity-40 cursor-not-allowed',
+                                      )}>
+                                      {unit === 'seconds' ?
+                                        'sec'
+                                      : unit === 'minutes' ?
+                                        'min'
+                                      : 'hr'}
+                                      {needsPro && !isEligible && (
+                                        <Lock className='inline ml-0.5 h-2.5 w-2.5' />
+                                      )}
+                                    </button>
+                                  );
+                                },
+                              )}
                             </div>
                             {editedQuiz.hasTimer && (
                               <Button
@@ -1539,16 +1710,20 @@ const QuizBuilder = ({
                           label='Active Lifespan (Expiry)'
                           description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
                           <div className='flex flex-col gap-2 w-full'>
-                            {editedQuiz.isExpiryLocked ? (
+                            {editedQuiz.isExpiryLocked ?
                               <div className='flex items-center gap-2 p-3 rounded-xl bg-pw-warning/10 border border-pw-warning/30'>
                                 <Lock className='h-4 w-4 text-pw-warning shrink-0' />
                                 <div>
-                                  <p className='text-xs font-bold text-pw-warning'>Expiry setter locked</p>
-                                  <p className='text-[10px] text-pw-muted'>Maximum 3 expiry changes reached. Upgrade your plan to extend.</p>
+                                  <p className='text-xs font-bold text-pw-warning'>
+                                    Expiry setter locked
+                                  </p>
+                                  <p className='text-[10px] text-pw-muted'>
+                                    Maximum 3 expiry changes reached. Upgrade
+                                    your plan to extend.
+                                  </p>
                                 </div>
                               </div>
-                            ) : (
-                              <DropdownMenu>
+                            : <DropdownMenu>
                                 <DropdownMenuTrigger>
                                   <Button
                                     variant='outline'
@@ -1593,14 +1768,14 @@ const QuizBuilder = ({
                                     { days: 7, tier: 'flexible' },
                                     { days: 14, tier: 'standard' },
                                     { days: 30, tier: 'pro' },
-                                  ].map(({ days, tier }) => {
+                                  ].map(({ days, tier }, i) => {
                                     const isEligible = tierAtLeast(
                                       premiumTier,
                                       tier as any,
                                     );
                                     return (
                                       <DropdownMenuItem
-                                        key={`exp-select-${days}`}
+                                        key={`exp-select-${days}` + i}
                                         disabled={!isEligible}
                                         onClick={() => {
                                           if (isEligible) {
@@ -1608,9 +1783,19 @@ const QuizBuilder = ({
                                               premiumTier,
                                               days,
                                             );
+                                            const oldExpiry = [
+                                              ...(editedQuiz.expiryHistory ||
+                                                []),
+                                            ];
+
                                             setEditedQuiz({
                                               ...editedQuiz,
-                                              expires_at: newExpiry.toISOString(),
+                                              expires_at:
+                                                newExpiry.toISOString(),
+                                              expiryHistory: [
+                                                ...oldExpiry,
+                                                newExpiry.toISOString(),
+                                              ],
                                             });
                                             toast.success(
                                               `Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`,
@@ -1637,7 +1822,7 @@ const QuizBuilder = ({
                                   })}
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            )}
+                            }
 
                             <p className='text-[10px] text-pw-muted pl-1'>
                               {editedQuiz.expires_at ?
@@ -1648,16 +1833,23 @@ const QuizBuilder = ({
                                       editedQuiz.expires_at,
                                     ).toLocaleDateString()}
                                   </span>
-                                  {(editedQuiz.expiryHistory?.length ?? 0) > 0 && (
+                                  {(editedQuiz.expiryHistory?.length ?? 0) >
+                                    0 && (
                                     <span className='ml-1 text-pw-warning'>
-                                      {' '}({editedQuiz.expiryHistory!.length}/3 changes used
-                                      {editedQuiz.expiryHistory!.length >= 2 ? ' - 1 change remaining!' : ''})
+                                      {' '}
+                                      ({editedQuiz.expiryHistory!.length}/3
+                                      changes used
+                                      {editedQuiz.expiryHistory!.length >= 2 ?
+                                        ' - 1 change remaining!'
+                                      : ''}
+                                      )
                                     </span>
                                   )}
                                 </>
                               : <>Default lifespan is 2 days</>}
                               <span className='block mt-0.5 text-pw-error/70'>
-                                ⚠ Expired quizzes are auto-deleted after 48 hours.
+                                ⚠ Expired quizzes are auto-deleted after 48
+                                hours.
                               </span>
                             </p>
                           </div>
@@ -1756,22 +1948,22 @@ const QuizBuilder = ({
                           (q) =>
                             q.skipTo ||
                             q.skipToCat ||
-                            (q.options.some(
+                            q.options.some(
                               (o) =>
                                 typeof o === 'object' &&
                                 (o.skipTo || o.skipToCat),
-                            )
-                        )) && 
-                        editedQuiz.randomizeOptions  && (
-                          <div className='flex gap-2 items-center px-1'>
-                            <AlertTriangle className='h-4 w-4 shrink-0' />
-                            <span className='text-pw-warning text-[10px] mb-2'>
-                              Branching Active: Question order randomization is
-                              restricted to internal category shuffling to
-                              maintain valid logical branching paths.
-                            </span>
-                          </div>
-                        )}
+                            ),
+                        ) &&
+                          editedQuiz.randomizeOptions && (
+                            <div className='flex gap-2 items-center px-1'>
+                              <AlertTriangle className='h-4 w-4 shrink-0' />
+                              <span className='text-pw-warning text-[10px] mb-2'>
+                                Branching Active: Question order randomization
+                                is restricted to internal category shuffling to
+                                maintain valid logical branching paths.
+                              </span>
+                            </div>
+                          )}
                       </div>
                     </Wrapper>
 
@@ -1790,7 +1982,10 @@ const QuizBuilder = ({
                             onClick={() =>
                               setEditedQuiz({
                                 ...editedQuiz,
-                                showCategoryInPerformance: editedQuiz.endScreen.showPerformance ? false : editedQuiz.showCategoryInPerformance,
+                                showCategoryInPerformance:
+                                  editedQuiz.endScreen.showPerformance ?
+                                    false
+                                  : editedQuiz.showCategoryInPerformance,
                                 endScreen: {
                                   ...editedQuiz.endScreen,
                                   showPerformance:
@@ -1852,24 +2047,55 @@ const QuizBuilder = ({
                     </Wrapper>
 
                     <Wrapper
+                      title='Disclaimer'
+                      description='Customize the assessment introduction disclaimer'
+                      icon={<AlertTriangle className='h-4 w-4' />}
+                      premium={premiumTier === 'free'}
+                      color='warning'>
+                      <div className='flex flex-col gap-3 px-2'>
+                        <div className='space-y-0.5'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase mb-1'>
+                            Introduction Screen Notice
+                          </label>
+                          <textarea
+                            value={editedQuiz.disclaimer || ''}
+                            onChange={(e) =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                disclaimer: e.target.value,
+                              })
+                            }
+                            placeholder='e.g. Notice: This assessment is for educational and evaluation purposes.'
+                            className='w-full h-20 bg-white/5 border border-white/10 rounded-xl p-3 text-xs resize-none focus:outline-none focus:border-pw-primary/30'
+                          />
+                          <p className='text-[10px] text-pw-muted'>
+                            This notice will be displayed to participants on the
+                            assessment introduction screen.
+                          </p>
+                        </div>
+                      </div>
+                    </Wrapper>
+
+                    <Wrapper
                       title='Branding'
                       description='Customize background image and logo'
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
                       premium={premiumTier === 'free'}
                       color='primary'>
-                      <div className='flex flex-col gap-4 pt-2'>
+                      <div className='flex flex-col gap-1 pt-2'>
                         <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
                           Branding
                         </h4>
 
-                        <div className='grid grid-cols-2 gap-2'>
-                          <div className='space-y-2'>
+                        <div className='grid grid-cols-2 gap-2 px-1 pb-1'>
+                          <div className='space-y-0.5'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase'>
                               Background Image
                             </label>
                             <Input
                               type='file'
                               accept='image/*'
+                              id='brand-image-input'
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
@@ -1887,8 +2113,34 @@ const QuizBuilder = ({
                                   r.readAsDataURL(file);
                                 }
                               }}
-                              className='bg-white/5 border-white/10 h-10'
+                              className='hidden'
                             />
+                            <div
+                              onClick={() =>
+                                document
+                                  .getElementById('brand-image-input')
+                                  ?.click()
+                              }
+                              className={cn(
+                                'border border-pw-primary/60 rounded-xl h-30 items-center flex justify-center cursor-pointer flex-col',
+                                !editedQuiz?.branding?.image &&
+                                  'p-1 border-dashed border-pw-primary/60 hover:bg-pw-primary/5 gap-2',
+                              )}>
+                              {editedQuiz?.branding?.image ?
+                                <img
+                                  src={editedQuiz?.branding?.image || ''}
+                                  className='max-w-full max-h-full rounded object-fit'
+                                />
+                              : <>
+                                  <Upload className='text-pw-primary w-6 h-6' />
+                                  <p className='text-[10px] text-pw-muted text-center'>
+                                    Upload brand background image. This would
+                                    appear on the background of the quiz taker
+                                    page.
+                                  </p>
+                                </>
+                              }
+                            </div>
                           </div>
 
                           <div className='space-y-2'>
@@ -1897,6 +2149,7 @@ const QuizBuilder = ({
                             </label>
                             <Input
                               type='file'
+                              id='brand-icon-input'
                               accept='image/*'
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
@@ -1915,8 +2168,33 @@ const QuizBuilder = ({
                                   r.readAsDataURL(file);
                                 }
                               }}
-                              className='bg-white/5 border-white/10 h-10'
+                              className='hidden'
                             />
+
+                            <div
+                              onClick={() =>
+                                document
+                                  .getElementById('brand-icon-input')
+                                  ?.click()
+                              }
+                              className={cn(
+                                'border border-pw-primary/60 rounded-xl h-30 items-center flex justify-center cursor-pointer flex-col',
+                                !editedQuiz?.branding?.icon &&
+                                  'p-1 border-dashed border-pw-primary/60 hover:bg-pw-primary/5 gap-2',
+                              )}>
+                              {editedQuiz?.branding?.icon ?
+                                <img
+                                  src={editedQuiz?.branding?.icon || ''}
+                                  className='max-w-full max-h-full rounded object-fit'
+                                />
+                              : <>
+                                  <Upload className='text-pw-primary w-6 h-6' />
+                                  <p className='text-[10px] text-pw-muted text-center'>
+                                    Upload brand background icon.
+                                  </p>
+                                </>
+                              }
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1937,27 +2215,6 @@ const QuizBuilder = ({
                     )}
                   </h3>
                   <div className='flex gap-2 flex-wrap'>
-                    <Button
-                      variant='ghost'
-                      title='Move question up'
-                      size='icon'
-                      onClick={() => moveQuestion(currentStep, 'up')}
-                      disabled={currentStep === 0}
-                      className='h-9 w-9 text-pw-muted hover:text-pw-primary'>
-                      <ArrowUp className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      title='Move question down'
-                      onClick={() => moveQuestion(currentStep, 'down')}
-                      disabled={currentStep === editedQuiz.questions.length - 1}
-                      className='h-9 w-9 text-pw-muted hover:text-pw-primary'>
-                      <ArrowDown className='h-4 w-4' />
-                    </Button>
-
-                    <div className='w-[1px] h-9 bg-white/5 mx-2' />
-
                     <div className='gap-2 flex'>
                       <Button
                         variant='ghost'
@@ -1994,100 +2251,126 @@ const QuizBuilder = ({
                     <DropdownMenu>
                       <DropdownMenuTrigger>
                         <Button
+                          variant='outline'
+                          title='Change question type'
+                          className='h-9 gap-2 text-xs bg-white/5 border-white/10 text-left flex justify-between items-center'>
+                          {editedQuiz.questions[currentStep].type
+                            .replace('_', ' ')
+                            .toUpperCase()}{' '}
+                          <ChevronDown className='h-3 w-3' />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-48'>
+                        {(
+                          [
+                            'multiple_choice',
+                            'true_false',
+                            'dropdown',
+                            'checkbox',
+                            'input',
+                            premiumTier === 'free' && 'upload',
+                            editedQuiz.type === 'survey' && 'rating',
+                            editedQuiz.type === 'survey' && 'range',
+                          ] as QuestionType[]
+                        ).map((type) => {
+                          if (!type) return null;
+                          return (
+                            <DropdownMenuItem
+                              key={type}
+                              onClick={() => {
+                                const q = {
+                                  ...editedQuiz.questions[currentStep],
+                                  type,
+                                };
+                                // Reset options/correct Index for new type
+                                if (type === 'true_false') {
+                                  q.options = [
+                                    { id: 'true', text: 'True' },
+                                    { id: 'false', text: 'False' },
+                                  ];
+                                  q.correctIndex = 'true';
+                                } else if (type === 'input') {
+                                  q.options = [];
+                                  q.correctIndex = '';
+                                } else if (type === 'checkbox') {
+                                  q.correctIndex = [];
+                                } else if (type === 'range') {
+                                  q.options = [];
+                                  q.min = 0;
+                                  q.max = 10;
+                                  q.step = 1;
+                                  q.correctIndex = 5;
+                                } else if (type === 'rating') {
+                                  q.options = [];
+                                  q.correctIndex = 5;
+                                } else {
+                                  // For MC/Dropdown, ensure options are objects
+                                  if (
+                                    q.options.length > 0 &&
+                                    typeof q.options[0] === 'string'
+                                  ) {
+                                    q.options = q.options.map((opt, idx) => ({
+                                      id: `${q.id}-opt-${idx}`,
+                                      text: opt as string,
+                                    }));
+                                  }
+                                  q.correctIndex =
+                                    (q.options[0] as QuizOption)?.id || '';
+                                }
+                                updateQuestion(currentStep, q);
+                              }}>
+                              {type.replace('_', ' ').toUpperCase()}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <Button
                           variant='ghost'
                           title='Question Settings'
                           className='bg-transparent h-9 gap-2 text-xs sm:bg-white/5 sm:border sm:border-white/10'>
                           <MoreVertical className='h-3 w-3' />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-54 p-3 space-y-4 '>
-                        <div className='w-full'>
-                          <p className='uppercase text-xs mb-1 font-bold text-white'>
-                            Type:
-                          </p>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger className='w-full'>
-                              <Button
-                                variant='outline'
-                                title='Change question type'
-                                className='h-9 gap-2 text-xs bg-white/5 border-white/10 w-full text-left flex justify-between items-center'>
-                                {editedQuiz.questions[currentStep].type
-                                  .replace('_', ' ')
-                                  .toUpperCase()}{' '}
-                                <ChevronDown className='h-3 w-3' />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-48'>
-                              {(
-                                [
-                                  'multiple_choice',
-                                  'true_false',
-                                  'dropdown',
-                                  'checkbox',
-                                  'input',
-                                  premiumTier !== 'free' && 'upload',
-                                  editedQuiz.type === 'survey' && 'rating',
-                                  editedQuiz.type === 'survey' && 'range',
-                                ] as QuestionType[]
-                              ).map((type) => {
-                                if (!type) return null;
-                                return (
-                                  <DropdownMenuItem
-                                    key={type}
-                                    onClick={() => {
-                                      const q = {
-                                        ...editedQuiz.questions[currentStep],
-                                        type,
-                                      };
-                                      // Reset options/correct Index for new type
-                                      if (type === 'true_false') {
-                                        q.options = [
-                                          { id: 'true', text: 'True' },
-                                          { id: 'false', text: 'False' },
-                                        ];
-                                        q.correctIndex = 'true';
-                                      } else if (type === 'input') {
-                                        q.options = [];
-                                        q.correctIndex = '';
-                                      } else if (type === 'checkbox') {
-                                        q.correctIndex = [];
-                                      } else if (type === 'range') {
-                                        q.options = [];
-                                        q.min = 0;
-                                        q.max = 10;
-                                        q.step = 1;
-                                        q.correctIndex = 5;
-                                      } else if (type === 'rating') {
-                                        q.options = [];
-                                        q.correctIndex = 5;
-                                      } else {
-                                        // For MC/Dropdown, ensure options are objects
-                                        if (
-                                          q.options.length > 0 &&
-                                          typeof q.options[0] === 'string'
-                                        ) {
-                                          q.options = q.options.map(
-                                            (opt, idx) => ({
-                                              id: `${q.id}-opt-${idx}`,
-                                              text: opt as string,
-                                            }),
-                                          );
-                                        }
-                                        q.correctIndex =
-                                          (q.options[0] as QuizOption)?.id ||
-                                          '';
-                                      }
-                                      updateQuestion(currentStep, q);
-                                    }}>
-                                    {type.replace('_', ' ').toUpperCase()}
-                                  </DropdownMenuItem>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                      <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-54 p-3'>
+                        <DropdownMenuItem
+                          disabled={currentStep == 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveQuestion(currentStep, 'up');
+                          }}
+                          className={'h-7 gap-1 px-2'}
+                          style={{ opacity: currentStep === 0 ? 0.5 : 1 }}>
+                          <ArrowUp className='h-3 w-3 text-pw-cyan transition-all' />{' '}
+                          Move Up
+                        </DropdownMenuItem>
 
-                        <div className='w-full'>
+                        <DropdownMenuItem
+                          disabled={
+                            currentStep === editedQuiz.questions.length - 1
+                          }
+                          title='Move question down'
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveQuestion(currentStep, 'down');
+                          }}
+                          className={'h-7 gap-1 px-2'}
+                          style={{
+                            opacity:
+                              currentStep === editedQuiz.questions.length - 1 ?
+                                0.5
+                              : 1,
+                          }}>
+                          <ArrowDown className='h-3 w-3 text-pw-cyan transition-all' />{' '}
+                          Move Down
+                        </DropdownMenuItem>
+
+                        <DropdownMenuSeparator />
+
+                        <div className='w-full mt-2'>
                           <p className='uppercase text-xs font-bold mb-1 text-white'>
                             Assessory:
                           </p>
@@ -2134,6 +2417,7 @@ const QuizBuilder = ({
                             'note' && (
                             <Input
                               placeholder='Add your note/formula here...'
+                              onKeyDown={(e) => e.stopPropagation()}
                               value={
                                 editedQuiz.questions[currentStep]
                                   .accessoryNote || ''
@@ -2151,7 +2435,7 @@ const QuizBuilder = ({
                         </div>
 
                         {/* Question Timer */}
-                        <div className='w-full'>
+                        <div className='w-full mt-2'>
                           <p className='uppercase text-sm font-bold mb-1 text-white'>
                             Timer:
                           </p>
@@ -2160,6 +2444,7 @@ const QuizBuilder = ({
                             <input
                               type='number'
                               placeholder='Timer (s)'
+                              onKeyDown={(e) => e.stopPropagation()}
                               value={
                                 editedQuiz.questions[currentStep].timer || ''
                               }
@@ -2547,14 +2832,15 @@ const QuizBuilder = ({
                           {/* Input Branching Rules */}
                           <div className='space-y-2 pt-2 border-t border-white/10'>
                             <div className='flex items-center justify-between'>
-                              <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider flex gap-1 items-center' 
-                                    onClick={() =>
-                                      setShowBranchRules(!showBranchRules)
-                                    }>
-                                {(
-                                  editedQuiz?.questions[currentStep]
-                                    ?.inputBranchRules || []
-                                ).length > 0 && (
+                              <span
+                                className='text-[10px] font-bold text-pw-primary uppercase tracking-wider flex gap-1 items-center'
+                                onClick={() =>
+                                  editedQuiz.questions[currentStep]
+                                    .inputBranchRules &&
+                                  setShowBranchRules(!showBranchRules)
+                                }>
+                                {editedQuiz?.questions[currentStep]
+                                  ?.inputBranchRules && (
                                   <ChevronRight
                                     className={cn(
                                       'text-pw-primary h-3 w-3',
@@ -3554,6 +3840,26 @@ export default function QuizPage() {
       setQuizzes(processed);
     });
     const processed = await processExpiryStatus(localData);
+
+    // Auto-seed default showcase template on first time visiting the quiz section
+    if (typeof window !== 'undefined') {
+      const seeded = localStorage.getItem('pw_quiz_template_seeded');
+      if (!seeded && processed.length === 0) {
+        try {
+          await HybridStorage.save(
+            DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
+            DEFAULT_PINGWORLD_SHOWCASE_QUIZ,
+            'quiz',
+          );
+          localStorage.setItem('pw_quiz_template_seeded', 'true');
+          setQuizzes([DEFAULT_PINGWORLD_SHOWCASE_QUIZ]);
+          return;
+        } catch {
+          // Continue if storage fails
+        }
+      }
+    }
+
     setQuizzes(processed);
   };
 
@@ -3605,7 +3911,7 @@ export default function QuizPage() {
     setIsCreating(true);
   };
 
-  const handleSaveQuiz = async (quiz: Quiz) => {
+  const handleSaveQuiz = async (quiz: Quiz, isImport?: boolean) => {
     if (!quiz.title) return toast.error('Quiz needs a title!');
     if (quiz?.questions?.length === 0)
       return toast.error('Quiz needs at least one question!');
@@ -3683,7 +3989,7 @@ export default function QuizPage() {
       setQuizzes(newQuizzes);
       setIsCreating(false);
       setActiveQuiz(null);
-      toast.success('Quiz saved successfully!');
+      !isImport && toast.success('Quiz saved successfully!');
     } catch (e) {
       toast.error('Failed to save quiz.');
     }
@@ -3736,17 +4042,34 @@ export default function QuizPage() {
     reader.onload = (event) => {
       try {
         const quiz = JSON.parse(event.target?.result as string);
-        if (!quiz.title || !quiz?.questions) throw new Error('Invalid quiz file structure.');
-        if (!quiz.__pwquiz && quiz.app !== 'PingWorldQuizStudio') {
-          throw new Error('Rejected: File is not a valid PingWorld .pwquiz package.');
-        }
+        if (!quiz.title || !quiz?.questions)
+          throw new Error('Invalid quiz file structure.');
+
         quiz.id = Math.random().toString(36).substr(2, 9); // New fresh ID for import
-        handleSaveQuiz(quiz);
+
+        // Check if imported quiz has expired
+        if (quiz.expires_at) {
+          const isExpired = new Date(quiz.expires_at).getTime() < Date.now();
+          if (isExpired) {
+            const freshExpiry = computeExpiry(premiumTier, 2).toISOString();
+            quiz.expires_at = freshExpiry;
+            toast.info(
+              'Imported quiz was expired. Lifespan refreshed for your tier.',
+            );
+          }
+        } else {
+          quiz.expires_at = computeExpiry(premiumTier, 2).toISOString();
+        }
+
+        handleSaveQuiz(quiz, true);
+        toast.success(`Quiz "${quiz.title}" imported successfully!`);
       } catch (err: any) {
-        toast.error(err?.message || 'Invalid .pwquiz format.');
+        toast.error(err?.message || 'Invalid .pwquiz / .json format.');
       }
     };
     reader.readAsText(file);
+    // Reset file input value so same file can be re-imported if needed
+    e.target.value = '';
   };
 
   const playQuiz = (id: string) => {
@@ -3834,13 +4157,13 @@ export default function QuizPage() {
                 <div className='relative'>
                   <Button
                     variant='outline'
-                    title='Import Quiz'
+                    title='Import Quiz (.pwquiz or .json)'
                     className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
                     <Upload className='h-4 w-4' /> Import{' '}
-                    <span className='hidden sm:inline-flex'> JSON</span>
+                    <span className='hidden sm:inline-flex'> .pwquiz</span>
                     <input
                       type='file'
-                      accept='.json'
+                      accept='.pwquiz,.json,application/json'
                       onChange={importQuiz}
                       className='absolute inset-0 opacity-0 cursor-pointer'
                     />
@@ -4134,7 +4457,10 @@ export default function QuizPage() {
                     const countriesCount: Record<string, number> = {};
                     const isProTier = premiumTier !== 'free';
 
-                    const getTakerIdentifier = (resp: any, fallbackIdx: number) => {
+                    const getTakerIdentifier = (
+                      resp: any,
+                      fallbackIdx: number,
+                    ) => {
                       const ud = resp.userData;
                       if (!ud) return `Taker #${fallbackIdx + 1}`;
                       if (typeof ud === 'object') {
@@ -4148,7 +4474,9 @@ export default function QuizPage() {
                           ud.phone ||
                           ud.userId ||
                           (Array.isArray(ud) ? ud[0] : null) ||
-                          (Object.values(ud).length > 0 ? String(Object.values(ud)[0]) : null) ||
+                          (Object.values(ud).length > 0 ?
+                            String(Object.values(ud)[0])
+                          : null) ||
                           `Taker #${fallbackIdx + 1}`
                         );
                       }
@@ -4159,9 +4487,16 @@ export default function QuizPage() {
                     let worstTaker = { name: 'None', score: 999999 };
 
                     // Survey Question stats
-                    const surveyStats: Record<string, { text: string; attempts: number; skipped: number }> = {};
+                    const surveyStats: Record<
+                      string,
+                      { text: string; attempts: number; skipped: number }
+                    > = {};
                     viewingResponses.questions.forEach((q) => {
-                      surveyStats[q.id] = { text: q.text, attempts: 0, skipped: 0 };
+                      surveyStats[q.id] = {
+                        text: q.text,
+                        attempts: 0,
+                        skipped: 0,
+                      };
                     });
 
                     responses.forEach((resp, rIdx) => {
@@ -4171,8 +4506,12 @@ export default function QuizPage() {
                       else if (reason === 'quit') quits++;
                       else completions++;
 
-                      const geoKey = isProTier ? (resp.country || resp.continent || 'Unknown') : (resp.continent || 'Global');
-                      countriesCount[geoKey] = (countriesCount[geoKey] || 0) + 1;
+                      const geoKey =
+                        isProTier ?
+                          resp.country || resp.continent || 'Unknown'
+                        : resp.continent || 'Global';
+                      countriesCount[geoKey] =
+                        (countriesCount[geoKey] || 0) + 1;
 
                       const takerName = getTakerIdentifier(resp, rIdx);
 
@@ -4208,7 +4547,9 @@ export default function QuizPage() {
                       }
 
                       // Track question stats
-                      const answeredQIds = new Set((resp.answers || []).map((a: any) => a.questionId));
+                      const answeredQIds = new Set(
+                        (resp.answers || []).map((a: any) => a.questionId),
+                      );
 
                       viewingResponses.questions.forEach((q) => {
                         if (surveyStats[q.id]) {
@@ -4259,9 +4600,13 @@ export default function QuizPage() {
                       (a, b) => b.incorrect - a.incorrect,
                     )[0];
 
-                    const sortedSurveyByAttempts = Object.values(surveyStats).sort((a, b) => b.attempts - a.attempts);
+                    const sortedSurveyByAttempts = Object.values(
+                      surveyStats,
+                    ).sort((a, b) => b.attempts - a.attempts);
                     const mostAttemptedSurveyQ = sortedSurveyByAttempts[0];
-                    const mostSkippedSurveyQ = [...sortedSurveyByAttempts].sort((a, b) => b.skipped - a.skipped)[0];
+                    const mostSkippedSurveyQ = [...sortedSurveyByAttempts].sort(
+                      (a, b) => b.skipped - a.skipped,
+                    )[0];
 
                     const isQuizType = viewingResponses.type === 'quiz';
 
@@ -4270,12 +4615,15 @@ export default function QuizPage() {
                         <div className='flex items-center justify-between border-b border-white/5 p-1 pb-2'>
                           <span className='text-xs font-bold uppercase tracking-wider text-pw-primary flex items-center gap-2'>
                             <BarChart2 className='h-4 w-4' />{' '}
-                            {isQuizType ? 'Quiz Analytics' : 'Survey Response Analytics'}
+                            {isQuizType ?
+                              'Quiz Analytics'
+                            : 'Survey Response Analytics'}
                           </span>
 
                           <div className='flex items-center gap-2'>
                             <span className='text-[10px] font-mono text-pw-muted'>
-                              {totalParticipants} {isQuizType ? 'Takers' : 'Respondents'}
+                              {totalParticipants}{' '}
+                              {isQuizType ? 'Takers' : 'Respondents'}
                             </span>
                             <ChevronDown
                               onClick={() => setShowAnalytics(!showAnalytics)}
@@ -4290,7 +4638,7 @@ export default function QuizPage() {
                         {showAnalytics && (
                           <div className='space-y-4 pt-1'>
                             {/* Quiz Type Specific Pass/Fail Analytics */}
-                            {isQuizType ? (
+                            {isQuizType ?
                               <>
                                 <div className='space-y-1.5'>
                                   <div className='flex justify-between text-xs font-mono font-bold'>
@@ -4370,31 +4718,42 @@ export default function QuizPage() {
                                 </div>
 
                                 {/* Most Failed Question & Top Wrong Choice */}
-                                {topFailedQuestion && topFailedQuestion.incorrect > 0 && (
-                                  <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1.5'>
-                                    <span className='text-[9px] font-bold uppercase text-pw-danger block'>
-                                      Most Missed Question
-                                    </span>
-                                    <p className='font-bold text-white line-clamp-1'>
-                                      &quot;{topFailedQuestion.text}&quot;
-                                    </p>
-                                    <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono flex-wrap gap-1'>
-                                      <span>
-                                        Missed {topFailedQuestion.incorrect} times out of{' '}
-                                        {topFailedQuestion.correct + topFailedQuestion.incorrect} attempts
+                                {topFailedQuestion &&
+                                  topFailedQuestion.incorrect > 0 && (
+                                    <div className='p-3 rounded-xl bg-pw-danger/10 border border-pw-danger/20 text-xs space-y-1.5'>
+                                      <span className='text-[9px] font-bold uppercase text-pw-danger block'>
+                                        Most Missed Question
                                       </span>
-                                      {Object.keys(topFailedQuestion.wrongChoices || {}).length > 0 && (
-                                        <span className='text-pw-danger font-bold'>
-                                          Top Wrong Option: {
-                                            Object.entries(topFailedQuestion.wrongChoices).sort(
-                                              (a, b) => (b[1] as number) - (a[1] as number),
-                                            )[0][0]
-                                          }
+                                      <p className='font-bold text-white line-clamp-1'>
+                                        &quot;{topFailedQuestion.text}&quot;
+                                      </p>
+                                      <div className='flex items-center justify-between text-[10px] text-pw-muted font-mono flex-wrap gap-1'>
+                                        <span>
+                                          Missed {topFailedQuestion.incorrect}{' '}
+                                          times out of{' '}
+                                          {topFailedQuestion.correct +
+                                            topFailedQuestion.incorrect}{' '}
+                                          attempts
                                         </span>
-                                      )}
+                                        {Object.keys(
+                                          topFailedQuestion.wrongChoices || {},
+                                        ).length > 0 && (
+                                          <span className='text-pw-danger font-bold'>
+                                            Top Wrong Option:{' '}
+                                            {
+                                              Object.entries(
+                                                topFailedQuestion.wrongChoices,
+                                              ).sort(
+                                                (a, b) =>
+                                                  (b[1] as number) -
+                                                  (a[1] as number),
+                                              )[0][0]
+                                            }
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
 
                                 {/* Category Performance Analysis */}
                                 {Object.keys(categoryStats).length > 0 && (
@@ -4403,41 +4762,46 @@ export default function QuizPage() {
                                       Category Performance Analysis
                                     </span>
                                     <div className='space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1'>
-                                      {Object.entries(categoryStats).map(([cat, stat]) => {
-                                        const catPassPct =
-                                          stat.attempts > 0 ?
-                                            Math.round((stat.pass / stat.attempts) * 100)
-                                          : 0;
-                                        return (
-                                          <div
-                                            key={cat}
-                                            className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
-                                            <span className='font-bold text-white uppercase text-[10px]'>
-                                              {cat}
-                                            </span>
-                                            <div className='flex items-center gap-3 font-mono text-[10px]'>
-                                              <span>
-                                                {stat.pass} Pass / {stat.fail} Fail
+                                      {Object.entries(categoryStats).map(
+                                        ([cat, stat]) => {
+                                          const catPassPct =
+                                            stat.attempts > 0 ?
+                                              Math.round(
+                                                (stat.pass / stat.attempts) *
+                                                  100,
+                                              )
+                                            : 0;
+                                          return (
+                                            <div
+                                              key={cat}
+                                              className='p-2 bg-white/5 rounded-xl flex items-center justify-between text-xs'>
+                                              <span className='font-bold text-white uppercase text-[10px]'>
+                                                {cat}
                                               </span>
-                                              <span
-                                                className={cn(
-                                                  'font-bold',
-                                                  catPassPct >= 50 ?
-                                                    'text-pw-success'
-                                                  : 'text-pw-danger',
-                                                )}>
-                                                {catPassPct}%
-                                              </span>
+                                              <div className='flex items-center gap-3 font-mono text-[10px]'>
+                                                <span>
+                                                  {stat.pass} Pass / {stat.fail}{' '}
+                                                  Fail
+                                                </span>
+                                                <span
+                                                  className={cn(
+                                                    'font-bold',
+                                                    catPassPct >= 50 ?
+                                                      'text-pw-success'
+                                                    : 'text-pw-danger',
+                                                  )}>
+                                                  {catPassPct}%
+                                                </span>
+                                              </div>
                                             </div>
-                                          </div>
-                                        );
-                                      })}
+                                          );
+                                        },
+                                      )}
                                     </div>
                                   </div>
                                 )}
                               </>
-                            ) : (
-                              /* Survey Specific Response Distribution & Averages */
+                            : /* Survey Specific Response Distribution & Averages */
                               <div className='space-y-3'>
                                 <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
                                   <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
@@ -4485,7 +4849,14 @@ export default function QuizPage() {
                                         &quot;{mostAttemptedSurveyQ.text}&quot;
                                       </p>
                                       <span className='text-[10px] font-mono text-pw-muted block'>
-                                        {mostAttemptedSurveyQ.attempts} out of {totalParticipants} respondents ({Math.round((mostAttemptedSurveyQ.attempts / totalParticipants) * 100)}%)
+                                        {mostAttemptedSurveyQ.attempts} out of{' '}
+                                        {totalParticipants} respondents (
+                                        {Math.round(
+                                          (mostAttemptedSurveyQ.attempts /
+                                            totalParticipants) *
+                                            100,
+                                        )}
+                                        %)
                                       </span>
                                     </div>
                                   )}
@@ -4498,7 +4869,13 @@ export default function QuizPage() {
                                         &quot;{mostSkippedSurveyQ.text}&quot;
                                       </p>
                                       <span className='text-[10px] font-mono text-pw-muted block'>
-                                        {mostSkippedSurveyQ.skipped} skipped ({Math.round((mostSkippedSurveyQ.skipped / totalParticipants) * 100)}%)
+                                        {mostSkippedSurveyQ.skipped} skipped (
+                                        {Math.round(
+                                          (mostSkippedSurveyQ.skipped /
+                                            totalParticipants) *
+                                            100,
+                                        )}
+                                        %)
                                       </span>
                                     </div>
                                   )}
@@ -4506,54 +4883,61 @@ export default function QuizPage() {
 
                                 <div className='space-y-2 pt-2 border-t border-white/5'>
                                   <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
-                                    Survey Questions Overview ({viewingResponses.questions.length})
+                                    Survey Questions Overview (
+                                    {viewingResponses.questions.length})
                                   </span>
                                   <div className='space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar'>
-                                    {viewingResponses.questions.map((quest, qIdx) => (
-                                      <div
-                                        key={quest.id}
-                                        className='p-2 bg-white/5 rounded-xl text-xs flex items-center justify-between gap-2'>
-                                        <div className='min-w-0 flex-1'>
-                                          <p className='font-bold text-white truncate'>
-                                            Q{qIdx + 1}: {quest.text}
-                                          </p>
-                                          <span className='text-[9px] text-pw-muted uppercase font-mono'>
-                                            Type: {quest.type}
-                                          </span>
+                                    {viewingResponses.questions.map(
+                                      (quest, qIdx) => (
+                                        <div
+                                          key={quest.id}
+                                          className='p-2 bg-white/5 rounded-xl text-xs flex items-center justify-between gap-2'>
+                                          <div className='min-w-0 flex-1'>
+                                            <p className='font-bold text-white truncate'>
+                                              Q{qIdx + 1}: {quest.text}
+                                            </p>
+                                            <span className='text-[9px] text-pw-muted uppercase font-mono'>
+                                              Type: {quest.type}
+                                            </span>
+                                          </div>
+                                          {quest.category && (
+                                            <span className='px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-pw-primary/10 text-pw-primary border border-pw-primary/20 shrink-0'>
+                                              {quest.category}
+                                            </span>
+                                          )}
                                         </div>
-                                        {quest.category && (
-                                          <span className='px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-pw-primary/10 text-pw-primary border border-pw-primary/20 shrink-0'>
-                                            {quest.category}
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
+                                      ),
+                                    )}
                                   </div>
                                 </div>
                               </div>
-                            )}
+                            }
 
                             {/* Geographic Locations Breakdown Tags */}
                             {Object.keys(countriesCount).length > 0 && (
                               <div className='pt-2 border-t border-white/5 space-y-1.5'>
                                 <div className='flex items-center justify-between'>
                                   <span className='text-[10px] font-bold uppercase tracking-wider text-pw-muted block'>
-                                    Participant Locations ({Object.keys(countriesCount).length})
+                                    Participant Locations (
+                                    {Object.keys(countriesCount).length})
                                   </span>
                                   {!isProTier && (
                                     <span className='text-[9px] text-pw-warning font-bold'>
-                                      Upgrade to Pro for Specific Country Breakdown
+                                      Upgrade to Pro for Specific Country
+                                      Breakdown
                                     </span>
                                   )}
                                 </div>
                                 <div className='flex items-center flex-wrap gap-1.5'>
-                                  {Object.entries(countriesCount).map(([loc, cnt]) => (
-                                    <span
-                                      key={loc}
-                                      className='px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 border border-white/10 text-pw-cyan font-bold'>
-                                      📍 {loc} ({cnt})
-                                    </span>
-                                  ))}
+                                  {Object.entries(countriesCount).map(
+                                    ([loc, cnt], i) => (
+                                      <span
+                                        key={loc + i} 
+                                        className='px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 border border-white/10 text-pw-cyan font-bold'>
+                                        📍 {loc} ({cnt})
+                                      </span>
+                                    ),
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -4603,9 +4987,9 @@ export default function QuizPage() {
                         </div>
 
                         <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5 px-1 mb-1'>
-                          {Object.entries(resp.userData).map(([key, val]) => (
+                          {Object.entries(resp.userData).map(([key, val], i) => (
                             <div
-                              key={key}
+                              key={key + i}
                               className='flex gap-1.5 text-[11px]'>
                               <span className='text-pw-muted font-bold uppercase'>
                                 {key}:
@@ -4756,10 +5140,10 @@ export default function QuizPage() {
       <Dialog
         open={isNameModalOpen}
         onOpenChange={setIsNameModalOpen}>
-        <DialogContent className='max-w-md w-full pt-5 bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl text-pw-text z-50 animate-fade-in'>
+        <DialogContent className='max-w-md w-[95%] pt-5 bg-[#0c0d1c]/70 bkbklur border border-white/10 rounded-3xl shadow-2xl text-pw-text z-50 animate-fade-in'>
           <DialogHeader className='p-2'>
             <DialogTitle className='text-xl font-extrabold font-display'>
-              Export Name Customization
+              Export Quiz
             </DialogTitle>
             <DialogDescription className='text-pw-muted text-xs'>
               Specify the filename you want to save. Do not include extensions.
@@ -4772,7 +5156,7 @@ export default function QuizPage() {
                 value={filenameInput}
                 onChange={(e) => setFilenameInput(e.target.value)}
                 placeholder='Enter filename...'
-                className='card-glow bg-transparent h-11 text-sm border-white/5 focus-visible:ring-0 w-full'
+                className='bg-white/5 bkblur h-11 pl-2 text-sm border border-white/10 focus-visible:ring-0 w-full rounded-xl pr-15.5'
               />
               <span className='absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-pw-primary font-mono uppercase'>
                 .{filenameExtension}
@@ -4780,7 +5164,7 @@ export default function QuizPage() {
             </div>
           </div>
 
-          <DialogFooter className='flex flex-col sm:flex-row gap-2'>
+          <DialogFooter className='flex flex-row flex-wrap gap-2 rounded-3xl'>
             <button
               onClick={() => setIsNameModalOpen(false)}
               className='flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all'>
@@ -4789,7 +5173,7 @@ export default function QuizPage() {
             <button
               onClick={handleConfirmFilename}
               className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all'>
-              Confirm &amp; Export
+              Export
             </button>
           </DialogFooter>
         </DialogContent>

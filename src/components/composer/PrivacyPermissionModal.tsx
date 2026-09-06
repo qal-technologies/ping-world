@@ -131,22 +131,22 @@ export function PrivacyPermissionModal() {
             </p>
 
             {(Object.entries(PERMISSIONS) as [Platform, string[]][]).map(
-              ([platform, perms]) => {
+              ([platform, perms], idx) => {
                 const meta = getPlatform(platform);
                 return (
                   <div
-                    key={platform}
+                    key={platform + idx}
                     className='space-y-2'>
                     <p
                       className='text-xs font-bold uppercase tracking-widest'
                       style={{ color: meta.iconHex }}>
                       {meta.name}
                     </p>
-                    {perms.map((perm) => {
+                    {perms.map((perm, idx) => {
                       const key = `${platform}:${perm}`;
                       return (
                         <label
-                          key={perm}
+                          key={perm + idx}
                           className='flex items-start gap-2 cursor-pointer group'>
                           <input
                             type='checkbox'

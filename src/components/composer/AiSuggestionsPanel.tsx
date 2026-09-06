@@ -173,9 +173,9 @@ export function AiSuggestionsPanel() {
           Writing Style
         </label>
         <div className='flex gap-2 flex-wrap'>
-          {STYLE_OPTIONS.map((style) => (
+          {STYLE_OPTIONS.map((style, idx) => (
             <button
-              key={style.id}
+              key={style.id + idx}
               onClick={() => setSelectedStyle(style.id)}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
@@ -261,7 +261,7 @@ export function AiSuggestionsPanel() {
             </p>
             {state.aiSuggestions.map((s, i) => (
               <motion.div
-                key={s.id}
+                key={s.id + i}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}

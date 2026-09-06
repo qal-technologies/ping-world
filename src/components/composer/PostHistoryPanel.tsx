@@ -133,9 +133,9 @@ export function PostHistoryPanel() {
         </p>
       ) : (
         <div className='space-y-2.5 max-h-[320px] overflow-y-auto pr-1'>
-          {history.map((item) => (
+          {history.map((item, idx) => (
             <div
-              key={item.id}
+              key={item.id + idx}
               className='p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all space-y-2 group'>
               <div className='flex items-center justify-between text-[10px] text-pw-muted'>
                 <div className='flex items-center gap-1.5'>
@@ -143,11 +143,11 @@ export function PostHistoryPanel() {
                   <span>{new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div className='flex items-center gap-1'>
-                  {item.platforms.map((p) => {
+                  {item.platforms.map((p, idx) => {
                     const meta = PLATFORMS.find((pl) => pl.id === p);
                     return (
                       <span
-                        key={p}
+                        key={p + idx}
                         className='px-1.5 py-0.5 rounded text-[8px] font-bold uppercase'
                         style={{ backgroundColor: `${meta?.iconHex || '#888'}20`, color: meta?.iconHex || '#888' }}>
                         {p}

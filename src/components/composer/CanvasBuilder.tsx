@@ -296,9 +296,9 @@ export function CanvasBuilder() {
             )}
 
             {/* Render shapes */}
-            {shapes.map((shape) => (
+            {shapes.map((shape, idx) => (
               <div
-                key={shape.id}
+                key={shape.id + idx}
                 onPointerDown={(e) => handlePointerDownShape(shape.id, e)}
                 onPointerUp={handlePointerUp}
                 style={{
@@ -328,7 +328,7 @@ export function CanvasBuilder() {
             {/* Render text layers */}
             {state.canvasTextOverlays.map((overlay, i) => (
               <div
-                key={i}
+                key={overlay.text + i}
                 onPointerDown={(e) => handlePointerDownText(i, e)}
                 onPointerUp={handlePointerUp}
                 className={cn(
@@ -367,9 +367,9 @@ export function CanvasBuilder() {
               Background Pattern
             </label>
             <div className='flex gap-2 flex-wrap px-1'>
-              {BG_PRESETS.map((preset) => (
+              {BG_PRESETS.map((preset, idx) => (
                 <button
-                  key={preset.label}
+                  key={preset.label + idx}
                   onClick={() =>
                     dispatch({ type: 'SET_CANVAS_BG', payload: preset.value })
                   }
@@ -559,9 +559,9 @@ export function CanvasBuilder() {
                   handleUpdateActiveLayer({ fontFamily: e.target.value });
                 }}
                 className='bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-pw-text focus:outline-none no-outline appearance-none'>
-                {CANVAS_FONTS.map((f) => (
+                {CANVAS_FONTS.map((f, i) => (
                   <option
-                    key={f}
+                    key={f + i}
                     value={f}
                     className='bg-pw-surface'>
                     {f}
@@ -634,7 +634,7 @@ export function CanvasBuilder() {
               </p>
               {state.canvasTextOverlays.map((overlay, i) => (
                 <div
-                  key={i}
+                  key={overlay.text + i}
                   className={cn(
                     'flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all',
                     selectedOverlayIdx === i ?

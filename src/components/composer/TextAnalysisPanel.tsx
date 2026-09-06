@@ -110,9 +110,9 @@ export function TextAnalysisPanel() {
             icon: <Clock className='h-3.5 w-3.5' />,
             color: 'text-pw-cyan',
           },
-        ].map((stat) => (
+        ].map((stat, idx) => (
           <div
-            key={stat.label}
+            key={stat.label + idx}
             className='p-3 rounded-xl bg-white/[0.03] border border-white/5 flex items-center gap-2'>
             <span className={stat.color}>{stat.icon}</span>
             <div>
@@ -206,9 +206,9 @@ export function TextAnalysisPanel() {
             </span>
           </div>
           <div className='flex flex-wrap gap-1.5'>
-            {analysis.flaggedWords.map((w) => (
+            {analysis.flaggedWords.map((w, i) => (
               <span
-                key={w}
+                key={`flagged-${w}-${i}`}
                 className='text-[10px] px-2 py-0.5 rounded-full bg-pw-danger/8 text-pw-danger border border-pw-danger/15'>
                 {w}
               </span>

@@ -108,14 +108,14 @@ export function AccountConnector() {
       <div className='h-4 w-px bg-white/10' />
 
       {/* Platform Pills */}
-      {PLATFORMS.map((platform) => {
+      {PLATFORMS.map((platform, idx) => {
         const account = getAccount(platform.id);
         const Icon = PLATFORM_ICONS[platform.id];
         const isConnected = !!account;
 
         return (
           <div
-            key={platform.id}
+            key={platform.id + idx}
             className='relative'
             onMouseEnter={() => setHovered(platform.id)}
             onMouseLeave={() => setHovered(null)}

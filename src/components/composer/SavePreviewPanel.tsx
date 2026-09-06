@@ -128,13 +128,13 @@ export function SavePreviewPanel() {
       {/* Export Platform Selector */}
       {state.selectedPlatforms.length > 1 && (
         <div className='flex gap-2 flex-wrap mb-2'>
-          {state.selectedPlatforms.map((platform) => {
+          {state.selectedPlatforms.map((platform, idx) => {
             const Icon = PLATFORM_ICONS[platform];
             const pmeta = getPlatform(platform);
             const isSelected = exportPlatform === platform;
             return (
               <button
-                key={platform}
+                key={platform + idx}
                 onClick={() => setExportPlatform(platform)}
                 className='flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all hover:scale-105'
                 style={

@@ -5,6 +5,7 @@ import { fontDisplay, fontBody, fontMono } from '@/lib/fonts';
 import { AppProvider } from '@/context/AppContext';
 import { AppModalProvider } from '@/components/ui/AppModalProvider';
 import { ComposerProvider } from '@/lib/composer/useComposerStore';
+import { NetworkStatusBar } from '@/components/layout/NetworkStatusBar';
 import './globals.css';
 import { PageLayoutProvider } from '@/components/layout';
 
@@ -128,6 +129,7 @@ export default function RootLayout({
         />
       </head>
       <body className='min-h-dvh flex flex-col antialiased'>
+        <NetworkStatusBar />
         <AppProvider>
           <PageLayoutProvider>
             <AppModalProvider>

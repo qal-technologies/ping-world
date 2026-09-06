@@ -142,6 +142,7 @@
 * {
   transition: all ease 400ms;
 }
+
 html {
   scroll-behavior: smooth;
   scroll-snap-type: proximity;
@@ -160,6 +161,8 @@ body {
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: all ease 400ms;
+
 }
 
 /* ─── Custom Scrollbar ──────────────────────────────────────── */
@@ -169,15 +172,11 @@ body {
   transition:
     width ease-in 0.5s,
     height ease 0.6s;
-}
-
-::-webkit-scrollbar:hover {
-  width: 6px;
-  height: 6px;
+    
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--pw-bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {

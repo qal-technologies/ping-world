@@ -390,7 +390,7 @@ export default function ImageToolkitPage() {
       </div>
 
       {/* ─── Studio Mode Switcher ─── */}
-      <div className='flex gap-1 bg-white/5 border border-white/5 rounded-2xl p-1 mb-8 w-fit'>
+      <div className='flex bg-white/5 border border-white/5 rounded-3xl p-0.5 mb-8 w-fit max-w-full scrollable-row no-scrollbar' style={{placeSelf:'center', gap:0 }}>
         {([
           { id: 'editor',  label: 'Image Editor',      icon: <Wand2 className='h-4 w-4' /> },
           { id: 'profile', label: 'Profile Pic Maker',  icon: <UserCircle className='h-4 w-4' /> },
@@ -398,7 +398,7 @@ export default function ImageToolkitPage() {
         ] as { id: StudioMode; label: string; icon: React.ReactNode }[]).map((m) => (
           <Button key={m.id} variant='ghost' onClick={() => setStudioMode(m.id)}
             className={cn(
-              'h-9 gap-2 rounded-xl text-xs font-bold px-4 transition-all',
+              'h-9 gap-2 rounded-3xl text-xs font-bold px-4 transition-all',
               studioMode === m.id
                 ? 'bg-pw-primary text-white shadow-lg shadow-pw-primary/25'
                 : 'text-pw-muted hover:text-white hover:bg-white/10',
@@ -427,7 +427,7 @@ export default function ImageToolkitPage() {
           className='relative'>
           <div
             onClick={() => document.getElementById('image-upload')?.click()}
-            className='flex flex-col items-center justify-center py-30 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'>
+            className='flex flex-col items-center justify-center py-20 px-3 sm:py-30 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group relative'>
             <input
               id='image-upload'
               type='file'
@@ -441,7 +441,7 @@ export default function ImageToolkitPage() {
             <h3 className='text-2xl font-bold font-display mb-2'>
               Upload an Image
             </h3>
-            <p className='text-pw-muted text-sm max-w-sm'>
+            <p className='text-pw-muted text-xs sm:text-sm max-w-sm'>
               Drag and drop or click to pick an image. All processing happens in
               your browser for 100% privacy.
             </p>

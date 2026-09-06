@@ -111,7 +111,9 @@ export function ComposerLayout() {
     if (!scheduledDate) {
       return toast.error('Please pick a valid schedule date!');
     }
-    const targetIso = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
+    const targetIso = new Date(
+      `${scheduledDate}T${scheduledTime}`,
+    ).toISOString();
     setIsPosting(true);
     const toastId = toast.loading('Scheduling post...');
 
@@ -126,10 +128,16 @@ export function ComposerLayout() {
         status: 'scheduled',
       };
 
-      await HybridStorage.save(scheduledLog.id, scheduledLog, 'composer_history');
+      await HybridStorage.save(
+        scheduledLog.id,
+        scheduledLog,
+        'composer_history',
+      );
       setShowScheduleModal(false);
       toast.dismiss(toastId);
-      toast.success(`🎉 Post scheduled for ${new Date(targetIso).toLocaleString()}!`);
+      toast.success(
+        `🎉 Post scheduled for ${new Date(targetIso).toLocaleString()}!`,
+      );
     } catch (e: any) {
       toast.dismiss(toastId);
       toast.error('Failed to schedule post.');
@@ -140,11 +148,15 @@ export function ComposerLayout() {
 
   const handlePostToSocials = async () => {
     if (!state.isOnline) {
-      return toast.warning('You are currently offline. Posting to social networks requires an active internet connection.');
+      return toast.warning(
+        'You are currently offline. Posting to social networks requires an active internet connection.',
+      );
     }
 
     if (!state.baseContent.trim()) {
-      return toast.error('Please write some content before attempting to post!');
+      return toast.error(
+        'Please write some content before attempting to post!',
+      );
     }
 
     if (!state.selectedPlatforms || state.selectedPlatforms.length === 0) {
@@ -152,7 +164,9 @@ export function ComposerLayout() {
     }
 
     setIsPosting(true);
-    const toastId = toast.loading('Connecting and dispatching to selected social API gateways...');
+    const toastId = toast.loading(
+      'Connecting and dispatching to selected social API gateways...',
+    );
 
     try {
       // 1. Dispatch to social publishing API
@@ -163,7 +177,8 @@ export function ComposerLayout() {
           content: state.baseContent,
           platforms: state.selectedPlatforms,
           hashtags: state.tags?.map((t) => t.tag) || [],
-          mediaUrls: state.mediaAssets?.map((f) => f.previewUrl).filter(Boolean) || [],
+          mediaUrls:
+            state.mediaAssets?.map((f) => f.previewUrl).filter(Boolean) || [],
           canvasBlobBase64: state.canvasBackground || undefined,
         }),
       });
@@ -192,7 +207,8 @@ export function ComposerLayout() {
       await HybridStorage.save(newLog.id, newLog, 'composer_history');
 
       if (user) {
-        const maxHistory = premiumTier === 'free' || premiumTier === 'flexible' ? 5 : 50;
+        const maxHistory =
+          premiumTier === 'free' || premiumTier === 'flexible' ? 5 : 50;
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -200,7 +216,10 @@ export function ComposerLayout() {
           .eq('id', user.id)
           .single();
 
-        let history = Array.isArray(profile?.composer_history) ? profile.composer_history : [];
+        let history =
+          Array.isArray(profile?.composer_history) ?
+            profile.composer_history
+          : [];
         history.unshift(newLog);
         if (history.length > maxHistory) history = history.slice(0, maxHistory);
 
@@ -212,17 +231,22 @@ export function ComposerLayout() {
         const cached = localStorage.getItem('pw_composer_history') || '[]';
         const list = JSON.parse(cached);
         list.unshift(newLog);
-        localStorage.setItem('pw_composer_history', JSON.stringify(list.slice(0, 10)));
+        localStorage.setItem(
+          'pw_composer_history',
+          JSON.stringify(list.slice(0, 10)),
+        );
       }
 
       toast.dismiss(toastId);
       if (data.sandbox) {
         toast.info(
           '🎉 Post verified & simulated in Sandbox mode! (Add social API keys in .env for live posting)',
-          { duration: 6000 }
+          { duration: 6000 },
         );
       } else {
-        toast.success('🎉 Successfully published to all selected social platforms!');
+        toast.success(
+          '🎉 Successfully published to all selected social platforms!',
+        );
       }
     } catch (err: any) {
       toast.dismiss(toastId);
@@ -231,7 +255,6 @@ export function ComposerLayout() {
       setIsPosting(false);
     }
   };
-  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   const isPremiumUI = state.isPremium;
 
@@ -322,131 +345,161 @@ export function ComposerLayout() {
           {/* ─── Left: Editor + Tools ─── */}
           <div className='md:col-span-3 xl:col-span-8 space-y-4'>
             {/* Platform Editor */}
-            <div className='flex items-center flex-col w-full gap-2'>
-              {/* Add Network / Add Social button */}
+            <AnimatePresence mode='popLayout'>
+              <div className='flex items-center justify-end flex-wrap w-full gap-2'>
+                {/* Add Network / Add Social button */}
 
-              <AnimatePresence mode='popLayout'>
-                <div className='h-12 bg-transparent w-full items-center justify-end flex gap-2'>
-                  {/* Schedule Post Button for Premium Users */}
-                  {state.isPremium && (
-                    <button
-                      title='Schedule Post'
-                      onClick={() => setShowScheduleModal(true)}
-                      className='h-10 px-4 rounded-full border border-pw-warning/30 bg-pw-warning/10 text-pw-warning text-xs font-bold flex items-center gap-1.5 hover:bg-pw-warning/20 transition-all'>
-                      <Crown className='h-3.5 w-3.5' /> Schedule
-                    </button>
-                  )}
-
-                  <button
-                    title='Post to social platforms'
-                    onClick={handlePostToSocials}
-                    disabled={isPosting}
-                    className='btn-primary h-10 rounded-full flex items-center justify-between gap-3 cursor-pointer'
-                    style={{ borderRadius: '200px' }}>
-                    <CheckCircle className='w-4 h-4' />
-                    {isPosting ? 'Posting...' : 'Post'}
-                  </button>
-                  <button
-                    title='Add New Social Platform'
-                    onClick={() =>
-                      toast.error(
-                        'Additional premium social networks coming soon!',
-                      )
+                {/* Schedule Post Button */}
+                <button
+                  title={
+                    state.isPremium ? 'Schedule Post' : (
+                      'Schedule Post (Premium Feature)'
+                    )
+                  }
+                  onClick={() => {
+                    if (!state.isPremium) {
+                      toast.info(
+                        'Post Scheduling is a Premium feature. Upgrade to schedule posts in advance!',
+                      );
                     }
-                    className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10 sm:bg-transparent'>
-                    <div className='h-5 w-5 rounded-full border border-current flex items-center justify-center'>
-                      <span className='font-bold text-lg'>+</span>
+                    setShowScheduleModal(true);
+                  }}
+                  className={cn(
+                    'h-10 px-4 rounded-full border text-xs font-bold flex items-center gap-1.5 transition-all',
+                    state.isPremium ?
+                      'border-pw-warning/30 bg-pw-warning/10 text-pw-warning hover:bg-pw-warning/20'
+                    : 'border-white/10 bg-white/5 text-pw-muted hover:text-white hover:bg-white/10',
+                  )}>
+                  <Crown
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      state.isPremium ? 'text-pw-warning' : 'text-pw-muted',
+                    )}
+                  />
+                  <span>Schedule</span>
+                </button>
+
+                <button
+                  title='Post to social platforms'
+                  onClick={handlePostToSocials}
+                  disabled={isPosting}
+                  className={cn(
+                    'px-4 text-xs h-10 rounded-full flex items-center gap-3 border',
+                    !isPosting || state.baseContent ?
+                      'border-none gradient-brand'
+                    : 'border-white/10 bg-white/5 text-pw-muted hover:text-white hover:bg-white/10',
+                  )}
+                  style={{ borderRadius: '200px' }}>
+                  <CheckCircle className='w-4 h-4' />
+                  {isPosting ? 'Posting...' : 'Post'}
+                </button>
+                <button
+                  title='Add New Social Platform'
+                  onClick={() =>
+                    toast.error(
+                      'Additional premium social networks coming soon!',
+                    )
+                  }
+                  className='w-10 h-10 bg-pw-primary/5 rounded-full flex flex-col items-center justify-center gap-1.5 text-pw-muted/80 hover:text-pw-primary transition-colors hover:bg-pw-primary/10 sm:bg-transparent hidden'>
+                  <div className='h-5 w-5 rounded-full border border-current flex items-center justify-center'>
+                    <span className='font-bold text-lg'>+</span>
+                  </div>
+
+                  <span className='text-[8px] font-bold uppercase tracking-widest hidden sm:block'>
+                    Add
+                  </span>
+                </button>
+              </div>
+
+              <InstagramCanvasSettings />
+            </AnimatePresence>
+
+            {/* Schedule Post Dialog Modal */}
+            {showScheduleModal && (
+              <div className='fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4'>
+                <div className='bg-[#0c0d1c] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white'>
+                  <div className='flex items-center gap-2 text-pw-warning'>
+                    <Crown className='h-5 w-5' />
+                    <h3 className='text-lg font-bold font-display'>
+                      Schedule Post
+                    </h3>
+                  </div>
+                  <p className='text-xs text-pw-muted'>
+                    Pick a date & time to automatically queue this post.
+                  </p>
+
+                  <div className='space-y-3'>
+                    <div className='space-y-1'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Date
+                      </label>
+                      <input
+                        type='date'
+                        value={scheduledDate}
+                        onChange={(e) => setScheduledDate(e.target.value)}
+                        className='w-full h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white'
+                      />
                     </div>
-                    <span className='text-[8px] font-bold uppercase tracking-widest hidden sm:block'>
-                      Add
-                    </span>
-                  </button>
-                </div>
 
-                <InstagramCanvasSettings />
-              </AnimatePresence>
-
-              {/* Schedule Post Dialog Modal */}
-              {showScheduleModal && (
-                <div className='fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4'>
-                  <div className='bg-[#0c0d1c] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white'>
-                    <div className='flex items-center gap-2 text-pw-warning'>
-                      <Crown className='h-5 w-5' />
-                      <h3 className='text-lg font-bold font-display'>Schedule Post</h3>
-                    </div>
-                    <p className='text-xs text-pw-muted'>
-                      Pick a date & time to automatically queue this post.
-                    </p>
-
-                    <div className='space-y-3'>
-                      <div className='space-y-1'>
-                        <label className='text-[10px] font-bold text-pw-muted uppercase'>Date</label>
-                        <input
-                          type='date'
-                          value={scheduledDate}
-                          onChange={(e) => setScheduledDate(e.target.value)}
-                          className='w-full h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white'
-                        />
-                      </div>
-
-                      <div className='space-y-1'>
-                        <label className='text-[10px] font-bold text-pw-muted uppercase'>Time</label>
-                        <input
-                          type='time'
-                          value={scheduledTime}
-                          onChange={(e) => setScheduledTime(e.target.value)}
-                          className='w-full h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white'
-                        />
-                      </div>
-                    </div>
-
-                    <div className='flex gap-2 pt-2'>
-                      <button
-                        onClick={() => setShowScheduleModal(false)}
-                        className='flex-1 h-9 rounded-xl border border-white/10 text-xs font-bold text-pw-muted hover:text-white'>
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSchedulePost}
-                        className='flex-1 h-9 rounded-xl btn-primary text-xs font-bold'>
-                        Confirm
-                      </button>
+                    <div className='space-y-1'>
+                      <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                        Time
+                      </label>
+                      <input
+                        type='time'
+                        value={scheduledTime}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className='w-full h-10 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white'
+                      />
                     </div>
                   </div>
-                </div>
-              )}
 
-              <Card
-                className={cn(
-                  'overflow-hidden bg-transparent ring-0 sm:ring-1 w-full p-0 sm:bg-white/[0.02] sm:bkblur sm:rounded-[25px]',
-                  isPremiumUI ?
-                    'sm:border-pw-warning/20 sm:shadow-[0_0_30px_rgba(255,179,71,0.08)]'
-                  : 'sm:border-white/10',
-                )}>
-                <PlatformEditor
-                  onOpenTag={() => setActiveTab('tags')}
-                  onOpenMedia={() => setActiveTab('media')}
-                />
-              </Card>
-            </div>
+                  <div className='flex gap-2 pt-2'>
+                    <button
+                      onClick={() => setShowScheduleModal(false)}
+                      className='flex-1 h-9 rounded-xl border border-white/10 text-xs font-bold text-pw-muted hover:text-white'>
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSchedulePost}
+                      className='flex-1 h-9 rounded-xl btn-primary text-xs font-bold'>
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Card
+              className={cn(
+                'overflow-hidden bg-transparent ring-0 sm:ring-1 w-full p-0 sm:bg-white/[0.02] sm:bkblur sm:rounded-[25px]',
+                isPremiumUI ?
+                  'sm:border-pw-warning/20 sm:shadow-[0_0_30px_rgba(255,179,71,0.08)]'
+                : 'sm:border-white/10',
+              )}>
+              <PlatformEditor
+                onOpenTag={() => setActiveTab('tags')}
+                onOpenMedia={() => setActiveTab('media')}
+              />
+            </Card>
 
             <div className='divider h-1 my-10 sm:hidden' />
             {/* Tool Tabs */}
             <Card
               className={cn(
-                'overflow-hidden ring-0 sm:ring-1 p-0 bg-transparent sm:bg-pw-surface/60',
+                'overflow-hidden ring-0 sm:ring-1 p-0 bg-transparent sm:bg-pw-surface/60 ',
                 isPremiumUI ? 'sm:border-pw-warning/20' : 'sm:border-white/10',
               )}>
               {/* Tab bar */}
               <div className='flex overflow-x-auto scrollable-row pt-3 px-1'>
-                {TOOL_TABS.map((tab) => {
+                {TOOL_TABS.map((tab, idx) => {
                   const Icon = tab.icon;
                   const isDisabled = tab.onlineOnly && !state.isOnline;
                   const isActive = activeTab === tab.id;
 
                   return (
                     <button
-                      key={tab.id}
+                      key={tab.id + idx}
                       title={
                         tab.onlineOnly && !state.isOnline ?
                           "You're offline"
@@ -481,7 +534,7 @@ export function ComposerLayout() {
               {/* Tab content */}
               <AnimatePresence mode='wait'>
                 <motion.div
-                  key={activeTab}
+                  key={activeTab + 'tool-tab'}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}

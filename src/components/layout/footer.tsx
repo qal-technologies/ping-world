@@ -65,8 +65,8 @@ export const Footer = () => {
   ];
 
   return (
-    <footer className='bg-pw-bg/80 backdrop-blur-lg bg-to-br bg-to-bg-pw-cyan'>
-      <div className='divider'/>
+    <footer className='bg-pw-bg/80 backdrop-blur-lg mt-5'>
+      <div className='divider' />
       <div className='mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-12'>
         <div className='grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-5'>
           {/* Brand column */}
@@ -164,14 +164,15 @@ export const Footer = () => {
             </ul>
           </div>
 
-          
           <div>
             <h2 className='text-sm font-semibold text-pw-text mb-3 flex items-center gap-1.5'>
               Developer APIs
             </h2>
             <ul className='space-y-2 flex flex-col flex-wrap max-w-full'>
               {FOOTER_DEV_TOOLS.map((devTool) => (
-                <li key={devTool.href} className='truncate'>
+                <li
+                  key={devTool.href}
+                  className='truncate'>
                   <Link
                     href={devTool.href}
                     className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px]'>

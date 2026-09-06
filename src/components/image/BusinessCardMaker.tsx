@@ -264,7 +264,7 @@ export default function BusinessCardMaker() {
     <div className='grid grid-cols-1 xl:grid-cols-12 gap-8 items-start'>
       {/* ───── Live Preview ───── */}
       <div className='xl:col-span-7 flex flex-col items-center gap-6
-                      p-8 bg-black/40 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl'>
+                      p-8'>
 
         {/* Front preview */}
         <div ref={frontRef}>

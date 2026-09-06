@@ -68,22 +68,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const handleOnline = () => {
       setIsOnline(true);
-      // Only show sync toast if not initial visit on fresh tab open
-      if (!initialVisit) {
-        toast.success('Back online - syncing data...', { id: 'online-status' });
-      }
-      initialVisit = false;
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      if (!offlineToastShown) {
-        toast.warning(
-          "You're offline. Some features are disabled and data is served from local cache.",
-          { id: 'offline-status', duration: 8000 },
-        );
-        setOfflineToastShown(true);
-      }
     };
 
     // Set initial state

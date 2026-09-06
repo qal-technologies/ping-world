@@ -50,6 +50,11 @@ import { useAppContext } from '@/context/AppContext';
 import { useAppModal } from '../ui/AppModalProvider';
 
 import { resolvePipedText } from '@/lib/quiz/quiz-piping';
+import {
+  playQuizStartTone,
+  playQuizCompletionTone,
+} from '@/lib/quiz/quiz-audio';
+import { detectClientGeo } from '@/lib/countries/geo-detector';
 
 export type QuestionType =
   | 'multiple_choice'
@@ -104,9 +109,9 @@ const PeriodicTable = () => {
         </h3>
       </div>
       <div className='grid grid-cols-6 gap-1'>
-        {elements.map((el) => (
+        {elements.map((el, i) => (
           <div
-            key={el.s}
+            key={el.s + i}
             title={`${el.n} (${el.cat})`}
             className='aspect-square flex flex-col items-center justify-center rounded border border-white/5 bg-white/5 hover:bg-white/10 transition-colors cursor-help p-1'>
             <span
@@ -205,17 +210,17 @@ const FormulaSheet = ({
         </h3>
       </div>
       <div className='space-y-6'>
-        {formulas.map((group) => (
+        {formulas.map((group, idx) => (
           <div
-            key={group.cat}
+            key={group.cat + idx}
             className='space-y-2'>
             <h4 className='text-[8px] font-black text-pw-muted uppercase tracking-[0.3em] border-b border-white/5 pb-1'>
               {group.cat}
             </h4>
             <div className='space-y-2'>
-              {group.items.map((item) => (
+              {group.items.map((item, idx) => (
                 <div
-                  key={item.n + item.f}
+                  key={item.n + item.f + idx}
                   className='flex justify-between items-center group'>
                   <span className='text-[10px] text-pw-text opacity-70 group-hover:opacity-100 transition-opacity'>
                     {item.n}
@@ -403,6 +408,7 @@ function Taker() {
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [isOfflineUncached, setIsOfflineUncached] = useState(false);
+  const [isQuizExpired, setIsQuizExpired] = useState(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -471,6 +477,7 @@ function Taker() {
           target.expires_at &&
           new Date(target.expires_at).getTime() < Date.now()
         ) {
+          setIsQuizExpired(true);
           setQuiz(null);
           setLoading(false);
           return;
@@ -991,6 +998,8 @@ function Taker() {
 
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
+    playQuizCompletionTone();
+
     if (quiz) {
       if (!quiz.allowRetry) {
         localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
@@ -998,29 +1007,28 @@ function Taker() {
       try {
         const finalScore = finalAnswers.filter((a) => a.correct).length;
 
-        // Detect taker's country & continent
-        let detectedCountry = 'Unknown';
-        let detectedContinent = 'Global';
-        try {
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-          if (tz.includes('/')) {
-            const parts = tz.split('/');
-            detectedContinent = parts[0].replace(/_/g, ' ');
-            detectedCountry = parts[1] ? parts[1].replace(/_/g, ' ') : parts[0];
+        // Detect taker's accurate country & continent via geo-detector
+        const clientGeo = detectClientGeo();
+
+        // Sanitize & trim all participant details to preserve exact values
+        const sanitizedUserData: Record<string, string> = {};
+        Object.entries(userData || {}).forEach(([k, v]) => {
+          const cleanKey = k.trim();
+          if (cleanKey) {
+            sanitizedUserData[cleanKey] = String(v ?? '').trim();
           }
-        } catch (e) {
-          // timezone fallback
-        }
+        });
 
         await HybridStorage.saveResponse(quiz.id, {
-          userData,
+          userData: sanitizedUserData,
           answers: finalAnswers,
           score: finalScore,
           categoryScores,
           totalQuestions: activeQuestions.length,
           answeredQuestions: finalAnswers.length,
-          country: detectedCountry,
-          continent: detectedContinent,
+          country: clientGeo.country,
+          continent: clientGeo.continent,
+          timezone: clientGeo.timezone,
         });
       } catch (e) {
         console.error('Failed to save response:', e);
@@ -1459,7 +1467,7 @@ function Taker() {
 
                   return (
                     <button
-                      key={optId}
+                      key={optId + oIdx}
                       onClick={() => {
                         if (quiz?.quizScroll) {
                           let val;
@@ -1585,6 +1593,30 @@ function Taker() {
     );
   }
 
+  if (isQuizExpired) {
+    return (
+      <motion.div
+        initial={{ opacity: 0.1, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        key='expired-quiz-view'
+        className='flex flex-col items-center justify-center min-h-[70vh] text-center p-6'>
+        <div className='w-16 h-16 bg-pw-warning/10 rounded-full flex items-center justify-center border border-pw-warning/20 mb-4'>
+          <Clock className='h-8 w-8 text-pw-warning' />
+        </div>
+        <h2 className='text-2xl font-bold mb-2'>Assessment Expired</h2>
+        <p className='text-xs text-pw-muted max-w-sm mb-6'>
+          This assessment has passed its active lifespan and is no longer
+          accepting new submissions.
+        </p>
+        <Link href='/tools'>
+          <Button className='btn-primary h-10 px-6 rounded-xl font-bold text-xs'>
+            Explore PingWorld Tools
+          </Button>
+        </Link>
+      </motion.div>
+    );
+  }
+
   if (isFinished) {
     const totalQuestions = activeQuestions.length;
     const endTitle = formatDetailVars(
@@ -1603,8 +1635,8 @@ function Taker() {
           <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20 mb-3'>
             <CheckCircle2 className='h-8 w-8 text-pw-success' />
           </div>
-          <h1 className='text-lg font-extrabold font-display'>{endTitle}</h1>
-          <p className='text-pw-muted text-xs mb-1'>{endMsg}</p>
+          <h1 className='text-lg font-extrabold font-display' dangerouslySetInnerHTML={{__html: endTitle}}/>
+          <p className='text-pw-muted text-xs mb-1' dangerouslySetInnerHTML={{__html:endMsg}}/>
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
             <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4'>
@@ -1625,7 +1657,7 @@ function Taker() {
 
                   {Object.entries(categoryScores).map(([cat, stats], idx) => (
                     <div
-                      key={cat}
+                      key={cat + idx}
                       className={cn(
                         'flex items-center justify-between text-xs py-1',
                         idx !== Object.keys(categoryScores).length - 1 &&
@@ -1672,6 +1704,16 @@ function Taker() {
               </Button>
             </Link>
           </div>
+
+          {/* PingWorld compliance disclaimer footer on completion screen */}
+          <div className='pt-6 border-t border-white/5 mt-6 text-[10px] text-pw-muted leading-tight max-w-sm mx-auto'>
+            <p>
+              PingWorld is a service provider hosting this{' '}
+              {quiz?.type ?? 'assessment'}. We are not responsible for any
+              questions, responses, or outcomes generated in this{' '}
+              {quiz?.type ?? 'assessment'}.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1712,8 +1754,8 @@ function Taker() {
               className='absolute inset-0 z-0 bg-cover bg-center pointer-events-none'
               style={{
                 backgroundImage: `url(${quiz?.branding?.image})`,
-                opacity: 0.1,
-                filter: 'blur(1px)',
+                opacity: quiz?.branding?.opacity || 0.1,
+                filter:`blur(${quiz?.branding?.blur || 2}px) brightness(80%)`,
               }}
             />
           )}
@@ -1724,7 +1766,7 @@ function Taker() {
               <img
                 src={quiz?.branding?.icon}
                 alt='Intro Logo'
-                className='h-24 w-24 object-contain rounded-2xl mb-4 mx-auto border-1 border-white/20 shadow-2xl bg-black/40 bkblur'
+                className='h-20 w-20 object-contain rounded-2xl mb-4 mx-auto border-1 border-white/10 shadow-2xl bg-black/40 bkblur'
               />
             : <div className='flex justify-center mb-6 text-pw-primary'>
                 {quiz?.type === 'quiz' ?
@@ -1767,6 +1809,7 @@ function Taker() {
                     setShowDetails(true);
                     setShowSecurityProtocol(false);
                   } else {
+                    playQuizStartTone();
                     setStart(true);
                   }
                   setShowIntro(false);
@@ -1779,14 +1822,19 @@ function Taker() {
           {/* Terms disclaimer & Reporting Flow */}
           <div className='text-pw-muted leading-relaxed z-10 pb-4 fixed bottom-0 sm:bottom-1 w-[95%] self-center max-w-2xl'>
             <div className='divider mb-4 mt-10' />
-            <p className='mb-1 text-[10px] flex flex-col'>
-              PingWorld is only a service provider hosting this{' '}
-              {quiz?.type ?? 'assessment'}.
-              <span>
-                We are not responsible for any questions, responses, or outcomes
-                generated in this {quiz?.type ?? 'assessment'}.
-              </span>
-            </p>
+            {quiz?.disclaimer ?
+              <p className='mb-1 text-[10px] leading-relaxed text-pw-muted/90'>
+                {quiz.disclaimer}
+              </p>
+            : <p className='mb-1 text-[10px] flex flex-col'>
+                PingWorld is only a service provider hosting this{' '}
+                {quiz?.type ?? 'assessment'}.
+                <span>
+                  We are not responsible for any questions, responses, or
+                  outcomes generated in this {quiz?.type ?? 'assessment'}.
+                </span>
+              </p>
+            }
             <button
               onClick={() => setShowReportModal(true)}
               className='text-pw-danger text-[10px] hover:underline transition-colors font-bold tracking-wide'>
@@ -1881,9 +1929,9 @@ function Taker() {
                     </label>
                     {detail.type === 'sex' ?
                       <div className='flex gap-3'>
-                        {['Male', 'Female'].map((s) => (
+                        {['Male', 'Female'].map((s, idx) => (
                           <Button
-                            key={s + 'detail-field'}
+                            key={s + 'detail-field' + idx}
                             variant='outline'
                             onClick={() =>
                               setUserData({ ...userData, [detail.title]: s })
@@ -1919,18 +1967,15 @@ function Taker() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className='w-56 bg-pw-surface/70 bkblur border-white/10 rounded-2xl'>
                             {detail.options?.map((opt, index) => (
-                              <DropdownMenuItem
-                                key={opt + index + '98gdewaa576yfy'}
+                                <DropdownMenuItem
+                                  key={opt + index + 'dropdown-option'}
                                 onClick={() =>
-                                  setUserData({
-                                    ...userData,
-                                    [detail.title]: opt,
-                                  })
+                                  setUserData({...userData, [detail.title]: opt})
                                 }
-                                className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
-                                {opt}
-                              </DropdownMenuItem>
-                            ))}
+                                  className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
+                                  {capFirst(opt)}
+                                </DropdownMenuItem>
+                              ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -2025,9 +2070,8 @@ function Taker() {
                         const rawAllow = d.allowlist.trim();
                         const allowedItems = rawAllow
                           .split(',')
-                          .map((item) => item.trim().toLowerCase());
+                          .map((item) => item.trim());
 
-                        // Not strong!, it needs to match the exact allowlist text (both in casing and length), so avoid fooling the system.
                         let matched = allowedItems.includes(val);
 
                         if (!matched) {
@@ -2401,9 +2445,9 @@ function Taker() {
                       'Inappropriate Content',
                       'Copyright',
                       'Other',
-                    ].map((cat) => (
+                    ].map((cat, idx) => (
                       <button
-                        key={cat}
+                        key={cat + idx}
                         onClick={() => setReportCategory(cat)}
                         className={cn(
                           'px-3 py-1.5 rounded-full text-xs font-bold border transition-all',

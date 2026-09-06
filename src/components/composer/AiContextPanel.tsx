@@ -57,9 +57,9 @@ export function AiContextPanel() {
           Generation Context Preset
         </label>
         <div className='grid grid-cols-2 gap-2'>
-          {PRESET_ENTRIES.map(([id, preset]) => (
+          {PRESET_ENTRIES.map(([id, preset], idx) => (
             <button
-              key={id}
+              key={id + idx}
               onClick={() => handlePresetSelect(id)}
               className={cn(
                 'p-3 rounded-xl border text-left transition-all',

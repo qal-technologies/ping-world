@@ -222,7 +222,10 @@ function extractKeyNouns(text: string): string[] {
  */
 export async function checkGrammar(text: string): Promise<GrammarIssue[]> {
   if (!text || text.trim().length === 0) return [];
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return [];
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch('https://api.languagetool.org/v2/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -230,18 +233,21 @@ export async function checkGrammar(text: string): Promise<GrammarIssue[]> {
         text,
         language: 'auto',
       }),
+      signal: controller.signal,
     });
-    if (!res.ok) throw new Error('API server issue');
+    clearTimeout(timeoutId);
+    if (!res.ok) return [];
     const data = await res.json();
+    if (!data || !Array.isArray(data.matches)) return [];
     return data.matches.map((m: any) => ({
       message: m.message,
-      context: m.context.text,
-      offset: m.context.offset,
-      length: m.context.length,
+      context: m.context?.text || '',
+      offset: m.context?.offset ?? 0,
+      length: m.context?.length ?? 0,
     }));
-  } catch (e) {
-    console.warn('Grammar check failed:', e);
-    throw e;
+  } catch {
+    // Graceful silent fallback for offline / rate-limited / blocked requests
+    return [];
   }
 }
 

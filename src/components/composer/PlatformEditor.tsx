@@ -123,7 +123,7 @@ export function PlatformEditor({
           className='flex w-max min-w-full items-center'
           style={
             isSinglePlatform ? { borderColor: `${activeMeta.iconHex}20` } : {}}>
-          {PLATFORMS.map((platform) => {
+          {PLATFORMS.map((platform, idx) => {
             const isSelected = state.selectedPlatforms.includes(platform.id);
             const isActive = activePlatformTab === platform.id && isSelected;
             const locked = isPlatformLocked(platform.id);
@@ -131,7 +131,7 @@ export function PlatformEditor({
 
             return (
               <div
-                key={platform.id}
+                key={platform.id + idx}
                 className='relative flex-1 h-16'>
                 <button
                   title={

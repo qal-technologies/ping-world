@@ -148,7 +148,7 @@ function XPreview({
         >
           {images.slice(0, 4).map((img, idx) => (
             <img
-              key={img.id + 'x-image'}
+              key={(img.id || `x-img-${idx}`) + '-x-image'}
               src={img.previewUrl}
               alt={img.altText || 'upload'}
               className='w-full h-full object-cover aspect-video'
@@ -432,9 +432,9 @@ function FacebookPreview({
             images.length >= 3 && 'grid-cols-3',
           )}
         >
-          {images.map((img) => (
+          {images.map((img, idx) => (
             <img
-              key={img.id + 'facebook-image'}
+              key={(img.id || `fb-img-${idx}`) + '-facebook-image'}
               src={img.previewUrl}
               alt='Facebook post'
               className='w-full h-full object-cover max-h-48'
@@ -557,9 +557,9 @@ function LinkedInPreview({
             images.length >= 2 && 'grid-cols-2',
           )}
         >
-          {images.map((img) => (
+          {images.map((img, idx) => (
             <img
-              key={img.id + 'linkedin-image'}
+              key={(img.id || `li-img-${idx}`) + '-linkedin-image'}
               src={img.previewUrl}
               alt='LinkedIn post'
               className='w-full h-full object-cover max-h-56'
@@ -663,11 +663,11 @@ export function LivePreview({
           </p>
           {state.selectedPlatforms
             .filter((p) => p !== activePlatform)
-            .map((platform) => {
+            .map((platform, idx) => {
               const PC = PLATFORM_PREVIEWS[platform];
               return (
                 <div
-                  key={platform + 'other-preview'}
+                  key={platform + idx + 'other-preview'}
                   className='opacity-70 hover:opacity-100 transition-opacity cursor-pointer'
                   onClick={() =>
                     dispatch({

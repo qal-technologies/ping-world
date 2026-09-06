@@ -103,8 +103,8 @@ export function useTextChecks(text: string, delayMs = 1500): TextCheckResult {
           setTone('educational');
         }
 
-      } catch (err) {
-        console.warn('Text check hook error:', err);
+      } catch {
+        // Handled silently
       } finally {
         if (active) setIsChecking(false);
       }

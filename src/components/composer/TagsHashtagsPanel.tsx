@@ -122,9 +122,9 @@ export function TagsHashtagsPanel() {
       {/* Current tags */}
       <div className='flex flex-wrap gap-2 min-h-[40px]'>
         <AnimatePresence>
-          {state.tags.map((tag) => (
+          {state.tags.map((tag, idx) => (
             <motion.div
-              key={tag.tag}
+              key={`tag-${tag.tag || 'empty'}-${idx}`}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
@@ -187,9 +187,9 @@ export function TagsHashtagsPanel() {
         </div>
         {state.isPremium ? (
           <div className='flex flex-wrap gap-1.5'>
-            {TRENDING_TAGS_MOCK.map((tag) => (
+            {TRENDING_TAGS_MOCK.map((tag, idx) => (
               <button
-                key={tag}
+                key={tag + idx}
                 onClick={() => handleAddTrending(tag)}
                 className='text-[11px] px-2.5 py-1 rounded-full bg-pw-warning/5 border border-pw-warning/20 text-pw-warning hover:bg-pw-warning/20 transition-all'
               >
@@ -204,9 +204,9 @@ export function TagsHashtagsPanel() {
             showPartial={true}
           >
             <div className='flex flex-wrap gap-1.5 pointer-events-none'>
-              {TRENDING_TAGS_MOCK.slice(0, 5).map((tag) => (
+              {TRENDING_TAGS_MOCK.slice(0, 5).map((tag, idx) => (
                 <span
-                  key={tag}
+                  key={tag + idx}
                   className='text-[11px] px-2.5 py-1 rounded-full bg-pw-warning/10 border border-pw-warning/20 text-pw-warning'
                 >
                   {tag}

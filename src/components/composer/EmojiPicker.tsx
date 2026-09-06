@@ -160,9 +160,9 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
       {/* Category tabs */}
       {!searchQuery && (
         <div className='flex overflow-x-auto scrollable-row px-2 py-1.5 gap-0.5'>
-          {categories.map((cat) => (
+          {categories.map((cat, idx) => (
             <button
-              key={cat.id}
+              key={cat.id + idx}
               onClick={() => setActiveCategory(cat.id)}
               className={cn(
                 'text-lg px-2 py-1 rounded-lg shrink-0 transition-all',
