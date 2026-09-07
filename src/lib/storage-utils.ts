@@ -23,10 +23,23 @@ const tableName = (type: StorageItem['type']) =>
 // Local helpers
 // ---------------------------------------------------------------------------
 
-function readLocal(type: StorageItem['type']): StorageItem[] {
+function readLocal(type: StorageItem['type'], currentUserId?: string | null): StorageItem[] {
   try {
     const raw = localStorage.getItem(`pw_${keyPrefix(type)}`);
-    return raw ? JSON.parse(raw) : [];
+    const list: StorageItem[] = raw ? JSON.parse(raw) : [];
+
+    // Restrict hybrid storage access by user_id rule unless item is flagged as public or RPC
+    if (currentUserId) {
+      return list.filter((item) => {
+        const content = item.content || {};
+        if (content.isPublic || content.is_public || content.isRpc) return true;
+        const ownerId = content.user_id || content.userId || content.creator_id || content.recipient_id;
+        if (!ownerId) return true;
+        return ownerId === currentUserId;
+      });
+    }
+
+    return list;
   } catch {
     return [];
   }
@@ -442,8 +455,10 @@ export const HybridStorage = {
     type: StorageItem['type'],
     onUpdate?: (items: any[]) => void,
   ): Promise<any[]> {
-    // 1. Return local immediately
-    const local = readLocal(type);
+    const currentUserId = await getActiveUserId();
+
+    // 1. Return local immediately filtered by user_id rule
+    const local = readLocal(type, currentUserId);
     const localFlat = flattenItems(local);
 
     // 2. Background sync if online

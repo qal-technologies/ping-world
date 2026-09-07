@@ -63,8 +63,9 @@ import { HybridStorage } from '@/lib/storage-utils';
 import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
-import { computeExpiry, tierAtLeast } from '@/lib/config/premium';
+import { computeExpiry, tierAtLeast, PREMIUM_TIERS } from '@/lib/config/premium';
 import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
+import { cleanTextForCSV } from '@/lib/quiz/text-parser';
 
 // --- Types ---
 export type QuestionType =
@@ -3278,8 +3279,101 @@ const QuizBuilder = ({
                                   </div>
 
                                   <div className='flex items-center flex-wrap gap-0.5'>
-                                    {/* Option Image Upload button & preview */}
-                                    {opt.uploadUrl ?
+                                    {/* Scalable Option Action Drawer / Menu (MoreVertical Scaffold) */}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type='button'
+                                          title='Option Controls'
+                                          className='p-1 hover:bg-white/10 rounded-lg text-pw-muted hover:text-white transition-colors'>
+                                          <MoreVertical className='h-4 w-4' />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className='w-56 bg-pw-surface/90 bkblur border border-white/10 p-2 shadow-2xl rounded-xl space-y-1 z-50'>
+                                        <DropdownMenuItem className='h-8 text-xs cursor-pointer gap-2' onSelect={(e) => e.preventDefault()}>
+                                          <label className='flex items-center gap-2 cursor-pointer w-full'>
+                                            <Image className='h-3.5 w-3.5 text-pw-primary' />
+                                            <span>{opt.uploadUrl ? 'Change Image' : 'Add Option Image'}</span>
+                                            <input
+                                              type='file'
+                                              accept='image/*'
+                                              className='hidden'
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                  const reader = new FileReader();
+                                                  reader.onload = (ev) => {
+                                                    const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                                    newOpts[idx].uploadUrl = ev.target?.result as string;
+                                                    updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                                    toast.success('Option image uploaded!');
+                                                  };
+                                                  reader.readAsDataURL(file);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                        </DropdownMenuItem>
+
+                                        {/* Option Score Weight for Checkbox questions */}
+                                        {isCheckbox && (
+                                          <div className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1' onClick={(e) => e.stopPropagation()}>
+                                            <span className='text-[9px] font-bold text-pw-muted uppercase block'>Option Score Weight</span>
+                                            <Input
+                                              type='number'
+                                              value={(opt as any).scoreWeight ?? 1}
+                                              onChange={(e) => {
+                                                const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                                (newOpts[idx] as any).scoreWeight = parseFloat(e.target.value) || 0;
+                                                updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                              }}
+                                              className='h-6 text-[10px] bg-white/5 border-white/10'
+                                            />
+                                          </div>
+                                        )}
+
+                                        <DropdownMenuSeparator className='bg-white/5' />
+
+                                        {/* Move Up/Down controls */}
+                                        <DropdownMenuItem
+                                          disabled={idx === 0}
+                                          onClick={() => {
+                                            if (idx === 0) return;
+                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                            [newOpts[idx - 1], newOpts[idx]] = [newOpts[idx], newOpts[idx - 1]];
+                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                          }}
+                                          className='h-7 text-xs cursor-pointer gap-2'>
+                                          <ArrowUp className='h-3 w-3 text-pw-cyan' /> Move Option Up
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem
+                                          disabled={idx === (editedQuiz.questions[currentStep].options as QuizOption[]).length - 1}
+                                          onClick={() => {
+                                            if (idx === (editedQuiz.questions[currentStep].options as QuizOption[]).length - 1) return;
+                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                            [newOpts[idx + 1], newOpts[idx]] = [newOpts[idx], newOpts[idx + 1]];
+                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                          }}
+                                          className='h-7 text-xs cursor-pointer gap-2'>
+                                          <ArrowDown className='h-3 w-3 text-pw-cyan' /> Move Option Down
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuSeparator className='bg-white/5' />
+
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            const newOpts = (editedQuiz.questions[currentStep].options as QuizOption[]).filter((_, i) => i !== idx);
+                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                          }}
+                                          className='h-7 text-xs text-pw-danger focus:bg-pw-danger/10 focus:text-pw-danger cursor-pointer gap-2'>
+                                          <Trash2 className='h-3 w-3' /> Delete Option
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    {/* Option Image Preview Badge */}
+                                    {opt.uploadUrl && (
                                       <div className='relative shrink-0 group/img mr-1'>
                                         <img
                                           src={opt.uploadUrl}
@@ -3306,42 +3400,7 @@ const QuizBuilder = ({
                                           ✕
                                         </button>
                                       </div>
-                                    : <label
-                                        className='cursor-pointer text-pw-muted hover:text-pw-primary transition-colors p-1 shrink-0'
-                                        title='Upload option image'>
-                                        <Image className='h-4 w-4' />
-                                        <input
-                                          type='file'
-                                          accept='image/*'
-                                          className='hidden'
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                              const reader = new FileReader();
-                                              reader.onload = (ev) => {
-                                                const newOpts = [
-                                                  ...(editedQuiz.questions[
-                                                    currentStep
-                                                  ].options as QuizOption[]),
-                                                ];
-                                                newOpts[idx].uploadUrl = ev
-                                                  .target?.result as string;
-                                                updateQuestion(currentStep, {
-                                                  ...editedQuiz.questions[
-                                                    currentStep
-                                                  ],
-                                                  options: newOpts,
-                                                });
-                                                toast.success(
-                                                  'Option image uploaded!',
-                                                );
-                                              };
-                                              reader.readAsDataURL(file);
-                                            }
-                                          }}
-                                        />
-                                      </label>
-                                    }
+                                    )}
 
                                     {/* Branching Logic for Option */}
                                     {(
@@ -3563,23 +3622,6 @@ const QuizBuilder = ({
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                     }
-
-                                    <Button
-                                      variant='ghost'
-                                      size='icon'
-                                      onClick={() => {
-                                        const newOpts = (
-                                          editedQuiz.questions[currentStep]
-                                            .options as QuizOption[]
-                                        ).filter((_, i) => i !== idx);
-                                        updateQuestion(currentStep, {
-                                          ...editedQuiz.questions[currentStep],
-                                          options: newOpts,
-                                        });
-                                      }}
-                                      className='h-7 w-7 sm:hidden sm:group-hover:inline-flex text-pw-danger transition-all duration-200'>
-                                      <Trash2 size={12} />
-                                    </Button>
                                   </div>
                                 </div>
                               </div>
@@ -3782,7 +3824,8 @@ export default function QuizPage() {
           true,
           true,
         );
-        return `"${resolvedText.replace(/"/g, '""')}"`;
+        const cleaned = cleanTextForCSV(resolvedText);
+        return `"${cleaned.replace(/"/g, '""')}"`;
       }),
     ]);
 
@@ -3942,6 +3985,24 @@ export default function QuizPage() {
     let finalExpiry = quiz.expires_at;
     if (!finalExpiry) {
       finalExpiry = computeExpiry(premiumTier, 2).toISOString();
+    }
+
+    // Plan Expiry Alignment & History Validation
+    const maxPlanExpiryDays = PREMIUM_TIERS[premiumTier]?.maxExpiryDays || 2;
+    const now = Date.now();
+    const expiryTime = new Date(finalExpiry).getTime();
+    const allowedMaxTime = now + maxPlanExpiryDays * 24 * 60 * 60 * 1000;
+
+    if (expiryTime > allowedMaxTime) {
+      const remainingTimeMs = Math.max(0, allowedMaxTime - now);
+      const remainingDays = Math.ceil(remainingTimeMs / (1000 * 60 * 60 * 24));
+      const adjustedExpiry = new Date(allowedMaxTime).toISOString();
+
+      toast.error(
+        `Selected expiry date exceeds your plan limit (${maxPlanExpiryDays} days max for ${PREMIUM_TIERS[premiumTier].label}). Expiry has been adjusted to your remaining allowed time (${remainingDays} days).`,
+      );
+
+      finalExpiry = adjustedExpiry;
     }
 
     // Track expiry history and enforce 3-change lock
