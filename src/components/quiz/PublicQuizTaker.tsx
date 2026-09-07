@@ -374,7 +374,7 @@ function Taker() {
   setPaddingTop('pt-0');
 
   const params = useParams();
-  const { id: quizId } = params;
+  const routeParamId = (params?.id || params?.customQuizId) as string | undefined;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -463,8 +463,24 @@ function Taker() {
     const loadQuiz = async () => {
       setLoading(true);
       const data = await HybridStorage.getAll('quiz');
-      const target = (data.find((q: any) => String(q.id) === String(quizId)) ||
-        null) as Quiz | null;
+      let target = (data.find(
+        (q: any) =>
+          String(q.id) === String(routeParamId) ||
+          String((q as any).custom_id) === String(routeParamId),
+      ) || null) as Quiz | null;
+
+      if (!target && navigator.onLine && routeParamId) {
+        try {
+          const { data: dbData } = await supabase
+            .from('quizzes')
+            .select('*')
+            .or(`id.eq.${routeParamId},custom_id.eq.${routeParamId}`)
+            .single();
+          if (dbData) target = dbData as Quiz;
+        } catch {
+          // Fall back to local target if fetch fails
+        }
+      }
 
       if (!target && !navigator.onLine) {
         setIsOfflineUncached(true);
@@ -615,7 +631,7 @@ function Taker() {
       setLoading(false);
     };
     loadQuiz();
-  }, [quizId]);
+  }, [routeParamId]);
 
   // 2. Timer Setup
   useEffect(() => {
@@ -1795,13 +1811,22 @@ function Taker() {
         <div
           key='intro-view'
           className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
+          {quiz?.branding?.shadeColor && (
+            <div
+              className='absolute inset-0 z-0 pointer-events-none transition-all duration-300'
+              style={{
+                backgroundColor: quiz.branding.shadeColor,
+                opacity: (quiz.branding.opacity ?? 0.15) * 0.5,
+              }}
+            />
+          )}
           {quiz?.branding?.image && (
             <div
               className='absolute inset-0 z-0 bg-cover bg-center pointer-events-none'
               style={{
                 backgroundImage: `url(${quiz?.branding?.image})`,
-                opacity: quiz?.branding?.opacity || 0.1,
-                filter:`blur(${quiz?.branding?.blur || 2}px) brightness(80%)`,
+                opacity: quiz?.branding?.opacity ?? 0.1,
+                filter: `blur(${quiz?.branding?.blur ?? 2}px) brightness(80%)`,
               }}
             />
           )}

@@ -2081,16 +2081,12 @@ const QuizBuilder = ({
                     </Wrapper>
 
                     <Wrapper
-                      title='Branding'
-                      description='Customize background image and logo'
+                      title='Branding & Visual Effects'
+                      description='Customize background image, logo, shade colors, opacity and blur'
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
                       premium={premiumTier === 'free'}
                       color='primary'>
-                      <div className='flex flex-col gap-1 pt-2'>
-                        <h4 className='text-[10px] font-bold text-pw-primary uppercase tracking-widest'>
-                          Branding
-                        </h4>
-
+                      <div className='flex flex-col gap-3 pt-2'>
                         <div className='grid grid-cols-2 gap-2 px-1 pb-1'>
                           <div className='space-y-0.5'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase'>
@@ -2126,28 +2122,26 @@ const QuizBuilder = ({
                                   ?.click()
                               }
                               className={cn(
-                                'border border-pw-primary/60 rounded-xl h-30 items-center flex justify-center cursor-pointer flex-col',
+                                'border border-pw-primary/60 rounded-xl h-24 items-center flex justify-center cursor-pointer flex-col',
                                 !editedQuiz?.branding?.image &&
-                                  'p-1 border-dashed border-pw-primary/60 hover:bg-pw-primary/5 gap-2',
+                                  'p-1 border-dashed border-pw-primary/60 hover:bg-pw-primary/5 gap-1',
                               )}>
                               {editedQuiz?.branding?.image ?
                                 <img
                                   src={editedQuiz?.branding?.image || ''}
-                                  className='max-w-full max-h-full rounded object-fit'
+                                  className='max-w-full max-h-full rounded object-contain'
                                 />
                               : <>
-                                  <Upload className='text-pw-primary w-6 h-6' />
-                                  <p className='text-[10px] text-pw-muted text-center'>
-                                    Upload brand background image. This would
-                                    appear on the background of the quiz taker
-                                    page.
+                                  <Upload className='text-pw-primary w-5 h-5' />
+                                  <p className='text-[9px] text-pw-muted text-center'>
+                                    Upload brand image
                                   </p>
                                 </>
                               }
                             </div>
                           </div>
 
-                          <div className='space-y-2'>
+                          <div className='space-y-0.5'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase'>
                               Brand Icon / Logo
                             </label>
@@ -2182,22 +2176,95 @@ const QuizBuilder = ({
                                   ?.click()
                               }
                               className={cn(
-                                'border border-pw-primary/60 rounded-xl h-30 items-center flex justify-center cursor-pointer flex-col',
+                                'border border-pw-primary/60 rounded-xl h-24 items-center flex justify-center cursor-pointer flex-col',
                                 !editedQuiz?.branding?.icon &&
-                                  'p-1 border-dashed border-pw-primary/60 hover:bg-pw-primary/5 gap-2',
+                                  'p-1 border-dashed border-pw-primary/60 hover:bg-pw-primary/5 gap-1',
                               )}>
                               {editedQuiz?.branding?.icon ?
                                 <img
                                   src={editedQuiz?.branding?.icon || ''}
-                                  className='max-w-full max-h-full rounded object-fit'
+                                  className='max-w-full max-h-full rounded object-contain'
                                 />
                               : <>
-                                  <Upload className='text-pw-primary w-6 h-6' />
-                                  <p className='text-[10px] text-pw-muted text-center'>
-                                    Upload brand background icon.
+                                  <Upload className='text-pw-primary w-5 h-5' />
+                                  <p className='text-[9px] text-pw-muted text-center'>
+                                    Upload brand icon
                                   </p>
                                 </>
                               }
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Shade Color, Opacity & Blur Controls */}
+                        <div className='space-y-3 pt-2 border-t border-white/5'>
+                          <div className='flex items-center justify-between'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase'>
+                              Branding Shade Accent Color
+                            </label>
+                            <input
+                              type='color'
+                              value={editedQuiz.branding?.shadeColor || '#3B82F6'}
+                              onChange={(e) =>
+                                setEditedQuiz({
+                                  ...editedQuiz,
+                                  branding: {
+                                    ...(editedQuiz.branding || {}),
+                                    shadeColor: e.target.value,
+                                  },
+                                })
+                              }
+                              className='w-7 h-7 rounded-lg bg-transparent border border-white/10 cursor-pointer'
+                            />
+                          </div>
+
+                          <div className='grid grid-cols-2 gap-3'>
+                            <div className='space-y-1'>
+                              <div className='flex justify-between text-[10px] text-pw-muted font-bold'>
+                                <span>Opacity</span>
+                                <span>{Math.round((editedQuiz.branding?.opacity ?? 0.15) * 100)}%</span>
+                              </div>
+                              <input
+                                type='range'
+                                min='0'
+                                max='1'
+                                step='0.05'
+                                value={editedQuiz.branding?.opacity ?? 0.15}
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      opacity: parseFloat(e.target.value),
+                                    },
+                                  })
+                                }
+                                className='w-full accent-pw-primary cursor-pointer'
+                              />
+                            </div>
+
+                            <div className='space-y-1'>
+                              <div className='flex justify-between text-[10px] text-pw-muted font-bold'>
+                                <span>Blur Radius</span>
+                                <span>{editedQuiz.branding?.blur ?? 2}px</span>
+                              </div>
+                              <input
+                                type='range'
+                                min='0'
+                                max='20'
+                                step='1'
+                                value={editedQuiz.branding?.blur ?? 2}
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    branding: {
+                                      ...(editedQuiz.branding || {}),
+                                      blur: parseInt(e.target.value, 10),
+                                    },
+                                  })
+                                }
+                                className='w-full accent-pw-primary cursor-pointer'
+                              />
                             </div>
                           </div>
                         </div>
