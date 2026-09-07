@@ -32,6 +32,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -1241,7 +1242,7 @@ function Taker() {
   ) => {
     if (!rawText) return rawText;
 
-    // First resolve cross-question, category, and taker mentions
+    // First resolve cross-question, category, taker mentions, and @eval logic
     let piped = resolvePipedText(
       rawText,
       {
@@ -1396,59 +1397,91 @@ function Taker() {
                 className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-pw-primary resize-none'
               />
             : quest.type === 'upload' ?
-              <div className='space-y-3 p-4 bg-white/5 border border-dashed border-white/20 rounded-2xl text-center'>
-                <input
-                  type='file'
-                  accept='image/*,.pdf,.doc,.docx,.txt'
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const base64Url = reader.result as string;
-                      if (quiz?.quizScroll) {
-                        setScrollAnswers((prev) => ({
-                          ...prev,
-                          [quest.id]: base64Url,
-                        }));
-                      } else {
-                        setContent(base64Url);
-                      }
-                      const existingIdx = userAnswers.findIndex(
-                        (a) => a.questionId === quest.id,
-                      );
-                      let updated;
-                      if (existingIdx > -1) {
-                        updated = [...userAnswers];
-                        updated[existingIdx] = {
-                          questionId: quest.id,
-                          answer: file.name,
-                          fileUrl: base64Url,
-                          correct: true,
-                        };
-                      } else {
-                        updated = [
-                          ...userAnswers,
-                          {
-                            questionId: quest.id,
-                            answer: file.name,
-                            fileUrl: base64Url,
-                            correct: true,
-                          },
-                        ];
-                      }
-                      setUserAnswers(updated);
-                      toast.success(`Uploaded: ${file.name}`);
-                    };
-                    reader.readAsDataURL(file);
-                  }}
-                  className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/20 file:text-pw-primary hover:file:bg-pw-primary/30 cursor-pointer w-full'
-                />
-                {(content || scrollAnswers[quest.id]) && (
-                  <p className='text-[10px] text-pw-success font-mono font-bold mt-2'>
-                    ✓ Attachment Ready
+              <div className='space-y-3 p-4 bg-white/5 border border-dashed border-white/20 rounded-2xl text-left'>
+                {quest.uploadInstruction && (
+                  <p className='text-xs text-pw-cyan font-semibold mb-2 bg-pw-cyan/5 p-2 rounded-xl border border-pw-cyan/10'>
+                    ℹ {formatDetailVars(quest.uploadInstruction)}
                   </p>
                 )}
+
+                <div className='flex flex-col gap-2'>
+                  <input
+                    type='file'
+                    accept={quest.allowedTypes || 'image/*,.pdf,.doc,.docx,.txt,.zip'}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      // Enforce max size limit (MB)
+                      const maxMb = quest.maxSizeMb || 15;
+                      const sizeInMb = file.size / (1024 * 1024);
+                      if (sizeInMb > maxMb) {
+                        toast.error(`File size (${sizeInMb.toFixed(1)}MB) exceeds limit of ${maxMb}MB`);
+                        return;
+                      }
+
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const base64Url = reader.result as string;
+                        if (quiz?.quizScroll) {
+                          setScrollAnswers((prev) => ({
+                            ...prev,
+                            [quest.id]: base64Url,
+                          }));
+                        } else {
+                          setContent(base64Url);
+                        }
+
+                        // Auto-score as correct on upload
+                        const existingIdx = userAnswers.findIndex(
+                          (a) => a.questionId === quest.id,
+                        );
+                        let updated;
+                        const uploadRecord = {
+                          questionId: quest.id,
+                          answer: file.name,
+                          fileName: file.name,
+                          fileUrl: base64Url,
+                          correct: true, // Marked answered & correct on upload
+                        };
+
+                        if (existingIdx > -1) {
+                          updated = [...userAnswers];
+                          updated[existingIdx] = uploadRecord;
+                        } else {
+                          updated = [...userAnswers, uploadRecord];
+                        }
+                        setUserAnswers(updated);
+                        toast.success(`Uploaded & Verified: ${file.name}`);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                    className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/20 file:text-pw-primary hover:file:bg-pw-primary/30 cursor-pointer w-full'
+                  />
+
+                  {/* Allow taker to customize filename on save */}
+                  {(content || scrollAnswers[quest.id]) && (
+                    <div className='mt-2 p-2 bg-black/30 rounded-xl border border-white/10 flex items-center justify-between gap-2 flex-wrap'>
+                      <div className='flex items-center gap-2 text-xs text-pw-success font-bold font-mono'>
+                        <span>✓ File Attached</span>
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        <Input
+                          placeholder='Rename file before saving...'
+                          value={userAnswers.find((a) => a.questionId === quest.id)?.answer || ''}
+                          onChange={(e) => {
+                            const newName = e.target.value;
+                            const updated = userAnswers.map((a) =>
+                              a.questionId === quest.id ? { ...a, answer: newName, fileName: newName } : a
+                            );
+                            setUserAnswers(updated);
+                          }}
+                          className='h-7 w-48 text-[10px] bg-white/5 border-white/10'
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             : <div className='grid gap-2.5'>
                 {currentOptions.map((opt: any, oIdx) => {
@@ -1639,50 +1672,63 @@ function Taker() {
           <p className='text-pw-muted text-xs mb-1' dangerouslySetInnerHTML={{__html:endMsg}}/>
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4'>
-              <div>
+            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4 text-left'>
+              <div className='text-center'>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
-                  ASSESSMENT SUMMARY
+                  TOTAL OVERALL SCORE
                 </span>
                 <span className='text-3xl font-bold font-mono text-pw-primary'>
                   {score} / {totalQuestions}
                 </span>
               </div>
 
+              {/* Independent Questions Score Breakdown */}
+              {(() => {
+                const independentQs = activeQuestions.filter(
+                  (quest) => !quest.category || quest.category.trim() === '',
+                );
+                if (independentQs.length === 0) return null;
+                const independentAns = userAnswers.filter((a) =>
+                  independentQs.some((q) => q.id === a.questionId),
+                );
+                const indCorrect = independentAns.filter((a) => a.correct).length;
+
+                return (
+                  <div className='border-t border-white/5 pt-3 space-y-1.5'>
+                    <span className='text-[10px] text-pw-cyan uppercase font-bold tracking-widest block'>
+                      Independent Questions Score
+                    </span>
+                    <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
+                      <span className='font-bold text-white'>
+                        Standalone Questions ({independentQs.length})
+                      </span>
+                      <span className='font-mono text-pw-cyan font-bold'>
+                        {indCorrect} / {independentQs.length}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Group / Category Questions Score Breakdown */}
               {Object.keys(categoryScores).length > 0 && (
-                <div className='border-t border-white/5 pt-4 space-y-2 text-left'>
-                  <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-2'>
-                    Category Breakdown
+                <div className='border-t border-white/5 pt-3 space-y-2'>
+                  <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
+                    Group / Category Scores
                   </span>
 
                   {Object.entries(categoryScores).map(([cat, stats], idx) => (
                     <div
                       key={cat + idx}
-                      className={cn(
-                        'flex items-center justify-between text-xs py-1',
-                        idx !== Object.keys(categoryScores).length - 1 &&
-                          'border-b border-white/5',
-                      )}>
+                      className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
                       <span className='font-bold text-white'>
-                        {capFirst(cat)}
+                        📁 {capFirst(cat)} ({stats.total})
                       </span>
-                      <span className='font-mono text-pw-cyan font-bold'>
+                      <span className='font-mono text-pw-primary font-bold'>
                         {stats.correct} / {stats.total}
                       </span>
                     </div>
                   ))}
-
-                  <div
-                    key={'others'}
-                    className={cn(
-                      'flex items-center justify-between text-xs py-1',
-                      'border-t border-white/5',
-                    )}>
-                    <span className='font-bold text-white'>Others</span>
-                    <span className='font-mono text-pw-cyan font-bold'>
-                      {score}
-                    </span>
-                  </div>
                 </div>
               )}
             </Card>

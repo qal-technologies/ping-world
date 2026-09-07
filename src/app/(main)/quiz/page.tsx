@@ -108,6 +108,9 @@ export interface Question {
   min?: number; // for range
   max?: number; // for range
   step?: number; // for range
+  allowedTypes?: string; // e.g. "image/*,.pdf,.docx,.zip"
+  maxSizeMb?: number; // max upload size in MB
+  uploadInstruction?: string; // Optional taker upload instructions
   accessory?:
     | 'none'
     | 'calculator'
@@ -2269,7 +2272,7 @@ const QuizBuilder = ({
                             'dropdown',
                             'checkbox',
                             'input',
-                            premiumTier === 'free' && 'upload',
+                            'upload',
                             editedQuiz.type === 'survey' && 'rating',
                             editedQuiz.type === 'survey' && 'range',
                           ] as QuestionType[]
@@ -3083,6 +3086,80 @@ const QuizBuilder = ({
                               className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
                             />
                           </div>
+                        </div>
+                      </div>
+                    : editedQuiz.questions[currentStep].type === 'upload' ?
+                      <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 space-y-4 text-left'>
+                        <div className='flex items-center gap-3 border-b border-white/5 pb-3'>
+                          <Upload className='h-6 w-6 text-pw-primary shrink-0' />
+                          <div>
+                            <p className='text-sm font-bold text-white'>File Upload Configuration</p>
+                            <p className='text-[10px] text-pw-muted'>
+                              Set accepted formats, size caps based on plan, and custom taker instructions.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                          <div className='space-y-1'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                              Accepted Formats
+                            </label>
+                            <Input
+                              placeholder='e.g. image/*,.pdf,.docx,.zip'
+                              value={editedQuiz.questions[currentStep].allowedTypes || 'image/*,.pdf,.doc,.docx,.txt'}
+                              onChange={(e) =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  allowedTypes: e.target.value,
+                                })
+                              }
+                              className='h-9 bg-white/5 border-white/10 text-xs'
+                            />
+                          </div>
+
+                          <div className='space-y-1'>
+                            <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                              Max Size Cap (MB)
+                            </label>
+                            <Input
+                              type='number'
+                              placeholder='e.g. 10'
+                              value={editedQuiz.questions[currentStep].maxSizeMb || (premiumTier === 'free' ? 5 : premiumTier === 'flexible' ? 15 : 50)}
+                              onChange={(e) => {
+                                const maxAllowed = premiumTier === 'free' ? 5 : premiumTier === 'flexible' ? 15 : 50;
+                                const requested = parseFloat(e.target.value) || 5;
+                                if (requested > maxAllowed) {
+                                  toast.error(`Max file size for ${PREMIUM_TIERS[premiumTier].label} plan is ${maxAllowed}MB`);
+                                }
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  maxSizeMb: Math.min(requested, maxAllowed),
+                                });
+                              }}
+                              className='h-9 bg-white/5 border-white/10 text-xs'
+                            />
+                            <p className='text-[9px] text-pw-muted'>
+                              Plan Limit: {premiumTier === 'free' ? '5MB (Free)' : premiumTier === 'flexible' ? '15MB (Flex)' : '50MB (Pro/Std)'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className='space-y-1 pt-1'>
+                          <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                            Upload Instructions (Optional)
+                          </label>
+                          <textarea
+                            value={editedQuiz.questions[currentStep].uploadInstruction || ''}
+                            onChange={(e) =>
+                              updateQuestion(currentStep, {
+                                ...editedQuiz.questions[currentStep],
+                                uploadInstruction: e.target.value,
+                              })
+                            }
+                            placeholder='Instructions displayed to takers (e.g. "Upload your solution as a high resolution PDF")'
+                            className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs resize-none'
+                          />
                         </div>
                       </div>
                     : editedQuiz.questions[currentStep].type === 'range' ?
@@ -5139,27 +5216,58 @@ export default function QuizPage() {
                                         }}
                                       />
 
-                                      <div className='flex items-start gap-2 pt-1'>
+                                      <div className='flex items-start gap-2 pt-1 flex-wrap'>
                                         <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
                                           ANSWER:
                                         </p>
-                                        <p
-                                          className={cn(
-                                            'text-[11px] font-mono',
-                                            ans.correct === undefined ?
-                                              'text-white/80'
-                                            : ans.correct ? 'text-pw-success'
-                                            : 'text-pw-danger',
-                                          )}
-                                          dangerouslySetInnerHTML={{
-                                            __html: formatDetailVars(
-                                              resolvedAnswer,
-                                              resp.userData,
-                                              false,
-                                              true,
-                                            ),
-                                          }}
-                                        />
+                                        {ans.fileUrl ? (
+                                          <div className='flex flex-col gap-2 w-full mt-1'>
+                                            <div className='flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/10'>
+                                              <span className='text-xs font-mono font-bold text-pw-success truncate'>
+                                                📁 {ans.fileName || ans.answer || 'Uploaded Attachment'}
+                                              </span>
+                                              <Button
+                                                variant='ghost'
+                                                size='sm'
+                                                onClick={() => {
+                                                  const win = window.open('');
+                                                  if (win) {
+                                                    win.document.write(
+                                                      `<body style="margin:0;background:#0A0C1B;display:flex;align-items:center;justify-content:center;height:100vh;"><iframe src="${ans.fileUrl}" style="width:100%;height:100%;border:none;"></iframe></body>`
+                                                    );
+                                                  }
+                                                }}
+                                                className='h-7 text-[10px] bg-pw-primary/20 text-pw-primary font-bold px-3 rounded-lg'>
+                                                Fullscreen View ↗
+                                              </Button>
+                                            </div>
+                                            {String(ans.fileUrl).startsWith('data:image/') && (
+                                              <img
+                                                src={ans.fileUrl}
+                                                alt='Uploaded Preview'
+                                                className='max-h-48 max-w-full rounded-xl object-contain border border-white/10'
+                                              />
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <p
+                                            className={cn(
+                                              'text-[11px] font-mono',
+                                              ans.correct === undefined ?
+                                                'text-white/80'
+                                              : ans.correct ? 'text-pw-success'
+                                              : 'text-pw-danger',
+                                            )}
+                                            dangerouslySetInnerHTML={{
+                                              __html: formatDetailVars(
+                                                resolvedAnswer,
+                                                resp.userData,
+                                                false,
+                                                true,
+                                              ),
+                                            }}
+                                          />
+                                        )}
                                       </div>
                                       {viewingResponses.type === 'quiz' &&
                                         !ans.correct && (
