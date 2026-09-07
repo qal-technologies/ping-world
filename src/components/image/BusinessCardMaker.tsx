@@ -27,15 +27,30 @@ interface CardData {
   logoUrl:    string | null;
 }
 
-type TemplateId = 'midnight' | 'aurora' | 'monochrome' | 'coral' | 'forest' | 'slate';
+import { Lock, Crown } from 'lucide-react';
+import { useAppContext } from '@/context/AppContext';
+
+type TemplateId =
+  | 'midnight'
+  | 'aurora'
+  | 'monochrome'
+  | 'coral'
+  | 'forest'
+  | 'slate'
+  | 'glassmorphism'
+  | 'techcyber'
+  | 'goldelite'
+  | 'executiveminimal'
+  | 'modernvertical';
 
 interface Template {
-  id:         TemplateId;
-  name:       string;
-  bg:         string;             // Tailwind class(es) or inline bg
-  accent:     string;             // hex used for detail elements
-  textPrimary:string;
-  textMuted:  string;
+  id: TemplateId;
+  name: string;
+  bg: string;
+  accent: string;
+  textPrimary: string;
+  textMuted: string;
+  isPremium?: boolean;
 }
 
 /* ─────────────────────────────── Templates ──────────────────────────── */
@@ -48,6 +63,7 @@ const TEMPLATES: Template[] = [
     accent: '#0EBAE1',
     textPrimary: 'text-white',
     textMuted: 'text-white/50',
+    isPremium: false,
   },
   {
     id: 'aurora',
@@ -56,6 +72,7 @@ const TEMPLATES: Template[] = [
     accent: '#38EF7D',
     textPrimary: 'text-white',
     textMuted: 'text-white/50',
+    isPremium: false,
   },
   {
     id: 'monochrome',
@@ -64,6 +81,7 @@ const TEMPLATES: Template[] = [
     accent: '#e5e5e5',
     textPrimary: 'text-white',
     textMuted: 'text-white/40',
+    isPremium: false,
   },
   {
     id: 'coral',
@@ -72,6 +90,7 @@ const TEMPLATES: Template[] = [
     accent: '#ffffff',
     textPrimary: 'text-white',
     textMuted: 'text-white/70',
+    isPremium: false,
   },
   {
     id: 'forest',
@@ -80,6 +99,7 @@ const TEMPLATES: Template[] = [
     accent: '#6ee7b7',
     textPrimary: 'text-white',
     textMuted: 'text-white/50',
+    isPremium: false,
   },
   {
     id: 'slate',
@@ -88,6 +108,53 @@ const TEMPLATES: Template[] = [
     accent: '#334155',
     textPrimary: 'text-slate-800',
     textMuted: 'text-slate-500',
+    isPremium: false,
+  },
+  /* Premium Gated Layouts */
+  {
+    id: 'glassmorphism',
+    name: 'Glass Elite',
+    bg: 'bg-gradient-to-br from-purple-900/90 via-indigo-900/80 to-slate-900 backdrop-blur-xl border border-white/20',
+    accent: '#C084FC',
+    textPrimary: 'text-white',
+    textMuted: 'text-purple-200/60',
+    isPremium: true,
+  },
+  {
+    id: 'techcyber',
+    name: 'Cyber Neon',
+    bg: 'bg-gradient-to-tr from-black via-[#041228] to-[#032a30]',
+    accent: '#22D3EE',
+    textPrimary: 'text-cyan-100',
+    textMuted: 'text-cyan-400/60',
+    isPremium: true,
+  },
+  {
+    id: 'goldelite',
+    name: 'Gold Luxury',
+    bg: 'bg-gradient-to-br from-[#1A1408] via-[#2A1F0C] to-[#0F0D05]',
+    accent: '#FBBF24',
+    textPrimary: 'text-amber-100',
+    textMuted: 'text-amber-300/60',
+    isPremium: true,
+  },
+  {
+    id: 'executiveminimal',
+    name: 'Executive',
+    bg: 'bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#020617]',
+    accent: '#38BDF8',
+    textPrimary: 'text-slate-100',
+    textMuted: 'text-slate-400',
+    isPremium: true,
+  },
+  {
+    id: 'modernvertical',
+    name: 'Vibrant Mesh',
+    bg: 'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-rose-500 via-red-800 to-indigo-950',
+    accent: '#F43F5E',
+    textPrimary: 'text-rose-50',
+    textMuted: 'text-rose-200/70',
+    isPremium: true,
   },
 ];
 
@@ -228,6 +295,9 @@ const EMPTY: CardData = {
 };
 
 export default function BusinessCardMaker() {
+  const { premiumTier } = useAppContext();
+  const isProUser = premiumTier !== 'free';
+
   const [data, setData]             = useState<CardData>(EMPTY);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<TemplateId>('midnight');
@@ -326,21 +396,37 @@ export default function BusinessCardMaker() {
           <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest block'>
             Card Template
           </label>
-          <div className='grid grid-cols-3 gap-2'>
-            {TEMPLATES.map((t) => (
-              <button
-                key={t.id}
-                type='button'
-                onClick={() => setTemplateId(t.id)}
-                className={cn(
-                  'h-12 rounded-xl text-xs font-bold border-2 transition-all',
-                  t.bg,
-                  templateId === t.id ? 'border-white scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-90',
-                  t.textPrimary,
-                )}>
-                {t.name}
-              </button>
-            ))}
+          <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
+            {TEMPLATES.map((t) => {
+              const isLocked = t.isPremium && !isProUser;
+              return (
+                <button
+                  key={t.id}
+                  type='button'
+                  onClick={() => {
+                    if (isLocked) {
+                      toast.info(`Unlock "${t.name}" premium business card style with a Pro upgrade!`);
+                      return;
+                    }
+                    setTemplateId(t.id);
+                  }}
+                  className={cn(
+                    'h-14 rounded-xl text-xs font-bold border-2 transition-all relative flex flex-col items-center justify-center p-1',
+                    t.bg,
+                    templateId === t.id ? 'border-white scale-105 shadow-md ring-2 ring-pw-primary/40' : 'border-transparent opacity-75 hover:opacity-100',
+                    t.textPrimary,
+                    isLocked && 'opacity-50 grayscale hover:opacity-60 cursor-not-allowed',
+                  )}>
+                  <span className='truncate w-full text-center'>{t.name}</span>
+                  {t.isPremium && (
+                    <span className={cn('text-[9px] font-mono flex items-center gap-0.5 mt-0.5', isLocked ? 'text-pw-warning font-bold' : 'text-amber-300')}>
+                      {isLocked ? <Lock className='h-2.5 w-2.5' /> : <Crown className='h-2.5 w-2.5' />}
+                      {isLocked ? 'LOCKED' : 'PRO'}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </Card>
 

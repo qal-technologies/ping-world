@@ -177,19 +177,21 @@ function resolveEvalExpressions(text: string, context: PipingContext): string {
 
     // 1. Check for ternary show branches: condition @show:(trueResult) : @show:(falseResult)
     if (trimmed.includes('@show:')) {
-      const parts = trimmed.split(':');
-      const conditionAndTrueBranch = parts[0] ? parts[0].trim() : '';
-      const falseBranch = parts[1] ? parts[1].trim() : '';
+      const ternaryMatch = trimmed.match(
+        /^(.+?)\s*@show:\((.*?)\)\s*:\s*@show:\((.*?)\)$/i,
+      );
 
-      const trueMatch = conditionAndTrueBranch.match(/(.+?)\s*@show:\((.*?)\)$/i);
-      if (trueMatch) {
-        const rawCondStr = trueMatch[1].trim();
-        const trueResult = trueMatch[2];
-        const falseResultMatch = falseBranch.match(/@show:\((.*?)\)/i);
-        const falseResult = falseResultMatch ? falseResultMatch[1] : '';
-
+      if (ternaryMatch) {
+        const [, rawCondStr, trueResult, falseResult] = ternaryMatch;
         const isTrue = evaluateCondition(rawCondStr, context);
         return isTrue ? trueResult : falseResult;
+      }
+
+      const singleMatch = trimmed.match(/^(.+?)\s*@show:\((.*?)\)$/i);
+      if (singleMatch) {
+        const [, rawCondStr, trueResult] = singleMatch;
+        const isTrue = evaluateCondition(rawCondStr, context);
+        return isTrue ? trueResult : '';
       }
     }
 
