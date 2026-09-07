@@ -36,6 +36,17 @@ const BG_OPTIONS = [
 type FrameShape = 'circle' | 'squircle' | 'hexagon';
 type BadgeKind = 'none' | 'verified' | 'pro' | 'creator';
 
+const OBJECT_MOCKS = [
+  { id: 'none', label: 'None', icon: '🚫' },
+  { id: 'crown', label: 'Crown', icon: '👑' },
+  { id: 'sunglasses', label: 'Cool Shades', icon: '🕶️' },
+  { id: 'sparkles', label: 'Sparkles', icon: '✨' },
+  { id: 'flame', label: 'On Fire', icon: '🔥' },
+  { id: 'headphones', label: 'Headphones', icon: '🎧' },
+  { id: 'halo', label: 'Angel Halo', icon: '😇' },
+  { id: 'verified_gold', label: 'Gold Badge', icon: '🏅' },
+];
+
 const SHAPE_CLASSES: Record<FrameShape, string> = {
   circle:   'rounded-full',
   squircle: 'rounded-[2.5rem]',
@@ -56,6 +67,7 @@ export default function ProfilePicMaker() {
   const [glow, setGlow]       = useState(40);
   const [zoom, setZoom]       = useState(100);
   const [badge, setBadge]     = useState<BadgeKind>('verified');
+  const [objectMock, setObjectMock] = useState<string>('none');
   const [bg, setBg]           = useState('#0A0C1B');
   const [exporting, setExporting] = useState(false);
 
@@ -155,6 +167,13 @@ export default function ProfilePicMaker() {
                 </button>
               }
             </div>
+
+            {/* Object Mock Overlay */}
+            {objectMock !== 'none' && (
+              <div className='absolute -top-4 inset-x-0 flex justify-center z-20 pointer-events-none select-none text-4xl drop-shadow-xl animate-bounce-slow'>
+                {OBJECT_MOCKS.find((m) => m.id === objectMock)?.icon}
+              </div>
+            )}
 
             {/* Badge overlay */}
             {badge !== 'none' && (
@@ -352,6 +371,31 @@ export default function ProfilePicMaker() {
                 />
               </div>
             ))}
+          </section>
+
+          {/* Object Mocks & Stickers Library */}
+          <section className='space-y-2 pt-3 border-t border-white/5'>
+            <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest block'>
+              Object Mocks & Trendy Overlays
+            </label>
+            <div className='grid grid-cols-4 gap-2'>
+              {OBJECT_MOCKS.map((m) => (
+                <Button
+                  key={m.id}
+                  type='button'
+                  variant='outline'
+                  onClick={() => setObjectMock(m.id)}
+                  className={cn(
+                    'h-9 text-xs font-bold rounded-xl gap-1.5',
+                    objectMock === m.id ?
+                      'bg-pw-primary/20 border-pw-primary text-pw-primary'
+                    : 'bg-white/5 border-white/10 text-pw-muted hover:bg-white/10',
+                  )}>
+                  <span>{m.icon}</span>
+                  <span className='truncate'>{m.label}</span>
+                </Button>
+              ))}
+            </div>
           </section>
 
           {/* Status Badge */}

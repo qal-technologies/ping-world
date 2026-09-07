@@ -98,21 +98,37 @@ function BusinessCardPreview({
   template,
   showBack,
   logoDataUrl,
+  isExporting = false,
 }: {
   data: CardData;
   template: Template;
   showBack: boolean;
   logoDataUrl: string | null;
+  isExporting?: boolean;
 }) {
   return (
     /* 3.5" × 2" ratio → 350px × 200px at 1× */
     <div
       className={cn(
         'relative w-[350px] h-[200px] rounded-2xl overflow-hidden shadow-2xl',
-        'ring-1 ring-white/10 select-none shrink-0',
+        'ring-1 ring-white/10 select-none shrink-0 relative',
         template.bg,
       )}
       style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+
+      {/* Dynamic Watermark grid overlay during live preview to prevent screenshot bypass */}
+      {!isExporting && (
+        <div className='absolute inset-0 pointer-events-none select-none z-30 flex flex-col justify-between p-3 opacity-20 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:12px_12px]'>
+          <div className='flex justify-between text-[9px] font-black tracking-widest text-white uppercase font-mono'>
+            <span>PingWorld Preview</span>
+            <span>PingWorld Protected</span>
+          </div>
+          <div className='flex justify-between text-[9px] font-black tracking-widest text-white uppercase font-mono'>
+            <span>PINGWORLD</span>
+            <span>PINGWORLD</span>
+          </div>
+        </div>
+      )}
 
       {/* Decorative accent bar */}
       <div className='absolute left-0 top-0 bottom-0 w-1 rounded-full'
@@ -246,13 +262,18 @@ export default function BusinessCardMaker() {
         useCORS: true,
         allowTaint: false,
         logging: false,
+        onclone: (clonedDoc) => {
+          // Remove PingWorld watermark grid overlay from cloned document prior to render
+          const watermarkOverlays = clonedDoc.querySelectorAll('.pointer-events-none.select-none.z-30');
+          watermarkOverlays.forEach((el) => el.remove());
+        },
       });
       const url = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = url;
       a.download = `business-card-${side}-${Date.now()}.png`;
       a.click();
-      toast.success(`${side === 'front' ? 'Front' : 'Back'} exported at print quality!`);
+      toast.success(`${side === 'front' ? 'Front' : 'Back'} exported without watermark at print quality!`);
     } catch {
       toast.error('Export failed.');
     } finally {
