@@ -31,47 +31,54 @@ function getAudioContext(): AudioContext | null {
  * designed for mental focus, readiness, and calm presence when starting a quiz.
  */
 export function playQuizStartTone(): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
+  if (typeof window === 'undefined') return;
   try {
-    const now = ctx.currentTime;
-    const duration = 1.1;
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
 
-    // Master gain
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0.001, now);
-    masterGain.gain.linearRampToValueAtTime(0.18, now + 0.09);
-    masterGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    masterGain.connect(ctx.destination);
+    const startSound = () => {
+      try {
+        const now = ctx.currentTime;
+        const duration = 1.2;
 
-    // Primary 432 Hz focus tone
-    const osc1 = ctx.createOscillator();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(432, now);
-    osc1.frequency.exponentialRampToValueAtTime(436, now + duration);
-    osc1.connect(masterGain);
+        // Master gain
+        const masterGain = ctx.createGain();
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.22, now + 0.09);
+        masterGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        masterGain.connect(ctx.destination);
 
-    // Warm harmonic fifth (540 Hz)
-    const osc2 = ctx.createOscillator();
-    osc2.type = 'sawtooth';
-    osc2.frequency.setValueAtTime(540, now);
-    osc2.frequency.exponentialRampToValueAtTime(544, now + duration);
+        // Primary 432 Hz focus tone
+        const osc1 = ctx.createOscillator();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(432, now);
+        osc1.frequency.exponentialRampToValueAtTime(440, now + duration);
+        osc1.connect(masterGain);
+        osc1.start(now);
+        osc1.stop(now + duration);
 
-    const gain2 = ctx.createGain();
-    gain2.gain.setValueAtTime(0.12, now);
-    gain2.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    osc2.connect(gain2);
-    gain2.connect(masterGain);
+        // Warm harmonic fifth (540 Hz)
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(540, now);
+        osc2.frequency.exponentialRampToValueAtTime(554, now + duration);
+        osc2.connect(masterGain);
+        osc2.start(now);
+        osc2.stop(now + duration);
 
-    osc1.start(now);
-    osc2.start(now);
+        setTimeout(() => {
+          ctx.close().catch(() => {});
+        }, (duration + 0.2) * 1000);
+      } catch {}
+    };
 
-    osc1.stop(now + duration);
-    osc2.stop(now + duration);
-  } catch {
-    // Graceful fallback if Web Audio is blocked
-  }
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(startSound).catch(() => {});
+    } else {
+      startSound();
+    }
+  } catch {}
 }
 
 /**

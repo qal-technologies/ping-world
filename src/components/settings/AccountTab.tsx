@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
+import ProfileAvatarDesigner from '@/components/profile/ProfileAvatarDesigner';
 
 interface AccountTabProps {
   displayName: string;
@@ -200,6 +201,28 @@ export default function AccountTab({
           </form>
         </Card>
       </div>
+
+      {/* Profile Avatar Designer with Object Mocks */}
+      <ProfileAvatarDesigner
+        initialImage={user?.user_metadata?.avatar_url || null}
+        displayName={displayName}
+        onSaveAvatar={async (avatarDataUrl: string) => {
+          try {
+            if (user?.id) {
+              await supabase
+                .from('profiles')
+                .update({ avatar_url: avatarDataUrl })
+                .eq('id', user.id);
+            }
+            await supabase.auth.updateUser({
+              data: { avatar_url: avatarDataUrl },
+            });
+            await refresh();
+          } catch (err: any) {
+            console.warn('Failed to update avatar', err);
+          }
+        }}
+      />
 
       {/* Danger Zone */}
       <Card className='p-4 sm:p-6 bg-pw-danger/2 border border-pw-danger/10 rounded-2xl space-y-4'>

@@ -67,12 +67,14 @@ export default function Wrapper({
         </div>
 
         <div className='flex items-center gap-2'>
-            {premium && (
-                              <span className='flex items-center gap-0.5 text-pw-warning' title='Premium feature'>
-                                <Crown className='h-3.5 w-3.5' />
-                              </span>
+          {premium && (
+            <span
+              className='flex items-center gap-0.5 text-pw-warning'
+              title='Premium feature'>
+              <Crown className='h-3.5 w-3.5' />
+            </span>
           )}
-          
+
           <ChevronDown
             className={cn(
               'h-4 w-4 text-pw-muted transition-transform duration-300',
@@ -89,13 +91,26 @@ export default function Wrapper({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{duration: 0.3, ease: 'easeInOut'}}
-          className='relative'>
-            {premium && <div className='inset-0 absolute w-full h-full p-2 bg-black/50 flex items-center justify-center text-center font-bold font-display'><Link href='/pricing' target='_self' className='text-pw-primary underline mr-1'>Upgrade {' '}</Link>to use this feature</div>}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className={cn('relative', premium && 'cursor-not-allowed')}>
+            {premium && (
+              <div
+                className='inset-0 absolute w-full h-full p-2 bg-black/50 flex items-center justify-center text-center font-bold font-display'
+                title='Premium feature'>
+                <Link
+                  href='/pricing'
+                  target='_self'
+                  className='text-pw-primary underline mr-1'>
+                  Upgrade{' '}
+                </Link>
+                to use this feature
+              </div>
+            )}
             <div
               className={cn(
                 'p-1 sm:p-2 pt-0 border-t border-white/5 relative',
-                premium && 'select-none pointer-events-none opacity-50 blur-[2px]',
+                premium &&
+                  'select-none pointer-events-none opacity-50 blur-[2px]',
               )}
               aria-disabled={premium}>
               {children}

@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: QuizParams): Promise<Metadata
     const { data: quiz } = await supabase
       .from('quizzes')
       .select('title, description')
-      .eq('id', id)
+      .or(`id.eq.${id},custom_id.eq.${id}`)
       .single();
 
     if (quiz) {

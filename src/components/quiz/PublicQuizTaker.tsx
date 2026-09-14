@@ -28,6 +28,13 @@ import {
   HelpCircle,
   Folder,
   Flag,
+  Diamond,
+  Badge,
+  Trophy,
+  Download,
+  X,
+  Maximize2,
+  SkipForward,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -50,11 +57,19 @@ import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
 import { useAppModal } from '../ui/AppModalProvider';
 
-import { resolvePipedText } from '@/lib/quiz/quiz-piping';
+import {
+  resolvePipedText,
+  packPingWorldMediaUrl,
+  unpackPingWorldMediaUrl,
+  formatDobToWords,
+  getDobGetter,
+} from '@/lib/quiz/quiz-piping';
+import { parseWhitelistedHtml } from '@/lib/quiz/text-parser';
 import {
   playQuizStartTone,
   playQuizCompletionTone,
 } from '@/lib/quiz/quiz-audio';
+import { triggerConfetti } from '@/lib/confetti';
 import { detectClientGeo } from '@/lib/countries/geo-detector';
 
 export type QuestionType =
@@ -374,7 +389,9 @@ function Taker() {
   setPaddingTop('pt-0');
 
   const params = useParams();
-  const routeParamId = (params?.id || params?.customQuizId) as string | undefined;
+  const routeParamId = (params?.id || params?.customQuizId) as
+    | string
+    | undefined;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -434,6 +451,11 @@ function Taker() {
   const [isLoading, setLoading] = useState(true);
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
+  const [isEndMsgExpanded, setIsEndMsgExpanded] = useState(false);
+  const [fullscreenMedia, setFullscreenMedia] = useState<{
+    url: string;
+    title?: string;
+  } | null>(null);
 
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState('');
@@ -909,6 +931,24 @@ function Taker() {
     return String(answer) === String(decodedCorrect);
   };
 
+  const handlePass = () => {
+    if (!q) return;
+    const passedRecord = {
+      questionId: q.id,
+      answer: '(Passed)',
+      passed: true,
+      correct: false,
+    };
+    const updated = [
+      ...userAnswers.filter((a) => a.questionId !== q.id),
+      passedRecord,
+    ];
+    setUserAnswers(updated);
+    setScore(updated.filter((a) => a.correct).length);
+    toast.info('Question passed');
+    proceedToNext(updated);
+  };
+
   const handleNext = (isAutoSubmit: any = false) => {
     const autoSubmit = isAutoSubmit === true;
 
@@ -931,6 +971,7 @@ function Taker() {
       if (
         currentSelectedOption === null &&
         q?.type !== 'input' &&
+        q?.type !== 'upload' &&
         q?.type !== 'checkbox'
       ) {
         return toast.error('Please select an answer');
@@ -939,6 +980,24 @@ function Taker() {
 
     let correct = false;
     if (quiz?.type === 'quiz' && q) {
+      // Upload type: answer was already stored directly in userAnswers on file pick
+      if (q.type === 'upload') {
+        const existingUpload = userAnswers.find((a) => a.questionId === q.id);
+        if (existingUpload) {
+          // Already recorded as correct — just count score and proceed
+          setScore(userAnswers.filter((a) => a.correct).length);
+          proceedToNext(userAnswers);
+          return;
+        }
+        // No file uploaded — still proceed (upload is optional) with a skipped record
+        const skippedRecord = { questionId: q.id, answer: '', correct: true };
+        const updatedWithSkip = [...userAnswers, skippedRecord];
+        setUserAnswers(updatedWithSkip);
+        setScore(updatedWithSkip.filter((a) => a.correct).length);
+        proceedToNext(updatedWithSkip);
+        return;
+      }
+
       const activeAns =
         q.type === 'checkbox' ?
           quiz?.quizScroll ?
@@ -985,6 +1044,23 @@ function Taker() {
         proceedToNext(updatedAnswers);
       }
     } else if (q) {
+      // Upload type for surveys: answer was pre-stored on file pick
+      if (q.type === 'upload') {
+        const existingUpload = userAnswers.find((a) => a.questionId === q.id);
+        if (!existingUpload) {
+          // No file — record a skip and proceed
+          const updatedWithSkip = [
+            ...userAnswers,
+            { questionId: q.id, answer: '' },
+          ];
+          setUserAnswers(updatedWithSkip);
+          proceedToNext(updatedWithSkip);
+        } else {
+          proceedToNext(userAnswers);
+        }
+        return;
+      }
+
       const activeAns =
         q.type === 'checkbox' ?
           quiz?.quizScroll ?
@@ -1016,6 +1092,10 @@ function Taker() {
   const finalizeQuiz = async (finalAnswers: any[]) => {
     setIsFinished(true);
     playQuizCompletionTone();
+
+    if (quiz?.endScreen?.enableConfetti) {
+      triggerConfetti(quiz.endScreen.confettiType || 'standard');
+    }
 
     if (quiz) {
       if (!quiz.allowRetry) {
@@ -1251,15 +1331,15 @@ function Taker() {
   };
 
   // Dynamic variable mention & cross-question piping engine
-  const formatDetailVars = (
+   const formatDetailVars = (
     rawText: string,
-    showPrev?: boolean,
-    hideBold?: boolean,
+    _showPrev?: boolean,
+    _hideBold?: boolean,
   ) => {
     if (!rawText) return rawText;
 
-    // First resolve cross-question, category, taker mentions, and @eval logic
-    let piped = resolvePipedText(
+    // Resolve cross-question, category, taker mentions, date getters, and @eval logic directly
+    const piped = resolvePipedText(
       rawText,
       {
         userData,
@@ -1270,19 +1350,7 @@ function Taker() {
       },
       false,
     );
-
-    // Apply bold highlighting if requested
-    if (!hideBold && typeof piped === 'string') {
-      Object.entries(userData || {}).forEach(([key, val]) => {
-        if (!val) return;
-        const cleanKey = key.trim().replace(/\s+/g, '');
-        const boldVal = `${showPrev ? `@${cleanKey} (<strong class="text-pw-cyan font-bold">${val}</strong>)` : `<strong class="text-pw-cyan font-bold">${val}</strong>`}`;
-        const regex1 = new RegExp(`@${cleanKey}`, 'gi');
-        piped = piped.replace(regex1, boldVal);
-      });
-    }
-
-    return piped;
+    return parseWhitelistedHtml(piped);
   };
 
   const renderQuestionCard = (quest: Question, index: number) => {
@@ -1294,7 +1362,9 @@ function Taker() {
     );
 
     // Read selections dynamically from scrollAnswers inside scroll layouts
-    const currentOptions = shuffledOptions[quest.id] || quest.options;
+    const currentOptions = (shuffledOptions[quest.id] || quest.options).filter(
+      (o: any) => !o?.hidden,
+    );
 
     const activeSelected =
       isScrollLayout ? scrollAnswers[quest.id] || null : selectedOption;
@@ -1317,6 +1387,7 @@ function Taker() {
           className={cn(
             'p-0  rounded-none sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300 space-y-0 self-center',
             !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
+            !isScrollLayout && 'bkblur',
           )}
           style={{ placeSelf: 'center' }}>
           {/* Show Question Category tag if enabled or set */}
@@ -1332,10 +1403,20 @@ function Taker() {
             {isScrollLayout ?
               <div className='flex items-baseline gap-2'>
                 <span className='text-pw-primary font-black text-xl select-none shrink-0'>
-                  {index + 1}.
+                  {(() => {
+                    const targetCat = quest.category?.trim() || '';
+                    const inStack = activeQuestions.filter(
+                      (item) => (item.category?.trim() || '') === targetCat,
+                    );
+                    const posInStack = inStack.findIndex(
+                      (item) => item.id === quest.id,
+                    );
+                    return posInStack !== -1 ? posInStack + 1 : index + 1;
+                  })()}
+                  .
                 </span>
                 <h2
-                  className='text-base font-bold text-white'
+                  className='text-base font-bold text-white whitespace-pre-wrap'
                   dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
                 />
               </div>
@@ -1359,11 +1440,26 @@ function Taker() {
                   }
                 </div>
                 <div>
-                  <span className='text-[9px] font-black text-pw-muted uppercase block'>
-                    Question {index + 1}
+                  <span className='text-[9px] font-black text-pw-muted uppercase block tracking-wider'>
+                    {(() => {
+                      const targetCat = quest.category?.trim() || '';
+                      const inStack = activeQuestions.filter(
+                        (item) => (item.category?.trim() || '') === targetCat,
+                      );
+                      const posInStack = inStack.findIndex(
+                        (item) => item.id === quest.id,
+                      );
+                      const stackPos =
+                        posInStack !== -1 ? posInStack + 1 : index + 1;
+                      const stackTotal =
+                        inStack.length || activeQuestions.length;
+                      return quest.category ?
+                          `Question ${stackPos} of ${stackTotal} in ${quest.category}`
+                        : `Question ${stackPos} of ${stackTotal}`;
+                    })()}
                   </span>
                   <h2
-                    className='text-base font-bold text-white'
+                    className='text-base font-bold text-white whitespace-pre-wrap'
                     dangerouslySetInnerHTML={{ __html: formattedQuestionText }}
                   />
                 </div>
@@ -1423,7 +1519,9 @@ function Taker() {
                 <div className='flex flex-col gap-2'>
                   <input
                     type='file'
-                    accept={quest.allowedTypes || 'image/*,.pdf,.doc,.docx,.txt,.zip'}
+                    accept={
+                      quest.allowedTypes || 'image/*,.pdf,.doc,.docx,.txt,.zip'
+                    }
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
@@ -1432,20 +1530,24 @@ function Taker() {
                       const maxMb = quest.maxSizeMb || 15;
                       const sizeInMb = file.size / (1024 * 1024);
                       if (sizeInMb > maxMb) {
-                        toast.error(`File size (${sizeInMb.toFixed(1)}MB) exceeds limit of ${maxMb}MB`);
+                        toast.error(
+                          `File size (${sizeInMb.toFixed(1)}MB) exceeds limit of ${maxMb}MB`,
+                        );
                         return;
                       }
 
                       const reader = new FileReader();
                       reader.onload = () => {
-                        const base64Url = reader.result as string;
+                        const rawBase64 = reader.result as string;
+                        // Wrap with PingWorld media envelope for security tagging
+                        const packedUrl = packPingWorldMediaUrl(rawBase64);
                         if (quiz?.quizScroll) {
                           setScrollAnswers((prev) => ({
                             ...prev,
-                            [quest.id]: base64Url,
+                            [quest.id]: packedUrl,
                           }));
                         } else {
-                          setContent(base64Url);
+                          setContent(packedUrl);
                         }
 
                         // Auto-score as correct on upload
@@ -1457,7 +1559,7 @@ function Taker() {
                           questionId: quest.id,
                           answer: file.name,
                           fileName: file.name,
-                          fileUrl: base64Url,
+                          fileUrl: packedUrl,
                           correct: true, // Marked answered & correct on upload
                         };
 
@@ -1484,11 +1586,16 @@ function Taker() {
                       <div className='flex items-center gap-2'>
                         <Input
                           placeholder='Rename file before saving...'
-                          value={userAnswers.find((a) => a.questionId === quest.id)?.answer || ''}
+                          value={
+                            userAnswers.find((a) => a.questionId === quest.id)
+                              ?.answer || ''
+                          }
                           onChange={(e) => {
                             const newName = e.target.value;
                             const updated = userAnswers.map((a) =>
-                              a.questionId === quest.id ? { ...a, answer: newName, fileName: newName } : a
+                              a.questionId === quest.id ?
+                                { ...a, answer: newName, fileName: newName }
+                              : a,
                             );
                             setUserAnswers(updated);
                           }}
@@ -1503,9 +1610,10 @@ function Taker() {
                 {currentOptions.map((opt: any, oIdx) => {
                   const optId = opt.id || String(oIdx);
                   const optText = opt.text || String(opt);
+                  const rawOptUrl = opt?.uploadUrl;
                   const optImage =
-                    typeof opt === 'object' ?
-                      opt.uploadUrl || opt.imageUrl
+                    rawOptUrl ?
+                      unpackPingWorldMediaUrl(rawOptUrl).url || undefined
                     : undefined;
                   const formattedOptionText = formatDetailVars(optText);
 
@@ -1514,10 +1622,42 @@ function Taker() {
                       activeChecked.includes(optId)
                     : activeSelected === optId;
 
+                  const isFeedbackMode =
+                    showFeedback && quiz?.correctOption && quest.id === q?.id;
+                  let feedbackClasses =
+                    isSelected ?
+                      'bg-pw-primary/12 border-pw-primary text-white font-bold'
+                    : 'bg-white/5 border-white/10 text-white/90';
+
+                  if (isFeedbackMode) {
+                    let decodedCorrect: any = quest.correctIndex;
+                    try {
+                      decodedCorrect = JSON.parse(atob(quest.correctIndex));
+                    } catch {
+                      decodedCorrect = quest.correctIndex;
+                    }
+                    const isCorrectOpt =
+                      Array.isArray(decodedCorrect) ?
+                        decodedCorrect.includes(optId)
+                      : String(decodedCorrect) === optId ||
+                        String(decodedCorrect) === String(oIdx);
+
+                    if (isSelected) {
+                      feedbackClasses =
+                        isCorrectOpt ?
+                          'bg-pw-success/20 border-pw-success text-pw-success font-bold shadow-lg shadow-pw-success/10'
+                        : 'bg-pw-danger/20 border-pw-danger text-pw-danger font-bold shadow-lg shadow-pw-danger/10';
+                    } else if (isCorrectOpt) {
+                      feedbackClasses =
+                        'bg-pw-success/10 border-pw-success/50 text-pw-success/90 font-semibold';
+                    }
+                  }
+
                   return (
                     <button
                       key={optId + oIdx}
                       onClick={() => {
+                        if (isFeedbackMode) return;
                         if (quiz?.quizScroll) {
                           let val;
                           if (quest.type === 'checkbox') {
@@ -1566,20 +1706,25 @@ function Taker() {
                       }}
                       className={cn(
                         'w-full min-h-11 p-3 text-left rounded-xl border transition-all text-xs flex items-center justify-between gap-3 backdrop-blur-lg',
-                        isSelected ?
-                          'bg-pw-primary/12 border-pw-primary text-white font-bold'
-                        : 'bg-white/5 border-white/10 text-white/90',
+                        feedbackClasses,
                       )}>
                       <div
                         className={cn(
-                          'flex items-center gap-3 flex-1 min-w-0',
-                          optImage ? 'flex-col' : 'flex-row',
+                          'flex items-start sm:items-center gap-3 flex-1 min-w-0',
+                          optImage ? 'flex-col sm:flex-row' : 'flex-row',
                         )}>
                         {optImage && (
                           <img
                             src={optImage}
                             alt='Option attachment'
-                            className='h-15 w-15 object-cover rounded-lg border border-white/10 shrink-0'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFullscreenMedia({
+                                url: optImage,
+                                title: 'Option Attachment',
+                              });
+                            }}
+                            className='h-16 w-16 object-cover rounded-lg border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
                           />
                         )}
                         <span
@@ -1594,7 +1739,7 @@ function Taker() {
                         className={cn(
                           'h-4 w-4 transition-all shrink-0',
                           isSelected ?
-                            'ttext-pw-primary w-4.5 h-4.5'
+                            'text-pw-primary w-4.5 h-4.5'
                           : 'text-pw-muted',
                         )}
                       />
@@ -1603,6 +1748,47 @@ function Taker() {
                 })}
               </div>
             }
+
+            {/* Instant Option & Question Explanations when feedback mode is active */}
+            {showFeedback && quiz?.correctOption && quest.id === q?.id && (
+              <div className='mt-3 space-y-2 text-xs'>
+                {(() => {
+                  const selOptObj: any = currentOptions.find(
+                    (o: any, oI: number) =>
+                      (o.id || String(oI)) === activeSelected,
+                  );
+                  const optExp =
+                    selOptObj?.explanation ?
+                      selOptObj?.explanation
+                    : 'No Explanation Available';
+                  return optExp ?
+                      <div className='p-2.5 rounded-xl bg-pw-cyan/10 border border-pw-cyan/20 text-pw-cyan/90 italic whitespace-pre-wrap flex items-start gap-2'>
+                        <span className='font-bold not-italic shrink-0'>
+                          ℹ Option Note:
+                        </span>
+                        <span
+                          dangerouslySetInnerHTML={{
+                            __html: formatDetailVars(optExp),
+                          }}
+                        />
+                      </div>
+                    : null;
+                })()}
+
+                {quest.correctExplanation && (
+                  <div className='p-2.5 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
+                    <span className='font-bold not-italic shrink-0'>
+                      💡 Explanation:
+                    </span>
+                    <span
+                      dangerouslySetInnerHTML={{
+                        __html: formatDetailVars(quest.correctExplanation),
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </Card>
       </motion.div>
@@ -1616,7 +1802,7 @@ function Taker() {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0.1, x: -5 }}
         key='loading-view'
-        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6'>
+        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bkblur'>
         <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
         <h2 className='text-2xl font-bold mb-2'>Loading Assessment...</h2>
       </motion.div>
@@ -1630,7 +1816,7 @@ function Taker() {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0.1, x: -5 }}
         key='not-cached-view'
-        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6'>
+        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6 bkblur'>
         <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 animate-pulse' />
         <h2 className='text-2xl font-bold mb-1'>
           Offline: Quiz Not Cached Yet
@@ -1648,7 +1834,7 @@ function Taker() {
         initial={{ opacity: 0.1, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         key='expired-quiz-view'
-        className='flex flex-col items-center justify-center min-h-[70vh] text-center p-6'>
+        className='flex flex-col items-center justify-center min-h-[70vh] text-center p-6 backdrop-blur-md'>
         <div className='w-16 h-16 bg-pw-warning/10 rounded-full flex items-center justify-center border border-pw-warning/20 mb-4'>
           <Clock className='h-8 w-8 text-pw-warning' />
         </div>
@@ -1679,13 +1865,78 @@ function Taker() {
     return (
       <div
         key='completion-view'
-        className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6'>
-        <div className='max-w-md w-full text-center space-y-2'>
-          <div className='w-16 h-16 bg-pw-success/10 rounded-full flex items-center justify-center mx-auto border border-pw-success/20 mb-3'>
-            <CheckCircle2 className='h-8 w-8 text-pw-success' />
+        className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6 overflow-x-hidden backdrop-blur-md'>
+        {/* Persistent Branding Background & Shade */}
+        {quiz?.branding?.shadeColor && (
+          <div
+            className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none transition-all duration-500'
+            style={{
+              backgroundColor: quiz.branding.shadeColor,
+              opacity: quiz.branding.opacity ?? 0.35,
+            }}
+          />
+        )}
+        {quiz?.branding?.image && (
+          <div
+            className='fixed inset-0 min-h-screen w-screen z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-all duration-500'
+            style={{
+              backgroundImage: `url(${unpackPingWorldMediaUrl(quiz.branding.image).url || quiz.branding.image})`,
+              opacity: quiz.branding.opacity ?? 0.25,
+              filter: `blur(${quiz.branding.blur ?? 0}px) brightness(85%)`,
+            }}
+          />
+        )}
+        {(quiz?.branding?.image || quiz?.branding?.shadeColor) && (
+          <div className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60' />
+        )}
+        <div
+          className={cn(
+            'max-w-md w-full space-y-2 relative z-10',
+            quiz?.endScreen?.textAlign === 'center' && 'text-center',
+            quiz?.endScreen?.textAlign === 'left' && 'text-left',
+            quiz?.endScreen?.textAlign === 'right' && 'text-right',
+          )}>
+          <div
+            className={cn(
+              'w-16 h-16 rounded-full flex items-center justify-center mx-auto border mb-3',
+              quiz?.endScreen?.completionIcon === 'diamond' &&
+                'bg-pw-success/10 border-pw-success/20',
+              quiz?.endScreen?.completionIcon === 'badge' &&
+                'bg-pw-primary/10 border-pw-primary/20',
+              quiz?.endScreen?.completionIcon === 'trophy' &&
+                'bg-pw-warning/10 border-pw-warning/20',
+            )}>
+            {quiz?.endScreen?.completionIcon === 'diamond' ?
+              <Diamond className='h-9 w-9 text-pw-success' />
+            : quiz?.endScreen?.completionIcon === 'badge' ?
+              <Badge className='h-9 w-9 text-pw-primary' />
+            : quiz?.endScreen?.completionIcon === 'trophy' ?
+              <Trophy className='h-9 w-9 text-pw-warning' />
+            : <CheckCircle className='h-9 w-9 text-pw-success' />}
           </div>
-          <h1 className='text-lg font-extrabold font-display' dangerouslySetInnerHTML={{__html: endTitle}}/>
-          <p className='text-pw-muted text-xs mb-1' dangerouslySetInnerHTML={{__html:endMsg}}/>
+          <h1
+            className='text-lg font-extrabold font-display whitespace-pre-wrap'
+            dangerouslySetInnerHTML={{ __html: endTitle }}
+          />
+          <div className='relative'>
+            <p
+              className={cn(
+                'text-pw-muted text-xs mb-1 whitespace-pre-wrap transition-all',
+                !isEndMsgExpanded && endMsg.length > 180 ?
+                  'line-clamp-3 max-h-24 overflow-hidden'
+                : 'max-h-96 overflow-y-auto pr-1',
+              )}
+              dangerouslySetInnerHTML={{ __html: endMsg }}
+            />
+            {endMsg.length > 180 && (
+              <button
+                type='button'
+                onClick={() => setIsEndMsgExpanded(!isEndMsgExpanded)}
+                className='text-pw-cyan hover:underline text-[11px] font-semibold mt-1 inline-flex items-center gap-1 focus:outline-none'>
+                {isEndMsgExpanded ? 'Read less' : 'Read more...'}
+              </button>
+            )}
+          </div>
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
             <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4 text-left'>
@@ -1707,16 +1958,15 @@ function Taker() {
                 const independentAns = userAnswers.filter((a) =>
                   independentQs.some((q) => q.id === a.questionId),
                 );
-                const indCorrect = independentAns.filter((a) => a.correct).length;
+                const indCorrect = independentAns.filter(
+                  (a) => a.correct,
+                ).length;
 
                 return (
                   <div className='border-t border-white/5 pt-3 space-y-1.5'>
-                    <span className='text-[10px] text-pw-cyan uppercase font-bold tracking-widest block'>
-                      Independent Questions Score
-                    </span>
                     <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
                       <span className='font-bold text-white'>
-                        Standalone Questions ({independentQs.length})
+                        Other Questions ({independentQs.length})
                       </span>
                       <span className='font-mono text-pw-cyan font-bold'>
                         {indCorrect} / {independentQs.length}
@@ -1730,7 +1980,7 @@ function Taker() {
               {Object.keys(categoryScores).length > 0 && (
                 <div className='border-t border-white/5 pt-3 space-y-2'>
                   <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
-                    Group / Category Scores
+                    Category Scores
                   </span>
 
                   {Object.entries(categoryScores).map(([cat, stats], idx) => (
@@ -1750,6 +2000,259 @@ function Taker() {
             </Card>
           )}
 
+          {/* Per-question explanation review */}
+          {quiz?.type === 'quiz' &&
+            (quiz?.correctOptionDes ||
+              activeQuestions.some(
+                (q) =>
+                  q.correctExplanation ||
+                  (q.options as any[])?.some((o: any) => o.explanation),
+              )) &&
+            userAnswers.length > 0 && (
+              <Card className='p-4 sm:p-5 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-3 mt-4 text-left backdrop-blur-md'>
+                <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block'>
+                  Question Review & Explanations
+                </span>
+                {activeQuestions.map((q, qi) => {
+                  const ans = userAnswers.find((a) => a.questionId === q.id);
+                  const opts = (q.options as any[]) || [];
+                  const userAnswerText =
+                    ans ?
+                      Array.isArray(ans.answer) ?
+                        ans.answer
+                          .map(
+                            (id: string) =>
+                              opts.find((o: any) => o.id === id)?.text || id,
+                          )
+                          .join(', ')
+                      : opts.find((o: any) => o.id === ans.answer)?.text ||
+                        String(ans.answer)
+                    : '(No answer)';
+                  const selOpt =
+                    !Array.isArray(ans?.answer) ?
+                      opts.find((o: any) => o.id === ans?.answer)
+                    : null;
+
+                  // Option image for selected answer
+                  const rawSelOptImg =
+                    selOpt?.uploadUrl ||
+                    (typeof selOpt?.imageUrl === 'string' ?
+                      selOpt.imageUrl
+                    : selOpt?.imageUrl?.url);
+                  const selOptImgUrl =
+                    rawSelOptImg ?
+                      unpackPingWorldMediaUrl(rawSelOptImg).url
+                    : undefined;
+
+                  // Question image if present
+                  const rawQImg =
+                    (q as any)?.uploadUrl ||
+                    (typeof (q as any)?.imageUrl === 'string' ?
+                      (q as any).imageUrl
+                    : (q as any)?.imageUrl?.url) ||
+                    (q as any)?.image;
+                  const qImgUrl =
+                    rawQImg ? unpackPingWorldMediaUrl(rawQImg).url : undefined;
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={cn(
+                        'p-3 rounded-xl border text-xs space-y-1.5',
+                        ans?.correct ?
+                          'bg-pw-success/5 border-pw-success/20'
+                        : 'bg-pw-danger/5 border-pw-danger/20',
+                      )}>
+                      <div className='flex items-start gap-2'>
+                        <span
+                          className={cn(
+                            'font-bold shrink-0',
+                            ans?.correct ? 'text-pw-success' : 'text-pw-danger',
+                          )}>
+                          {ans?.correct ? '✓' : '✗'}{' '}
+                          {(() => {
+                            const targetCat = q.category?.trim() || '';
+                            const inStack = activeQuestions.filter(
+                              (item) =>
+                                (item.category?.trim() || '') === targetCat,
+                            );
+                            const posInStack = inStack.findIndex(
+                              (item) => item.id === q.id,
+                            );
+                            const stackPos =
+                              posInStack !== -1 ? posInStack + 1 : qi + 1;
+                            return q.category ?
+                                `Q${stackPos} (${q.category})`
+                              : `Q${stackPos}`;
+                          })()}
+                          .
+                        </span>
+                        <span
+                          className='text-white/80 whitespace-pre-wrap'
+                          dangerouslySetInnerHTML={{
+                            __html: formatDetailVars(q.text),
+                          }}
+                        />
+                      </div>
+
+                      {/* Question image attachment if present */}
+                      {qImgUrl && (
+                        <div className='pl-5 my-1'>
+                          <img
+                            src={qImgUrl}
+                            alt='Question media'
+                            onClick={() =>
+                              setFullscreenMedia({
+                                url: qImgUrl,
+                                title: `Question Attachment - Q${qi + 1}`,
+                              })
+                            }
+                            className='max-h-24 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
+                          />
+                        </div>
+                      )}
+
+                      <p className='text-pw-muted pl-5 whitespace-pre-wrap'>
+                        Your answer:{' '}
+                        <span
+                          className='font-bold text-white'
+                          dangerouslySetInnerHTML={{
+                            __html: formatDetailVars(userAnswerText),
+                          }}
+                        />
+                      </p>
+
+                      {/* Selected option image display */}
+                      {selOptImgUrl && (
+                        <div className='pl-5 my-1 flex items-center gap-2'>
+                          <span className='text-[10px] text-pw-muted'>
+                            Selected Image:
+                          </span>
+                          <img
+                            src={selOptImgUrl}
+                            alt='Selected option attachment'
+                            onClick={() =>
+                              setFullscreenMedia({
+                                url: selOptImgUrl,
+                                title: `Selected Option Image - Q${qi + 1}`,
+                              })
+                            }
+                            className='h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                          />
+                        </div>
+                      )}
+
+                      {/* Uploaded answer file image preview */}
+                      {ans?.fileUrl &&
+                        (() => {
+                          const unpacked =
+                            unpackPingWorldMediaUrl(ans.fileUrl).url ||
+                            ans.fileUrl;
+                          return (
+                              String(unpacked).startsWith('data:image/') ||
+                                String(unpacked).startsWith('http')
+                            ) ?
+                              <div className='pl-5 my-1 flex items-center gap-2'>
+                                <span className='text-[10px] text-pw-muted'>
+                                  Uploaded Image:
+                                </span>
+                                <img
+                                  src={unpacked}
+                                  alt='Uploaded Answer'
+                                  onClick={() =>
+                                    setFullscreenMedia({
+                                      url: unpacked,
+                                      title: `Uploaded Answer - Q${qi + 1}`,
+                                    })
+                                  }
+                                  className='max-h-28 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                />
+                              </div>
+                            : null;
+                        })()}
+
+                      {/* Show correct answer if taker got it wrong */}
+                      {!ans?.correct &&
+                        (() => {
+                          let decodedIndex: any = q.correctIndex;
+                          try {
+                            decodedIndex = JSON.parse(atob(q.correctIndex));
+                          } catch {
+                            decodedIndex = q.correctIndex;
+                          }
+                          const correctOpt = opts.find(
+                            (o: any, oI: number) =>
+                              o.id === decodedIndex ||
+                              String(oI) === String(decodedIndex) ||
+                              o.text === decodedIndex,
+                          );
+                          const rawCorrectImg =
+                            correctOpt?.uploadUrl ||
+                            (typeof correctOpt?.imageUrl === 'string' ?
+                              correctOpt?.imageUrl
+                            : correctOpt?.imageUrl?.url);
+                          const correctImgUrl =
+                            rawCorrectImg ?
+                              unpackPingWorldMediaUrl(rawCorrectImg).url
+                            : undefined;
+                          return (
+                            <div className='pl-5 text-xs text-pw-success/90 font-medium space-y-1 pt-0.5'>
+                              <p>
+                                Correct answer:{' '}
+                                <span
+                                  className='font-bold text-pw-success'
+                                  dangerouslySetInnerHTML={{
+                                    __html: formatDetailVars(
+                                      correctOpt?.text || String(decodedIndex),
+                                    ),
+                                  }}
+                                />
+                              </p>
+                              {correctImgUrl && (
+                                <div className='flex items-center gap-2 mt-1'>
+                                  <span className='text-[10px] text-pw-muted'>
+                                    Correct Image:
+                                  </span>
+                                  <img
+                                    src={correctImgUrl}
+                                    alt='Correct option attachment'
+                                    onClick={() =>
+                                      setFullscreenMedia({
+                                        url: correctImgUrl,
+                                        title: `Correct Option Image - Q${qi + 1}`,
+                                      })
+                                    }
+                                    className='h-12 w-12 rounded-lg object-cover border border-pw-success/30 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                      {selOpt?.explanation && (
+                        <p
+                          className='pl-5 text-pw-cyan/90 italic whitespace-pre-wrap'
+                          dangerouslySetInnerHTML={{
+                            __html: formatDetailVars(selOpt.explanation),
+                          }}
+                        />
+                      )}
+                      {q.correctExplanation && (
+                        <p
+                          className='pl-5 text-pw-primary/90 italic whitespace-pre-wrap'
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              '💡 ' + formatDetailVars(q.correctExplanation),
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </Card>
+            )}
+
           <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full mt-4 items-center justify-center'>
             {quiz?.allowRetry && (
               <Button
@@ -1768,14 +2271,20 @@ function Taker() {
           </div>
 
           {/* PingWorld compliance disclaimer footer on completion screen */}
-          <div className='pt-6 border-t border-white/5 mt-6 text-[10px] text-pw-muted leading-tight max-w-sm mx-auto'>
-            <p>
-              PingWorld is a service provider hosting this{' '}
-              {quiz?.type ?? 'assessment'}. We are not responsible for any
-              questions, responses, or outcomes generated in this{' '}
-              {quiz?.type ?? 'assessment'}.
-            </p>
-          </div>
+          {!quiz?.hidePingWorldDisclaimer && (
+            <div className='pt-6 border-t border-white/5 mt-6 text-[10px] text-pw-muted leading-tight max-w-sm mx-auto'>
+              <p>
+                {quiz?.customDisclaimer ?
+                  <span
+                    className='whitespace-pre-wrap'
+                    dangerouslySetInnerHTML={{
+                      __html: formatDetailVars(quiz.customDisclaimer),
+                    }}
+                  />
+                : `PingWorld is a service provider hosting this ${quiz?.type ?? 'assessment'}. We are not responsible for any questions, responses, or outcomes generated in this ${quiz?.type ?? 'assessment'}.`}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1806,31 +2315,35 @@ function Taker() {
         )}
       />
 
+      {/* Persistent Fullscreen Branding Background & Shade */}
+      {quiz?.branding?.shadeColor && (
+        <div
+          className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none transition-all duration-500'
+          style={{
+            backgroundColor: quiz.branding.shadeColor,
+            opacity: quiz.branding.opacity ?? 0.35,
+          }}
+        />
+      )}
+      {quiz?.branding?.image && (
+        <div
+          className='fixed inset-0 min-h-screen w-screen z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-all duration-500'
+          style={{
+            backgroundImage: `url(${unpackPingWorldMediaUrl(quiz.branding.image).url || quiz.branding.image})`,
+            opacity: quiz.branding.opacity ?? 0.25,
+            filter: `blur(${quiz.branding.blur ?? 0}px) brightness(85%)`,
+          }}
+        />
+      )}
+      {(quiz?.branding?.image || quiz?.branding?.shadeColor) && (
+        <div className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60' />
+      )}
+
       {/* Intro Gate */}
       {showIntro && !started && (
         <div
           key='intro-view'
           className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
-          {quiz?.branding?.shadeColor && (
-            <div
-              className='absolute inset-0 z-0 pointer-events-none transition-all duration-300'
-              style={{
-                backgroundColor: quiz.branding.shadeColor,
-                opacity: (quiz.branding.opacity ?? 0.15) * 0.5,
-              }}
-            />
-          )}
-          {quiz?.branding?.image && (
-            <div
-              className='absolute inset-0 z-0 bg-cover bg-center pointer-events-none'
-              style={{
-                backgroundImage: `url(${quiz?.branding?.image})`,
-                opacity: quiz?.branding?.opacity ?? 0.1,
-                filter: `blur(${quiz?.branding?.blur ?? 2}px) brightness(80%)`,
-              }}
-            />
-          )}
-
           <div className='relative z-10'>
             {/* Show clear foreground image/logo if configured */}
             {quiz?.branding?.icon ?
@@ -1845,12 +2358,19 @@ function Taker() {
                 : <MessageCircle size={60} />}
               </div>
             }
-            <h1 className='text-2xl sm:text-4xl font-extrabold font-display mb-4 tracking-tight'>
-              {quiz?.title?.toUpperCase()}
+            <h1 className='text-2xl sm:text-4xl font-extrabold font-display mb-4 tracking-tight whitespace-pre-wrap'>
+              <span
+                dangerouslySetInnerHTML={{
+                  __html: formatDetailVars(quiz?.title?.toUpperCase() || ''),
+                }}
+              />
             </h1>
-            <p className='text-pw-muted leading-relaxed mb-10 max-h-[300px] text-xs overflow-auto px-2'>
-              {quiz?.description}
-            </p>
+            <p
+              className='text-pw-muted leading-relaxed mb-10 max-h-[300px] text-xs overflow-auto px-2 whitespace-pre-wrap'
+              dangerouslySetInnerHTML={{
+                __html: formatDetailVars(quiz?.description || ''),
+              }}
+            />
           </div>
 
           <div className='max-w-sm mx-auto w-full relative z-10'>
@@ -1895,17 +2415,28 @@ function Taker() {
             <div className='divider mb-4 mt-10' />
             {quiz?.disclaimer ?
               <p className='mb-1 text-[10px] leading-relaxed text-pw-muted/90'>
-                {quiz.disclaimer}
+                {formatDetailVars(quiz.disclaimer)}
               </p>
-            : <p className='mb-1 text-[10px] flex flex-col'>
-                PingWorld is only a service provider hosting this{' '}
-                {quiz?.type ?? 'assessment'}.
-                <span>
-                  We are not responsible for any questions, responses, or
-                  outcomes generated in this {quiz?.type ?? 'assessment'}.
-                </span>
+            : !quiz?.hidePingWorldDisclaimer ?
+              <p className='mb-1 text-[10px] flex flex-col'>
+                {quiz?.customDisclaimer ?
+                  <span
+                    className='whitespace-pre-wrap'
+                    dangerouslySetInnerHTML={{
+                      __html: formatDetailVars(quiz.customDisclaimer),
+                    }}
+                  />
+                : <>
+                    PingWorld is only a service provider hosting this{' '}
+                    {quiz?.type ?? 'assessment'}.
+                    <span>
+                      We are not responsible for any questions, responses, or
+                      outcomes generated in this {quiz?.type ?? 'assessment'}.
+                    </span>
+                  </>
+                }
               </p>
-            }
+            : null}
             <button
               onClick={() => setShowReportModal(true)}
               className='text-pw-danger text-[10px] hover:underline transition-colors font-bold tracking-wide'>
@@ -1969,6 +2500,7 @@ function Taker() {
                   if (quiz?.askDetails && quiz?.askDetails.length > 0) {
                     setShowDetails(true);
                   } else {
+                    playQuizStartTone();
                     setStart(true);
                   }
                 }}
@@ -2038,15 +2570,18 @@ function Taker() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className='w-56 bg-pw-surface/70 bkblur border-white/10 rounded-2xl'>
                             {detail.options?.map((opt, index) => (
-                                <DropdownMenuItem
-                                  key={opt + index + 'dropdown-option'}
+                              <DropdownMenuItem
+                                key={opt + index + 'dropdown-option'}
                                 onClick={() =>
-                                  setUserData({...userData, [detail.title]: opt})
+                                  setUserData({
+                                    ...userData,
+                                    [detail.title]: opt,
+                                  })
                                 }
-                                  className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
-                                  {capFirst(opt)}
-                                </DropdownMenuItem>
-                              ))}
+                                className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
+                                {capFirst(opt)}
+                              </DropdownMenuItem>
+                            ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -2065,13 +2600,12 @@ function Taker() {
                           }
                         />
                         {userData[detail.title] && (
-                          <p className='text-xs py-1 pl-1 break-all'>
-                            You are{' '}
-                            {new Date().getFullYear() -
-                              parseInt(
-                                userData[detail.title].split('-')[0],
-                              )}{' '}
-                            years old.
+                          <p className='text-xs py-1 pl-1 text-pw-primary font-medium'>
+                            {formatDobToWords(userData[detail.title])}{' '}
+                            <span className='text-pw-muted'>
+                              (age {getDobGetter(userData[detail.title], 'age')}
+                              )
+                            </span>
                           </p>
                         )}
                       </>
@@ -2115,6 +2649,28 @@ function Taker() {
                         }
                       />
                     }
+                    {(detail.minLength || detail.maxLength) && (
+                      <div className='flex justify-between items-center text-[10px] px-1 text-pw-muted mt-1'>
+                        <span>
+                          {detail.minLength ? `Min: ${detail.minLength} chars` : ''}
+                          {detail.minLength && detail.maxLength ? ' • ' : ''}
+                          {detail.maxLength ? `Max: ${detail.maxLength} chars` : ''}
+                        </span>
+                        <span
+                          className={cn(
+                            'font-mono',
+                            detail.minLength &&
+                              (userData[detail.title]?.length || 0) < detail.minLength &&
+                              'text-pw-warning',
+                            detail.maxLength &&
+                              (userData[detail.title]?.length || 0) > detail.maxLength &&
+                              'text-pw-danger font-bold',
+                          )}>
+                          {(userData[detail.title] || '').length}
+                          {detail.maxLength ? `/${detail.maxLength}` : ' chars'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <Button
@@ -2128,22 +2684,83 @@ function Taker() {
                     if (!complete)
                       return toast.error('Required detail fields are missing.');
 
+                    let validationError = '';
                     let mismatch = false;
-                    quiz?.askDetails?.forEach((d) => {
-                      String(userData[d.title] || '').trim();
-                      setUserData({
-                        ...userData,
-                        [d.title]: String(d.title.trim()),
-                      });
+                    const cleanUserData: Record<string, any> = { ...userData };
 
+                    for (const d of quiz?.askDetails || []) {
+                      const rawEntered = userData[d.title];
+                      const val =
+                        typeof rawEntered === 'string' ?
+                          rawEntered.trim()
+                        : String(rawEntered || '').trim();
+                      cleanUserData[d.title] = val;
+
+                      // 1. Min length validation
+                      if (
+                        d.minLength !== undefined &&
+                        d.minLength !== null &&
+                        val.length < d.minLength
+                      ) {
+                        validationError = `${d.title || 'Field'} must be at least ${d.minLength} characters (currently ${val.length}).`;
+                        break;
+                      }
+
+                      // 2. Max length validation
+                      if (
+                        d.maxLength !== undefined &&
+                        d.maxLength !== null &&
+                        val.length > d.maxLength
+                      ) {
+                        validationError = `${d.title || 'Field'} cannot exceed ${d.maxLength} characters.`;
+                        break;
+                      }
+
+                      // 3. Restricted / Prohibited keywords validation
+                      if (
+                        (d as any).restrictedKeywords &&
+                        String((d as any).restrictedKeywords).trim() !== ''
+                      ) {
+                        const rawRestricted = String((d as any).restrictedKeywords).trim();
+                        const restrictedList = rawRestricted
+                          .split(',')
+                          .map((k) => k.trim().toLowerCase())
+                          .filter(Boolean);
+                        const valLower = val.toLowerCase();
+
+                        let matchedRestricted: string | null = null;
+                        for (const rk of restrictedList) {
+                          if (valLower.includes(rk)) {
+                            matchedRestricted = rk;
+                            break;
+                          }
+                        }
+
+                        if (!matchedRestricted) {
+                          try {
+                            const regex = new RegExp(rawRestricted, 'i');
+                            if (regex.test(val)) {
+                              matchedRestricted = rawRestricted;
+                            }
+                          } catch {}
+                        }
+
+                        if (matchedRestricted) {
+                          validationError = `Invalid input: "${d.title}" contains restricted keyword ("${matchedRestricted}").`;
+                          break;
+                        }
+                      }
+
+                      // 4. Administrative Allowlist validation
                       if (d.allowlist && d.allowlist.trim() !== '') {
-                        const val = String(userData[d.title] || '').trim();
                         const rawAllow = d.allowlist.trim();
                         const allowedItems = rawAllow
                           .split(',')
                           .map((item) => item.trim());
 
-                        let matched = allowedItems.includes(val);
+                        let matched = allowedItems.some(
+                          (item) => item.toLowerCase() === val.toLowerCase(),
+                        );
 
                         if (!matched) {
                           try {
@@ -2158,16 +2775,24 @@ function Taker() {
                             quiz?.allowlistMessage ||
                               `Access Denied: The entered ${d.title} ("${val}") does not match the required administrative allowlist.`,
                           );
+                          break;
                         }
                       }
-                    });
+                    }
+
+                    if (validationError) {
+                      toast.error(validationError);
+                      return;
+                    }
 
                     if (mismatch) return;
 
+                    setUserData(cleanUserData);
                     setDetailsCollected(true);
+                    playQuizStartTone();
                     setStart(true);
                   }}>
-                  START {quiz?.type?.toUpperCase() || 'AssESSMENT'}
+                  START {quiz?.type?.toUpperCase() || 'ASSESSMENT'}
                 </Button>
               </div>
             </div>
@@ -2211,7 +2836,12 @@ function Taker() {
                   size={14}
                   className='text-pw-warning shrink-0 mt-0.5'
                 />
-                <span>{quiz?.disclaimer}</span>
+                <span
+                  className='whitespace-pre-wrap'
+                  dangerouslySetInnerHTML={{
+                    __html: formatDetailVars(quiz.disclaimer),
+                  }}
+                />
               </div>
             )}
 
@@ -2220,7 +2850,12 @@ function Taker() {
               <div className='flex items-center gap-4 pl-3'>
                 <div className='flex flex-col'>
                   <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
-                    {quiz?.title}
+                    <span
+                      className='whitespace-pre-wrap'
+                      dangerouslySetInnerHTML={{
+                        __html: formatDetailVars(quiz?.title || ''),
+                      }}
+                    />
                   </h1>
                   <span
                     className='text-[8px] leading-none opacity-40 hidden'
@@ -2268,10 +2903,21 @@ function Taker() {
             </div>
 
             <div className='flex flex-col gap-3 mb-2 pt-1 px-2'>
-              {quiz?.type === 'quiz' &&
-                activeQuestions.some(
-                  (q) => q.category && q.category.trim() !== '',
-                ) && (
+              {/* Only show progress bar if NO branching is detected */}
+              {(() => {
+                const hasBranching = activeQuestions.some(
+                  (quest) =>
+                    quest.skipTo ||
+                    quest.skipToCat ||
+                    (quest.inputBranchRules &&
+                      quest.inputBranchRules.length > 0) ||
+                    (quest.options as any[])?.some(
+                      (opt: any) => opt?.skipTo || opt?.skipToCat,
+                    ),
+                );
+                if (hasBranching) return null;
+
+                return (
                   <div className='w-full min-w-full h-2 rounded-full overflow-hidden bg-pw-cyan/10 z-[100] backdrop-blur-sm mx-1'>
                     <motion.div
                       initial={{ width: 0 }}
@@ -2281,7 +2927,8 @@ function Taker() {
                       className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
                     />
                   </div>
-                )}
+                );
+              })()}
 
               <div
                 className={cn(
@@ -2312,7 +2959,7 @@ function Taker() {
                   )}
 
                   {/* Realtime Live Score Display */}
-                  {quiz?.showScore && quiz?.type === 'quiz' && (
+                  {(quiz?.showScore || quiz?.showRealtimeScore) && quiz?.type === 'quiz' && (
                     <div className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md'>
                       <Brain className='w-3.5 h-3.5' /> {score} /{' '}
                       {activeQuestions.length}
@@ -2349,6 +2996,14 @@ function Taker() {
                 <div ref={bottomRef} />
 
                 <div className='flex items-center gap-3 mt-4'>
+                  {quiz?.allowPass && (
+                    <Button
+                      onClick={handlePass}
+                      variant='outline'
+                      className='h-11 px-6 rounded-xl font-bold gap-1.5 border-white/10 hover:border-pw-warning/40 text-pw-warning/80 hover:text-pw-warning hover:bg-pw-warning/10 transition-all'>
+                      Pass Question <SkipForward className='h-4 w-4' />
+                    </Button>
+                  )}
                   <Button
                     onClick={() => handleNext()}
                     className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
@@ -2429,6 +3084,15 @@ function Taker() {
                             )}
 
                             <div className='flex items-center gap-3 ml-auto'>
+                              {quiz?.allowPass && (
+                                <Button
+                                  onClick={handlePass}
+                                  variant='outline'
+                                  className='h-10 px-5 text-xs rounded-2xl gap-1.5 font-bold border-white/10 hover:border-pw-warning/40 text-pw-warning/80 hover:text-pw-warning hover:bg-pw-warning/10 transition-all'>
+                                  Pass <SkipForward className='h-3.5 w-3.5' />
+                                </Button>
+                              )}
+
                               <Button
                                 onClick={handleNext}
                                 className='btn-primary h-10 px-8 rounded-2xl font-black gap-2 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
@@ -2576,6 +3240,49 @@ function Taker() {
           </div>
         </div>
       )}
+
+      {/* Fullscreen Lightbox Preview Modal */}
+      <AnimatePresence>
+        {fullscreenMedia && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setFullscreenMedia(null)}
+            className='fixed inset-0 z-[9999] bg-black/90 bkblur flex flex-col items-center justify-center p-4 cursor-pointer'>
+            <div
+              className='relative max-w-4xl max-h-[90vh] flex flex-col items-center gap-3 cursor-default'
+              onClick={(e) => e.stopPropagation()}>
+              <div className='flex items-center justify-between w-full text-white px-2'>
+                <span className='text-xs font-bold text-pw-muted truncate max-w-md'>
+                  {fullscreenMedia.title || 'Attachment Preview'}
+                </span>
+                <div className='flex items-center gap-2'>
+                  <a
+                    href={fullscreenMedia.url}
+                    download='attachment'
+                    target='_blank'
+                    rel='noreferrer'
+                    className='p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all text-xs flex items-center gap-1'>
+                    <Download className='h-4 w-4' />
+                  </a>
+                  <button
+                    onClick={() => setFullscreenMedia(null)}
+                    className='p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all'>
+                    <X className='h-4 w-4' />
+                  </button>
+                </div>
+              </div>
+
+              <img
+                src={fullscreenMedia.url}
+                alt={fullscreenMedia.title || 'Attachment Preview'}
+                className='max-h-[80vh] max-w-[90vw] object-contain rounded-2xl border border-white/10 shadow-2xl bg-black/60'
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

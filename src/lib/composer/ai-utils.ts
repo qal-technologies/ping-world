@@ -218,37 +218,102 @@ function extractKeyNouns(text: string): string[] {
 }
 
 /**
- * Check grammar using free keyless LanguageTool API
+ * Check grammar using offline-first local linting rules + optional safe remote fallback.
+ * Guaranteed to never throw unhandled fetch errors or crash hooks.
  */
 export async function checkGrammar(text: string): Promise<GrammarIssue[]> {
   if (!text || text.trim().length === 0) return [];
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return [];
+
+  const issues: GrammarIssue[] = [];
+
+  // Local Rule 1: Duplicate adjacent words (e.g. "the the", "and and")
+  const dupRegex = /\b([a-zA-Z]{2,})\s+\1\b/gi;
+  let match: RegExpExecArray | null;
+  while ((match = dupRegex.exec(text)) !== null) {
+    issues.push({
+      message: `Repeated word: "${match[1]}"`,
+      context: text.slice(Math.max(0, match.index - 10), Math.min(text.length, match.index + match[0].length + 10)),
+      offset: match.index,
+      length: match[0].length,
+    });
+  }
+
+  // Local Rule 2: Space before comma/period (e.g. "word , next")
+  const spacePunctRegex = /\w+\s+([,.:;!?])/g;
+  while ((match = spacePunctRegex.exec(text)) !== null) {
+    issues.push({
+      message: `Unusual space before punctuation "${match[1]}"`,
+      context: text.slice(Math.max(0, match.index - 5), Math.min(text.length, match.index + match[0].length + 5)),
+      offset: match.index,
+      length: match[0].length,
+    });
+  }
+
+  // Local Rule 3: Missing capitalization at sentence start
+  const sentenceCapRegex = /(?:^|[.!?]\s+)([a-z])/g;
+  while ((match = sentenceCapRegex.exec(text)) !== null) {
+    const charIdx = match.index + match[0].length - 1;
+    issues.push({
+      message: `Sentence should start with an uppercase letter`,
+      context: text.slice(Math.max(0, charIdx - 5), Math.min(text.length, charIdx + 10)),
+      offset: charIdx,
+      length: 1,
+    });
+  }
+
+  // Local Rule 4: Common homophone checks
+  const homophones = [
+    { regex: /\b(its)\s+(a|an|the|very|not|so|going)\b/gi, msg: 'Did you mean "it\'s" (it is)?' },
+    { regex: /\b(your)\s+(welcome|right|wrong|going|done)\b/gi, msg: 'Did you mean "you\'re" (you are)?' },
+    { regex: /\b(there)\s+(car|house|dog|opinion|idea|turn)\b/gi, msg: 'Did you mean "their" (possessive)?' },
+    { regex: /\b(their)\s+(is|are|was|were)\b/gi, msg: 'Did you mean "there"?' },
+  ];
+
+  for (const h of homophones) {
+    while ((match = h.regex.exec(text)) !== null) {
+      issues.push({
+        message: h.msg,
+        context: text.slice(Math.max(0, match.index - 5), Math.min(text.length, match.index + match[0].length + 5)),
+        offset: match.index,
+        length: match[0].length,
+      });
+    }
+  }
+
+  // If local issues found or user is offline, return local results immediately
+  if (issues.length > 0 || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    return issues.slice(0, 5);
+  }
+
+  // Optional background fetch with strict try/catch boundary
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
     const res = await fetch('https://api.languagetool.org/v2/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        text,
-        language: 'auto',
-      }),
+      body: new URLSearchParams({ text, language: 'auto' }),
       signal: controller.signal,
-    });
+    }).catch(() => null);
     clearTimeout(timeoutId);
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!data || !Array.isArray(data.matches)) return [];
-    return data.matches.map((m: any) => ({
-      message: m.message,
-      context: m.context?.text || '',
-      offset: m.context?.offset ?? 0,
-      length: m.context?.length ?? 0,
-    }));
+
+    if (res && res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && Array.isArray(data.matches)) {
+        const remoteIssues = data.matches.map((m: any) => ({
+          message: m.message || 'Grammar suggestion',
+          context: m.context?.text || '',
+          offset: m.context?.offset ?? 0,
+          length: m.context?.length ?? 0,
+        }));
+        return [...issues, ...remoteIssues].slice(0, 5);
+      }
+    }
   } catch {
-    // Graceful silent fallback for offline / rate-limited / blocked requests
-    return [];
+    // Completely silent fallback
   }
+
+  return issues.slice(0, 5);
 }
 
 // ─── AI Features (Mock + Real slot) ──────────────────────────

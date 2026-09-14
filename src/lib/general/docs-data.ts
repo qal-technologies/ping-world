@@ -58,13 +58,43 @@ export const toolDocsDb: Record<string, ToolDoc> = {
       },
       {
         title: "Selecting Question Types (Dropdown Selector)",
-        description: "Click the 'Question Type' dropdown menu inside the question editor. Choose from 'Multiple Choice' (single correct answer), 'True/False' (boolean), 'Checkbox' (multiple correct answers), 'Text Input' (keyboard response), 'Range' (slider evaluation), or 'Rating Scale' (star icons).",
+        description: "Click the 'Question Type' dropdown menu inside the question editor. Choose from 'Multiple Choice' (single correct answer), 'True/False' (boolean), 'Checkbox' (multiple correct answers), 'Text Input' (keyboard response), 'Range' (slider evaluation), 'Rating Scale' (star icons), or 'File Upload' (taker file submissions).",
         introduced: "basic"
+      },
+      {
+        title: "File Upload Question Type & Limits",
+        description: "Set questions to 'Upload' mode to allow takers to upload project files, assignments, or media attachments. Set allowed file extensions (such as png, jpg, pdf, docx, zip) and configure max file size limits up to 10MB.",
+        introduced: "2.0"
       },
       {
         title: "Configuring Answer Options (Option List & Checkbox Icons)",
         description: "For Multiple Choice and Checkbox questions, type your answers into the option input fields details. Click the circular checkbox icon or radio button directly to the left of the option text to mark it as the correct answer. The selected correct option will highlight in green.",
         introduced: "basic"
+      },
+      {
+        title: "Dynamic Variable Piping (@token Syntax)",
+        description: "Inject participant answers, scores, and metadata dynamically anywhere in question text, options, descriptions, and completion feedback. Use tokens like @FullName, @Email, @q1, @score, @totalQuestions, and @accuracy. Previews and evaluates in real time across the quiz.",
+        introduced: "2.0"
+      },
+      {
+        title: "Natural Language DOB & Date Getters",
+        description: "When participant Date of Birth is collected, referencing @DOB, @Date of Birth, or @birthdate automatically spells out natural words (e.g., '2nd of March, 2005'). Target specific parts using getters: @DOB:age, @DOB:year, @DOB:month, and @DOB:day.",
+        introduced: "2.0"
+      },
+      {
+        title: "Conditional Evaluation Expressions (@eval & @show)",
+        description: "Execute runtime logic inside descriptions, questions, and feedback cards. Use @eval:{condition ? 'A' : 'B'} with full support for '=', '!=', '>', '<', '>=', '<=', 'MATCH', and '||'. Conditionally show entire paragraphs or hints with @show:(condition).",
+        introduced: "2.0"
+      },
+      {
+        title: "Syntax Prefix Escaping (\\@ and @\\)",
+        description: "To display an '@' symbol literally without triggering token replacement (for email addresses or social handles like \\@username or @\\username), prepend or embed a backslash. PingWorld preserves the exact literal representation in taker view.",
+        introduced: "2.0"
+      },
+      {
+        title: "Question & Option Action Menus (MoreVertical)",
+        description: "Access context menus on each question and option. Rearrange questions with 'Move to Top', 'Move to Bottom', 'Move Up', or 'Move Down' within current category groups, duplicate items, configure branching destinations, or set option score weights.",
+        introduced: "2.0"
       },
       {
         title: "Setting Up Time Limits (Time Limit Slider & Input)",
@@ -77,14 +107,24 @@ export const toolDocsDb: Record<string, ToolDoc> = {
         introduced: "2.0"
       },
       {
+        title: "Persistent Fullscreen Branding & Visual Ambience",
+        description: "Upload a custom branding background image, set custom overlay shade colors (including transparent HEX/RGB), and adjust backdrop blur filters. Ambience stays persistently locked across the start gate, assessment cards, and final completion screen.",
+        introduced: "2.0"
+      },
+      {
         title: "Data Collection Headers (Participant Info Fields)",
-        description: "Toggle the 'Collect Participant Info' checkbox in the sidebar. Select which fields are required—such as Name, Email, or Employee ID. Participants will be forced to fill these in on a styled loading gate before the quiz begins.",
+        description: "Toggle the 'Collect Participant Info' checkbox in the sidebar. Select which fields are required—such as Name, Email, DOB, or Employee ID. Participants will be forced to fill these in on a styled loading gate before the quiz begins.",
         introduced: "1.0"
       },
       {
-        title: "Exporting and Importing Quizzes (JSON Backup Buttons)",
-        description: "Locate the two top utility buttons: 'Export JSON' and 'Import JSON'. Click 'Export' to download a clean, structured text profile containing your quiz. To load a previous quiz, click 'Import' and pick your saved file to rebuild the workspace.",
-        introduced: "1.0"
+        title: "Multi-Format Export (JSON, CSV, & Formatted Text)",
+        description: "Export full assessment schemas or taker response data into clean JSON configurations, spreadsheets (CSV with parsed multiline cells), or formatted human-readable reports (.txt).",
+        introduced: "2.0"
+      },
+      {
+        title: "Celebration Confetti & Audio Synthesizer Start Tones",
+        description: "Reward high-scoring participants upon completion with celebratory confetti animations. Synthesizer web audio triggers distinct start tones across all assessment start paths.",
+        introduced: "2.0"
       },
       {
         title: "Sharing Your Quiz (Share Icon & Link Dialog)",
