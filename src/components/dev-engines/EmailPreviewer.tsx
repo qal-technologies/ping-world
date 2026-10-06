@@ -5,7 +5,7 @@ import { Mail, Copy, Check, Plus, Trash2, Code, Layout,  Layers } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { EmailEngine, EmailTemplateType, ButtonConfig, ModularEmailParams } from '@/lib/dev-engines/email-engine';
+import { EmailEngine, EmailTemplateType, ButtonConfig} from '@/lib/dev-engines/email-engine';
 import { toast } from 'sonner';
 
 export default function EmailPreviewer() {
@@ -44,7 +44,7 @@ export default function EmailPreviewer() {
   const engine = new EmailEngine();
 
   // Compose modular config
-  const modularParams: ModularEmailParams = {
+  const modularParams = {
     primaryColor,
     header: {
       title: headerTitle,

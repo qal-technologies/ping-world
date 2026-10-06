@@ -21,7 +21,7 @@ function encryptPushPayload(subscription: { p256dh: string; auth: string }, payl
   }
 
   const ecdh = createECDH('prime256v1');
-  const serverPublic = ecdh.generateKeys(undefined, 'uncompressed');
+  const serverPublic = ecdh.generateKeys();
   const sharedSecret = ecdh.computeSecret(uaPublic);
   const keyInfo = Buffer.concat([Buffer.from('WebPush: info\0'), uaPublic, serverPublic]);
   const inputKey = Buffer.from(hkdfSync('sha256', sharedSecret, authSecret, keyInfo, 32));

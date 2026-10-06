@@ -55,23 +55,6 @@ export interface FooterConfig {
   color?: string;
 }
 
-export interface ModularEmailParams {
-  primaryColor?: string;
-  header?: {
-    title: string;
-    description?: string;
-    color?: string;
-    bgColor?: string;
-  };
-  body: {
-    text: string;
-    buttons?: ButtonConfig[];
-  };
-  footer?: {
-    text: string;
-    downlinks?: FooterConfig[];
-  };
-}
 export interface EmailTemplateParams {
   // Modular structural approach
   header?: HeaderConfig;
@@ -109,8 +92,8 @@ export class EmailEngine {
   ): EmailResult {
     try {
       const primary = params.primaryColor ?? this.defaultColors[type];
-      const company = params.companyName ?? 'PingWorld';
-      const year = params.year ?? new Date().getFullYear();
+      const company = params?.companyName ?? 'PingWorld';
+      const year = params?.year ?? new Date().getFullYear();
 
       // Resolve the structured email sections.
       const header = this._resolveHeader(type, params, primary);
