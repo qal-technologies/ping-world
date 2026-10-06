@@ -5,10 +5,12 @@ import {
   Upload, Download, Camera, Check, Circle, Square,
   Hexagon, RotateCw, ZoomIn, ZoomOut, Move,
   Sparkles, Crown, Eye, Sliders, RefreshCw,
+  Trash,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { makeHtml2CanvasCloneColorSafe } from '@/lib/image/html2canvas-color-safety';
 import { cn } from '@/lib/utils';
 import { TRENDY_OBJECT_MOCKS, ObjectMockItem } from '@/components/profile/ProfileAvatarDesigner';
 
@@ -116,15 +118,19 @@ export default function ProfilePicMaker() {
 
   const handleExport = async () => {
     if (!previewRef.current) return;
+    previewRef.current.dataset.captureRoot ||= crypto.randomUUID();
     setExporting(true);
     try {
-      const { default: html2canvas } = await import('html2canvas');
+      const {default: html2canvas} = await import('html2canvas');
+      
       const canvas = await html2canvas(previewRef.current, {
         backgroundColor: null,
         scale: 4,
         useCORS: true,
         allowTaint: false,
         logging: false,
+        foreignObjectRendering:true,
+        onclone: (clonedDoc) => makeHtml2CanvasCloneColorSafe(previewRef.current!, clonedDoc),
       });
       const url = canvas.toDataURL('image/png');
       const a = document.createElement('a');
@@ -218,7 +224,7 @@ export default function ProfilePicMaker() {
               <div
                 className={cn(
                   'absolute bottom-3 right-3 p-1 rounded-full border-2 border-white/20 shadow-xl flex items-center justify-center z-30',
-                  bg ? `bg-[${bg}]` : 'bg-[#0A0C1B]',
+                 
                 )}>
                 {badge === 'verified' && (
                   <span className='h-7 w-7 rounded-full bg-pw-primary flex items-center justify-center text-white text-xs font-black shadow-lg'>
@@ -226,12 +232,12 @@ export default function ProfilePicMaker() {
                   </span>
                 )}
                 {badge === 'pro' && (
-                  <span className='h-7 w-7 rounded-full bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center text-white text-[9px] font-black shadow-lg'>
+                  <span className='h-7 w-7 rounded-full bg-pw-warning flex items-center justify-center text-white text-[9px] font-black shadow-lg'>
                     PRO
                   </span>
                 )}
                 {badge === 'creator' && (
-                  <span className='h-7 w-7 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-black shadow-lg'>
+                  <span className='h-7 w-7 rounded-full bg-pw-cyan flex items-center justify-center text-white text-xs font-black shadow-lg'>
                     ★
                   </span>
                 )}
@@ -266,8 +272,8 @@ export default function ProfilePicMaker() {
         )}
 
         {/* CTA Buttons */}
-        <div className='flex items-center gap-3 w-full max-w-xs'>
-          <label className='flex-1 cursor-pointer'>
+        <div className='flex flex-wrap items-center gap-3 w-full max-w-xs'>
+          <label className='flex-1 cursor-pointer w-fit'>
             <input
               type='file'
               accept='image/*'
@@ -275,7 +281,7 @@ export default function ProfilePicMaker() {
               onChange={handleUpload}
               className='hidden'
             />
-            <div className='w-full h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center gap-2 text-xs font-bold text-pw-muted hover:text-white transition-colors cursor-pointer select-none'>
+            <div className='w-full h-10 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center gap-2 text-xs font-bold text-pw-muted hover:text-white transition-colors cursor-pointer select-none'>
               <Upload className='h-4 w-4' />
               {avatar ? 'Change Photo' : 'Upload Photo'}
             </div>
@@ -283,7 +289,7 @@ export default function ProfilePicMaker() {
           <Button
             onClick={handleExport}
             disabled={!avatar || exporting}
-            className='flex-1 h-11 rounded-xl btn-primary font-bold gap-2 text-xs shadow-lg shadow-pw-primary/20'>
+            className='flex-1 h-10 rounded-xl btn-primary font-bold gap-2 text-xs shadow-lg shadow-pw-primary/20'>
             <Download className='h-4 w-4' />
             {exporting ? 'Exporting…' : 'Export PNG'}
           </Button>
@@ -292,21 +298,21 @@ export default function ProfilePicMaker() {
 
       {/* ───── Controls & Customizer Tabs ───── */}
       <div className='lg:col-span-7 space-y-5'>
-        <Card className='p-6 bg-white/[0.02] border border-white/10 rounded-3xl backdrop-blur-xl space-y-6 shadow-xl'>
+        <Card className='p-1 ring-0 sm:ring-1 bg-transparent rounded-none sm:p-4 sm:bg-white/[0.02] sm:border sm:border-white/10 sm:rounded-3xl sm:backdrop-blur-xl space-y-4 sm:shadow-xl'>
 
           {/* Photo Framing & Positioning (Prevents stretching & centers subject) */}
-          <section className='space-y-3'>
+          <section className='space-y-2'>
             <div className='flex items-center justify-between'>
               <label className='text-[10px] font-bold text-pw-muted uppercase tracking-widest block flex items-center gap-1.5'>
-                <Sliders className='h-3 w-3 text-pw-cyan' /> Adaptive Photo Sizing & Positioning
+                <Sliders className='h-3 w-3 text-pw-cyan' /> Toolbar
               </label>
-              <div className='flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10'>
+              <div className='flex items-center gap-1 bg-white/5 p-0.5 rounded-full border border-white/10'>
                 <button
                   type='button'
                   onClick={() => setFitMode('cover')}
                   className={cn(
-                    'px-2 py-0.5 rounded text-[9px] font-bold uppercase transition-all',
-                    fitMode === 'cover' ? 'bg-pw-primary text-white' : 'text-pw-muted hover:text-white',
+                    'px-2.5 py-1 rounded-full text-[9px] font-bold uppercase transition-all',
+                    fitMode === 'cover' ? 'gradient-brand text-black' : 'text-pw-muted hover:text-white',
                   )}>
                   Cover (Fill)
                 </button>
@@ -314,15 +320,15 @@ export default function ProfilePicMaker() {
                   type='button'
                   onClick={() => setFitMode('contain')}
                   className={cn(
-                    'px-2 py-0.5 rounded text-[9px] font-bold uppercase transition-all',
-                    fitMode === 'contain' ? 'bg-pw-primary text-white' : 'text-pw-muted hover:text-white',
+                    'px-2.5 py-1 rounded-full text-[9px] font-bold transition-all',
+                    fitMode === 'contain' ? 'gradient-brand text-black' : 'text-pw-muted hover:text-white',
                   )}>
                   Contain (Full)
                 </button>
               </div>
             </div>
 
-            <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white/[0.02] border border-white/5 p-3 rounded-2xl'>
+            <div className='grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white/[0.02] border border-white/5 p-2.5 rounded-xl'>
               {/* Zoom */}
               <div className='space-y-1'>
                 <div className='flex justify-between text-[10px] font-bold'>
@@ -384,7 +390,7 @@ export default function ProfilePicMaker() {
                   type='button'
                   onClick={() => setSelectedMock(null)}
                   className='text-[9px] font-bold text-pw-danger hover:underline'>
-                  Remove Accessory
+                  <Trash className='w-4 h-4'/>
                 </button>
               )}
             </div>

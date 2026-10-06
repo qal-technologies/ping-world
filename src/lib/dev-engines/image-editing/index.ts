@@ -76,7 +76,8 @@ export class ImageEditingEngine {
       }
 
       return { width: image.width, height: image.height, data };
-    } catch (e) {
+    } catch(e) {
+      console.error(e);
       return image;
     }
   }

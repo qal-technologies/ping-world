@@ -25,7 +25,7 @@ export class PDFDocEngine {
       const title = options.title || 'Document';
       const cleanContent = content.replace(/[^\x20-\x7E\n\r\t]/g, ''); // sanitize ASCII for basic PDF 1.4 block
       const margin = options.margins?.left || 50;
-      let yStr = options.margins?.top || 750;
+      const yStr = options.margins?.top || 750;
       const fontSize = options.fontSize || 12;
       const leading = fontSize * 1.5;
 

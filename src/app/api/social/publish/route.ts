@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
+import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 
 interface PublishPayload {
   content: string;
@@ -83,14 +85,32 @@ function vetPostContent(platform: string, content: string, hasMedia: boolean): {
 // ── Main Publish Handler ──────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const body: PublishPayload = await req.json();
+    const ip = getClientIp(req);
+    if (isRateLimited(ip, 'api:social-publish', 5, 60_000).limited) {
+      return NextResponse.json({ success: false, error: 'Too many requests.' }, { status: 429 });
+    }
+    const requestUser = await getRequestUser(req);
+    if (!requestUser) {
+      return NextResponse.json({ success: false, error: 'Sign in to publish.' }, { status: 401 });
+    }
+    if (isRateLimited(requestUser.id, 'api:social-account', 5, 60_000).limited) {
+      return NextResponse.json({ success: false, error: 'Publishing limit reached. Try again later.' }, { status: 429 });
+    }
+    const body = await readJsonWithinLimit(req, 2 * 1024 * 1024) as PublishPayload;
     const { content, platforms, mediaUrls = [], canvasBlobBase64, hashtags = [] } = body;
 
-    if (!platforms || platforms.length === 0) {
+    const allowedPlatforms = new Set(['x', 'twitter', 'facebook', 'instagram', 'linkedin']);
+    if (typeof content !== 'string' || content.length > 63_206 || !Array.isArray(platforms) || platforms.length === 0 || platforms.length > 4 || platforms.some((platform) => !allowedPlatforms.has(platform)) || !Array.isArray(mediaUrls) || !Array.isArray(hashtags) || hashtags.length > 30 || hashtags.some((tag) => typeof tag !== 'string' || tag.length > 100)) {
       return NextResponse.json(
         { success: false, error: 'At least one target social platform must be selected.' },
         { status: 400 }
       );
+    }
+    if (mediaUrls.length > 10 || mediaUrls.some((value) => {
+      if (typeof value !== 'string' || value.length > 4096) return true;
+      try { return new URL(value).protocol !== 'https:'; } catch { return true; }
+    }) || (canvasBlobBase64 && canvasBlobBase64.length > 1_500_000)) {
+      return NextResponse.json({ success: false, error: 'Invalid media payload.' }, { status: 400 });
     }
 
     const hasMedia = mediaUrls.length > 0 || !!canvasBlobBase64;
@@ -148,7 +168,7 @@ export async function POST(req: NextRequest) {
                 platform: 'X (Twitter)',
                 success: false,
                 status: 'failed',
-                error: data?.detail || data?.title || 'Failed to publish tweet via X API.',
+              error: 'Failed to publish to X. Check the connected account and try again.',
               });
             }
           } else {
@@ -167,12 +187,11 @@ export async function POST(req: NextRequest) {
 
           if (pageToken && pageId) {
             // Live Facebook Graph API Call
-            const res = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+            const res = await fetch(`https://graph.facebook.com/v19.0/${encodeURIComponent(pageId)}/feed`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pageToken}` },
               body: JSON.stringify({
                 message: finalContent,
-                access_token: pageToken,
               }),
             });
             const data = await res.json();
@@ -189,7 +208,7 @@ export async function POST(req: NextRequest) {
                 platform: 'Facebook',
                 success: false,
                 status: 'failed',
-                error: data?.error?.message || 'Failed to post on Facebook page.',
+                error: 'Failed to publish to Facebook. Check the connected account and try again.',
               });
             }
           } else {
@@ -208,25 +227,23 @@ export async function POST(req: NextRequest) {
 
           if (igAccountId && igToken && mediaUrls[0]) {
             // 1. Create Media Container
-            const containerRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media`, {
+            const containerRes = await fetch(`https://graph.facebook.com/v19.0/${encodeURIComponent(igAccountId)}/media`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${igToken}` },
               body: JSON.stringify({
                 image_url: mediaUrls[0],
                 caption: finalContent,
-                access_token: igToken,
               }),
             });
             const containerData = await containerRes.json();
 
             if (containerRes.ok && containerData?.id) {
               // 2. Publish Media Container
-              const pubRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media_publish`, {
+              const pubRes = await fetch(`https://graph.facebook.com/v19.0/${encodeURIComponent(igAccountId)}/media_publish`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${igToken}` },
                 body: JSON.stringify({
                   creation_id: containerData.id,
-                  access_token: igToken,
                 }),
               });
               const pubData = await pubRes.json();
@@ -242,7 +259,7 @@ export async function POST(req: NextRequest) {
                   platform: 'Instagram',
                   success: false,
                   status: 'failed',
-                  error: pubData?.error?.message || 'Failed to publish media container to Instagram.',
+                  error: 'Failed to publish to Instagram. Check the connected account and try again.',
                 });
               }
             } else {
@@ -250,7 +267,7 @@ export async function POST(req: NextRequest) {
                 platform: 'Instagram',
                 success: false,
                 status: 'failed',
-                error: containerData?.error?.message || 'Failed to create Instagram media container.',
+                error: 'Could not prepare media for Instagram. Check the connected account and try again.',
               });
             }
           } else {
@@ -302,7 +319,7 @@ export async function POST(req: NextRequest) {
                 platform: 'LinkedIn',
                 success: false,
                 status: 'failed',
-                error: data?.message || 'Failed to post on LinkedIn profile.',
+                error: 'Failed to publish to LinkedIn. Check the connected account and try again.',
               });
             }
           } else {
@@ -316,12 +333,12 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-      } catch (err: any) {
+      } catch {
         results.push({
           platform,
           success: false,
           status: 'failed',
-          error: err?.message || 'Platform connection error occurred.',
+          error: 'Platform connection failed. Try again later.',
         });
       }
     }
@@ -337,10 +354,10 @@ export async function POST(req: NextRequest) {
         ? 'Posts vetted and simulated in Sandbox Mode. To post live, provide your social API keys in environment settings.'
         : 'All social media posts were dispatched to their respective platform APIs.',
     });
-  } catch (err: any) {
-    console.error('[/api/social/publish] Error:', err);
+  } catch {
+    console.error('[/api/social/publish] Request failed.');
     return NextResponse.json(
-      { success: false, error: err?.message || 'Internal server error while publishing posts.' },
+      { success: false, error: 'Could not publish this post.' },
       { status: 500 }
     );
   }

@@ -3,24 +3,15 @@
 import React, { useState, useRef } from 'react';
 import {
   Upload,
-  Crown,
   Sparkles,
-  CheckCircle2,
   Trash2,
-  RotateCcw,
   Save,
-  Smile,
-  Shield,
-  Zap,
-  Flame,
-  Star,
-  Eye,
-  Headphones,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+// import Image as Img from 'next/image';
 
 export interface ObjectMockItem {
   id: string;
@@ -192,15 +183,41 @@ export default function ProfileAvatarDesigner({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Choose a valid image file.');
+        e.target.value = '';
+        return;
+      }
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Image file must be under 5MB.');
+        e.target.value = '';
         return;
       }
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setAvatarImage(ev.target?.result as string);
-        toast.success('Profile image uploaded!');
+        const source = ev.target?.result;
+        if (typeof source !== 'string') return toast.error('Could not read this image.');
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 512;
+          canvas.height = 512;
+          const context = canvas.getContext('2d');
+          if (!context) return toast.error('Image editor is unavailable in this browser.');
+          const cropScale = Math.max(512 / image.width, 512 / image.height);
+          const width = image.width * cropScale;
+          const height = image.height * cropScale;
+          context.drawImage(image, (512 - width) / 2, (512 - height) / 2, width, height);
+          const webp = canvas.toDataURL('image/webp', 0.82);
+          const compact = webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.82);
+          if (compact.length > 600_000) return toast.error('This image could not be compressed enough. Choose a smaller or simpler image.');
+          setAvatarImage(compact);
+          toast.success('Profile image optimized and ready to save.');
+        };
+        image.onerror = () => toast.error('This image could not be decoded.');
+        image.src = source;
       };
+      reader.onerror = () => toast.error('Could not read this image.');
       reader.readAsDataURL(file);
     }
   };

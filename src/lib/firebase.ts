@@ -1,4 +1,4 @@
-// jules edit: Initialize and expose client-side Firebase SDK configuration safely
+// Initialize and expose client-side Firebase SDK configuration safely
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';

@@ -451,10 +451,19 @@ function simulateDelay(ms: number) {
 
 // ─── Real AI Calls (Modified to route to server-side API) ───
 
+async function aiRequestHeaders() {
+  const { supabase } = await import('@/lib/supabase');
+  const { data: { session } } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+  };
+}
+
 async function callRealAiForHashtags(text: string): Promise<HashTag[]> {
   const response = await fetch('/api/ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await aiRequestHeaders(),
     body: JSON.stringify({ action: 'hashtags', text }),
   });
   if (!response.ok) throw new Error('Real AI failed to generate hashtags');
@@ -469,7 +478,7 @@ async function callRealAiForRephrase(
 ): Promise<string> {
   const response = await fetch('/api/ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await aiRequestHeaders(),
     body: JSON.stringify({ action: 'rephrase', text, style, context }),
   });
   if (!response.ok) throw new Error('Real AI failed to rephrase text');
@@ -484,7 +493,7 @@ async function callRealAiForSuggestions(
 ): Promise<string[]> {
   const response = await fetch('/api/ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await aiRequestHeaders(),
     body: JSON.stringify({ action: 'suggest', title, style, context }),
   });
   if (!response.ok) throw new Error('Real AI failed to load suggestions');
@@ -499,7 +508,7 @@ async function callRealAiForTranslation(
 ): Promise<TransText> {
   const response = await fetch('/api/ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await aiRequestHeaders(),
     body: JSON.stringify({ action: 'translate', text, targetLanguageCode, targetLanguageName }),
   });
   if (!response.ok) throw new Error('Real AI translation failed');

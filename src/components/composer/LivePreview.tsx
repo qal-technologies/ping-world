@@ -68,7 +68,7 @@ function XPreview({
   const { state } = useComposer();
   const { user } = useAppContext();
   const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
-  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Display Name';
+  const displayName = user?.user_metadata?.display_name || 'Display Name';
   const handleName = (user?.user_metadata?.username || user?.email?.split('@')[0] || 'username').toLowerCase();
   const images = state.mediaAssets;
 
@@ -221,7 +221,7 @@ function InstagramPreview({
   const { state } = useComposer();
   const { user } = useAppContext();
   const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
-  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User Name';
+  const displayName = user?.user_metadata?.display_name || 'User Name';
   const handleName = (user?.user_metadata?.username || user?.email?.split('@')[0] || 'username').toLowerCase();
   const images = state.mediaAssets;
   const imageCount = images.length;
@@ -378,7 +378,7 @@ function FacebookPreview({
   const { state } = useComposer();
   const { user } = useAppContext();
   const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
-  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User Name';
+  const displayName = user?.user_metadata?.display_name || 'User Name';
   const images = state.mediaAssets;
 
   const handleLike = () => {
@@ -503,7 +503,7 @@ function LinkedInPreview({
   const { state } = useComposer();
   const { user } = useAppContext();
   const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
-  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User Name';
+  const displayName = user?.user_metadata?.display_name || 'User Name';
   const images = state.mediaAssets;
 
   const handleLike = () => {

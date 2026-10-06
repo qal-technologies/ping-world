@@ -51,7 +51,7 @@ export function playQuizStartTone(): void {
 
         // Primary 432 Hz focus tone
         const osc1 = ctx.createOscillator();
-        osc1.type = 'sine';
+        osc1.type = 'triangle';
         osc1.frequency.setValueAtTime(432, now);
         osc1.frequency.exponentialRampToValueAtTime(440, now + duration);
         osc1.connect(masterGain);
@@ -60,7 +60,7 @@ export function playQuizStartTone(): void {
 
         // Warm harmonic fifth (540 Hz)
         const osc2 = ctx.createOscillator();
-        osc2.type = 'triangle';
+        osc2.type = 'sine';
         osc2.frequency.setValueAtTime(540, now);
         osc2.frequency.exponentialRampToValueAtTime(554, now + duration);
         osc2.connect(masterGain);

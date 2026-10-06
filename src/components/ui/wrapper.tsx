@@ -24,7 +24,7 @@ export default function Wrapper({
   children,
   color = 'primary',
   defaultOpen = false,
-  premium=false,
+  premium = false,
 }: WrapperT) {
   const headerText = capTitle ? title.toUpperCase() : capFirst(title);
   const [open, setOpen] = useState(defaultOpen);
@@ -42,15 +42,15 @@ export default function Wrapper({
   return (
     <Card
       className='w-full flex flex-col gap-0 overflow-hidden border-white/4 bg-white/[0.02] p-0 bkblur rounded-2xl'
-      key={title + '-pw-wrapper'}>
+      key={title + '-pw-quiz-wrapper'}>
       <div
         onClick={() => setOpen(!open)}
-        className='w-full cursor-pointer flex items-center justify-between p-2 sm:p-4 hover:bg-white/4 transition-colors group'>
-        <div className='flex items-center gap-3'>
+        className='w-full cursor-pointer flex items-center justify-between p-2 sm:p-4 hover:bg-white/4 transition-colors group flex-1'>
+        <div className='flex items-center gap-3 flex-1'>
           {icon && (
             <div
               className={cn(
-                'h-8 w-8 rounded-lg flex items-center justify-center transition-all text-xl',
+                'h-8 w-8 rounded-lg flex items-center justify-center transition-all text-xl shink-0',
                 `bg-${activeColor}/10 text-${activeColor} group-hover:scale-110`,
               )}>
               {icon}

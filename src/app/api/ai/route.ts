@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
+import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
 
 /**
  * jules edit: Server-side API handler for Gemini 2.5 Flash
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const requestUser = await getRequestUser(req);
+    if (!requestUser) {
+      return NextResponse.json({ error: 'Sign in to use AI tools.' }, { status: 401 });
+    }
+    if (isRateLimited(requestUser.id, 'api:ai-account', 15, 60 * 1000).limited) {
+      return NextResponse.json({ error: 'AI request limit reached. Please try again later.' }, { status: 429 });
+    }
+
+    const body = await readJsonWithinLimit(req, 64 * 1024) as Record<string, unknown>;
     const {
       action,
       text,
@@ -37,7 +47,10 @@ export async function POST(req: NextRequest) {
       context,
       targetLanguageCode,
       targetLanguageName,
-    } = await req.json();
+    } = body as any;
+    if (Object.values(body).some((value) => typeof value === 'string' && value.length > 12_000)) {
+      return NextResponse.json({ error: 'Request text is too long.' }, { status: 413 });
+    }
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -82,11 +95,8 @@ Text: "${text}"`;
     );
 
     if (!response.ok) {
-      const errText = await response.text();
-      return NextResponse.json(
-        { error: `Gemini API error: ${errText}` },
-        { status: 502 },
-      );
+      console.error('[api/ai] Provider request failed:', response.status);
+      return NextResponse.json({ error: 'AI provider request failed.' }, { status: 502 });
     }
 
     const data = await response.json();
@@ -121,7 +131,11 @@ Text: "${text}"`;
     }
 
     return NextResponse.json({ error: 'Processing error' }, { status: 500 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'PAYLOAD_TOO_LARGE') {
+      return NextResponse.json({ error: 'Request is too large.' }, { status: 413 });
+    }
+    console.error('[api/ai] Request failed.');
+    return NextResponse.json({ error: 'AI request failed.' }, { status: 500 });
   }
 }

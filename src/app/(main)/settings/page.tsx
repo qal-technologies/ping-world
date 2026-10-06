@@ -26,6 +26,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
 import AccountTab from '@/components/settings/AccountTab';
 import SecurityTab from '@/components/settings/SecurityTab';
+import { requestWebNotificationPermission, subscribeToWebPush, unsubscribeFromWebPush } from '@/lib/notifications/web-push';
 
 function SettingsContent() {
   const { user, username, refresh, isPremium } = useAppContext();
@@ -68,10 +69,41 @@ function SettingsContent() {
 
   // Preferences & Push Notification states
   const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifyInApp, setNotifyInApp] = useState(true);
+  const [notifyAssessmentResponses, setNotifyAssessmentResponses] = useState(true);
   const [notifyWebPush, setNotifyWebPush] = useState(false);
+  const [isUpdatingPush, setIsUpdatingPush] = useState(false);
   const [pushPermission, setPushPermission] =
     useState<NotificationPermission>('default');
+
+  const notificationStorageKey = user?.id ? `pw_settings_${user.id}` : '';
+  const persistNotificationPreference = async (
+    key: 'email' | 'webPush' | 'assessmentResponses',
+    value: boolean,
+  ) => {
+    if (!user?.id) return;
+    const current = (() => {
+      try {
+        return {
+          ...(user.user_metadata?.notification_preferences || {}),
+          ...JSON.parse(localStorage.getItem(notificationStorageKey) || '{}'),
+        };
+      } catch {
+        return user.user_metadata?.notification_preferences || {};
+      }
+    })();
+    const next = { ...current, [key]: value };
+    try {
+      localStorage.setItem(notificationStorageKey, JSON.stringify(next));
+    } catch {
+      toast.error('Could not save this preference on this device.');
+      return;
+    }
+    if (key === 'webPush') return;
+    const { error } = await supabase.auth.updateUser({
+      data: { notification_preferences: { ...(user.user_metadata?.notification_preferences || {}), [key]: value } },
+    });
+    if (error) console.warn('[Settings] Preference remains saved locally:', error.message);
+  };
 
   // jules edit: Safe Auth Guard check using Supabase session to prevent redirect loops
   useEffect(() => {
@@ -87,37 +119,62 @@ function SettingsContent() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPushPermission(Notification.permission);
-      if (Notification.permission === 'granted') {
-        setNotifyWebPush(true);
-      }
     }
-  }, []);
+    if (!user?.id) return;
+    let localPreferences: Record<string, boolean> = {};
+    try {
+      localPreferences = JSON.parse(localStorage.getItem(`pw_settings_${user.id}`) || '{}');
+    } catch {
+      localPreferences = {};
+    }
+    const preferences = { ...(user.user_metadata?.notification_preferences || {}), ...localPreferences };
+    setNotifyEmail(typeof preferences.email === 'boolean' ? preferences.email : true);
+    setNotifyAssessmentResponses(typeof preferences.assessmentResponses === 'boolean' ? preferences.assessmentResponses : true);
+    setNotifyWebPush(localPreferences.webPush === true);
+  }, [user]);
 
   const handleToggleWebPush = async () => {
+    if (isUpdatingPush) return;
     if (typeof window === 'undefined' || !('Notification' in window)) {
       toast.error('Notifications are not supported in this browser.');
       return;
     }
 
     if (Notification.permission === 'granted') {
-      setNotifyWebPush(!notifyWebPush);
-      toast.success(
-        !notifyWebPush ? 'Notifications enabled.' : 'Notifications disabled.',
-      );
+      const nextValue = !notifyWebPush;
+      setIsUpdatingPush(true);
+      try {
+        if (nextValue) await subscribeToWebPush();
+        else await unsubscribeFromWebPush();
+        setNotifyWebPush(nextValue);
+        await persistNotificationPreference('webPush', nextValue);
+        toast.success(nextValue ? 'Push notifications enabled on this device.' : 'Push notifications disabled on this device.');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not update push notifications.');
+      } finally {
+        setIsUpdatingPush(false);
+      }
       return;
     }
 
-    const permission = await Notification.requestPermission();
+    const permission = await requestWebNotificationPermission();
+    if (permission === 'unsupported') {
+      toast.error('Notifications are not supported in this browser.');
+      return;
+    }
     setPushPermission(permission);
     if (permission === 'granted') {
-      setNotifyWebPush(true);
-      if ('serviceWorker' in navigator) {
-        try {
-          await navigator.serviceWorker.register('/sw.js').catch(() => {});
-        } catch {
-        }
+      setIsUpdatingPush(true);
+      try {
+        await subscribeToWebPush();
+        setNotifyWebPush(true);
+        await persistNotificationPreference('webPush', true);
+        toast.success('Push notifications enabled on this device.');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not enable push notifications.');
+      } finally {
+        setIsUpdatingPush(false);
       }
-      toast.success('Notification permission granted!');
     } else {
       setNotifyWebPush(false);
       toast.error('Notification permission not granted.');
@@ -129,23 +186,10 @@ function SettingsContent() {
     if (user) {
       setEmail(user.email || '');
       if (!displayName) {
-        setDisplayName(username || user.user_metadata?.full_name || user.email?.split('@')[0] || '');
+        setDisplayName(user.user_metadata?.display_name || username || user.user_metadata?.username || user.email?.split('@')[0] || 'user');
       }
     }
-    try {
-      const keys = Object.keys(localStorage);
-      const quizzes = keys.filter(
-        (k) => k.startsWith('pw_quiz') || k.includes('quizzes'),
-      ).length;
-      const messages = keys.filter(
-        (k) => k.startsWith('pw_message') || k.includes('messages'),
-      ).length;
-      const documents = keys.filter(
-        (k) => k.startsWith('pw_pdf') || k.includes('doc'),
-      ).length;
-      setCacheCounts({ quizzes, messages, documents });
-    } catch {
-    }
+    void HybridStorage.getCacheCounts().then(setCacheCounts).catch(() => {});
   }, [user, username]);
 
   const handleClearCache = async () => {
@@ -161,12 +205,7 @@ function SettingsContent() {
     if (!confirmed) return;
 
     try {
-      const keys = Object.keys(localStorage);
-      keys.forEach((key) => {
-        if (key.startsWith('pw_')) {
-          localStorage.removeItem(key);
-        }
-      });
+      await HybridStorage.clearLocalCache();
       setCacheCounts({ quizzes: 0, messages: 0, documents: 0 });
       toast.success('Local device storage cleared.');
     } catch (err) {
@@ -279,11 +318,16 @@ function SettingsContent() {
     );
 
     if (!confirmed) return;
-
-    await supabase.auth.signOut();
-    await refresh();
-    toast.success('Logged out successfully.');
-    router.push('/');
+    try {
+      await HybridStorage.syncPending();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      await refresh();
+      toast.success('Changes synchronized. Logged out successfully.');
+      router.push('/');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not safely sync before logging out. Your session is still active.');
+    }
   };
 
   const createdAtFormatted =
@@ -471,20 +515,37 @@ function SettingsContent() {
             <div className='space-y-4'>
               <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
+                  <Bell className='h-4 w-4 text-pw-primary' />
+                  <div>
+                    <span className='text-xs font-bold text-white block'>Assessment response alerts</span>
+                    <span className='text-[10px] text-pw-muted'>Combine new responses into a single browser notification.</span>
+                  </div>
+                </div>
+                <input type='checkbox' checked={notifyAssessmentResponses} onChange={(event) => {
+                  const value = event.target.checked;
+                  setNotifyAssessmentResponses(value);
+                  void persistNotificationPreference('assessmentResponses', value);
+                }} className='h-4 w-4 rounded accent-pw-primary cursor-pointer' />
+              </div>
+              <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
+                <div className='flex items-center gap-3'>
                   <Mail className='h-4 w-4 text-pw-primary' />
                   <div>
                     <span className='text-xs font-bold text-white block'>
                       Email Notifications
                     </span>
                     <span className='text-[10px] text-pw-muted'>
-                      Receive weekly summaries of quiz completions
+                      Allow requested export emails; account confirmation emails are required
                     </span>
                   </div>
                 </div>
                 <input
                   type='checkbox'
                   checked={notifyEmail}
-                  onChange={(e) => setNotifyEmail(e.target.checked)}
+                  onChange={(e) => {
+                    setNotifyEmail(e.target.checked);
+                    void persistNotificationPreference('email', e.target.checked);
+                  }}
                   className='h-4 w-4 rounded-full accent-pw-primary cursor-pointer'
                 />
               </div>
@@ -494,12 +555,14 @@ function SettingsContent() {
                   <Bell className='h-4 w-4 text-pw-primary' />
                   <div>
                     <span className='text-xs font-bold text-white block'>
-                      Web Push & Browser Notifications
+                      Browser Notifications
                     </span>
                     <span className='text-[10px] text-pw-muted'>
                       {pushPermission === 'granted' ?
-                        'Browser push permission granted'
-                      : 'Click to enable real browser push alerts via Service Worker'
+                        'Permission granted on this device'
+                      : pushPermission === 'denied' ?
+                        'Blocked by the browser. Allow notifications in site settings.'
+                      : 'Click to request notification permission'
                       }
                     </span>
                   </div>
@@ -508,6 +571,7 @@ function SettingsContent() {
                   type='checkbox'
                   checked={notifyWebPush}
                   onChange={handleToggleWebPush}
+                  disabled={isUpdatingPush}
                   className='h-4 w-4 rounded accent-pw-primary cursor-pointer'
                 />
               </div>
@@ -520,16 +584,11 @@ function SettingsContent() {
                       In-App Toast Alerts
                     </span>
                     <span className='text-[10px] text-pw-muted'>
-                      Display real-time desktop toast badges for new messages
+                      In-app toast alerts stay enabled for important activity
                     </span>
                   </div>
                 </div>
-                <input
-                  type='checkbox'
-                  checked={notifyInApp}
-                  onChange={(e) => setNotifyInApp(e.target.checked)}
-                  className='h-4 w-4 rounded accent-pw-primary cursor-pointer'
-                />
+                <span className='rounded-full border border-pw-success/20 bg-pw-success/10 px-2.5 py-1 text-[10px] font-bold text-pw-success'>Always on</span>
               </div>
             </div>
           </Card>

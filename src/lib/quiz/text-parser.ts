@@ -82,8 +82,7 @@ export function formatAnswerForExport(
     if (question && question.options) {
       const resolved = answer.map((val) => {
         const found = question.options.find(
-          (opt: any, oIdx: number) =>
-            opt.id === val || String(oIdx) === String(val) || opt.text === val,
+        (opt: any) => opt.id === val,
         );
         return cleanTextForCSV(found ? (found.text || String(found)) : String(val));
       });
@@ -95,8 +94,7 @@ export function formatAnswerForExport(
   // If answer matches option ID
   if (question && question.options && typeof answer === 'string') {
     const found = question.options.find(
-      (opt: any, oIdx: number) =>
-        opt.id === answer || String(oIdx) === String(answer) || opt.text === answer,
+      (opt: any) => opt.id === answer,
     );
     if (found) {
       return cleanTextForCSV(found.text || String(found));
@@ -114,45 +112,48 @@ export function exportResponsesToCSV(quiz: any, responses: any[]): string {
 
   const questions = quiz.questions || [];
   const askDetails = quiz.askDetails || [];
+  const isQuiz = quiz.type === 'quiz';
+  const csvCell = (value: unknown) => {
+    let text = String(value ?? '');
+    // Neutralize spreadsheet formulas before applying RFC-4180 quoting.
+    if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  };
 
   // Headers
   const headers = [
     'Timestamp',
-    'Score',
-    'Total Questions',
-    'Percentage',
+    ...(isQuiz ? ['Score', 'Total Questions', 'Percentage'] : ['Submission Status']),
     ...askDetails.map((d: any) => cleanTextForCSV(d.title || d)),
-    ...questions.map((q: any, idx: number) => `"${q.id || `Q${idx + 1}`}: ${cleanTextForCSV(q.text).replace(/"/g, '""')}"`),
+    ...questions.map((q: any, idx: number) => `Q${idx + 1}: ${cleanTextForCSV(q.text)}`),
   ];
 
   const rows = responses.map((r) => {
-    const score = r.score ?? 0;
+    const score = isQuiz ? (r.score ?? 0) : '';
     const total = r.totalQuestions ?? questions.length;
-    const pct = total > 0 ? `${Math.round((score / total) * 100)}%` : '0%';
+    const pct = isQuiz ? (total > 0 ? `${Math.round((Number(score) / total) * 100)}%` : '0%') : '';
 
     const detailCols = askDetails.map((d: any) => {
       const key = (d.title || d).toLowerCase().replace(/\s+/g, '');
       const rawVal = r.userData ? (r.userData[key] || r.userData[d.title || d] || '') : '';
-      return `"${cleanTextForCSV(String(rawVal)).replace(/"/g, '""')}"`;
+      return cleanTextForCSV(String(rawVal));
     });
 
     const questionCols = questions.map((q: any) => {
       const ansObj = (r.answers || []).find((a: any) => a.questionId === q.id);
       const val = ansObj ? formatAnswerForExport(ansObj.answer, q, 'csv') : '';
-      return `"${String(val).replace(/"/g, '""')}"`;
+      return String(val ?? '');
     });
 
     return [
-      `"${r.timestamp || new Date().toISOString()}"`,
-      score,
-      total,
-      `"${pct}"`,
+      r.timestamp || '',
+      ...(isQuiz ? [score, total, pct] : [r.submissionReason || 'completion']),
       ...detailCols,
       ...questionCols,
-    ].join(',');
+    ].map(csvCell).join(',');
   });
 
-  return [headers.join(','), ...rows].join('\n');
+  return [headers.map(csvCell).join(','), ...rows].join('\r\n');
 }
 
 /**
@@ -162,15 +163,22 @@ export function exportResponsesToJSON(quiz: any, responses: any[]): string {
   const exportPayload = {
     quizId: quiz.id,
     quizTitle: cleanTextForCSV(quiz.title),
+    assessmentType: quiz.type || 'quiz',
     exportedAt: new Date().toISOString(),
     totalResponses: responses.length,
     responses: responses.map((r, idx) => ({
       responseNumber: idx + 1,
       timestamp: r.timestamp,
-      score: r.score,
+      score: quiz.type === 'quiz' ? (r.score ?? 0) : null,
       totalQuestions: r.totalQuestions || quiz.questions?.length || 0,
+      percentage: quiz.type === 'quiz' && (r.totalQuestions || quiz.questions?.length)
+        ? Math.round(((r.score ?? 0) / (r.totalQuestions || quiz.questions.length)) * 100)
+        : null,
+      submissionReason: r.submissionReason || 'completion',
+      country: r.country || null,
+      continent: r.continent || null,
       userData: r.userData || {},
-      categoryScores: r.categoryScores || {},
+      categoryScores: quiz.type === 'quiz' ? (r.categoryScores || {}) : null,
       answers: (quiz.questions || []).map((q: any) => {
         const ansObj = (r.answers || []).find((a: any) => a.questionId === q.id);
         return {
@@ -178,7 +186,7 @@ export function exportResponsesToJSON(quiz: any, responses: any[]): string {
           questionText: cleanTextForCSV(q.text),
           category: q.category || 'Independent',
           answer: ansObj ? formatAnswerForExport(ansObj.answer, q, 'json') : null,
-          isCorrect: ansObj?.correct ?? null,
+          isCorrect: quiz.type === 'quiz' ? (ansObj?.correct ?? null) : null,
         };
       }),
     })),
@@ -200,7 +208,11 @@ export function exportResponsesToText(quiz: any, responses: any[]): string {
   responses.forEach((r, idx) => {
     lines.push(`## Participant #${idx + 1}`);
     lines.push(`- Submission Date: ${r.timestamp || 'N/A'}`);
-    lines.push(`- Score: ${r.score} / ${r.totalQuestions || quiz.questions?.length || 0}`);
+    if (quiz.type === 'quiz') {
+      lines.push(`- Score: ${r.score ?? 0} / ${r.totalQuestions || quiz.questions?.length || 0}`);
+    } else {
+      lines.push(`- Submission: ${r.submissionReason || 'completion'}`);
+    }
     if (r.userData && Object.keys(r.userData).length > 0) {
       lines.push('### Details:');
       Object.entries(r.userData).forEach(([k, v]) => {

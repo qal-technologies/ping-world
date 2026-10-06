@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Eye, EyeOff, Key, Mail, ArrowRight, LogIn } from 'lucide-react';
+import { Eye, EyeOff, Key, Mail, ArrowRight, LogIn, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -45,13 +45,17 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: formData.email, password: formData.password }),
       });
-      await refresh();
-
+      const result = await response.json();
+      if (!response.ok || !result.session?.access_token || !result.session?.refresh_token) throw new Error(result.error || 'Could not sign in.');
+      const { error } = await supabase.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
       if (error) throw error;
+      void fetch('/api/auth/welcome-email', { method: 'POST', keepalive: true, headers: { Authorization: `Bearer ${result.session.access_token}` } }).catch(() => {});
+      await refresh();
 
       toast.success('Welcome back!');
       router.replace('/dashboard');
@@ -78,7 +82,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className='min-h-screen w-full p-2 md:p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
+    <div className='min-h-screen w-full p-1 md:p-4 flex flex-col gap-2 justify-center items-center overflow-hidden relative'>
       <div className='beauty-obj w-64 h-64 top-[5%] left-[20%] opacity-10 float gradient-brand' />
       <div
         className='beauty-obj w-48 h-48 bottom-[10%] right-[10%] opacity-5 float'
@@ -94,7 +98,6 @@ export default function LoginPage() {
               BACK
             </h2>
           </div>
-
           <div className='space-y-4 mb-8 hidden md:block'>
             <div className='flex items-center gap-3 text-xs opacity-80'>
               <LogIn className='h-4 w-4 text-pw-cyan' /> Access Dashboard
@@ -104,6 +107,14 @@ export default function LoginPage() {
               experience.
             </p>
           </div>
+
+          <div className='w-8 h-8 p-1 rounded-full bg-white text-black flex items-center justify-center shadow-sm absolute right-2 top-2' />
+
+          <Link
+            href='/'
+            className='w-8 h-8 p-1 rounded-full bg-white text-black flex items-center justify-center shadow-sm absolute right-2 top-2 z-10'>
+            <X />
+          </Link>
         </div>
 
         <form
@@ -112,12 +123,14 @@ export default function LoginPage() {
           <div className='space-y-4'>
             <div className='form-group'>
               <label className='form-label mb-1.5'>
-                <Mail size={18} /> Email Address
+                <Mail size={18} /> Email or Username
               </label>
               <input
-                className='form-input bg-white/5 border-white/10 hover:border-pw-primary/30'
-                type='email'
-                placeholder='name@example.com'
+                className='form-input border-white/10 hover:border-pw-primary/30'
+                type='text'
+                placeholder='name@example.com or username'
+                autoComplete='username'
+                disabled={loading}
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
@@ -131,9 +144,11 @@ export default function LoginPage() {
               </label>
               <div className='flex gap-2 w-full'>
                 <input
-                  className='form-input bg-white/5 border-white/10 hover:border-pw-primary/30'
+                  className='form-input border-white/10 hover:border-pw-primary/30'
                   type={secure ? 'password' : 'text'}
                   placeholder='••••••••'
+                  autoComplete='current-password'
+                  disabled={loading}
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
@@ -144,7 +159,7 @@ export default function LoginPage() {
                   className={cn(
                     'w-12 h-10 flex items-center justify-center rounded-xl cursor-pointer transition-all border border-white/10',
                     secure ?
-                      'bg-white/5 text-pw-muted'
+                      'bg-white/5 hover:bg-white/10 text-pw-muted'
                     : 'gradient-brand text-white',
                   )}>
                   {secure ?

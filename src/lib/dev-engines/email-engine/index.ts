@@ -78,18 +78,9 @@ export interface EmailTemplateParams {
   body?: BodyConfig;
   footer?: FooterConfig;
 
-  // Legacy flat-param shorthand (for quick usage)
-  title?: string;
-  preheader?: string;
-  bodyText?: string;
-  ctaText?: string;
-  ctaUrl?: string;
-  otp?: string;
   primaryColor?: string; // Global accent color (can be overridden per component)
   companyName?: string;
   year?: number;
-  unsubscribeUrl?: string;
-  modularConfig?: ModularEmailParams;
 }
 
 export interface EmailResult {
@@ -121,7 +112,7 @@ export class EmailEngine {
       const company = params.companyName ?? 'PingWorld';
       const year = params.year ?? new Date().getFullYear();
 
-      // Resolve modular or flat params
+      // Resolve the structured email sections.
       const header = this._resolveHeader(type, params, primary);
       const body = this._resolveBody(type, params, primary);
       const footer = this._resolveFooter(params, primary, company, year);
@@ -174,36 +165,36 @@ export class EmailEngine {
     const flat = params.header;
     const defaults: Record<EmailTemplateType, Partial<HeaderConfig>> = {
       professional: {
-        title: params.title ?? 'Important Update',
-        description: params.preheader ?? '',
+        title: 'Important Update',
+        description: '',
       },
       otp: {
         title: 'Your Verification Code',
         description: 'Use this code to complete your login.',
       },
       marketing: {
-        title: params.title ?? 'Exclusive Offer Just for You',
-        description: params.preheader ?? "Don't miss out.",
+        title: 'Exclusive Offer Just for You',
+        description: "Don't miss out.",
       },
       social: {
-        title: params.title ?? 'Activity Update',
-        description: params.preheader ?? '',
+        title: 'Activity Update',
+        description: '',
       },
       information: {
-        title: params.title ?? 'Information',
-        description: params.preheader ?? '',
+        title: 'Information',
+        description: '',
       },
       newsletter: {
-        title: params.title ?? 'Newsletter',
-        description: params.preheader ?? '',
+        title: 'Newsletter',
+        description: '',
       },
       welcome: {
-        title: params.title ?? 'Welcome',
-        description: params.preheader ?? '',
+        title: 'Welcome',
+        description: '',
       },
       modular: {
-        title: params.title ?? 'Modular Email',
-        description: params.preheader ?? '',
+        title: 'Modular Email',
+        description: '',
       },
     };
     const base = defaults[type];
@@ -224,27 +215,15 @@ export class EmailEngine {
   ): BodyConfig {
     if (params.body) return params.body;
 
-    const buttons: ButtonConfig[] = [];
-
     if (type === 'otp') {
       return {
         text: `Your one-time password is below. It expires in 10 minutes. Do not share this code with anyone.`,
       };
     }
 
-    if (params.ctaText && params.ctaUrl) {
-      buttons.push({
-        title: {text: params.ctaText, color: '#ffffff', underline: true, weight: 'bold'},
-        url: params.ctaUrl,
-        bgColor: primary,
-        position: 'center',
-        order: 'after-text',
-      });
-    }
-
     return {
-      text: params.bodyText ?? 'Thank you for using our services.',
-      buttons,
+      text: 'Thank you for using our services.',
+      buttons: [],
     };
   }
 
@@ -257,9 +236,6 @@ export class EmailEngine {
     const flat = params.footer;
     const downlinks: Array<{ text: string; url: string }> =
       flat?.downlinks ?? [];
-    if (params.unsubscribeUrl) {
-      downlinks.push({ text: 'Unsubscribe', url: params.unsubscribeUrl });
-    }
     return {
       text: flat?.text ?? `© ${year} ${company}. All rights reserved.`,
       downlinks,

@@ -9,11 +9,19 @@ interface CustomQuizParams {
 export async function generateMetadata({ params }: CustomQuizParams): Promise<Metadata> {
   const { username, customQuizId } = await params;
   try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .single();
+    if (!profile) throw new Error('Quiz owner not found');
+
     const { data: quiz } = await supabase
       .from('quizzes')
       .select('title, description')
-      .or(`id.eq.${customQuizId},custom_id.eq.${customQuizId}`)
-      .single();
+      .eq('custom_id', customQuizId)
+      .eq('user_id', profile.id)
+      .maybeSingle();
 
     if (quiz) {
       const title = `${quiz.title} by @${username} | Quizzable`;

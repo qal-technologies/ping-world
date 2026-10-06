@@ -71,6 +71,7 @@ import { useAppModal } from '@/components/ui/AppModalProvider';
 import { HybridStorage } from '@/lib/storage-utils';
 import BookReaderModal from '@/components/pdf/BookReaderModal';
 import ImagePaletteDialog from '@/components/pdf/ImagePaletteDialog';
+import { useAppFileViewer } from '@/components/shared/AppFileViewer';
 
 interface PDFImagePage {
   id: string;
@@ -167,8 +168,8 @@ type FormatType = 'pdf' | 'word' | 'excel' | 'txt' | 'images' | 'pptx';
 
 const FORMAT_ACCEPT_MAP: Record<FormatType, string> = {
   pdf: '.pdf,application/pdf',
-  word: '.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  excel: '.xlsx,.csv,application/vnd.ms-excel,text/csv',
+  word: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  excel: '.xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv',
   txt: '.txt,text/plain',
   images: 'image/*',
   pptx: '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -233,6 +234,7 @@ To load brand logo graphics directly inside your text content streams, use the I
 };
 
 export default function PdfToolStudioPage() {
+  const { openFile } = useAppFileViewer();
   const { isFeatureUnlocked, isPremium, user } = useAppContext();
   const hasProPdf = isFeatureUnlocked('pdf-tools');
   const searchParams = useSearchParams();
@@ -250,26 +252,44 @@ export default function PdfToolStudioPage() {
     router.replace(url.pathname + url.search, { scroll: false });
   };
 
+  const setConversionSource = (format: FormatType) => {
+    setFromFormat(format);
+    const supported: Record<FormatType, FormatType[]> = {
+      pdf: ['word', 'txt'], txt: ['word', 'pdf'], images: ['pdf'],
+      word: ['pdf', 'txt', 'word'], excel: ['pdf', 'txt', 'word'], pptx: ['pdf', 'txt', 'word'],
+    };
+    if (!supported[format].includes(toFormat)) setToFormat(supported[format][0]);
+    setConversionFile(null);
+    setConversionQueue([]);
+  };
+
+  // Auto-detection must not clear the file just loaded by the picker/drop zone.
+  const setDetectedConversionSource = (format: FormatType) => {
+    setFromFormat(format);
+    const supported: Record<FormatType, FormatType[]> = {
+      pdf: ['word', 'txt'], txt: ['word', 'pdf'], images: ['pdf'],
+      word: ['pdf', 'txt', 'word'], excel: ['pdf', 'txt', 'word'], pptx: ['pdf', 'txt', 'word'],
+    };
+    if (!supported[format].includes(toFormat)) setToFormat(supported[format][0]);
+  };
+
   // ── Universal Conversion States ─────────────────────────────────
   const [fromFormat, setFromFormat] = useState<FormatType>('pdf');
   const [toFormat, setToFormat] = useState<FormatType>('word');
   const [conversionFile, setConversionFile] = useState<File | null>(null);
+  const [conversionQueue, setConversionQueue] = useState<File[]>([]);
   const [isConverting, setIsConverting] = useState(false);
   const conversionInputRef = useRef<HTMLInputElement>(null);
 
-  const detectFormatFromFile = (file: File): FormatType => {
+  const detectFormatFromFile = (file: File): FormatType | null => {
     const name = file.name.toLowerCase();
     if (name.endsWith('.pdf')) return 'pdf';
-    if (name.endsWith('.doc') || name.endsWith('.docx')) return 'word';
-    if (
-      name.endsWith('.xls') ||
-      name.endsWith('.xlsx') ||
-      name.endsWith('.csv')
-    )
-      return 'excel';
-    if (name.endsWith('.txt')) return 'txt';
+    if (name.endsWith('.txt') || name.endsWith('.md')) return 'txt';
     if (file.type.startsWith('image/')) return 'images';
-    return 'pdf';
+    if (/\.docx$/i.test(name) || /wordprocessingml/.test(file.type)) return 'word';
+    if (/\.(xlsx|csv)$/i.test(name) || /spreadsheetml|text\/csv/.test(file.type)) return 'excel';
+    if (/\.pptx$/i.test(name) || /presentationml/.test(file.type)) return 'pptx';
+    return null;
   };
 
   // ── Book Creator States ─────────────────────────────────────────
@@ -405,7 +425,7 @@ export default function PdfToolStudioPage() {
 
   // Merge state
   const [mergeFiles, setMergeFiles] = useState<
-    { id: string; name: string; size: string; file: File }[]
+    {id: string; name: string; size: string; type: string; file: File }[]
   >([]);
 
   // ── Load Books from LocalStorage / HybridStorage ────────────────
@@ -884,7 +904,7 @@ export default function PdfToolStudioPage() {
       imagePalette: [],
       frontCoverTitle: name.trim(),
       frontCoverSubtitle: 'A new book',
-      frontCoverAuthor: user?.user_metadata?.full_name || 'PingWorld',
+      frontCoverAuthor: user?.user_metadata?.display_name || 'PingWorld',
       backCoverSummary: 'Summary of this published book.',
       backCoverBgColor: '#0a0c1b',
       hasFrontCover: true,
@@ -1214,6 +1234,10 @@ export default function PdfToolStudioPage() {
       toast.error('Please choose or drop a file to convert.');
       return;
     }
+    if (conversionFile.size > 40 * 1024 * 1024) {
+      toast.error('Choose a file smaller than 40 MB for in-browser conversion.');
+      return;
+    }
 
     setIsConverting(true);
     const toastId = toast.loading(
@@ -1253,7 +1277,8 @@ export default function PdfToolStudioPage() {
               .join(' ');
 
             if (pageText.trim()) {
-              extractedHtml += `<h3 style="color:#3b82f6; margin-top:24px;">Page ${i}</h3><p style="text-indent:24px; line-height:1.6;">${pageText}</p>`;
+              const safeText = pageText.replace(/[&<>"']/g, (char: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
+              extractedHtml += `<h3 style="color:#3b82f6; margin-top:24px;">Page ${i}</h3><p style="text-indent:24px; line-height:1.6; white-space:pre-wrap;">${safeText}</p>`;
             } else {
               // Scanned page rendering
               const viewport = page.getViewport({ scale: 1.5 });
@@ -1270,15 +1295,13 @@ export default function PdfToolStudioPage() {
           }
         }
 
-        if (!extractedHtml.trim()) {
-          extractedHtml = `<p>Converted textual content from ${conversionFile.name}</p>`;
-        }
+        if (!extractedHtml.trim()) throw new Error('No readable PDF pages were found.');
 
         const docHtml = `
           <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
           <head><title>Converted Word Manuscript</title><meta charset="utf-8"></head>
           <body style="font-family: Calibri, Arial, sans-serif; line-height: 1.6; padding: 40px;">
-            <h2 style="color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">Extracted PDF Document: ${conversionFile.name}</h2>
+            <h2 style="color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">Extracted PDF Document</h2>
             ${extractedHtml}
           </body>
           </html>
@@ -1294,40 +1317,150 @@ export default function PdfToolStudioPage() {
         toast.success(
           '🎉 Successfully converted PDF to Microsoft Word (.doc)!',
         );
-      } else if (toFormat === 'pdf') {
-        // Text/Word/Excel to PDF
-        const text = await conversionFile
-          .text()
-          .catch(() => 'Document textual stream');
-        const clean = text.replace(/<[^>]*>/g, '').substring(0, 10000);
-
+      } else if (fromFormat === 'txt' && toFormat === 'pdf') {
+        const text = await conversionFile.text();
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF();
-
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Converted Document: ${conversionFile.name}`, 15, 20);
-
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        const splitText = doc.splitTextToSize(clean, 180);
-        doc.text(splitText, 15, 32);
-
+        const margin = 15;
+        const lineHeight = 5;
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.setFontSize(10);
+        const lines = text.replace(/\r\n?/g, '\n').split('\n').flatMap((line) => doc.splitTextToSize(line || ' ', doc.internal.pageSize.getWidth() - margin * 2));
+        let y = margin;
+        for (const line of lines) {
+          if (y + lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+          doc.text(line, margin, y);
+          y += lineHeight;
+        }
         doc.save(`${conversionFile.name.replace(/\.[^/.]+$/, '')}.pdf`);
         toast.dismiss(toastId);
-        toast.success(`🎉 Converted ${fromFormat.toUpperCase()} to PDF!`);
-      } else if (toFormat === 'txt') {
-        const text = await conversionFile.text().catch(() => 'Converted text');
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        toast.success('Text exported to a paginated PDF.');
+      } else if (fromFormat === 'images' && toFormat === 'pdf') {
+        const { jsPDF } = await import('jspdf');
+        const { compressImageForPdf } = await import('@/lib/pdf/image-compressor');
+        const files = conversionQueue.length ? conversionQueue : [conversionFile];
+        let doc: InstanceType<typeof jsPDF> | null = null;
+        for (const [index, file] of files.entries()) {
+          const imageData = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(`Could not read ${file.name}.`));
+            reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+            reader.readAsDataURL(file);
+          });
+          const compressed = await compressImageForPdf(imageData, 2400, 2400, 0.88);
+          if (!doc) doc = new jsPDF({ orientation: compressed.width > compressed.height ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' });
+          else doc.addPage();
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+          const scale = Math.min((pageWidth - 48) / compressed.width, (pageHeight - 48) / compressed.height);
+          const width = compressed.width * scale;
+          const height = compressed.height * scale;
+          doc.addImage(compressed.dataUrl, 'JPEG', (pageWidth - width) / 2, (pageHeight - height) / 2, width, height, `image-${index}`, 'FAST');
+        }
+        if (!doc) throw new Error('Choose at least one image.');
+        doc.save(`${files[0].name.replace(/\.[^/.]+$/, '')}${files.length > 1 ? '-images' : ''}.pdf`);
+        toast.dismiss(toastId);
+        toast.success(`${files.length} image${files.length === 1 ? '' : 's'} exported to PDF.`);
+      } else if (fromFormat === 'pdf' && toFormat === 'txt') {
+        const arrayBuffer = await conversionFile.arrayBuffer();
+        if (!(window as any).pdfjsLib) {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
+        const pdfjsLib = (window as any).pdfjsLib;
+        if (!pdfjsLib) throw new Error('PDF text reader could not be loaded.');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pages: string[] = [];
+        for (let pageNo = 1; pageNo <= pdfDoc.numPages; pageNo++) {
+          const page = await pdfDoc.getPage(pageNo);
+          const content = await page.getTextContent();
+          const pageText = content.items.map((item: any) => item.str || '').join(' ').trim();
+          pages.push(`--- Page ${pageNo} ---\n${pageText}`);
+        }
         const { saveAs } = await import('file-saver');
-        saveAs(blob, `${conversionFile.name.replace(/\.[^/.]+$/, '')}.txt`);
+        saveAs(new Blob([pages.join('\n\n')], { type: 'text/plain;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.txt`);
         toast.dismiss(toastId);
-        toast.success('🎉 Converted to Plain Text (.txt)!');
+        toast.success('PDF text exported. Scanned pages require OCR and are left blank.');
+      } else if (fromFormat === 'txt' && toFormat === 'word') {
+        const text = await conversionFile.text();
+        const safeText = text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
+        const docHtml = `<html><head><meta charset="utf-8"></head><body><pre style="font-family:Calibri,Arial,sans-serif;white-space:pre-wrap">${safeText}</pre></body></html>`;
+        const { saveAs } = await import('file-saver');
+        saveAs(new Blob(['\ufeff', docHtml], { type: 'application/msword;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.doc`);
+        toast.dismiss(toastId);
+        toast.success('Text exported as a Word-compatible document.');
+      } else if (['word', 'excel', 'pptx'].includes(fromFormat)) {
+        // Convert Office Open XML and CSV files using the browser's bundled JSZip;
+        // this extracts text/data without uploading user documents to a service.
+        const name = conversionFile.name.toLowerCase();
+        let text = '';
+        if (fromFormat === 'excel' && /\.csv$/i.test(name)) {
+          text = await conversionFile.text();
+        } else if (/\.(docx|xlsx|pptx)$/i.test(name)) {
+          const JSZip = (await import('jszip')).default;
+          const zip = await JSZip.loadAsync(await conversionFile.arrayBuffer());
+          const xmlText = async (path: string) => await zip.file(path)?.async('text') || '';
+          const getTextNodes = (xml: string) => {
+            const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+            if (parsed.querySelector('parsererror')) return '';
+            return Array.from(parsed.getElementsByTagNameNS('*', 't')).map((node) => node.textContent || '').join(' ');
+          };
+          if (fromFormat === 'word') {
+            text = getTextNodes(await xmlText('word/document.xml'));
+          } else if (fromFormat === 'pptx') {
+            const slides = Object.keys(zip.files).filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path)).sort((a, b) => Number(a.match(/slide(\d+)/)?.[1]) - Number(b.match(/slide(\d+)/)?.[1]));
+            text = (await Promise.all(slides.map(async (path, index) => `Slide ${index + 1}\n${getTextNodes(await xmlText(path))}`))).join('\n\n');
+          } else {
+            const sharedXml = await xmlText('xl/sharedStrings.xml');
+            const sharedDoc = sharedXml ? new DOMParser().parseFromString(sharedXml, 'application/xml') : null;
+            const shared = sharedDoc ? Array.from(sharedDoc.getElementsByTagNameNS('*', 'si')).map((item) => Array.from(item.getElementsByTagNameNS('*', 't')).map((node) => node.textContent || '').join('')) : [];
+            const sheets = Object.keys(zip.files).filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/.test(path)).sort((a, b) => Number(a.match(/sheet(\d+)/)?.[1]) - Number(b.match(/sheet(\d+)/)?.[1]));
+            text = (await Promise.all(sheets.map(async (path) => {
+              const parsed = new DOMParser().parseFromString(await xmlText(path), 'application/xml');
+              return Array.from(parsed.getElementsByTagNameNS('*', 'row')).map((row) => Array.from(row.getElementsByTagNameNS('*', 'c')).map((cell) => {
+                const value = cell.getElementsByTagNameNS('*', 'v')[0]?.textContent || '';
+                return cell.getAttribute('t') === 's' ? shared[Number(value)] || '' : value;
+              }).join('\t')).join('\n');
+            }))).join('\n\n');
+          }
+        } else {
+          throw new Error('This conversion reads DOCX, XLSX, PPTX, and CSV files. Save DOC, XLS, or PPT files in a supported Office format first.');
+        }
+        if (!text.trim()) throw new Error('No readable text or data was found in this file.');
+        const baseName = conversionFile.name.replace(/\.[^/.]+$/, '');
+        if (toFormat === 'txt') {
+          const { saveAs } = await import('file-saver');
+          saveAs(new Blob([text], { type: 'text/plain;charset=utf-8' }), `${baseName}.txt`);
+        } else if (toFormat === 'word') {
+          const safeText = text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
+          const { saveAs } = await import('file-saver');
+          saveAs(new Blob([`\ufeff<html><head><meta charset="utf-8"></head><body><pre style="white-space:pre-wrap">${safeText}</pre></body></html>`], { type: 'application/msword;charset=utf-8' }), `${baseName}.doc`);
+        } else if (toFormat === 'pdf') {
+          const { jsPDF } = await import('jspdf');
+          const doc = new jsPDF();
+          const margin = 15;
+          const pageHeight = doc.internal.pageSize.getHeight();
+          const lines = doc.splitTextToSize(text, doc.internal.pageSize.getWidth() - margin * 2);
+          let y = margin;
+          for (const line of lines) {
+            if (y + 5 > pageHeight - margin) { doc.addPage(); y = margin; }
+            doc.text(line, margin, y);
+            y += 5;
+          }
+          doc.save(`${baseName}.pdf`);
+        }
+        toast.dismiss(toastId);
+        toast.success(`${fromFormat.toUpperCase()} converted to ${toFormat.toUpperCase()}.`);
+      } else if (toFormat === 'txt') {
+        throw new Error('This source format is not supported for text extraction.');
       } else {
-        toast.dismiss(toastId);
-        toast.success(
-          `Conversion from ${fromFormat.toUpperCase()} to ${toFormat.toUpperCase()} completed!`,
-        );
+        throw new Error('This source and target format combination is not supported.');
       }
     } catch (err: any) {
       console.error('Universal conversion error:', err);
@@ -1603,8 +1736,9 @@ export default function PdfToolStudioPage() {
               if (palItem && palItem.src) {
                 try {
                   const comp = await compressImageForPdf(palItem.src, 600, 600, 0.75);
-                  const imgWidth = 90;
-                  const imgHeight = Math.min(65, Math.max(30, (comp.height / comp.width) * imgWidth));
+                  const imageScale = Math.min(90 / comp.width, 65 / comp.height);
+                  const imgWidth = comp.width * imageScale;
+                  const imgHeight = comp.height * imageScale;
                   if (startY + imgHeight + 15 > 265) {
                     doc.addPage();
                     startY = 25;
@@ -1629,8 +1763,9 @@ export default function PdfToolStudioPage() {
               const imgSrc = mdImageMatch[2];
               try {
                 const comp = await compressImageForPdf(imgSrc, 600, 600, 0.75);
-                const imgWidth = 90;
-                const imgHeight = Math.min(65, Math.max(30, (comp.height / comp.width) * imgWidth));
+                const imageScale = Math.min(90 / comp.width, 65 / comp.height);
+                const imgWidth = comp.width * imageScale;
+                const imgHeight = comp.height * imageScale;
                 if (startY + imgHeight + 15 > 265) {
                   doc.addPage();
                   startY = 25;
@@ -2126,17 +2261,13 @@ export default function PdfToolStudioPage() {
                 value={fromFormat}
                 onChange={(e) => {
                   const val = e.target.value as FormatType;
-                  setFromFormat(val);
-                  if (val === toFormat) {
-                    toast.warning('Source and Target cannot be identical.');
-                  }
+                  setConversionSource(val);
                 }}
                 className='w-full h-11 px-3.5 bg-[#12152e]/70 border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
                 <option value='pdf'>PDF (.pdf)</option>
-                <option value='word'>Word (.doc, .docx)</option>
-                <option value='excel'>
-                  Excel / Spreadsheets (.xlsx, .csv)
-                </option>
+                <option value='word'>Word (.docx)</option>
+                <option value='excel'>Excel / CSV (.xlsx, .csv)</option>
+                <option value='pptx'>PowerPoint (.pptx)</option>
                 <option value='txt'>Text (.txt)</option>
                 <option value='images'>Images (PNG, JPG, WEBP)</option>
               </select>
@@ -2160,15 +2291,26 @@ export default function PdfToolStudioPage() {
                 onChange={(e) => {
                   const val = e.target.value as FormatType;
                   setToFormat(val);
-                  if (val === fromFormat) {
-                    toast.warning('Source and Target cannot be identical.');
-                  }
                 }}
                 className='w-full h-11 px-3.5 bg-[#12152e]/70 border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-pw-primary cursor-pointer'>
-                <option value='word'>Word (.doc)</option>
-                <option value='pdf'>PDF (.pdf)</option>
-                <option value='txt'>Text (.txt)</option>
-                <option value='excel'>Excel (.csv)</option>
+                {(fromFormat === 'pdf' ||
+                  fromFormat === 'txt' ||
+                  fromFormat === 'word' ||
+                  fromFormat === 'excel' ||
+                  fromFormat === 'pptx') && (
+                  <option value='word'>Word (.doc)</option>
+                )}
+                {(fromFormat === 'word' ||
+                  fromFormat === 'excel' ||
+                  fromFormat === 'pptx') && (
+                  <option value='txt'>Text (.txt)</option>
+                )}
+                {(fromFormat === 'txt' || fromFormat === 'images') && (
+                  <option value='pdf'>PDF (.pdf)</option>
+                )}
+                {fromFormat === 'pdf' && (
+                  <option value='txt'>Text (.txt)</option>
+                )}
               </select>
             </div>
           </div>
@@ -2181,9 +2323,23 @@ export default function PdfToolStudioPage() {
               e.preventDefault();
               const file = e.dataTransfer.files?.[0];
               if (file) {
-                setConversionFile(file);
                 const detected = detectFormatFromFile(file);
-                setFromFormat(detected);
+                if (!detected) {
+                  setConversionFile(null);
+                  setConversionQueue([]);
+                  toast.error(
+                    'Unsupported file. Choose PDF, TXT, an image, DOCX, XLSX, CSV, or PPTX.',
+                  );
+                  return;
+                }
+                setDetectedConversionSource(detected);
+                const selectedFiles = Array.from(e.dataTransfer.files).filter(
+                  (item) => detectFormatFromFile(item) === detected,
+                );
+                setConversionFile(selectedFiles[0] || file);
+                setConversionQueue(
+                  detected === 'images' ? selectedFiles : [file],
+                );
                 toast.success(
                   `Detected file format: ${detected.toUpperCase()}`,
                 );
@@ -2194,13 +2350,36 @@ export default function PdfToolStudioPage() {
               ref={conversionInputRef}
               type='file'
               accept={FORMAT_ACCEPT_MAP[fromFormat]}
+              multiple={fromFormat === 'images'}
               onChange={(e) => {
-                const file = e.target.files?.[0];
+                const selectedFiles = Array.from(e.target.files || []);
+                const file = selectedFiles[0];
                 if (file) {
-                  setConversionFile(file);
                   const detected = detectFormatFromFile(file);
-                  setFromFormat(detected);
-                  toast.success(`Loaded file: ${file.name}`);
+                  if (!detected) {
+                    setConversionFile(null);
+                    setConversionQueue([]);
+                    toast.error(
+                      'Unsupported file. Choose PDF, TXT, an image, DOCX, XLSX, CSV, or PPTX.',
+                    );
+                    e.currentTarget.value = '';
+                    return;
+                  }
+                  setDetectedConversionSource(detected);
+                  setConversionFile(file);
+                  setConversionQueue(
+                    detected === 'images' ?
+                      selectedFiles.filter(
+                        (item) => detectFormatFromFile(item) === detected,
+                      )
+                    : [file],
+                  );
+                  toast.success(
+                    detected === 'images' && selectedFiles.length > 1 ?
+                      `Queued ${selectedFiles.length} images for one PDF.`
+                    : `Loaded file: ${file.name}`,
+                  );
+                  e.currentTarget.value = '';
                 }
               }}
               className='hidden'
@@ -2218,17 +2397,55 @@ export default function PdfToolStudioPage() {
                   {conversionFile.name}
                 </p>
                 <p className='text-xs text-pw-muted font-mono'>
-                  {(conversionFile.size / 1024).toFixed(1)} KB - Click to choose
-                  a different file
+                  {(conversionFile.size / 1024).toFixed(1)} KB
+                  {conversionQueue.length > 1 ?
+                    ` · ${conversionQueue.length} images queued`
+                  : ''}{' '}
+                  - Click to choose a different file
                 </p>
+                <Button
+                  type='button'
+                  variant='outline'
+                  className='mt-2 h-8 text-xs'
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openFile({
+                      src: URL.createObjectURL(conversionFile),
+                      name: conversionFile.name,
+                      mimeType: conversionFile.type,
+                    });
+                  }}>
+                  Preview file
+                </Button>
+                {conversionQueue.length > 1 && (
+                  <div className='mt-2 flex flex-wrap justify-center gap-1.5'>
+                    {conversionQueue.map((queuedFile, index) => (
+                      <Button
+                        key={`${queuedFile.name}-${queuedFile.lastModified}-${index}`}
+                        type='button'
+                        variant='ghost'
+                        className='h-7 max-w-48 truncate px-2 text-[10px] text-pw-cyan'
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openFile({
+                            src: URL.createObjectURL(queuedFile),
+                            name: queuedFile.name,
+                            mimeType: queuedFile.type,
+                          });
+                        }}>
+                        Preview {index + 1}: {queuedFile.name}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             : <div className='space-y-1'>
                 <h3 className='text-base font-bold text-white'>
                   Drop or select your {fromFormat.toUpperCase()} file here
                 </h3>
                 <p className='text-[10px] text-pw-muted max-w-sm'>
-                  File types are automatically detected and prepared for
-                  high-integrity conversion.
+                  PDF, TXT, images, DOCX, XLSX, CSV and PPTX are supported.
+                  Conversion runs locally in your browser.
                 </p>
               </div>
             }
@@ -2287,8 +2504,10 @@ export default function PdfToolStudioPage() {
                   />
 
                   <Button
-                    onClick={()=> {
-                      document.getElementById('book-import-file-input')?.click();
+                    onClick={() => {
+                      document
+                        .getElementById('book-import-file-input')
+                        ?.click();
                     }}
                     title='Import Book (.pwbook)'
                     className='h-10 px-4 sm:px-5 text-sm rounded-full font-bold'>
@@ -2314,10 +2533,10 @@ export default function PdfToolStudioPage() {
                       className='bg-[#0c0d1c]/70 bkblur border border-white/5 hover:border-pw-primary/30 rounded-2xl shadow-xl transition-all flex flex-col justify-between group p-0'>
                       <div className='sapce-y-2 p-3 sm:p-4 pb-1'>
                         <div className='flex items-start justify-between gap-2'>
-                        <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1 pt-2'>
-                          {book.name}
-                        </h3>
-                         
+                          <h3 className='text-lg font-bold text-white group-hover:text-pw-primary transition-colors line-clamp-1 pt-2'>
+                            {book.name}
+                          </h3>
+
                           <span className='text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-white/5 text-pw-muted font-bold'>
                             {book.pages?.length === 0 ?
                               ''
@@ -2874,15 +3093,16 @@ export default function PdfToolStudioPage() {
                     <div className='sm:hidden divider my-4' />
                     <Card className='bg-[#0c0d1c]/70 bkblur p-0 py-3.5 border border-white/5 rounded-2xl  mt-2 sm:shadow-xl'>
                       <div className='px-4 pt-0 flex items-center justify-between flex-wrap'>
-
                         <span className=' flex text-xs font-bold text-white uppercase tracking-wider'>
-                      <ChevronRight
-                      onClick={()=>{setShowPager(!showPager)}}
-                          className={cn(
-                            'h-4 w-4 text-pw-muted transition-transform cursor-pointer mr-1',
-                            showPager && 'rotate-90',
-                          )}
-                        />
+                          <ChevronRight
+                            onClick={() => {
+                              setShowPager(!showPager);
+                            }}
+                            className={cn(
+                              'h-4 w-4 text-pw-muted transition-transform cursor-pointer mr-1',
+                              showPager && 'rotate-90',
+                            )}
+                          />
                           Chapters & Pages
                         </span>
                         <Button
@@ -2891,342 +3111,360 @@ export default function PdfToolStudioPage() {
                             setShowPager(true);
                           }}
                           size='sm'
-                          className={cn('btn-ghost h-7 text-[10px] font-bold gap-1', !showPager && 'h-8 w-8 rounded-full')}>
-                          <Plus className={cn('h-3 w-3', !showPager && 'h-5 w-5')} /> {showPager && 'Add Page'}
+                          className={cn(
+                            'btn-ghost h-7 text-[10px] font-bold gap-1',
+                            !showPager && 'h-8 w-8 rounded-full',
+                          )}>
+                          <Plus
+                            className={cn('h-3 w-3', !showPager && 'h-5 w-5')}
+                          />{' '}
+                          {showPager && 'Add Page'}
                         </Button>
                       </div>
 
-                        {/* Add Stack (Chapter / Page) */}
+                      {/* Add Stack (Chapter / Page) */}
                       {showPager && (
                         <>
-                        <div className='mx-3 flex gap-2 flex-wrap'>
-                          <select
-                            value={stackType}
-                            onChange={(e) => setStackType(e.target.value as any)}
-                            className='bg-white/5 border border-white/10 rounded-xl px-2 text-xs text-pw-text focus:outline-none flex-1 cursor-pointer h-9'>
-                            <option
-                              value='page'
-                              className='bg-[#0A0C1B]'>
-                              Page
-                            </option>
-                            <option
-                              value='chapter'
-                              className='bg-[#0A0C1B]'>
-                              Chapter
-                            </option>
-                          </select>
-                          <Button
-                            onClick={() => {
-                              if (stackType === 'chapter') {
-                                const newChId = `ch-${Date.now()}`;
-                                setChapters([
-                                  ...chapters,
-                                  {
-                                    id: newChId,
-                                    name: `Chapter ${chapters.length + 1}: Subtitle`,
-                                  },
-                                ]);
-                                setActiveChapter(newChId);
-
-                                setStackType('page');
-                                toast.success('Chapter created!.');
-                              } else {
-                                handleAddPageToChapter(activeChapter || null);
-                                setCollapsedChapters((prev) => ({
-                                  ...prev,
-                                  [activeChapter as string]: false,
-                                }));
+                          <div className='mx-3 flex gap-2 flex-wrap'>
+                            <select
+                              value={stackType}
+                              onChange={(e) =>
+                                setStackType(e.target.value as any)
                               }
-                            }}
-                            size='sm'
-                            className='btn-primary h-9 px-3 text-xs font-bold'>
-                            <Plus/> <span className='hidden sm:inline-block ml-1'>Add</span>
-                          </Button>
-                        </div>
+                              className='bg-white/5 border border-white/10 rounded-xl px-2 text-xs text-pw-text focus:outline-none flex-1 cursor-pointer h-9'>
+                              <option
+                                value='page'
+                                className='bg-[#0A0C1B]'>
+                                Page
+                              </option>
+                              <option
+                                value='chapter'
+                                className='bg-[#0A0C1B]'>
+                                Chapter
+                              </option>
+                            </select>
+                            <Button
+                              onClick={() => {
+                                if (stackType === 'chapter') {
+                                  const newChId = `ch-${Date.now()}`;
+                                  setChapters([
+                                    ...chapters,
+                                    {
+                                      id: newChId,
+                                      name: `Chapter ${chapters.length + 1}: Subtitle`,
+                                    },
+                                  ]);
+                                  setActiveChapter(newChId);
 
-                        {/* Chapters List */}
-                        <div className='space-y-3 mx-2 max-h-[460px] overflow-y-auto custom-scrollbar'>
-                          {chapters.map((ch) => {
-                            const chPages = pages.filter(
-                              (p) => p.chapterId === ch.id,
-                            );
-                            const isCollapsed = !!collapsedChapters[ch.id];
-
-                            return (
-                              <div
-                                key={ch.id}
-                                className='space-y-1.5'>
-                                {/* Chapter Header */}
-                                <div
-                                  className={cn(
-                                    'flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 group',
-                                    activeChapter === ch.id &&
-                                      'border-pw-primary/5 bg-pw-primary/11',
-                                  )}
-                                  onClick={() => setActiveChapter(ch.id)}>
-                                  <div className='flex items-center gap-2 cursor-pointer flex-1 min-w-0'>
-                                    <ChevronRight
-                                      onClick={() =>
-                                        setCollapsedChapters((prev) => ({
-                                          ...prev,
-                                          [ch.id]: !prev[ch.id],
-                                        }))
-                                      }
-                                      className={cn(
-                                        'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
-                                        !isCollapsed && 'rotate-90',
-                                      )}
-                                    />
-                                    <span
-                                      className={cn(
-                                        'text-xs font-bold font-mono truncate',
-                                        activeChapter === ch.id ?
-                                          'text-pw-primary'
-                                        : 'text-white',
-                                      )}>
-                                      {ch.name}
-                                    </span>
-                                  </div>
-
-                                  {/* Chapter 3-Dot Options Dropdown */}
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        size='icon'
-                                        variant='ghost'
-                                        className='h-7 w-7 text-pw-muted hover:text-white shrink-0'>
-                                        <MoreVertical className='h-3.5 w-3.5' />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52 shadow-2xl'>
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleRenameChapter(ch.id, ch.name)
-                                        }>
-                                        <Pencil className='h-3.5 w-3.5 mr-2 text-pw-primary' />{' '}
-                                        Rename
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleAddPageToChapter(ch.id)
-                                        }>
-                                        <Plus className='h-3.5 w-3.5 mr-2 text-pw-success' />{' '}
-                                        Add Page
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleDisbandChapter(ch.id)
-                                        }>
-                                        <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
-                                        Ungroup (Keep Pages)
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator className='bg-white/10' />
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleDeleteChapterWithPages(ch.id)
-                                        }>
-                                        <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
-                                        Delete All
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-
-                                {/* Sub-Pages Under Chapter */}
-                                {!isCollapsed && (
-                                  <div className='pl-4 space-y-1 border-l border-white/10'>
-                                    {chPages.map((page) => {
-                                      const pIdx = pages.findIndex(
-                                        (p) => p.id === page.id,
-                                      );
-                                      const isActive = activePageIndex === pIdx;
-
-                                      return (
-                                        <div
-                                          key={page.id}
-                                          onClick={() => setActivePageIndex(pIdx)}
-                                          className={cn(
-                                            'p-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all',
-                                            isActive ?
-                                              'bg-pw-primary/15 text-pw-primary font-bold'
-                                            : 'hover:bg-white/5 text-pw-muted',
-                                          )}>
-                                          <span className='truncate flex-1'>
-                                            {pIdx + 1}.{' '}
-                                            {page.title || 'Untitled Page'}
-                                          </span>
-
-                                          <DropdownMenu>
-                                            <DropdownMenuTrigger
-                                              asChild
-                                              onClick={(e: any) =>
-                                                e.stopPropagation()
-                                              }>
-                                              <Button
-                                                size='icon'
-                                                variant='ghost'
-                                                className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
-                                                <MoreVertical className='h-3 w-3' />
-                                              </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48 shadow-2xl'>
-                                              <DropdownMenuItem
-                                                disabled={pIdx === 0}
-                                                onClick={() =>
-                                                  handleMovePage(pIdx, 'up')
-                                                }>
-                                                <ArrowUp className='h-3.5 w-3.5 mr-2' />{' '}
-                                                Move Up
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem
-                                                disabled={
-                                                  pIdx === pages.length - 1
-                                                }
-                                                onClick={() =>
-                                                  handleMovePage(pIdx, 'down')
-                                                }>
-                                                <ArrowDown className='h-3.5 w-3.5 mr-2' />{' '}
-                                                Move Down
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem
-                                                onClick={() =>
-                                                  setPages((prev) =>
-                                                    prev.map((p) =>
-                                                      p.id === page.id ?
-                                                        { ...p, chapterId: null }
-                                                      : p,
-                                                    ),
-                                                  )
-                                                }>
-                                                <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
-                                                Make Independent
-                                              </DropdownMenuItem>
-                                              <DropdownMenuSeparator className='bg-white/10' />
-                                              <DropdownMenuItem
-                                                onClick={() =>
-                                                  handleDeletePage(page.id)
-                                                }>
-                                                <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
-                                                Delete
-                                              </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                          </DropdownMenu>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-
-                          {/* Independent Pages */}
-                          {pages.filter((p) => !p.chapterId).length > 0 && (
-                            <div className='space-y-1 pt-2 border-t border-white/5'>
-                              <span className='text-[10px] font-bold text-pw-muted uppercase pl-1 block'>
-                                Independent Pages
+                                  setStackType('page');
+                                  toast.success('Chapter created!.');
+                                } else {
+                                  handleAddPageToChapter(activeChapter || null);
+                                  setCollapsedChapters((prev) => ({
+                                    ...prev,
+                                    [activeChapter as string]: false,
+                                  }));
+                                }
+                              }}
+                              size='sm'
+                              className='btn-primary h-9 px-3 text-xs font-bold'>
+                              <Plus />{' '}
+                              <span className='hidden sm:inline-block ml-1'>
+                                Add
                               </span>
-                              {pages
-                                .filter((p) => !p.chapterId)
-                                .map((page) => {
-                                  const pIdx = pages.findIndex(
-                                    (p) => p.id === page.id,
-                                  );
-                                  const isActive = activePageIndex === pIdx;
+                            </Button>
+                          </div>
 
-                                  return (
-                                    <div
-                                      key={page.id}
-                                      onClick={() => setActivePageIndex(pIdx)}
-                                      className={cn(
-                                        'p-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all',
-                                        isActive ?
-                                          'bg-pw-primary/15 text-pw-primary font-bold'
-                                        : 'hover:bg-white/5 text-pw-muted',
-                                      )}>
-                                      <span className='truncate flex-1'>
-                                        {pIdx + 1}.{' '}
-                                        {page.title || 'Untitled Page'}
+                          {/* Chapters List */}
+                          <div className='space-y-3 mx-2 max-h-[460px] overflow-y-auto custom-scrollbar'>
+                            {chapters.map((ch) => {
+                              const chPages = pages.filter(
+                                (p) => p.chapterId === ch.id,
+                              );
+                              const isCollapsed = !!collapsedChapters[ch.id];
+
+                              return (
+                                <div
+                                  key={ch.id}
+                                  className='space-y-1.5'>
+                                  {/* Chapter Header */}
+                                  <div
+                                    className={cn(
+                                      'flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 group',
+                                      activeChapter === ch.id &&
+                                        'border-pw-primary/5 bg-pw-primary/11',
+                                    )}
+                                    onClick={() => setActiveChapter(ch.id)}>
+                                    <div className='flex items-center gap-2 cursor-pointer flex-1 min-w-0'>
+                                      <ChevronRight
+                                        onClick={() =>
+                                          setCollapsedChapters((prev) => ({
+                                            ...prev,
+                                            [ch.id]: !prev[ch.id],
+                                          }))
+                                        }
+                                        className={cn(
+                                          'h-3.5 w-3.5 text-pw-primary shrink-0 transition-transform duration-200',
+                                          !isCollapsed && 'rotate-90',
+                                        )}
+                                      />
+                                      <span
+                                        className={cn(
+                                          'text-xs font-bold font-mono truncate',
+                                          activeChapter === ch.id ?
+                                            'text-pw-primary'
+                                          : 'text-white',
+                                        )}>
+                                        {ch.name}
                                       </span>
-
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger
-                                          asChild
-                                          onClick={(e: any) =>
-                                            e.stopPropagation()
-                                          }>
-                                          <Button
-                                            size='icon'
-                                            variant='ghost'
-                                            className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
-                                            <MoreVertical className='h-3 w-3' />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48 shadow-2xl'>
-                                          <DropdownMenuSub>
-                                            <DropdownMenuSubTrigger>
-                                              <BookOpen className='h-3.5 w-3.5 mr-2' />{' '}
-                                              Move to Chapter
-                                            </DropdownMenuSubTrigger>
-                                            <DropdownMenuPortal>
-                                              <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
-                                                {chapters.map((c) => (
-                                                  <DropdownMenuItem
-                                                    key={c.id}
-                                                    onClick={() =>
-                                                      setPages((prev) =>
-                                                        prev.map((p) =>
-                                                          p.id === page.id ?
-                                                            {
-                                                              ...p,
-                                                              chapterId: c.id,
-                                                            }
-                                                          : p,
-                                                        ),
-                                                      )
-                                                    }>
-                                                    {c.name}
-                                                  </DropdownMenuItem>
-                                                ))}
-                                              </DropdownMenuSubContent>
-                                            </DropdownMenuPortal>
-                                          </DropdownMenuSub>
-
-                                          <DropdownMenuItem
-                                            disabled={pIdx === 0}
-                                            onClick={() =>
-                                              handleMovePage(pIdx, 'up')
-                                            }>
-                                            <ArrowUp className='h-3.5 w-3.5 mr-2' />{' '}
-                                            Move Up
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            disabled={pIdx === pages.length - 1}
-                                            onClick={() =>
-                                              handleMovePage(pIdx, 'down')
-                                            }>
-                                            <ArrowDown className='h-3.5 w-3.5 mr-2' />{' '}
-                                            Move Down
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator className='bg-white/10' />
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              handleDeletePage(page.id)
-                                            }>
-                                            <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
                                     </div>
-                                  );
-                                })}
-                            </div>
-                          )}
-                        </div>
-                      </>)
-                  
-                      }
+
+                                    {/* Chapter 3-Dot Options Dropdown */}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          size='icon'
+                                          variant='ghost'
+                                          className='h-7 w-7 text-pw-muted hover:text-white shrink-0'>
+                                          <MoreVertical className='h-3.5 w-3.5' />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-52 shadow-2xl'>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleRenameChapter(ch.id, ch.name)
+                                          }>
+                                          <Pencil className='h-3.5 w-3.5 mr-2 text-pw-primary' />{' '}
+                                          Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleAddPageToChapter(ch.id)
+                                          }>
+                                          <Plus className='h-3.5 w-3.5 mr-2 text-pw-success' />{' '}
+                                          Add Page
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleDisbandChapter(ch.id)
+                                          }>
+                                          <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
+                                          Ungroup (Keep Pages)
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className='bg-white/10' />
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleDeleteChapterWithPages(ch.id)
+                                          }>
+                                          <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
+                                          Delete All
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+
+                                  {/* Sub-Pages Under Chapter */}
+                                  {!isCollapsed && (
+                                    <div className='pl-4 space-y-1 border-l border-white/10'>
+                                      {chPages.map((page) => {
+                                        const pIdx = pages.findIndex(
+                                          (p) => p.id === page.id,
+                                        );
+                                        const isActive =
+                                          activePageIndex === pIdx;
+
+                                        return (
+                                          <div
+                                            key={page.id}
+                                            onClick={() =>
+                                              setActivePageIndex(pIdx)
+                                            }
+                                            className={cn(
+                                              'p-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all',
+                                              isActive ?
+                                                'bg-pw-primary/15 text-pw-primary font-bold'
+                                              : 'hover:bg-white/5 text-pw-muted',
+                                            )}>
+                                            <span className='truncate flex-1'>
+                                              {pIdx + 1}.{' '}
+                                              {page.title || 'Untitled Page'}
+                                            </span>
+
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger
+                                                asChild
+                                                onClick={(e: any) =>
+                                                  e.stopPropagation()
+                                                }>
+                                                <Button
+                                                  size='icon'
+                                                  variant='ghost'
+                                                  className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
+                                                  <MoreVertical className='h-3 w-3' />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48 shadow-2xl'>
+                                                <DropdownMenuItem
+                                                  disabled={pIdx === 0}
+                                                  onClick={() =>
+                                                    handleMovePage(pIdx, 'up')
+                                                  }>
+                                                  <ArrowUp className='h-3.5 w-3.5 mr-2' />{' '}
+                                                  Move Up
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                  disabled={
+                                                    pIdx === pages.length - 1
+                                                  }
+                                                  onClick={() =>
+                                                    handleMovePage(pIdx, 'down')
+                                                  }>
+                                                  <ArrowDown className='h-3.5 w-3.5 mr-2' />{' '}
+                                                  Move Down
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                  onClick={() =>
+                                                    setPages((prev) =>
+                                                      prev.map((p) =>
+                                                        p.id === page.id ?
+                                                          {
+                                                            ...p,
+                                                            chapterId: null,
+                                                          }
+                                                        : p,
+                                                      ),
+                                                    )
+                                                  }>
+                                                  <Link2 className='h-3.5 w-3.5 mr-2 text-pw-warning' />{' '}
+                                                  Make Independent
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator className='bg-white/10' />
+                                                <DropdownMenuItem
+                                                  onClick={() =>
+                                                    handleDeletePage(page.id)
+                                                  }>
+                                                  <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
+                                                  Delete
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {/* Independent Pages */}
+                            {pages.filter((p) => !p.chapterId).length > 0 && (
+                              <div className='space-y-1 pt-2 border-t border-white/5'>
+                                <span className='text-[10px] font-bold text-pw-muted uppercase pl-1 block'>
+                                  Independent Pages
+                                </span>
+                                {pages
+                                  .filter((p) => !p.chapterId)
+                                  .map((page) => {
+                                    const pIdx = pages.findIndex(
+                                      (p) => p.id === page.id,
+                                    );
+                                    const isActive = activePageIndex === pIdx;
+
+                                    return (
+                                      <div
+                                        key={page.id}
+                                        onClick={() => setActivePageIndex(pIdx)}
+                                        className={cn(
+                                          'p-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all',
+                                          isActive ?
+                                            'bg-pw-primary/15 text-pw-primary font-bold'
+                                          : 'hover:bg-white/5 text-pw-muted',
+                                        )}>
+                                        <span className='truncate flex-1'>
+                                          {pIdx + 1}.{' '}
+                                          {page.title || 'Untitled Page'}
+                                        </span>
+
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger
+                                            asChild
+                                            onClick={(e: any) =>
+                                              e.stopPropagation()
+                                            }>
+                                            <Button
+                                              size='icon'
+                                              variant='ghost'
+                                              className='h-6 w-6 text-pw-muted hover:text-white shrink-0'>
+                                              <MoreVertical className='h-3 w-3' />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent className='bg-[#0c0d1c] border-white/10 text-white w-48 shadow-2xl'>
+                                            <DropdownMenuSub>
+                                              <DropdownMenuSubTrigger>
+                                                <BookOpen className='h-3.5 w-3.5 mr-2' />{' '}
+                                                Move to Chapter
+                                              </DropdownMenuSubTrigger>
+                                              <DropdownMenuPortal>
+                                                <DropdownMenuSubContent className='bg-[#0c0d1c] border-white/10 text-white w-48'>
+                                                  {chapters.map((c) => (
+                                                    <DropdownMenuItem
+                                                      key={c.id}
+                                                      onClick={() =>
+                                                        setPages((prev) =>
+                                                          prev.map((p) =>
+                                                            p.id === page.id ?
+                                                              {
+                                                                ...p,
+                                                                chapterId: c.id,
+                                                              }
+                                                            : p,
+                                                          ),
+                                                        )
+                                                      }>
+                                                      {c.name}
+                                                    </DropdownMenuItem>
+                                                  ))}
+                                                </DropdownMenuSubContent>
+                                              </DropdownMenuPortal>
+                                            </DropdownMenuSub>
+
+                                            <DropdownMenuItem
+                                              disabled={pIdx === 0}
+                                              onClick={() =>
+                                                handleMovePage(pIdx, 'up')
+                                              }>
+                                              <ArrowUp className='h-3.5 w-3.5 mr-2' />{' '}
+                                              Move Up
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                              disabled={
+                                                pIdx === pages.length - 1
+                                              }
+                                              onClick={() =>
+                                                handleMovePage(pIdx, 'down')
+                                              }>
+                                              <ArrowDown className='h-3.5 w-3.5 mr-2' />{' '}
+                                              Move Down
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator className='bg-white/10' />
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                handleDeletePage(page.id)
+                                              }>
+                                              <Trash2 className='h-3.5 w-3.5 mr-2 text-pw-danger' />{' '}
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </Card>
                   </div>
                 )}
@@ -3397,7 +3635,8 @@ export default function PdfToolStudioPage() {
                     {/* Main Content Textarea */}
                     <textarea
                       id='book-editor-textarea'
-                      // dangerouslySetInnerHTML={{__html: activePage.content}}
+                      spellCheck
+                      autoCorrect='text'
                       value={activePage.content}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -3510,24 +3749,24 @@ export default function PdfToolStudioPage() {
 
                     {/* Footnotes Panel */}
                     <div className='border-t border-white/5 pt-4 space-y-3'>
-                <div className='flex items-center justify-between'>
-                  
+                      <div className='flex items-center justify-between'>
                         <span className='text-xs font-bold text-pw-muted uppercase tracking-wider'>
                           Page Footnotes ({activePage.footnotes?.length || 0})
                         </span>
-                        
-                  <ChevronRight
-                  onClick={()=>{setShowFootnote(!showFootnote)}}
+
+                        <ChevronRight
+                          onClick={() => {
+                            setShowFootnote(!showFootnote);
+                          }}
                           className={cn(
                             'h-4 w-4 text-pw-muted transition-transform cursor-pointer',
                             showFootnote && 'rotate-90',
                           )}
                         />
-
-                  
                       </div>
 
-                      {showFootnote && activePage.footnotes &&
+                      {showFootnote &&
+                        activePage.footnotes &&
                         activePage.footnotes.length > 0 && (
                           <div className='space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar'>
                             {activePage.footnotes.map((fn) => (
@@ -3622,10 +3861,10 @@ export default function PdfToolStudioPage() {
           <div className='flex items-center justify-between flex-wrap gap-4'>
             <div>
               <h2 className='text-2xl font-bold font-display text-white'>
-                Merge PDF Documents
+                Merge Documents
               </h2>
               <p className='text-xs text-pw-muted'>
-                Combine multiple PDF files into one structured document.
+                Combine multiple files into one structured document.
               </p>
             </div>
             <Button
@@ -3633,13 +3872,14 @@ export default function PdfToolStudioPage() {
                 document.getElementById('pdf-merge-file-input')?.click()
               }
               className='btn-primary h-10 px-5 text-xs font-bold gap-2'>
-              <Upload className='h-4 w-4' /> Add Documents
+              <Upload className='h-4 w-4' /> Add Files
             </Button>
             <input
               id='pdf-merge-file-input'
               type='file'
               multiple
-              accept='.pdf'
+              accept='*'
+              // accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
               className='hidden'
               onChange={(e) => {
                 const files = e.target.files;
@@ -3648,8 +3888,15 @@ export default function PdfToolStudioPage() {
                     id: `merge-${Date.now()}-${Math.random()}`,
                     name: f.name,
                     size: `${(f.size / 1024).toFixed(1)} KB`,
+                    type:
+                      f.type.includes('pdf') ? 'Pdf'
+                      : f.type.includes('.document') ? 'Word'
+                      : f.type.includes('.presentation') ? 'PPT'
+                      : f.type.includes('image') ? 'Image'
+                      : 'File',
                     file: f,
                   }));
+
                   setMergeFiles((prev) => [...prev, ...arr]);
                   toast.success(`Added ${arr.length} files to queue.`);
                 }
@@ -3662,13 +3909,17 @@ export default function PdfToolStudioPage() {
               {mergeFiles.map((item, idx) => (
                 <div
                   key={item.id}
-                  className='p-3.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between'>
-                  <div className='flex items-center gap-3'>
+                  className='p-2 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between'>
+                  <div className='flex items-center gap-3 w-full max-w-[70%]'>
                     <span className='font-mono font-bold text-pw-primary text-xs'>
                       {idx + 1}.
                     </span>
-                    <div>
-                      <span className='text-xs font-bold text-white block'>
+                    <div className='w-full max-w-[95%]'>
+                      <p className='text-[10px] tracking-wide uppercase'>
+                        {item.type}
+                      </p>
+
+                      <span className='text-xs font-bold text-white block truncate lime-clamp-1 break-all max-w-full'>
                         {item.name}
                       </span>
                       <span className='text-[10px] text-pw-muted font-mono'>
@@ -3676,23 +3927,40 @@ export default function PdfToolStudioPage() {
                       </span>
                     </div>
                   </div>
-                  <Button
-                    size='icon'
-                    variant='ghost'
-                    onClick={() =>
-                      setMergeFiles((prev) =>
-                        prev.filter((f) => f.id !== item.id),
-                      )
-                    }
-                    className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
-                    <Trash2 className='h-4 w-4' />
-                  </Button>
+
+                  <div className='flex items-center gap-1 flex-col self-end'>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant='ghost'
+                      onClick={() =>
+                        openFile({
+                          src: URL.createObjectURL(item.file),
+                          name: item.name,
+                          mimeType: item.file.type || 'application/pdf',
+                        })
+                      }
+                      className='h-8 px-2 text-[10px] text-pw-cyan'>
+                      Preview
+                    </Button>
+                    <Button
+                      size='icon'
+                      variant='ghost'
+                      onClick={() =>
+                        setMergeFiles((prev) =>
+                          prev.filter((f) => f.id !== item.id),
+                        )
+                      }
+                      className='h-8 w-8 text-pw-muted hover:text-pw-danger'>
+                      <Trash2 className='h-4 w-4' />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
-          : <div className='py-16 text-center border-2 border-dashed border-white/10 rounded-2xl text-pw-muted text-xs'>
-              No PDF files queued yet. Click &quot;Add Documents&quot; to begin
-              merging.
+          : <div className='py-16 text-center border-2 border-dashed border-white/10 rounded-2xl text-pw-muted text-xs px-2'>
+              No files queued yet. Add PDFs, images, text, CSV, DOCX, XLSX or
+              PPTX files to combine them into one PDF.
             </div>
           }
 
@@ -3705,13 +3973,182 @@ export default function PdfToolStudioPage() {
                 const mergedPdf = await PDFDocument.create();
 
                 for (const item of mergeFiles) {
-                  const bytes = await item.file.arrayBuffer();
-                  const donorPdf = await PDFDocument.load(bytes);
+                  const file = item.file;
+                  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+                  if (ext === 'pdf' || file.type === 'application/pdf') {
+                    const donorPdf = await PDFDocument.load(
+                      await file.arrayBuffer(),
+                    );
+                    const pages = await mergedPdf.copyPages(
+                      donorPdf,
+                      donorPdf.getPageIndices(),
+                    );
+                    pages.forEach((page) => mergedPdf.addPage(page));
+                    continue;
+                  }
+                  if (file.type.startsWith('image/')) {
+                    const { compressImageForPdf } = await import(
+                      '@/lib/pdf/image-compressor'
+                    );
+                    const source = await new Promise<string>(
+                      (resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () =>
+                          typeof reader.result === 'string' ?
+                            resolve(reader.result)
+                          : reject(new Error(`Could not read ${file.name}.`));
+                        reader.onerror = () =>
+                          reject(new Error(`Could not read ${file.name}.`));
+                        reader.readAsDataURL(file);
+                      },
+                    );
+                    const compressed = await compressImageForPdf(
+                      source,
+                      2400,
+                      2400,
+                      0.88,
+                    );
+                    const imageBytes = Uint8Array.from(
+                      atob(compressed.dataUrl.split(',')[1]),
+                      (char) => char.charCodeAt(0),
+                    );
+                    const image = await mergedPdf.embedJpg(imageBytes);
+                    const page = mergedPdf.addPage([595.28, 841.89]);
+                    const scale = Math.min(
+                      (page.getWidth() - 48) / image.width,
+                      (page.getHeight() - 48) / image.height,
+                    );
+                    const width = image.width * scale;
+                    const height = image.height * scale;
+                    page.drawImage(image, {
+                      x: (page.getWidth() - width) / 2,
+                      y: (page.getHeight() - height) / 2,
+                      width,
+                      height,
+                    });
+                    continue;
+                  }
+                  let text = '';
+                  if (['txt', 'csv', 'md'].includes(ext)) {
+                    text = await file.text();
+                  } else if (['docx', 'xlsx', 'pptx'].includes(ext)) {
+                    const JSZip = (await import('jszip')).default;
+                    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+                    const xmlText = async (path: string) =>
+                      (await zip.file(path)?.async('text')) || '';
+                    const nodes = (xml: string) => {
+                      const parsed = new DOMParser().parseFromString(
+                        xml,
+                        'application/xml',
+                      );
+                      if (parsed.querySelector('parsererror')) return '';
+                      return Array.from(parsed.getElementsByTagNameNS('*', 't'))
+                        .map((node) => node.textContent || '')
+                        .join(' ');
+                    };
+                    if (ext === 'docx')
+                      text = nodes(await xmlText('word/document.xml'));
+                    else if (ext === 'pptx') {
+                      const slides = Object.keys(zip.files)
+                        .filter((path) =>
+                          /^ppt\/slides\/slide\d+\.xml$/.test(path),
+                        )
+                        .sort(
+                          (a, b) =>
+                            Number(a.match(/slide(\d+)/)?.[1]) -
+                            Number(b.match(/slide(\d+)/)?.[1]),
+                        );
+                      text = (
+                        await Promise.all(
+                          slides.map(
+                            async (path, index) =>
+                              `Slide ${index + 1}: ${nodes(await xmlText(path))}`,
+                          ),
+                        )
+                      ).join('\n\n');
+                    } else {
+                      const sharedXml = await xmlText('xl/sharedStrings.xml');
+                      const sharedDoc =
+                        sharedXml ?
+                          new DOMParser().parseFromString(
+                            sharedXml,
+                            'application/xml',
+                          )
+                        : null;
+                      const shared =
+                        sharedDoc ?
+                          Array.from(
+                            sharedDoc.getElementsByTagNameNS('*', 'si'),
+                          ).map((item) =>
+                            Array.from(item.getElementsByTagNameNS('*', 't'))
+                              .map((node) => node.textContent || '')
+                              .join(''),
+                          )
+                        : [];
+                      const sheets = Object.keys(zip.files).filter((path) =>
+                        /^xl\/worksheets\/sheet\d+\.xml$/.test(path),
+                      );
+                      text = (
+                        await Promise.all(
+                          sheets.map(async (path) => {
+                            const parsed = new DOMParser().parseFromString(
+                              await xmlText(path),
+                              'application/xml',
+                            );
+                            return Array.from(
+                              parsed.getElementsByTagNameNS('*', 'row'),
+                            )
+                              .map((row) =>
+                                Array.from(row.getElementsByTagNameNS('*', 'c'))
+                                  .map((cell) => {
+                                    const value =
+                                      cell.getElementsByTagNameNS('*', 'v')[0]
+                                        ?.textContent || '';
+                                    return cell.getAttribute('t') === 's' ?
+                                        shared[Number(value)] || ''
+                                      : value;
+                                  })
+                                  .join('\t'),
+                              )
+                              .join('\n');
+                          }),
+                        )
+                      ).join('\n\n');
+                    }
+                  } else {
+                    throw new Error(
+                      `${file.name} is not a supported PDF merge input.`,
+                    );
+                  }
+                  if (!text.trim())
+                    throw new Error(
+                      `No readable text was found in ${file.name}.`,
+                    );
+                  const { jsPDF } = await import('jspdf');
+                  const textPdf = new jsPDF();
+                  const margin = 15;
+                  const lines = textPdf.splitTextToSize(
+                    `${file.name}\n\n${text}`,
+                    textPdf.internal.pageSize.getWidth() - margin * 2,
+                  );
+                  const pageHeight = textPdf.internal.pageSize.getHeight();
+                  let y = margin;
+                  for (const line of lines) {
+                    if (y + 5 > pageHeight - margin) {
+                      textPdf.addPage();
+                      y = margin;
+                    }
+                    textPdf.text(line, margin, y);
+                    y += 5;
+                  }
+                  const donorPdf = await PDFDocument.load(
+                    textPdf.output('arraybuffer'),
+                  );
                   const pages = await mergedPdf.copyPages(
                     donorPdf,
                     donorPdf.getPageIndices(),
                   );
-                  pages.forEach((p) => mergedPdf.addPage(p));
+                  pages.forEach((page) => mergedPdf.addPage(page));
                 }
 
                 const mergedBytes = await mergedPdf.save();
@@ -3722,7 +4159,9 @@ export default function PdfToolStudioPage() {
                 saveAs(blob, `merged-document-${Date.now()}.pdf`);
 
                 toast.dismiss(toastId);
-                toast.success('🎉 Successfully merged and downloaded PDFs!');
+                toast.success(
+                  `Successfully combined ${mergeFiles.length} files into one PDF.`,
+                );
               } catch (err: any) {
                 toast.dismiss(toastId);
                 toast.error(
@@ -3732,8 +4171,8 @@ export default function PdfToolStudioPage() {
               }
             }}
             className='btn-primary h-12 w-full text-sm font-bold shadow-xl gap-2'>
-            <Sliders className='h-4 w-4' /> Merge {mergeFiles.length} PDF
-            Documents
+            <Sliders className='h-4 w-4' /> Merge {mergeFiles.length} Files to
+            PDF
           </Button>
         </Card>
       )}

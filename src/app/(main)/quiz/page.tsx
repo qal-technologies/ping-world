@@ -40,6 +40,13 @@ import {
   BookOpen,
   Eye,
   EyeOff,
+  User,
+  File,
+  Bold,
+  Italic,
+  Underline,
+  Highlighter,
+  Mail,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -66,7 +73,11 @@ import { HybridStorage } from '@/lib/storage-utils';
 import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
-import { computeExpiry, tierAtLeast, PREMIUM_TIERS } from '@/lib/config/premium';
+import {
+  computeExpiry,
+  tierAtLeast,
+  PREMIUM_TIERS,
+} from '@/lib/config/premium';
 import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
 import {
   cleanTextForCSV,
@@ -76,156 +87,25 @@ import {
 } from '@/lib/quiz/text-parser';
 import QuizLanguageModal from '@/components/quiz/QuizLanguageModal';
 import { validateQuizExpiry } from '@/lib/quiz/quiz-expiry';
-import {resolvePipedText} from '@/lib/quiz/quiz-piping';
+import {
+  resolvePipedText,
+  unpackPingWorldMediaUrl,
+} from '@/lib/quiz/quiz-piping';
+import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
+import { useAppFileViewer } from '@/components/shared/AppFileViewer';
+import type {
+  Question,
+  Quiz,
+  QuizOption,
+  Details,
+  InputBranchRule,
+  QuestionType,
+  QuizTakerResponse,
+} from '.';
+import {supabase} from '@/lib/supabase';
 
-// --- Types ---
-export type QuestionType =
-  | 'multiple_choice'
-  | 'true_false'
-  | 'dropdown'
-  | 'checkbox'
-  | 'input'
-  | 'range'
-  | 'rating'
-  | 'upload';
-
-export interface QuizOption {
-  id: string; // questionId-index or uuid
-  text: string;
-  uploadUrl?: string; // Image upload URL for option
-  uploadType?: 'image' | 'video' | 'audio';
-  skipTo?: string; // ID of the next question to jump to
-  skipToCat?: string; // Category name to jump to (jumps to first question in category)
-  explanation?: string; // Option-level explanation shown in feedback
-  hidden?: boolean; // Hidden from taker view (setter-only)
-  scoreWeight?: number; // Checkbox: custom score weight for this option
-}
-
-export interface InputBranchRule {
-  keyword: string;
-  caseSensitive?: boolean;
-  skipTo?: string;
-  skipToCat?: string;
-}
-
-export interface Question {
-  id: string;
-  type: QuestionType;
-  text: string;
-  options: (string | QuizOption)[];
-  correctExplanation?: string;
-  correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
-  caseSensitive?: boolean; // for input type
-  inputBranchRules?: InputBranchRule[]; // Branching rules for input type questions
-  elseSkipTo?: string; // Branching if no input rule matches
-  elseSkipToCat?: string;
-  min?: number; // for range
-  max?: number; // for range
-  step?: number; // for range
-  allowedTypes?: string; // e.g. "image/*,.pdf,.docx,.zip" (auto-mapped from plain-word upload type)
-  acceptedFormats?: string[]; // Plain-word accepted format list e.g. ['png','jpg','pdf']
-  maxSizeMb?: number; // max upload size in MB
-  maxFileSize?: number; // alias for maxSizeMb (legacy compat)
-  uploadInstruction?: string; // Optional taker upload instructions
-  accessory?:
-    | 'none'
-    | 'calculator'
-    | 'note'
-    | 'periodic_table'
-    | 'formula_sheet'
-    | 'glossary';
-  accessoryNote?: string; // content for the 'note' or custom formulas
-  accessoryConfig?: any; // specific IDs or categories for formulas/glossary
-  skipTo?: string; // Question-level branching: jump to specific question after this one
-  skipToCat?: string; // Question-level branching: jump to first question of this category
-  category?: string; // Optional category tag for grouping questions
-  timer?: number; // Optional question timer in seconds
-}
-
-export interface Details {
-  title: string;
-  type:
-    | 'sex'
-    | 'input'
-    | 'number'
-    | 'date'
-    | 'tel'
-    | 'email'
-    | 'dropdown'
-    | 'dob';
-  allowlist?: string;
-  restrictedKeywords?: string;
-  options?: string[];
-  maxLength?: number;
-  minLength?: number;
-}
-
-export interface QuizTakerResponse {
-  userData: Record<string, string>;
-  answers: any[];
-  score: number;
-  categoryScores?: Record<string, { correct: number; total: number }>;
-  totalQuestions: number;
-  timestamp: string;
-  submissionReason?: 'completion' | 'timeout' | 'self_submit' | 'quit';
-  country?: string;
-  continent?: string; // Continent-level geo tag (free tier)
-}
-
-export interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  type: 'quiz' | 'survey';
-  surveyType?: 'research' | 'form'; // research = branching/page-by-page; form = scroll-all, no branching
-  questions: Question[];
-  canGoBack?: boolean;
-  showScore?: boolean;
-  introBgUrl?: string;
-  showCategory?: boolean; // Admin setting to display category above question headers
-  showCategoryInPerformance?: boolean;
-  askDetails?: Details[];
-  allowlistMessage?: string;
-  hasTimer?: boolean | string | number;
-  timerUnit?: 'seconds' | 'minutes' | 'hours'; // Unit for hasTimer value
-  randomizeOptions?: boolean;
-  randomizeQuestions?: boolean;
-  allowRetry?: boolean;
-  enforceSecurity?: boolean;
-  endScreen: {
-    title: string;
-    message: string;
-    showPerformance?: boolean;
-    enableConfetti?: boolean; // Pro: show confetti on completion
-    confettiType?: 'standard' | 'fireworks' | 'stars' | 'ribbons'; // Confetti style
-    completionIcon?: 'check' | 'diamond' | 'badge' | 'trophy'; // Icon shown in end screen
-    textAlign?: 'left' | 'center' | 'right'; // End screen text alignment
-  };
-  correctOption?: boolean;
-  correctOptionDes?: boolean;
-  createdAt: number;
-  responses?: QuizTakerResponse[];
-  allowEarlySubmit?: boolean;
-  expires_at?: string; // ISO date
-  expiryHistory?: string[]; // Previous expiry values (max 3 changes allowed)
-  isExpiryLocked?: boolean; // Locked after 3 expiry changes
-  quizScroll?: boolean;
-  quizLayout?: string;
-  branding?: {
-    image?: string;
-    opacity?: number;
-    shadeColor?: string;
-    blur?: number;
-    icon?: string;
-  };
-  disclaimer?: string;
-  customDisclaimer?: string; // Pro: replaces default PingWorld disclaimer
-  hidePingWorldDisclaimer?: boolean; // Pro: hide PingWorld branding disclaimer
-  showRealtimeScore?: boolean; // Pro: show live score badge during quiz
-  nextButtonText?: string; // Pro: custom Next button label
-  prevButtonText?: string; // Pro: custom Previous button label
-  allowPass?: boolean; // Allow takers to pass/skip questions without answering
-}
+const seedTemplateStorageKey = () =>
+  `pw_quiz_template`;
 
 // Helper: compute a capped expiry date max 3 days out
 export function computeQuizExpiry(daysUntilExpiry: number): string {
@@ -250,46 +130,68 @@ export function quizExpiryCountdown(expires_at: string): {
   return { label: `${hours}h left`, urgent: hours < 6 };
 }
 
+const isExpired = async (quiz: Quiz): Promise<boolean> => {
+  const now = Date.now();
+  if (quiz.expires_at) {
+    const expiresAt = new Date(quiz.expires_at).getTime();
+    const isExpired = expiresAt < now;
+    return isExpired;
+  } else {
+    return false;
+  }
+};
+
+const generateQuizId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    return (char === 'x' ? random : (random & 0x3 | 0x8)).toString(16);
+  });
+};
+
+const normalizeQuizRecord = (quiz: any): Quiz => ({
+  ...quiz,
+  id: String(quiz.id),
+  title: quiz.title || 'Untitled assessment',
+  description: quiz.description || '',
+  type: quiz.type === 'survey' ? 'survey' : 'quiz',
+  questions: Array.isArray(quiz.questions) ? quiz.questions : [],
+  endScreen: quiz.endScreen || { title: 'Completed', message: 'Thank you for your response.' },
+  createdAt: Number(quiz.createdAt) || (quiz.created_at ? new Date(quiz.created_at).getTime() : Date.now()),
+  customUrl: quiz.custom_id || quiz.customUrl || '',
+});
+
 // --- Components ---
 
 const QuizBuilder = ({
   quiz,
   onSave,
   onCancel,
+  isSaving,
 }: {
   quiz: Quiz;
   onSave: (q: Quiz) => void;
   onCancel: () => void;
+  isSaving: boolean;
 }) => {
-  const { premiumTier } = useAppContext();
+  const { premiumTier, isFeatureUnlocked, user } = useAppContext();
   const [collapse, setCollapse] = useState<Record<string, boolean>>({});
-  const [allowlistArr, setAllowlistArr] = useState<Record<string, boolean>>({});
   const [showBranchRules, setShowBranchRules] = useState(false);
   const [showLanguageDocs, setShowLanguageDocs] = useState(false);
 
+  const quizUnlocked = isFeatureUnlocked('quiz');
+
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
-    let plainIndex = q.correctIndex;
-    try {
-      if (typeof q.correctIndex === 'string') {
-        const decoded = atob(q.correctIndex);
-        try {
-          plainIndex = JSON.parse(decoded);
-        } catch {
-          plainIndex = decoded;
-        }
-      }
-    } catch (e) {
-      // Not base64 or other error, keep as is
-    }
-    return { ...q, correctIndex: plainIndex };
+    return { ...q, correctIndex: decodeStoredCorrectAnswer(q.correctIndex) };
   });
 
-  const { showConfirm } = useAppModal();
+  const { showConfirm, showPrompt } = useAppModal();
   const [editedQuiz, setEditedQuiz] = useState<Quiz>({
     ...quiz,
     questions: decodedQuestions,
   });
+  const [quizId, setQuizId] = useState<string>(editedQuiz?.customUrl || '');
 
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1 for settings
 
@@ -326,24 +228,33 @@ const QuizBuilder = ({
   useEffect(() => {
     // Autosave to draft storage as the user types
     const timer = setTimeout(async () => {
-      await HybridStorage.save(
-        `draft-quiz-${editedQuiz.id}`,
-        editedQuiz,
-        'quiz',
-      );
+      if (editedQuiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+        try {
+          localStorage.setItem(
+            seedTemplateStorageKey(),
+            JSON.stringify(editedQuiz),
+          );
+        } catch {
+          toast.error(
+            'Could not save the local template draft on this device.',
+          );
+        }
+      } else {
+        await HybridStorage.saveQuizDraft(editedQuiz.id, editedQuiz);
+      }
     }, 1000); // Debounce saves by 1 second
 
     return () => clearTimeout(timer);
-  }, [editedQuiz]);
+  }, [editedQuiz, user?.id]);
 
   const addQuestion = (category?: string) => {
-    if (editedQuiz.questions.length >= 10 && premiumTier === 'free') {
+    if (editedQuiz.questions.length >= 10 && !quizUnlocked) {
       return toast.error(
         'Free tier accounts are capped at a maximum of 10 questions per quiz! Please upgrade to add more.',
       );
     }
 
-    const qId = Math.random().toString(36).substr(2, 9);
+    const qId = generateQuizId();
     const newQuestion: Question = {
       id: qId,
       type: 'multiple_choice',
@@ -354,6 +265,10 @@ const QuizBuilder = ({
       ],
       correctIndex: `${qId}-opt-0`,
       accessory: 'none',
+      maxFileSize:
+        !quizUnlocked ? 5
+        : premiumTier === 'pro' ? 50
+        : 15,
       category: category && category.trim() !== '' ? category : undefined,
     };
 
@@ -396,9 +311,12 @@ const QuizBuilder = ({
     if (proceed) {
       const newQuestions = editedQuiz.questions.filter((_, i) => i !== index);
       setEditedQuiz({ ...editedQuiz, questions: newQuestions });
-      if (currentStep >= newQuestions.length) {
-        setCurrentStep(newQuestions.length - 1);
-      }
+      setCurrentStep((step) => {
+        if (newQuestions.length === 0) return -1;
+        if (step === index) return Math.min(index, newQuestions.length - 1);
+        if (step > index) return step - 1;
+        return step;
+      });
     }
   };
 
@@ -512,6 +430,7 @@ const QuizBuilder = ({
 
   const moveCategory = (catName: string, direction: 'up' | 'down') => {
     const questions = [...editedQuiz.questions];
+    const activeQuestionId = questions[currentStep]?.id;
     const uniqueCats = Array.from(
       new Set(questions.map((q) => q.category).filter(Boolean)),
     ) as string[];
@@ -548,6 +467,8 @@ const QuizBuilder = ({
     }
 
     setEditedQuiz({ ...editedQuiz, questions: reordered });
+    const newActiveIndex = reordered.findIndex((question) => question.id === activeQuestionId);
+    if (newActiveIndex >= 0) setCurrentStep(newActiveIndex);
     toast.success(`Moved group "${catName}" ${direction}`);
   };
 
@@ -626,7 +547,25 @@ const QuizBuilder = ({
     }, 100);
   };
 
-  const [groupName, setGroupName] = useState('group');
+  const formatQuestionText = (tag: 'b' | 'i' | 'u' | 'mark') => {
+    const textarea = document.getElementById('question-text-input') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    const value = editedQuiz.questions[currentStep].text || '';
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = value.slice(start, end);
+    const open = `<${tag}>`;
+    const close = `</${tag}>`;
+    const content = selected || 'text';
+    const updatedText = `${value.slice(0, start)}${open}${content}${close}${value.slice(end)}`;
+    updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], text: updatedText });
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const selectionStart = start + open.length;
+      textarea.setSelectionRange(selectionStart, selectionStart + content.length);
+    });
+  };
+
   const [navWrap, setNavWrap] = useState(false);
 
   const QuestionButton = ({
@@ -663,25 +602,31 @@ const QuizBuilder = ({
         </span>
 
         <div className='ml-1 flex gap-1'>
-        {/* Desktop quick move buttons */}
-        <div className='hidden lg:flex items-center gap-0.5 shrink-0 mr-0.5'>
-          <button
-            type='button'
-            title='Move Up'
-            disabled={idx === 0}
-            onClick={(e) => { e.stopPropagation(); moveQuestion(i, 'up', isCat ? catName : undefined); }}
-            className='p-0.5 rounded hover:bg-pw-cyan/15 text-pw-muted hover:text-pw-cyan disabled:opacity-30 disabled:cursor-not-allowed transition-colors'>
-            <ArrowUp className='h-3 w-3' />
-          </button>
-          <button
-            type='button'
-            title='Move Down'
-            disabled={idx + 1 === length}
-            onClick={(e) => { e.stopPropagation(); moveQuestion(i, 'down', isCat ? catName : undefined); }}
-            className='p-0.5 rounded hover:bg-pw-cyan/15 text-pw-muted hover:text-pw-cyan disabled:opacity-30 disabled:cursor-not-allowed transition-colors'>
-            <ArrowDown className='h-3 w-3' />
-          </button>
-        </div>
+          {/* Desktop quick move buttons */}
+          <div className='hidden lg:flex items-center gap-0.5 shrink-0 mr-0.5'>
+            <button
+              type='button'
+              title='Move Up'
+              disabled={idx === 0}
+              onClick={(e) => {
+                e.stopPropagation();
+                moveQuestion(i, 'up', isCat ? catName : undefined);
+              }}
+              className='p-0.5 rounded hover:bg-pw-cyan/15 text-pw-muted hover:text-pw-cyan disabled:opacity-30 disabled:cursor-not-allowed transition-colors'>
+              <ArrowUp className='h-3 w-3' />
+            </button>
+            <button
+              type='button'
+              title='Move Down'
+              disabled={idx + 1 === length}
+              onClick={(e) => {
+                e.stopPropagation();
+                moveQuestion(i, 'down', isCat ? catName : undefined);
+              }}
+              className='p-0.5 rounded hover:bg-pw-cyan/15 text-pw-muted hover:text-pw-cyan disabled:opacity-30 disabled:cursor-not-allowed transition-colors'>
+              <ArrowDown className='h-3 w-3' />
+            </button>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger className='p-1 hover:bg-pw-cyan/10 rounded-full'>
               <MoreVertical className='h-4 w-4' />
@@ -721,45 +666,19 @@ const QuizBuilder = ({
                           </DropdownMenuItem>
                         ))}
 
-                    <div
-                      className='w-full pt-1 mt-1 border-t border-white/10 flex flex-col gap-1.5'
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}>
-                      <Input
-                        onKeyDown={(e) => e.stopPropagation()}
-                        type='text'
-                        placeholder='Enter Group Name'
-                        value={groupName}
-                        // onKeyDown={(e) => {
-                        //   e.stopPropagation();
-                        //   if (e.key === 'Enter' && groupName.trim()) {
-                        //     e.preventDefault();
-                        //     handleQuestionCategory('add', q.id, groupName.trim());
-                        //     setGroupName('');
-                        //   }
-                        // }}
-                        onChange={(e) => setGroupName(e.target.value)}
-                        className='w-full h-7 text-xs bg-black/40 border-white/10 px-2'
-                      />
-
-                      <Button
-                        size='sm'
-                        className='h-6 px-2.5 text-[10px] self-end btn-primary'
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (groupName.trim()) {
-                            handleQuestionCategory(
-                              'add',
-                              q.id,
-                              groupName.trim(),
-                            );
-                            setGroupName('');
-                          }
-                        }}>
-                        Create
-                      </Button>
-                    </div>
+                    <DropdownMenuItem
+                      className='mt-1 border-t border-white/10 pt-2 text-xs text-pw-primary'
+                      onClick={async () => {
+                        const enteredName = await showPrompt(
+                          'Enter a name for this question group.',
+                          { title: 'Create question group', placeholder: 'e.g. Section A' },
+                        );
+                        if (enteredName?.trim()) {
+                          handleQuestionCategory('add', q.id, enteredName.trim());
+                        }
+                      }}>
+                      Create new group…
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </DropdownMenuItem>
@@ -869,6 +788,13 @@ const QuizBuilder = ({
           </Button>
           <Button
             onClick={async () => {
+              const hasExpired = await isExpired(editedQuiz);
+              if (hasExpired) {
+                toast.warning(
+                  `This ${editedQuiz.type} has expired, adjust expiry time.`,
+                );
+                return;
+              }
               const hasActiveBranching = editedQuiz.questions.some(
                 (q) =>
                   q.skipTo ||
@@ -877,21 +803,36 @@ const QuizBuilder = ({
                     (o) => typeof o === 'object' && (o.skipTo || o.skipToCat),
                   ),
               );
-              if (hasActiveBranching) {
+              if (
+                hasActiveBranching &&
+                (editedQuiz?.randomizeOptions || editedQuiz?.randomizeQuestions)
+              ) {
                 const confirmed = await showConfirm(
-                  'Branching is active on one or more questions. Question order randomization will be restricted to internal category shuffling to preserve valid logical paths. Save quiz now?',
+                  'Branching is active on some questions. Question randomization will be restricted to internal group shuffling to preserve valid logical paths. Still save?',
                   {
-                    title: 'Branching Active Guard',
+                    title: 'Branching Active',
                     confirmText: 'Save Quiz',
                     type: 'info',
                   },
                 );
                 if (!confirmed) return;
               }
-              onSave(editedQuiz);
+
+              onSave({
+                ...editedQuiz,
+                isCustom: Boolean(quizId),
+                customUrl: quizId,
+                userId: user?.id || '',
+                fromPremium: quizUnlocked,
+              });
             }}
             className='btn-primary h-10 gap-2'>
-            <Save className='h-4 w-4' /> Save Quiz
+            {isSaving ?
+              'Saving....'
+            : <>
+                <Save className='h-4 w-4' /> Save Quiz
+              </>
+            }
           </Button>
         </div>
       </div>
@@ -1163,7 +1104,7 @@ const QuizBuilder = ({
                       </label>
                       <Input
                         value={editedQuiz.title}
-                        maxLength={20}
+                        maxLength={premiumTier === 'pro' ? 40 : 20}
                         onChange={(e) =>
                           setEditedQuiz({
                             ...editedQuiz,
@@ -1173,7 +1114,31 @@ const QuizBuilder = ({
                         placeholder='e.g., General Relativity Crash Course'
                         className='bg-white/5 border-white/10 h-10 focus:border-pw-primary'
                       />
+                      {premiumTier === 'pro' && (
+                        <>
+                          <label className='text-xs font-bold text-pw-muted uppercase mt-1'>
+                            Custom URL
+                          </label>
+
+                          <Input
+                            value={quizId}
+                            id={'custom-quiz-input'}
+                            key={'custom-quiz-input'}
+                            maxLength={premiumTier === 'pro' ? 12 : 8}
+                            onChange={(e) =>
+                              setQuizId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 12))
+                            }
+                            placeholder={`my-${editedQuiz.type}-url`}
+                            className='bg-white/5 border-white/10 h-9 focus:border-pw-primary mt-1'
+                          />
+                          <p className='text-[10px] text-pw-muted px-1 italic'>
+                            Underscore, hyphens, letters and numbers only
+                            allowed. No space allowed.
+                          </p>
+                        </>
+                      )}
                     </div>
+
                     <div className='space-y-2'>
                       <label className='text-xs font-bold text-pw-muted uppercase'>
                         Intro Message
@@ -1344,7 +1309,7 @@ const QuizBuilder = ({
                                   { id: 'number', label: 'NUMBER' },
                                 ].map((t, i) => (
                                   <DropdownMenuItem
-                                    key={t.id + i}
+                                    key={t.id + i + t.label}
                                     onClick={() => {
                                       const newDetails = [
                                         ...(editedQuiz.askDetails || []),
@@ -1417,7 +1382,7 @@ const QuizBuilder = ({
                                 </div>
 
                                 {/* Restricted / Prohibited Keywords */}
-                                <div className='space-y-1 pt-1 border-t border-white/5'>
+                                {/* <div className='space-y-1 pt-1 border-t border-white/5'>
                                   <label className='text-[10px] font-semibold text-white'>
                                     Restricted Keywords
                                   </label>
@@ -1443,7 +1408,7 @@ const QuizBuilder = ({
                                   <p className='text-[9px] text-pw-muted mt-[-2px]'>
                                     Comma-separated keywords prohibited from submission.
                                   </p>
-                                </div>
+                                </div> */}
 
                                 {/* Options list for Dropdown type */}
                                 {detail.type === 'dropdown' && (
@@ -1582,7 +1547,11 @@ const QuizBuilder = ({
                             )}
                             {detail.restrictedKeywords && (
                               <span className='text-pw-danger flex items-center gap-1 font-mono'>
-                                <CheckCircle size={10} className='rotate-45' /> Restricted Keywords
+                                <CheckCircle
+                                  size={10}
+                                  className='rotate-45'
+                                />{' '}
+                                Restricted words
                               </span>
                             )}
                             {detail.type === 'dropdown' &&
@@ -1662,19 +1631,22 @@ const QuizBuilder = ({
                             onClick={() =>
                               setEditedQuiz({
                                 ...editedQuiz,
-                                showCategory: !editedQuiz.showCategory,
+                                category: {
+                                  ...editedQuiz?.category,
+                                  show: !editedQuiz?.category?.show,
+                                },
                               })
                             }
                             className={cn(
                               'h-6 min-w-[80px] gap-2',
-                              editedQuiz.showCategory ?
+                              editedQuiz?.category?.show ?
                                 'bg-pw-primary/10 border-pw-primary text-pw-primary'
                               : 'bg-white/5 border-white/10',
                             )}>
-                            {editedQuiz.showCategory ?
+                            {editedQuiz.category?.show ?
                               <Check className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
-                            {editedQuiz.showCategory ? 'ON' : 'OFF'}
+                            {editedQuiz.category?.show ? 'ON' : 'OFF'}
                           </Button>
                         </QuizSettingItem>
 
@@ -1687,7 +1659,7 @@ const QuizBuilder = ({
                             onClick={() => {
                               if (
                                 !editedQuiz.endScreen.showPerformance &&
-                                !editedQuiz.showCategoryInPerformance
+                                !editedQuiz.category?.inPerformance
                               ) {
                                 toast.error(
                                   `To show category breakdown, go to 'Results & Review' and turn on (Show Performance Stats)`,
@@ -1697,28 +1669,31 @@ const QuizBuilder = ({
 
                               setEditedQuiz({
                                 ...editedQuiz,
-                                showCategoryInPerformance:
-                                  !editedQuiz.showCategoryInPerformance,
+                                category: {
+                                  ...editedQuiz?.category,
+                                  inPerformance:
+                                    !editedQuiz.category?.inPerformance,
+                                },
                               });
                             }}
                             className={cn(
                               'h-6 min-w-[80px] gap-2',
                               (
                                 editedQuiz.endScreen.showPerformance &&
-                                  editedQuiz.showCategoryInPerformance
+                                  editedQuiz.category?.inPerformance
                               ) ?
                                 'bg-pw-primary/10 border-pw-primary text-pw-primary'
                               : 'bg-white/5 border-white/10',
                             )}>
                             {(
                               editedQuiz.endScreen.showPerformance &&
-                              editedQuiz.showCategoryInPerformance
+                              editedQuiz.category?.inPerformance
                             ) ?
                               <Check className='h-3 w-3' />
                             : <X className='h-3 w-3' />}
                             {(
                               editedQuiz.endScreen.showPerformance &&
-                              editedQuiz.showCategoryInPerformance
+                              editedQuiz.category?.inPerformance
                             ) ?
                               'ON'
                             : 'OFF'}
@@ -1778,9 +1753,9 @@ const QuizBuilder = ({
                         <QuizSettingItem
                           label='Time Limit'
                           description={`Auto-submits when time expires. ${
-                            editedQuiz.timerUnit === 'seconds' ?
+                            editedQuiz.timer?.timerUnit === 'seconds' ?
                               'Set in seconds (min 30s).'
-                            : editedQuiz.timerUnit === 'hours' ?
+                            : editedQuiz.timer?.timerUnit === 'hours' ?
                               'Set in hours. Pro plan required for hours.'
                             : 'Set in minutes.'
                           }`}>
@@ -1788,22 +1763,26 @@ const QuizBuilder = ({
                             <Input
                               type='number'
                               value={
-                                typeof editedQuiz.hasTimer === 'number' ?
-                                  editedQuiz.hasTimer
+                                typeof editedQuiz.timer?.hasTimer === 'number' ?
+                                  editedQuiz.timer?.hasTimer
                                 : ''
                               }
                               onChange={(e) =>
                                 setEditedQuiz({
                                   ...editedQuiz,
-                                  hasTimer:
-                                    e.target.value ?
-                                      parseInt(e.target.value)
-                                    : false,
+                                  timer: {
+                                    ...editedQuiz?.timer,
+                                    hasTimer:
+                                      e.target.value ?
+                                        parseInt(e.target.value)
+                                      : false,
+                                  },
                                 })
                               }
                               placeholder={
-                                editedQuiz.timerUnit === 'seconds' ? 'Sec'
-                                : editedQuiz.timerUnit === 'hours' ?
+                                editedQuiz.timer?.timerUnit === 'seconds' ?
+                                  'Sec'
+                                : editedQuiz.timer?.timerUnit === 'hours' ?
                                   'Hrs'
                                 : 'Min'
                               }
@@ -1831,13 +1810,16 @@ const QuizBuilder = ({
                                         }
                                         setEditedQuiz({
                                           ...editedQuiz,
-                                          timerUnit: unit,
+                                          timer: {
+                                            ...editedQuiz?.timer,
+                                            timerUnit: unit,
+                                          },
                                         });
                                       }}
                                       className={cn(
                                         'h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-all',
                                         (
-                                          (editedQuiz.timerUnit ??
+                                          (editedQuiz.timer?.timerUnit ??
                                             'minutes') === unit
                                         ) ?
                                           'bg-pw-primary/10 border-pw-primary text-pw-primary'
@@ -1858,14 +1840,17 @@ const QuizBuilder = ({
                                 },
                               )}
                             </div>
-                            {editedQuiz.hasTimer && (
+                            {editedQuiz.timer?.hasTimer && (
                               <Button
                                 variant='ghost'
                                 size='icon'
                                 onClick={() =>
                                   setEditedQuiz({
                                     ...editedQuiz,
-                                    hasTimer: false,
+                                    timer: {
+                                      ...editedQuiz?.timer,
+                                      hasTimer: false,
+                                    },
                                   })
                                 }
                                 className='h-8 w-8 text-pw-muted opacity-50 hover:opacity-100'>
@@ -1880,7 +1865,7 @@ const QuizBuilder = ({
                           description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
                           <div className='flex flex-col gap-2 w-full'>
                             {editedQuiz.isExpiryLocked ?
-                              <div className='flex items-center gap-2 p-3 rounded-xl bg-pw-warning/10 border border-pw-warning/30'>
+                              <div className='flex items-center gap-2 p-2 rounded-xl bg-pw-warning/8 border border-pw-warning/30'>
                                 <Lock className='h-4 w-4 text-pw-warning shrink-0' />
                                 <div>
                                   <p className='text-xs font-bold text-pw-warning'>
@@ -1938,9 +1923,15 @@ const QuizBuilder = ({
                                     { days: 14, tier: 'standard' },
                                     { days: 30, tier: 'pro' },
                                   ].map(({ days, tier }, i) => {
+                                    const tier4Flex =
+                                      quizUnlocked ? 'flexible' : 'free';
+
+                                    const tier2use =
+                                      tier === 'flexible' ? tier4Flex : tier;
+
                                     const isEligible = tierAtLeast(
                                       premiumTier,
-                                      tier as any,
+                                      tier2use as any,
                                     );
                                     return (
                                       <DropdownMenuItem
@@ -1994,28 +1985,29 @@ const QuizBuilder = ({
                             }
 
                             <p className='text-[10px] text-pw-muted pl-1'>
-                              {editedQuiz.expires_at ?
-                                <>
-                                  Expires:{' '}
-                                  <span className='text-pw-primary font-bold'>
-                                    {new Date(
-                                      editedQuiz.expires_at,
-                                    ).toLocaleDateString()}
-                                  </span>
-                                  {(editedQuiz.expiryHistory?.length ?? 0) >
-                                    0 && (
-                                    <span className='ml-1 text-pw-warning'>
-                                      {' '}
-                                      ({editedQuiz.expiryHistory!.length}/3
-                                      changes used
-                                      {editedQuiz.expiryHistory!.length >= 2 ?
-                                        ' - 1 change remaining!'
-                                      : ''}
-                                      )
+                              {!editedQuiz.isExpiryLocked &&
+                                (editedQuiz.expires_at ?
+                                  <>
+                                    Expires:{' '}
+                                    <span className='text-pw-primary font-bold'>
+                                      {new Date(
+                                        editedQuiz.expires_at,
+                                      ).toLocaleDateString()}
                                     </span>
-                                  )}
-                                </>
-                              : <>Default lifespan is 2 days</>}
+                                    {(editedQuiz.expiryHistory?.length ?? 0) >
+                                      0 && (
+                                      <span className='ml-1 text-pw-warning'>
+                                        {' '}
+                                        ({editedQuiz.expiryHistory!.length}/3
+                                        changes used
+                                        {editedQuiz.expiryHistory!.length >= 2 ?
+                                          ' - 1 change remaining!'
+                                        : ''}
+                                        )
+                                      </span>
+                                    )}
+                                  </>
+                                : <>Default lifespan is 2 days</>)}
                               <span className='block mt-0.5 text-pw-error/70'>
                                 ⚠ Expired quizzes are auto-deleted after 48
                                 hours.
@@ -2055,7 +2047,7 @@ const QuizBuilder = ({
                         </QuizSettingItem>
 
                         <QuizSettingItem
-                          premium={premiumTier === 'free'}
+                          premium={!quizUnlocked}
                           label='Allow Pass'
                           description={`Let takers skip questions without answering.`}>
                           <Button
@@ -2069,9 +2061,9 @@ const QuizBuilder = ({
                             }
                             className={cn(
                               'h-6 min-w-[100px] gap-2 font-black tracking-tighter',
-                              editedQuiz.allowPass
-                                ? 'bg-pw-cyan/10 border-pw-cyan/80 text-pw-cyan'
-                                : 'bg-white/5 border-white/10 text-pw-muted',
+                              editedQuiz.allowPass ?
+                                'bg-pw-cyan/10 border-pw-cyan/80 text-pw-cyan'
+                              : 'bg-white/5 border-white/10 text-pw-muted',
                             )}>
                             {editedQuiz.allowPass ? 'ALLOWED' : 'DISABLED'}
                           </Button>
@@ -2174,10 +2166,13 @@ const QuizBuilder = ({
                             onClick={() =>
                               setEditedQuiz({
                                 ...editedQuiz,
-                                showCategoryInPerformance:
-                                  editedQuiz.endScreen.showPerformance ?
-                                    false
-                                  : editedQuiz.showCategoryInPerformance,
+                                category: {
+                                  ...editedQuiz.category,
+                                  inPerformance:
+                                    editedQuiz.endScreen.showPerformance ?
+                                      false
+                                    : editedQuiz.category?.inPerformance,
+                                },
                                 endScreen: {
                                   ...editedQuiz.endScreen,
                                   showPerformance:
@@ -2234,7 +2229,10 @@ const QuizBuilder = ({
                               placeholder='Enter custom completion message... Supports extended length text, instructions, and next steps.'
                               className='w-full h-36 bg-white/5 border border-white/10 rounded-xl p-3 text-xs resize-y focus:outline-none focus:border-pw-primary/30'
                             />
-                            <p className='text-[10px] text-pw-muted/60 pl-1'>Supports piping tags: @name, @score, @total, @percentage. Supports long-form messages.</p>
+                            <p className='text-[10px] text-pw-muted/60 pl-1'>
+                              Supports piping tags: @name, @score, @total,
+                              @percentage. Supports long-form messages.
+                            </p>
                           </div>
                         </div>
 
@@ -2243,21 +2241,29 @@ const QuizBuilder = ({
                           label='Completion Icon'
                           description='Icon shown on the end screen.'>
                           <div className='flex gap-1 flex-wrap'>
-                            {(['check', 'diamond', 'badge', 'trophy'] as const).map((icon) => (
+                            {(
+                              ['check', 'diamond', 'badge', 'trophy'] as const
+                            ).map((icon) => (
                               <button
                                 key={icon}
                                 type='button'
                                 onClick={() =>
                                   setEditedQuiz({
                                     ...editedQuiz,
-                                    endScreen: { ...editedQuiz.endScreen, completionIcon: icon },
+                                    endScreen: {
+                                      ...editedQuiz.endScreen,
+                                      completionIcon: icon,
+                                    },
                                   })
                                 }
                                 className={cn(
                                   'h-7 px-2.5 rounded-lg text-[10px] font-bold border capitalize transition-all',
-                                  (editedQuiz.endScreen.completionIcon || 'check') === icon
-                                    ? 'bg-pw-success/15 border-pw-success text-pw-success'
-                                    : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/30',
+                                  (
+                                    (editedQuiz.endScreen.completionIcon ||
+                                      'check') === icon
+                                  ) ?
+                                    'bg-pw-success/15 border-pw-success text-pw-success'
+                                  : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/30',
                                 )}>
                                 {icon}
                               </button>
@@ -2270,25 +2276,33 @@ const QuizBuilder = ({
                           label='Text Alignment'
                           description='Alignment of end screen title and message.'>
                           <div className='flex gap-1'>
-                            {(['left', 'center', 'right'] as const).map((align) => (
-                              <button
-                                key={align}
-                                type='button'
-                                onClick={() =>
-                                  setEditedQuiz({
-                                    ...editedQuiz,
-                                    endScreen: { ...editedQuiz.endScreen, textAlign: align },
-                                  })
-                                }
-                                className={cn(
-                                  'h-7 px-3 rounded-lg text-[10px] font-bold border capitalize transition-all',
-                                  (editedQuiz.endScreen.textAlign || 'center') === align
-                                    ? 'bg-pw-primary/15 border-pw-primary text-pw-primary'
+                            {(['left', 'center', 'right'] as const).map(
+                              (align) => (
+                                <button
+                                  key={align}
+                                  type='button'
+                                  onClick={() =>
+                                    setEditedQuiz({
+                                      ...editedQuiz,
+                                      endScreen: {
+                                        ...editedQuiz.endScreen,
+                                        textAlign: align,
+                                      },
+                                    })
+                                  }
+                                  className={cn(
+                                    'h-7 px-3 rounded-lg text-[10px] font-bold border capitalize transition-all',
+                                    (
+                                      (editedQuiz.endScreen.textAlign ||
+                                        'center') === align
+                                    ) ?
+                                      'bg-pw-primary/15 border-pw-primary text-pw-primary'
                                     : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/30',
-                                )}>
-                                {align}
-                              </button>
-                            ))}
+                                  )}>
+                                  {align}
+                                </button>
+                              ),
+                            )}
                           </div>
                         </QuizSettingItem>
 
@@ -2304,17 +2318,20 @@ const QuizBuilder = ({
                                 ...editedQuiz,
                                 endScreen: {
                                   ...editedQuiz.endScreen,
-                                  enableConfetti: !editedQuiz.endScreen.enableConfetti,
+                                  enableConfetti:
+                                    !editedQuiz.endScreen.enableConfetti,
                                 },
                               })
                             }
                             className={cn(
                               'h-6 min-w-[80px]',
-                              editedQuiz.endScreen.enableConfetti
-                                ? 'bg-pw-warning/10 border-pw-warning text-pw-warning'
-                                : 'bg-white/5 border-white/10',
+                              editedQuiz.endScreen.enableConfetti ?
+                                'bg-pw-warning/10 border-pw-warning text-pw-warning'
+                              : 'bg-white/5 border-white/10',
                             )}>
-                            {editedQuiz.endScreen.enableConfetti ? '🎉 ON' : 'OFF'}
+                            {editedQuiz.endScreen.enableConfetti ?
+                              '🎉 ON'
+                            : 'OFF'}
                           </Button>
                         </QuizSettingItem>
 
@@ -2323,21 +2340,34 @@ const QuizBuilder = ({
                             label='Confetti Style'
                             description='Choose the visual style of the confetti burst.'>
                             <div className='flex gap-1 flex-wrap'>
-                              {(['standard', 'fireworks', 'stars', 'ribbons'] as const).map((style) => (
+                              {(
+                                [
+                                  'standard',
+                                  'fireworks',
+                                  'stars',
+                                  'ribbons',
+                                ] as const
+                              ).map((style) => (
                                 <button
                                   key={style}
                                   type='button'
                                   onClick={() =>
                                     setEditedQuiz({
                                       ...editedQuiz,
-                                      endScreen: { ...editedQuiz.endScreen, confettiType: style },
+                                      endScreen: {
+                                        ...editedQuiz.endScreen,
+                                        confettiType: style,
+                                      },
                                     })
                                   }
                                   className={cn(
                                     'h-7 px-2.5 rounded-lg text-[10px] font-bold border capitalize transition-all',
-                                    (editedQuiz.endScreen.confettiType || 'standard') === style
-                                      ? 'bg-pw-warning/15 border-pw-warning text-pw-warning'
-                                      : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/30',
+                                    (
+                                      (editedQuiz.endScreen.confettiType ||
+                                        'standard') === style
+                                    ) ?
+                                      'bg-pw-warning/15 border-pw-warning text-pw-warning'
+                                    : 'bg-white/5 border-white/10 text-pw-muted hover:border-white/30',
                                   )}>
                                   {style}
                                 </button>
@@ -2352,7 +2382,7 @@ const QuizBuilder = ({
                       title='Disclaimer & Legal'
                       description='Customize assessment introduction notice and legal disclaimers'
                       icon={<AlertTriangle className='h-4 w-4' />}
-                      premium={premiumTier === 'free'}
+                      premium={!quizUnlocked}
                       color='warning'>
                       <div className='flex flex-col gap-3 px-2'>
                         <div className='space-y-0.5'>
@@ -2377,55 +2407,56 @@ const QuizBuilder = ({
                         </div>
 
                         {/* Custom Legal Disclaimer (Pro) */}
-                        {premiumTier === 'pro' &&
-                        <>
-                          <div className='space-y-0.5 pt-2 border-t border-white/5'>
-                            <label className='text-[10px] font-bold text-pw-muted uppercase mb-1'>
-                              Custom Platform Disclaimer (Pro)
-                            </label>
-                            <textarea
-                              value={editedQuiz.customDisclaimer || ''}
-                              onChange={(e) =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  customDisclaimer: e.target.value,
-                                })
-                              }
-                              placeholder='e.g. Acme Corp Assessment Terms: Responses are recorded securely according to corporate policy.'
-                              className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-3 text-xs resize-none focus:outline-none focus:border-pw-primary/30'
-                            />
-                            <p className='text-[10px] text-pw-muted'>
-                              Custom disclaimer replacing or supplementing the default platform footer. Supports @piping tags.
-                            </p>
-                          </div>
+                        {premiumTier === 'pro' && (
+                          <>
+                            <div className='space-y-0.5 pt-2 border-t border-white/5'>
+                              <label className='text-[10px] font-bold text-pw-muted uppercase mb-1'>
+                                Custom Platform Disclaimer (Pro)
+                              </label>
+                              <textarea
+                                value={editedQuiz.customDisclaimer || ''}
+                                onChange={(e) =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    customDisclaimer: e.target.value,
+                                  })
+                                }
+                                placeholder='e.g. Acme Corp Assessment Terms: Responses are recorded securely according to corporate policy.'
+                                className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-3 text-xs resize-none focus:outline-none focus:border-pw-primary/30'
+                              />
+                              <p className='text-[10px] text-pw-muted'>
+                                Custom disclaimer replacing or supplementing the
+                                default platform footer. Supports @piping tags.
+                              </p>
+                            </div>
 
-                          {/* Hide PingWorld Platform Disclaimer Toggle */}
-                          <QuizSettingItem
-                            label='Hide PingWorld Footer Notice'
-                            description='Remove the default service provider disclaimer badge on intro and finish screens.'>
-                            <Button
-                              variant='outline'
-                              size='sm'
-                              onClick={() =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  hidePingWorldDisclaimer:
-                                    !editedQuiz.hidePingWorldDisclaimer,
-                                })
-                              }
-                              className={cn(
-                                'h-6 min-w-[80px] gap-2',
-                                editedQuiz.hidePingWorldDisclaimer ?
-                                  'bg-pw-warning/10 border-pw-warning text-pw-warning'
+                            {/* Hide PingWorld Platform Disclaimer Toggle */}
+                            <QuizSettingItem
+                              label='Hide PingWorld Footer Notice'
+                              description='Remove the default service provider disclaimer badge on intro and finish screens.'>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() =>
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    hidePingWorldDisclaimer:
+                                      !editedQuiz.hidePingWorldDisclaimer,
+                                  })
+                                }
+                                className={cn(
+                                  'h-6 min-w-[80px] gap-2',
+                                  editedQuiz.hidePingWorldDisclaimer ?
+                                    'bg-pw-warning/10 border-pw-warning text-pw-warning'
                                   : 'bg-white/5 border-white/10',
-                              )}>
-                              {editedQuiz.hidePingWorldDisclaimer ?
-                                'HIDDEN'
+                                )}>
+                                {editedQuiz.hidePingWorldDisclaimer ?
+                                  'HIDDEN'
                                 : 'SHOWN'}
-                            </Button>
-                          </QuizSettingItem>
-                        </>
-                        }
+                              </Button>
+                            </QuizSettingItem>
+                          </>
+                        )}
                       </div>
                     </Wrapper>
 
@@ -2433,7 +2464,7 @@ const QuizBuilder = ({
                       title='Branding & Visual Effects'
                       description='Customize background image, logo, shade colors, opacity and blur'
                       icon={<Image className='h-4 w-4 text-pw-primary' />}
-                      premium={premiumTier === 'free'}
+                      premium={!quizUnlocked}
                       color='primary'>
                       <div className='flex flex-col gap-3 pt-2'>
                         <div className='grid grid-cols-2 gap-2 px-1 pb-1'>
@@ -2553,7 +2584,9 @@ const QuizBuilder = ({
                             </label>
                             <input
                               type='color'
-                              value={editedQuiz.branding?.shadeColor || '#3B82F6'}
+                              value={
+                                editedQuiz.branding?.shadeColor || '#3B82F6'
+                              }
                               onChange={(e) =>
                                 setEditedQuiz({
                                   ...editedQuiz,
@@ -2571,7 +2604,13 @@ const QuizBuilder = ({
                             <div className='space-y-1'>
                               <div className='flex justify-between text-[10px] text-pw-muted font-bold'>
                                 <span>Opacity</span>
-                                <span>{Math.round((editedQuiz.branding?.opacity ?? 0.15) * 100)}%</span>
+                                <span>
+                                  {Math.round(
+                                    (editedQuiz.branding?.opacity ?? 0.15) *
+                                      100,
+                                  )}
+                                  %
+                                </span>
                               </div>
                               <input
                                 type='range'
@@ -2630,15 +2669,18 @@ const QuizBuilder = ({
                     {(() => {
                       const q = editedQuiz?.questions[currentStep];
                       if (!q) return `Question ${currentStep + 1}`;
-                      const targetCat = (q.category?.trim() || '');
+                      const targetCat = q.category?.trim() || '';
                       const inStack = editedQuiz.questions.filter(
                         (item) => (item.category?.trim() || '') === targetCat,
                       );
-                      const posInStack = inStack.findIndex((item) => item.id === q.id);
-                      const stackPos = posInStack !== -1 ? posInStack + 1 : currentStep + 1;
+                      const posInStack = inStack.findIndex(
+                        (item) => item.id === q.id,
+                      );
+                      const stackPos =
+                        posInStack !== -1 ? posInStack + 1 : currentStep + 1;
                       return q.category ?
-                        `Question ${stackPos} (${q.category})`
-                      : `Question ${stackPos}`;
+                          `Question ${stackPos} (${q.category})`
+                        : `Question ${stackPos}`;
                     })()}
                   </h3>
                   <div className='flex gap-2 flex-wrap'>
@@ -2731,16 +2773,6 @@ const QuizBuilder = ({
                                   q.options = [];
                                   q.correctIndex = 5;
                                 } else {
-                                  // For MC/Dropdown, ensure options are objects
-                                  if (
-                                    q.options.length > 0 &&
-                                    typeof q.options[0] === 'string'
-                                  ) {
-                                    q.options = q.options.map((opt, idx) => ({
-                                      id: `${q.id}-opt-${idx}`,
-                                      text: opt as string,
-                                    }));
-                                  }
                                   q.correctIndex =
                                     (q.options[0] as QuizOption)?.id || '';
                                 }
@@ -2765,25 +2797,13 @@ const QuizBuilder = ({
                       <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 p-3 space-y-1'>
                         {/* Human-readable ID badge */}
                         <div className='px-2 py-1 mb-1.5 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between'>
-                          <span className='text-[9px] text-pw-muted font-mono uppercase'>ID</span>
+                          <span className='text-[9px] text-pw-muted font-mono uppercase'>
+                            ID
+                          </span>
                           <span className='text-[10px] text-pw-primary font-mono font-bold truncate max-w-[140px]'>
                             {editedQuiz.questions[currentStep].id}
                           </span>
                         </div>
-
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveToEdge(
-                              currentStep,
-                              'top',
-                              editedQuiz.questions[currentStep].category,
-                            );
-                          }}
-                          className='h-7 gap-1.5 px-2 text-xs'>
-                          <ArrowUp className='h-3 w-3 text-pw-primary transition-all' />{' '}
-                          Move to Top
-                        </DropdownMenuItem>
 
                         <DropdownMenuItem
                           onClick={(e) => {
@@ -2813,20 +2833,6 @@ const QuizBuilder = ({
                           Move Down
                         </DropdownMenuItem>
 
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveToEdge(
-                              currentStep,
-                              'bottom',
-                              editedQuiz.questions[currentStep].category,
-                            );
-                          }}
-                          className='h-7 gap-1.5 px-2 text-xs'>
-                          <ArrowDown className='h-3 w-3 text-pw-primary transition-all' />{' '}
-                          Move to Bottom
-                        </DropdownMenuItem>
-
                         <DropdownMenuSeparator className='bg-white/10 my-1' />
 
                         <DropdownMenuItem
@@ -2835,8 +2841,8 @@ const QuizBuilder = ({
                             removeQuestion(currentStep);
                           }}
                           className='h-7 gap-1.5 px-2 text-xs text-pw-danger hover:text-pw-danger'>
-                          <Trash2 className='h-3 w-3 text-pw-danger' />{' '}
-                          Delete Question
+                          <Trash2 className='h-3 w-3 text-pw-danger' /> Delete
+                          Question
                         </DropdownMenuItem>
 
                         <DropdownMenuSeparator className='bg-white/10 my-1' />
@@ -2947,6 +2953,12 @@ const QuizBuilder = ({
                     </label>
 
                     <div className='w-full bg-white/5 border border-white/10 rounded-xl p-2 sm:p-4 text-sm sm:pb-2'>
+                      <div className='flex items-center gap-1 border-b border-white/5 pb-2 mb-1' aria-label='Question text formatting'>
+                        <Button type='button' size='sm' variant='ghost' title='Bold selected text' aria-label='Bold' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('b')} className='h-7 w-7 p-0'><Bold size={14} /></Button>
+                        <Button type='button' size='sm' variant='ghost' title='Italic selected text' aria-label='Italic' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('i')} className='h-7 w-7 p-0'><Italic size={14} /></Button>
+                        <Button type='button' size='sm' variant='ghost' title='Underline selected text' aria-label='Underline' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('u')} className='h-7 w-7 p-0'><Underline size={14} /></Button>
+                        <Button type='button' size='sm' variant='ghost' title='Highlight selected text' aria-label='Highlight' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('mark')} className='h-7 w-7 p-0'><Highlighter size={14} /></Button>
+                      </div>
                       <div className='relative'>
                         <textarea
                           id='question-text-input'
@@ -3560,9 +3572,12 @@ const QuizBuilder = ({
                         <div className='flex items-center gap-3 border-b border-white/5 pb-3'>
                           <Upload className='h-6 w-6 text-pw-primary shrink-0' />
                           <div>
-                            <p className='text-sm font-bold text-white'>File Upload Configuration</p>
+                            <p className='text-sm font-bold text-white'>
+                              File Upload Configuration
+                            </p>
                             <p className='text-[10px] text-pw-muted'>
-                              Set accepted formats, size caps based on plan, and custom taker instructions.
+                              Set accepted formats, size caps based on plan, and
+                              custom taker instructions.
                             </p>
                           </div>
                         </div>
@@ -3572,17 +3587,56 @@ const QuizBuilder = ({
                             <label className='text-[10px] font-bold text-pw-muted uppercase block'>
                               Accepted Formats
                             </label>
-                            <Input
-                              placeholder='e.g. image/*,.pdf,.docx,.zip'
-                              value={editedQuiz.questions[currentStep].allowedTypes || 'image/*,.pdf,.doc,.docx,.txt'}
+                            <select
+                              value={
+                                editedQuiz.questions[currentStep]
+                                  ?.allowedTypes || 'Select Type'
+                              }
+                              className='w-full h-10 rounded-xl border border-white/10 px-3 text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'
                               onChange={(e) =>
                                 updateQuestion(currentStep, {
                                   ...editedQuiz.questions[currentStep],
                                   allowedTypes: e.target.value,
                                 })
-                              }
-                              className='h-9 bg-white/5 border-white/10 text-xs'
-                            />
+                              }>
+                              {[
+                                { title: 'All', type: '.', hide: quizUnlocked },
+                                { title: 'Pdf', type: '.pdf' },
+                                { title: 'Docs', type: '.doc,.docx' },
+                                { title: 'Text', type: '.txt' },
+                                {
+                                  title: 'Json',
+                                  type: '.json, application/json',
+                                },
+                                {
+                                  title: 'Zip',
+                                  type: '.zip',
+                                  hide: quizUnlocked,
+                                },
+                                { title: 'Image', type: 'image/*' },
+                                {
+                                  title: 'Video',
+                                  type: 'video/*',
+                                  hide: quizUnlocked,
+                                },
+                                {
+                                  title: 'Audio',
+                                  type: 'audio/*',
+                                  hide: quizUnlocked,
+                                },
+                              ].map((a, i) => {
+                                return (
+                                  !a.hide && (
+                                    <option
+                                      value={a.type}
+                                      key={a.type + a.title + i}
+                                      className='bg-[#0A0C1B]'>
+                                      {a.title.toUpperCase()}
+                                    </option>
+                                  )
+                                );
+                              })}
+                            </select>
                           </div>
 
                           <div className='space-y-1'>
@@ -3592,22 +3646,38 @@ const QuizBuilder = ({
                             <Input
                               type='number'
                               placeholder='e.g. 10'
-                              value={editedQuiz.questions[currentStep].maxSizeMb || (premiumTier === 'free' ? 5 : premiumTier === 'flexible' ? 15 : 50)}
+                              value={
+                                editedQuiz.questions[currentStep].maxFileSize ||
+                                (!quizUnlocked ? 5
+                                : quizUnlocked && premiumTier !== 'pro' ? 15
+                                : 50)
+                              }
                               onChange={(e) => {
-                                const maxAllowed = premiumTier === 'free' ? 5 : premiumTier === 'flexible' ? 15 : 50;
-                                const requested = parseFloat(e.target.value) || 5;
+                                const maxAllowed =
+                                  !quizUnlocked ? 5
+                                  : quizUnlocked ? 15
+                                  : 50;
+                                const requested =
+                                  parseFloat(e.target.value) || 5;
                                 if (requested > maxAllowed) {
-                                  toast.error(`Max file size for ${PREMIUM_TIERS[premiumTier].label} plan is ${maxAllowed}MB`);
+                                  toast.error(
+                                    `Max file size for ${PREMIUM_TIERS[premiumTier].label} plan is ${maxAllowed}MB`,
+                                  );
                                 }
                                 updateQuestion(currentStep, {
                                   ...editedQuiz.questions[currentStep],
-                                  maxSizeMb: Math.min(requested, maxAllowed),
+                                  maxFileSize: Math.min(requested, maxAllowed),
                                 });
                               }}
                               className='h-9 bg-white/5 border-white/10 text-xs'
                             />
                             <p className='text-[9px] text-pw-muted'>
-                              Plan Limit: {premiumTier === 'free' ? '5MB (Free)' : premiumTier === 'flexible' ? '15MB (Flex)' : '50MB (Pro/Std)'}
+                              Plan Limit:{' '}
+                              {!quizUnlocked ?
+                                '5MB (Free)'
+                              : quizUnlocked ?
+                                '15MB (Flex)'
+                              : '50MB (Pro/Std)'}
                             </p>
                           </div>
                         </div>
@@ -3617,7 +3687,10 @@ const QuizBuilder = ({
                             Upload Instructions (Optional)
                           </label>
                           <textarea
-                            value={editedQuiz.questions[currentStep].uploadInstruction || ''}
+                            value={
+                              editedQuiz.questions[currentStep]
+                                .uploadInstruction || ''
+                            }
                             onChange={(e) =>
                               updateQuestion(currentStep, {
                                 ...editedQuiz.questions[currentStep],
@@ -3834,23 +3907,47 @@ const QuizBuilder = ({
                                         </button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className='w-56 bg-pw-surface/90 bkblur border border-white/10 p-2 shadow-2xl rounded-xl space-y-1 z-50'>
-                                        <DropdownMenuItem className='h-8 text-xs cursor-pointer gap-2' onSelect={(e) => e.preventDefault()}>
+                                        <DropdownMenuItem
+                                          className='h-8 text-xs cursor-pointer gap-2'
+                                          onSelect={(e) => e.preventDefault()}>
                                           <label className='flex items-center gap-2 cursor-pointer w-full'>
                                             <Image className='h-3.5 w-3.5 text-pw-primary' />
-                                            <span>{opt.uploadUrl ? 'Change Image' : 'Add Option Image'}</span>
+                                            <span>
+                                              {opt.uploadUrl ?
+                                                'Change Image'
+                                              : 'Add Option Image'}
+                                            </span>
                                             <input
                                               type='file'
                                               accept='image/*'
                                               className='hidden'
                                               onChange={(e) => {
-                                                const file = e.target.files?.[0];
+                                                const file =
+                                                  e.target.files?.[0];
                                                 if (file) {
-                                                  const reader = new FileReader();
+                                                  const reader =
+                                                    new FileReader();
                                                   reader.onload = (ev) => {
-                                                    const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                                    newOpts[idx].uploadUrl = ev.target?.result as string;
-                                                    updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
-                                                    toast.success('Option image uploaded!');
+                                                    const newOpts = [
+                                                      ...(editedQuiz.questions[
+                                                        currentStep
+                                                      ]
+                                                        .options as QuizOption[]),
+                                                    ];
+                                                    newOpts[idx].uploadUrl = ev
+                                                      .target?.result as string;
+                                                    updateQuestion(
+                                                      currentStep,
+                                                      {
+                                                        ...editedQuiz.questions[
+                                                          currentStep
+                                                        ],
+                                                        options: newOpts,
+                                                      },
+                                                    );
+                                                    toast.success(
+                                                      'Option image uploaded!',
+                                                    );
                                                   };
                                                   reader.readAsDataURL(file);
                                                 }
@@ -3861,35 +3958,66 @@ const QuizBuilder = ({
 
                                         <DropdownMenuItem
                                           onClick={() => {
-                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                            newOpts[idx].hidden = !newOpts[idx].hidden;
-                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
-                                            toast.success(newOpts[idx].hidden ? 'Option hidden from takers' : 'Option visible to takers');
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            newOpts[idx].hidden =
+                                              !newOpts[idx].hidden;
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
+                                            toast.success(
+                                              newOpts[idx].hidden ?
+                                                'Option hidden from takers'
+                                              : 'Option visible to takers',
+                                            );
                                           }}
                                           className='h-7 text-xs cursor-pointer gap-2'>
-                                          {opt.hidden ? (
+                                          {opt.hidden ?
                                             <>
-                                              <Eye className='h-3.5 w-3.5 text-pw-primary' /> Show to Takers
+                                              <Eye className='h-3.5 w-3.5 text-pw-primary' />{' '}
+                                              Show to Takers
                                             </>
-                                          ) : (
-                                            <>
-                                              <EyeOff className='h-3.5 w-3.5 text-pw-muted' /> Hide from Takers
+                                          : <>
+                                              <EyeOff className='h-3.5 w-3.5 text-pw-muted' />{' '}
+                                              Hide from Takers
                                             </>
-                                          )}
+                                          }
                                         </DropdownMenuItem>
 
                                         {/* Option Feedback Note / Explanation */}
-                                        <div className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1' onClick={(e) => e.stopPropagation()}>
-                                          <span className='text-[9px] font-bold text-pw-muted uppercase block'>Option Feedback Note</span>
+                                        <div
+                                          className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1'
+                                          onClick={(e) => e.stopPropagation()}>
+                                          <span className='text-[9px] font-bold text-pw-muted uppercase block'>
+                                            Option Feedback Note
+                                          </span>
                                           <Input
                                             type='text'
                                             placeholder='Explanation when selected...'
                                             value={opt.explanation || ''}
-                                            onKeyDown={(e) => e.stopPropagation()}
+                                            onKeyDown={(e) =>
+                                              e.stopPropagation()
+                                            }
                                             onChange={(e) => {
-                                              const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                              newOpts[idx].explanation = e.target.value;
-                                              updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                              const newOpts = [
+                                                ...(editedQuiz.questions[
+                                                  currentStep
+                                                ].options as QuizOption[]),
+                                              ];
+                                              newOpts[idx].explanation =
+                                                e.target.value;
+                                              updateQuestion(currentStep, {
+                                                ...editedQuiz.questions[
+                                                  currentStep
+                                                ],
+                                                options: newOpts,
+                                              });
                                             }}
                                             className='h-6 text-[10px] bg-white/5 border-white/10'
                                           />
@@ -3897,15 +4025,36 @@ const QuizBuilder = ({
 
                                         {/* Option Score Weight for Checkbox questions */}
                                         {isCheckbox && (
-                                          <div className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1' onClick={(e) => e.stopPropagation()}>
-                                            <span className='text-[9px] font-bold text-pw-muted uppercase block'>Option Score Weight</span>
+                                          <div
+                                            className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1'
+                                            onClick={(e) =>
+                                              e.stopPropagation()
+                                            }>
+                                            <span className='text-[9px] font-bold text-pw-muted uppercase block'>
+                                              Option Score Weight
+                                            </span>
                                             <Input
                                               type='number'
-                                              value={(opt as any).scoreWeight ?? 1}
+                                              value={
+                                                (opt as any).scoreWeight ?? 1
+                                              }
                                               onChange={(e) => {
-                                                const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                                (newOpts[idx] as any).scoreWeight = parseFloat(e.target.value) || 0;
-                                                updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                                const newOpts = [
+                                                  ...(editedQuiz.questions[
+                                                    currentStep
+                                                  ].options as QuizOption[]),
+                                                ];
+                                                (
+                                                  newOpts[idx] as any
+                                                ).scoreWeight =
+                                                  parseFloat(e.target.value) ||
+                                                  0;
+                                                updateQuestion(currentStep, {
+                                                  ...editedQuiz.questions[
+                                                    currentStep
+                                                  ],
+                                                  options: newOpts,
+                                                });
                                               }}
                                               className='h-6 text-[10px] bg-white/5 border-white/10'
                                             />
@@ -3919,35 +4068,86 @@ const QuizBuilder = ({
                                           disabled={idx === 0}
                                           onClick={() => {
                                             if (idx === 0) return;
-                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                            [newOpts[idx - 1], newOpts[idx]] = [newOpts[idx], newOpts[idx - 1]];
-                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            [newOpts[idx - 1], newOpts[idx]] = [
+                                              newOpts[idx],
+                                              newOpts[idx - 1],
+                                            ];
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
                                           }}
                                           className='h-7 text-xs cursor-pointer gap-2'>
-                                          <ArrowUp className='h-3 w-3 text-pw-cyan' /> Move Option Up
+                                          <ArrowUp className='h-3 w-3 text-pw-cyan' />{' '}
+                                          Move Option Up
                                         </DropdownMenuItem>
 
                                         <DropdownMenuItem
-                                          disabled={idx === (editedQuiz.questions[currentStep].options as QuizOption[]).length - 1}
+                                          disabled={
+                                            idx ===
+                                            (
+                                              editedQuiz.questions[currentStep]
+                                                .options as QuizOption[]
+                                            ).length -
+                                              1
+                                          }
                                           onClick={() => {
-                                            if (idx === (editedQuiz.questions[currentStep].options as QuizOption[]).length - 1) return;
-                                            const newOpts = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                            [newOpts[idx + 1], newOpts[idx]] = [newOpts[idx], newOpts[idx + 1]];
-                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                            if (
+                                              idx ===
+                                              (
+                                                editedQuiz.questions[
+                                                  currentStep
+                                                ].options as QuizOption[]
+                                              ).length -
+                                                1
+                                            )
+                                              return;
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            [newOpts[idx + 1], newOpts[idx]] = [
+                                              newOpts[idx],
+                                              newOpts[idx + 1],
+                                            ];
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
                                           }}
                                           className='h-7 text-xs cursor-pointer gap-2'>
-                                          <ArrowDown className='h-3 w-3 text-pw-cyan' /> Move Option Down
+                                          <ArrowDown className='h-3 w-3 text-pw-cyan' />{' '}
+                                          Move Option Down
                                         </DropdownMenuItem>
 
                                         <DropdownMenuSeparator className='bg-white/5' />
 
                                         <DropdownMenuItem
                                           onClick={() => {
-                                            const newOpts = (editedQuiz.questions[currentStep].options as QuizOption[]).filter((_, i) => i !== idx);
-                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options: newOpts });
+                                            const newOpts = (
+                                              editedQuiz.questions[currentStep]
+                                                .options as QuizOption[]
+                                            ).filter((_, i) => i !== idx);
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
                                           }}
                                           className='h-7 text-xs text-pw-danger focus:bg-pw-danger/10 focus:text-pw-danger cursor-pointer gap-2'>
-                                          <Trash2 className='h-3 w-3' /> Delete Option
+                                          <Trash2 className='h-3 w-3' /> Delete
+                                          Option
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
@@ -4215,7 +4415,7 @@ const QuizBuilder = ({
                             if (
                               editedQuiz.questions[currentStep].options
                                 .length >= 4 &&
-                              premiumTier === 'free'
+                              !quizUnlocked
                             ) {
                               return toast.error(
                                 'Free tier accounts are capped at a maximum of 4 options per question! Please upgrade to add more.',
@@ -4255,6 +4455,7 @@ const QuizBuilder = ({
 };
 
 export default function QuizPage() {
+  const { openFile } = useAppFileViewer();
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const { showAlert, showConfirm, showPrompt } = useAppModal();
   const [filenameInput, setFilenameInput] = useState('');
@@ -4262,6 +4463,9 @@ export default function QuizPage() {
   const [onConfirmFilename, setOnConfirmFilename] = useState<
     ((cleanName: string) => void) | null
   >(null);
+
+  const { premiumTier, isFeatureUnlocked, user, username, isLoading } = useAppContext();
+  const quizUnlocked = isFeatureUnlocked('quiz');
 
   const triggerExport = (
     defaultName: string,
@@ -4285,30 +4489,38 @@ export default function QuizPage() {
     setIsNameModalOpen(false);
   };
 
-  const { premiumTier, isFeatureUnlocked } = useAppContext();
-  const isQuizzablePremium = isFeatureUnlocked('quizzable');
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
   const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
+  const [isSavingQuiz, setIsSavingQuiz] = useState(false);
+  const [isEmailingExport, setIsEmailingExport] = useState(false);
+
+  const emailResponseExport = async (quizId: string, format: 'csv' | 'json' = 'csv') => {
+    if (isEmailingExport) return;
+    setIsEmailingExport(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sign in again before emailing an export.');
+      const response = await fetch('/api/quiz-export-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ quizId, format }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not email this export.');
+      toast.success(`Export emailed to ${result.email}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not email this export.');
+    } finally {
+      setIsEmailingExport(false);
+    }
+  };
 
   const safeDecodeBase64 = (str: any): any => {
-    if (typeof str !== 'string' || str.trim() === '') return str;
-    // Check if string is structured as standard Base64 characters and padding
-    const base64Regex =
-      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
-    if (!base64Regex.test(str)) return str;
-    try {
-      const decoded = atob(str);
-      try {
-        return JSON.parse(decoded);
-      } catch {
-        return decoded;
-      }
-    } catch {
-      return str;
-    }
+    return decodeStoredCorrectAnswer(str);
   };
 
   const resolveAnswerToText = (quiz: Quiz, questionId: string, val: any) => {
@@ -4322,33 +4534,10 @@ export default function QuizPage() {
       if (id === undefined || id === null) return '';
       const idStr = String(id);
 
-      // 1. Try to find by option.id matches idStr exactly
       const foundById = options.find(
-        (o) => typeof o !== 'string' && o && o.id === idStr,
+        (o) => o && o.id === idStr,
       );
-      if (foundById && typeof foundById !== 'string') return foundById.text;
-
-      // 2. Try to find by index (legacy representation)
-      const numIdx = parseInt(idStr, 10);
-      if (!isNaN(numIdx) && numIdx >= 0 && numIdx < options.length) {
-        const opt = options[numIdx];
-        if (typeof opt === 'string') return opt;
-        if (opt && typeof opt === 'object') return opt.text;
-      }
-
-      // 3. Try to match options text of any object option (incase it was stored as text already)
-      const foundByText = options.find(
-        (o) => typeof o !== 'string' && o && o.text === idStr,
-      );
-      if (foundByText && typeof foundByText !== 'string')
-        return foundByText.text;
-
-      // 4. Try to match options string if options list is string list
-      const foundInStringArray = options.find(
-        (o) => typeof o === 'string' && o === idStr,
-      );
-      if (foundInStringArray && typeof foundInStringArray === 'string')
-        return foundInStringArray;
+      if (foundById) return foundById.text;
 
       // Special Boolean/True/False check
       if (idStr === 'true' || idStr === 'false') {
@@ -4477,46 +4666,79 @@ export default function QuizPage() {
   };
 
   const clearResponses = async (quizId: string) => {
-    if (
-      !showConfirm(
-        'Are you sure you want to clear all responses? This cannot be undone.',
-      )
-    )
-      return;
+    const confirmed = await showConfirm(
+      'Are you sure you want to clear all responses? This cannot be undone.',
+      { confirmText: 'Clear responses', type: 'danger' },
+    );
+    if (!confirmed) return;
 
-    const data = await HybridStorage.getAll('quiz');
-    const index = data.findIndex((q: any) => q.id === quizId);
-    if (index !== -1) {
-      data[index].responses = [];
-      await HybridStorage.save(quizId, data[index], 'quiz');
-      setQuizzes([...data]);
+    const data =
+      quizzes.find((item) => item.id === quizId) ||
+      (await HybridStorage.getQuiz(quizId));
+    if (data) {
+      const updated = { ...data, responses: [] };
+      if (quizId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+        localStorage.setItem(
+          seedTemplateStorageKey(),
+          JSON.stringify(updated),
+        );
+      } else {
+        try {
+          await HybridStorage.clearQuizResponses(quizId);
+        } catch (error: any) {
+          toast.error(error?.message || 'Could not clear assessment responses.');
+          return;
+        }
+      }
+      setQuizzes((current) =>
+        current.map((item) => (item.id === quizId ? updated : item)),
+      );
       if (viewingResponses?.id === quizId) {
-        setViewingResponses({ ...data[index] });
+        setViewingResponses(updated);
       }
       toast.success('Responses cleared!');
     }
   };
 
   const loadQuizzes = async () => {
+    const localSeedKey = seedTemplateStorageKey();
+    const includeLocalSeed = (items: Quiz[]) => {
+      try {
+        const localSeed = JSON.parse(
+          localStorage.getItem(localSeedKey) || 'null',
+        ) as Quiz | null;
+        if (localSeed?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+          return [
+            localSeed,
+            ...items.filter((item) => item.id !== localSeed.id),
+          ];
+        }
+      } catch {
+        console.warn('[Quiz] Ignoring an unreadable local showcase draft.');
+      }
+      return items;
+    };
+    const normalizeItems = (items: any[]) => items.map(normalizeQuizRecord);
     // 1. Serve local cache immediately
     const localData = await HybridStorage.getAll('quiz', async (freshItems) => {
       // 2. Called in background when remote data arrives — silently refresh
-      const processed = await processExpiryStatus(freshItems);
-      setQuizzes(processed);
+      const remoteItems = normalizeItems(freshItems).filter((item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id);
+      const processed = await processExpiryStatus(remoteItems);
+      setQuizzes(includeLocalSeed(processed));
     });
-    const processed = await processExpiryStatus(localData);
+    const localQuizzes = normalizeItems(localData).filter((item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id);
+    const processed = includeLocalSeed(await processExpiryStatus(localQuizzes));
 
     // Auto-seed default showcase template on first time visiting the quiz section
     if (typeof window !== 'undefined') {
-      const seeded = localStorage.getItem('pw_quiz_template_seeded');
+      const seeded = localStorage.getItem(localSeedKey);
       if (!seeded && processed.length === 0) {
         try {
-          await HybridStorage.save(
-            DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
-            DEFAULT_PINGWORLD_SHOWCASE_QUIZ,
-            'quiz',
+          localStorage.setItem(
+            localSeedKey,
+            JSON.stringify(DEFAULT_PINGWORLD_SHOWCASE_QUIZ),
           );
-          localStorage.setItem('pw_quiz_template_seeded', 'true');
+          localStorage.setItem(localSeedKey, 'true');
           setQuizzes([DEFAULT_PINGWORLD_SHOWCASE_QUIZ]);
           return;
         } catch {
@@ -4553,14 +4775,20 @@ export default function QuizPage() {
 
   // Load from hybrid storage (offline-first)
   useEffect(() => {
-    loadQuizzes();
-  }, []);
+    if (!isLoading) {
+      setIsLoadingQuizzes(true);
+      void loadQuizzes().catch((error) => {
+        console.error('[Quiz] Local/remote assessment list failed to load.', error);
+        toast.error('Assessments could not be loaded. Check your connection and retry.');
+      }).finally(() => setIsLoadingQuizzes(false));
+    }
+  }, [isLoading, user?.id]);
 
   // Managed by HybridStorage exclusively
 
   const handleStartNew = () => {
     const newQuiz: Quiz = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateQuizId(),
       title: '',
       description: '',
       type: 'quiz',
@@ -4568,23 +4796,52 @@ export default function QuizPage() {
       endScreen: {
         title: 'Assessment Completed!',
         message:
-          'You have completed this accessment. Thank you for using PingWorld.',
+          'You have completed this assessment. Thank you for using PingWorld.',
+        completionIcon: 'check',
+        showPerformance: true,
+        textAlign: 'center',
       },
       createdAt: Date.now(),
+      fromPremium: quizUnlocked,
+      userId: user?.id || '',
     };
     setActiveQuiz(newQuiz);
     setIsCreating(true);
   };
 
   const handleSaveQuiz = async (quiz: Quiz, isImport?: boolean) => {
+    const originalQuizId = quiz.id;
+    const hasDatabaseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(quiz.id);
+    if (
+      user?.id &&
+      !hasDatabaseUuid &&
+      quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id
+    ) {
+      quiz = {
+        ...quiz,
+        id: generateQuizId(),
+        customUrl: quiz.customUrl || (quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id ? '' : quiz.id),
+        isCustom: true,
+        userId: user.id,
+      };
+    }
     if (!quiz.title) return toast.error('Quiz needs a title!');
     if (quiz?.questions?.length === 0)
       return toast.error('Quiz needs at least one question!');
 
     // Check if questions are valid
-    const invalid = quiz?.questions?.some(
-      (q) => !q.text || q.options.some((o) => !o),
-    );
+    const optionQuestionTypes: QuestionType[] = [
+      'multiple_choice',
+      'true_false',
+      'dropdown',
+      'checkbox',
+    ];
+    const invalid = quiz.questions.some((question) => {
+      if (!question.text?.trim()) return true;
+      if (!optionQuestionTypes.includes(question.type)) return false;
+      return !question.options?.length ||
+        question.options.some((option) => !option?.id?.trim() || !option?.text?.trim());
+    });
     if (invalid)
       return toast.error('Please fill in all questions and options.');
 
@@ -4621,12 +4878,16 @@ export default function QuizPage() {
         },
       );
 
-      if (!proceed) {
-        toast.info('Assessment save cancelled. Please adjust the expiration date.');
-        return;
+      if (proceed) {
+        finalExpiry = expiryValidation.suggestedExpiry!;
       }
 
-      finalExpiry = expiryValidation.suggestedExpiry;
+      if (!proceed) {
+        toast.info(
+          'Assessment save cancelled. Please adjust the expiration date.',
+        );
+        return;
+      }
     } else if (!finalExpiry) {
       finalExpiry = expiryValidation.suggestedExpiry;
     }
@@ -4651,26 +4912,40 @@ export default function QuizPage() {
       isExpiryLocked,
     };
 
+    setIsSavingQuiz(true);
     try {
-      const savedItem = await HybridStorage.save(
-        quizToSave.id,
-        quizToSave,
-        'quiz',
-      );
+      const isLocalSeed = quizToSave.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
+      const isSynced =
+        isLocalSeed ? false : (
+          (await HybridStorage.save(quizToSave.id, quizToSave, 'quiz'))
+            .is_synced
+        );
+      if (isLocalSeed) {
+        localStorage.setItem(
+          seedTemplateStorageKey(),
+          JSON.stringify(quizToSave),
+        );
+      }
+      if (!isLocalSeed) {
+        await HybridStorage.deleteQuizDraft(quizToSave.id);
+        if (originalQuizId !== quizToSave.id) await HybridStorage.deleteQuizDraft(originalQuizId);
+        if (originalQuizId !== quizToSave.id) await HybridStorage.delete(originalQuizId, 'quiz');
+        if (originalQuizId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+          localStorage.removeItem(seedTemplateStorageKey());
+        }
+      }
 
-      const existingIndex = quizzes.findIndex((q) => q.id === quiz.id);
+      const retainedQuizzes = quizzes.filter((item) => item.id !== originalQuizId || originalQuizId === quizToSave.id);
+      const existingIndex = retainedQuizzes.findIndex((q) => q.id === quizToSave.id);
       let newQuizzes;
       if (existingIndex > -1) {
-        newQuizzes = [...quizzes];
+        newQuizzes = [...retainedQuizzes];
         newQuizzes[existingIndex] = {
-          ...quiz,
-          is_synced: savedItem.is_synced,
+          ...quizToSave,
+          is_synced: isSynced,
         } as any;
       } else {
-        newQuizzes = [
-          { ...quiz, is_synced: savedItem.is_synced } as any,
-          ...quizzes,
-        ];
+        newQuizzes = [{ ...quizToSave, is_synced: isSynced } as any, ...retainedQuizzes];
       }
 
       setQuizzes(newQuizzes);
@@ -4678,7 +4953,9 @@ export default function QuizPage() {
       setActiveQuiz(null);
       !isImport && toast.success('Quiz saved successfully!');
     } catch (e) {
-      toast.error('Failed to save quiz.');
+      toast.error(`Failed to save quiz. - ${e}`);
+    } finally {
+      setIsSavingQuiz(false);
     }
   };
 
@@ -4688,37 +4965,71 @@ export default function QuizPage() {
     );
 
     if (check) {
-      await HybridStorage.delete(id, 'quiz');
+      if (id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+        localStorage.removeItem(seedTemplateStorageKey());
+      } else {
+        await HybridStorage.delete(id, 'quiz');
+      }
       const newQuizzes = quizzes.filter((q) => q.id !== id);
       setQuizzes(newQuizzes);
       toast.success('Quiz deleted');
     }
   };
 
-  const exportQuiz = (quiz: Quiz) => {
-    triggerExport(
-      quiz.title.replace(/\s+/g, '-').toLowerCase(),
-      'pwquiz',
-      (filename) => {
-        const payload = {
-          __pwquiz: true,
-          app: 'PingWorldQuizStudio',
-          version: '1.0',
-          exportedAt: new Date().toISOString(),
-          ...quiz,
-        };
-        const dataStr =
-          'data:text/json;charset=utf-8,' +
-          encodeURIComponent(JSON.stringify(payload, null, 2));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute('href', dataStr);
-        downloadAnchorNode.setAttribute('download', `${filename}.pwquiz`);
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-        toast.success('Quiz exported as .pwquiz package!');
+  const exportQuiz = async (quiz: Quiz) => {
+    if(!quiz) return;
+
+    const confirm = await showConfirm(
+      `The images and responses in this ${quiz.type} would be trimmed off, make sure to have downloaded these data before exporting!`,
+      {
+        confirmText: 'Export',
+        type: 'warning',
+        cancelText: 'Cancel',
       },
     );
+
+    if (confirm) {
+      let trimmedQuiz = quiz;
+
+      trimmedQuiz = {
+        ...trimmedQuiz,
+        branding: {
+          ...trimmedQuiz?.branding,
+          image: undefined,
+          icon: undefined,
+        },
+        responses: undefined,
+      };
+
+      trimmedQuiz.questions.forEach((q) => {
+        q.options
+          .filter((opt) => typeof opt !== 'string')
+          .forEach((o) => (o.uploadUrl = undefined));
+      });
+
+      triggerExport(
+        trimmedQuiz.title.replace(/\s+/g, '-').toLowerCase(),
+        'pwquiz',
+        (filename) => {
+          const payload = {
+            __pwquiz: true,
+            app: 'PingWorldQuizStudio',
+            version: '1.0',
+            ...trimmedQuiz,
+          };
+          const dataStr =
+            'data:text/json;charset=utf-8,' +
+            encodeURIComponent(JSON.stringify(payload, null, 2));
+          const downloadAnchorNode = document.createElement('a');
+          downloadAnchorNode.setAttribute('href', dataStr);
+          downloadAnchorNode.setAttribute('download', `${filename}.pwquiz`);
+          document.body.appendChild(downloadAnchorNode);
+          downloadAnchorNode.click();
+          downloadAnchorNode.remove();
+          toast.success('Quiz exported as .pwquiz package!');
+        },
+      );
+    }
   };
 
   const importQuiz = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4732,7 +5043,7 @@ export default function QuizPage() {
         if (!quiz.title || !quiz?.questions)
           throw new Error('Invalid quiz file structure.');
 
-        quiz.id = Math.random().toString(36).substr(2, 9); // New fresh ID for import
+        quiz.id = generateQuizId(); // New fresh ID for import
 
         // Check if imported quiz has expired
         if (quiz.expires_at) {
@@ -4748,8 +5059,9 @@ export default function QuizPage() {
           quiz.expires_at = computeExpiry(premiumTier, 2).toISOString();
         }
 
-        handleSaveQuiz(quiz, true);
-        toast.success(`Quiz "${quiz.title}" imported successfully!`);
+        handleSaveQuiz(quiz, true).then(() => {
+          toast.success(`Quiz "${quiz.title}" imported successfully!`);
+        });
       } catch (err: any) {
         toast.error(err?.message || 'Invalid .pwquiz / .json format.');
       }
@@ -4770,7 +5082,7 @@ export default function QuizPage() {
     hideBold?: boolean,
   ) => {
     if (!rawText) return rawText;
-    let formatted = resolvePipedText(rawText, {userData: details});
+    let formatted = resolvePipedText(rawText, { userData: details });
 
     Object.entries(details || {}).forEach(([key, val]) => {
       const cleanKey = key.trim().replace(/\s+/g, '');
@@ -4796,7 +5108,7 @@ export default function QuizPage() {
     <div
       className={cn(
         'container mx-auto px-4 py-12 max-w-8xl min-h-screen pb-20 transition-all duration-500',
-        premiumTier !== 'free' &&
+        quizUnlocked &&
           'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
       )}>
       <AnimatePresence mode='wait'>
@@ -4811,7 +5123,7 @@ export default function QuizPage() {
                 <div className='badge mb-4'>
                   <Puzzle className='h-3.5 w-3.5' />
                   Quizzable{' '}
-                  {premiumTier !== 'free' && (
+                  {quizUnlocked && (
                     <span className='ml-1 flex items-center gap-0.5 text-pw-warning'>
                       <Crown className='h-3 w-3' />
                       Premium
@@ -4822,9 +5134,7 @@ export default function QuizPage() {
                   Quiz{' '}
                   <span
                     className={
-                      premiumTier !== 'free' ? 'gradient-text-warm' : (
-                        'gradient-text'
-                      )
+                      quizUnlocked ? 'gradient-text-warm' : 'gradient-text'
                     }>
                     Builder.
                   </span>
@@ -4867,12 +5177,16 @@ export default function QuizPage() {
               </div>
             </div>
 
-            {quizzes.length > 0 ?
+            {isLoadingQuizzes ?
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' aria-busy='true' aria-label='Loading assessments'>
+                {Array.from({ length: 4 }, (_, index) => <div key={index} className='h-56 animate-pulse rounded-2xl border border-white/5 bg-white/[0.035]' />)}
+              </div>
+            : quizzes.length > 0 ?
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
                 {quizzes.map((quiz, i) => (
                   <motion.div
                     key={quiz.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}>
                     <Card className='card-glow h-full flex flex-col p-5 gap-2 group'>
@@ -4927,31 +5241,20 @@ export default function QuizPage() {
                             variant='ghost'
                             title='View Feedback'
                             size='icon'
-                            onClick={() => {
-                              // Migration: Ensure options have IDs if legacy
-                              const migratedQuestions = quiz.questions.map(
-                                (question: any) => {
-                                  if (
-                                    question.options.length > 0 &&
-                                    typeof question.options[0] === 'string'
-                                  ) {
-                                    return {
-                                      ...question,
-                                      options: question.options.map(
-                                        (opt: string, idx: number) => ({
-                                          id: `${question.id}-opt-${idx}`,
-                                          text: opt,
-                                        }),
-                                      ),
-                                    };
-                                  }
-                                  return question;
-                                },
-                              );
-                              setViewingResponses({
-                                ...quiz,
-                                questions: migratedQuestions,
-                              });
+                            onClick={async () => {
+                              try {
+                                const result = quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id
+                                  ? { responses: quiz.responses || [], nextOffset: null }
+                                  : await HybridStorage.getQuizResponses(quiz.id);
+                                setViewingResponses({
+                                  ...normalizeQuizRecord(quiz),
+                                  questions: quiz.questions,
+                                  responses: result.responses,
+                                  responsesNextOffset: result.nextOffset,
+                                });
+                              } catch (error: any) {
+                                toast.error(error?.message || 'Could not load assessment responses.');
+                              }
                             }}
                             className='h-8 w-8 text-pw-muted hover:text-pw-cyan'>
                             <MessageSquare className='h-4 w-4' />
@@ -4968,8 +5271,15 @@ export default function QuizPage() {
                             variant='ghost'
                             size='icon'
                             title='Edit'
-                            onClick={() => {
-                              setActiveQuiz(quiz);
+                            onClick={async () => {
+                              const expired = await isExpired(quiz);
+                              if (expired) {
+                                toast.warning(
+                                  `This ${quiz.type || 'assessment'} has expired, adjust expiry time.`,
+                                );
+                              }
+                              const draft = await HybridStorage.getQuizDraft(quiz.id);
+                              setActiveQuiz(draft ? { ...quiz, ...draft } : quiz);
                               setIsCreating(true);
                             }}
                             className='h-8 w-8 text-pw-muted hover:text-pw-primary'>
@@ -4992,8 +5302,9 @@ export default function QuizPage() {
                       <p
                         className='text-sm text-pw-muted line-clamp-2 mb-5 py-0 my-0 flex-1 whitespace-pre-wrap'
                         dangerouslySetInnerHTML={{
-                          __html: quiz.description
-                            ? resolvePipedText(quiz.description, {})
+                          __html:
+                            quiz.description ?
+                              resolvePipedText(quiz.description, {})
                                 .replace(/&/g, '&amp;')
                                 .replace(/</g, '&lt;')
                                 .replace(/>/g, '&gt;')
@@ -5011,7 +5322,10 @@ export default function QuizPage() {
                           variant='outline'
                           title='Share link'
                           onClick={() => {
-                            const url = `${window.location.origin}/q/${quiz.id}`;
+                            const route = quiz.customUrl && username
+                              ? `/u/${encodeURIComponent(username)}/q/${encodeURIComponent(quiz.customUrl)}`
+                              : `/q/${encodeURIComponent(quiz.id)}`;
+                            const url = `${window.location.origin}${route}`;
                             navigator.clipboard.writeText(url);
                             toast.success('Short link copied to clipboard!');
                           }}
@@ -5027,10 +5341,10 @@ export default function QuizPage() {
                 <div className='w-20 h-20 rounded-2xl bg-pw-surface border border-white/10 flex items-center justify-center mb-6 shadow-2xl'>
                   <Puzzle className='h-10 w-10 text-pw-muted' />
                 </div>
-                <h3 className='text-2xl font-bold font-display mb-2'>
+                <h3 className='text-xl lg:text-2xl font-bold font-display mb-2'>
                   Start your first quiz
                 </h3>
-                <p className='text-pw-muted max-w-sm mb-10'>
+                <p className='text-pw-muted max-w-sm mb-10 px-1 text-xs'>
                   Create interactive quizzes with multiple choice questions.
                   Save them locally or export to JSON.
                 </p>
@@ -5051,6 +5365,7 @@ export default function QuizPage() {
             <QuizBuilder
               quiz={activeQuiz!}
               onSave={handleSaveQuiz}
+              isSaving={isSavingQuiz}
               onCancel={() => {
                 setIsCreating(false);
                 setActiveQuiz(null);
@@ -5104,22 +5419,31 @@ export default function QuizPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className='bg-pw-surface/90 bkblur border-white/10'>
                             <DropdownMenuItem
-                              onClick={() => exportResponses(viewingResponses, 'csv')}
+                              onClick={() =>
+                                exportResponses(viewingResponses, 'csv')
+                              }
                               className='cursor-pointer text-xs'>
                               Export Spreadsheet (.csv)
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => exportResponses(viewingResponses, 'json')}
+                              onClick={() =>
+                                exportResponses(viewingResponses, 'json')
+                              }
                               className='cursor-pointer text-xs'>
                               Export Structured Data (.json)
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => exportResponses(viewingResponses, 'txt')}
+                              onClick={() =>
+                                exportResponses(viewingResponses, 'txt')
+                              }
                               className='cursor-pointer text-xs'>
                               Export Formatted Report (.txt)
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        <Button variant='outline' size='sm' disabled={isEmailingExport || !user?.email_confirmed_at || premiumTier === 'free' || viewingResponses.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id} title={premiumTier === 'free' ? 'Email export is available to active paid subscribers' : 'Email the full export to your verified account email'} onClick={() => void emailResponseExport(viewingResponses.id, 'csv')} className='h-9 gap-1.5 border-white/10 text-xs'>
+                          <Mail size={15} /> {isEmailingExport ? 'Sending…' : 'Email CSV'}
+                        </Button>
                         <Button
                           variant='outline'
                           size='sm'
@@ -5169,7 +5493,7 @@ export default function QuizPage() {
                       }
                     > = {};
                     const countriesCount: Record<string, number> = {};
-                    const isProTier = premiumTier !== 'free';
+                    const isProTier = quizUnlocked;
 
                     const getTakerIdentifier = (
                       resp: any,
@@ -5187,6 +5511,7 @@ export default function QuizPage() {
                           ud.username ||
                           ud.phone ||
                           ud.userId ||
+                          ud[0] ||
                           (Array.isArray(ud) ? ud[0] : null) ||
                           (Object.values(ud).length > 0 ?
                             String(Object.values(ud)[0])
@@ -5646,7 +5971,7 @@ export default function QuizPage() {
                                   {Object.entries(countriesCount).map(
                                     ([loc, cnt], i) => (
                                       <span
-                                        key={loc + i} 
+                                        key={loc + i}
                                         className='px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 border border-white/10 text-pw-cyan font-bold'>
                                         📍 {loc} ({cnt})
                                       </span>
@@ -5701,16 +6026,18 @@ export default function QuizPage() {
                         </div>
 
                         <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5 px-1 mb-1'>
-                          {Object.entries(resp.userData).map(([key, val], i) => (
-                            <div
-                              key={key + i}
-                              className='flex gap-1.5 text-[11px]'>
-                              <span className='text-pw-muted font-bold uppercase'>
-                                {key}:
-                              </span>
-                              <span className='text-white'>{val}</span>
-                            </div>
-                          ))}
+                          {Object.entries(resp.userData).map(
+                            ([key, val], i) => (
+                              <div
+                                key={key + i}
+                                className='flex gap-1.5 text-[11px]'>
+                                <span className='text-pw-muted font-bold uppercase'>
+                                  {key}:
+                                </span>
+                                <span className='text-white'>{val}</span>
+                              </div>
+                            ),
+                          )}
                         </div>
 
                         <div>
@@ -5796,37 +6123,74 @@ export default function QuizPage() {
                                         <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
                                           ANSWER:
                                         </p>
-                                        {ans.fileUrl ? (
-                                          <div className='flex flex-col gap-2 w-full mt-1'>
-                                            <div className='flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/10'>
-                                              <span className='text-xs font-mono font-bold text-pw-success truncate'>
-                                                📁 {ans.fileName || ans.answer || 'Uploaded Attachment'}
-                                              </span>
-                                              <Button
-                                                variant='ghost'
-                                                size='sm'
-                                                onClick={() => {
-                                                  const win = window.open('');
-                                                  if (win) {
-                                                    win.document.write(
-                                                      `<body style="margin:0;background:#0A0C1B;display:flex;align-items:center;justify-content:center;height:100vh;"><iframe src="${ans.fileUrl}" style="width:100%;height:100%;border:none;"></iframe></body>`
-                                                    );
-                                                  }
-                                                }}
-                                                className='h-7 text-[10px] bg-pw-primary/20 text-pw-primary font-bold px-3 rounded-lg'>
-                                                Fullscreen View ↗
-                                              </Button>
+                                        {ans.fileUrl ?
+                                            <div className='flex items-center w-full justify-between bg-white/5 rounded-2xl border border-white/10 overflow-hidden'>
+                                              {(() => {
+                                                const previewUrl =
+                                                  unpackPingWorldMediaUrl(
+                                                    String(ans.fileUrl),
+                                                  ).url || String(ans.fileUrl);
+                                                const fileType =
+                                                  (
+                                                    previewUrl.startsWith(
+                                                      'data:image/',
+                                                    )
+                                                  ) ?
+                                                    'image'
+                                                  : (
+                                                    previewUrl.startsWith(
+                                                      'data:video/',
+                                                    )
+                                                  ) ?
+                                                    'video'
+                                                  : (
+                                                    previewUrl.startsWith(
+                                                      'data:audio/',
+                                                    )
+                                                  ) ?
+                                                    'audio'
+                                                  : 'documents';
+                                                return fileType ?
+                                                    <button
+                                                      type='button'
+                                                      onClick={() =>
+                                                        openFile({
+                                                          src: previewUrl,
+                                                          name: String(
+                                                            ans.fileName ||
+                                                              'Response image',
+                                                          ),
+                                                        })
+                                                      }
+                                                      className='flex flex-col gap-1 w-full cursor-zoom-in'>
+                                                      {fileType === 'image' ?
+                                                        <img
+                                                          src={previewUrl}
+                                                          alt='Uploaded response preview'
+                                                          className='max-h-48 max-w-full rounded-xl object-contain'
+                                                        />
+                                                      : fileType === 'video' ?
+                                                        <video
+                                                          src={previewUrl}
+                                                          about='Iploaded response preview'
+                                                          controls
+                                                          playsInline
+                                                          className='max-w-full rounded-xl object-contain'
+                                                        />
+                                                      : <div className='flex flex-1 gap-2 items-center bg-white/5 text-primary rounded-xl p-2 px-2.5 m-1'>
+                                                          <File className='text-white text-sm'/>{' '}
+                                                          {ans.fileName}
+                                                        </div>
+                                                      }
+                                                      <span className='text-[10px] text-pw-cyan p-1 text-center w-full'>
+                                                        Click {String(fileType) || 'Response'}{' '}
+                                                        to view full screen
+                                                      </span>
+                                                    </button>
+                                                  : null;
+                                              })()}
                                             </div>
-                                            {String(ans.fileUrl).startsWith('data:image/') && (
-                                              <img
-                                                src={ans.fileUrl}
-                                                alt='Uploaded Preview'
-                                                className='max-h-48 max-w-full rounded-xl object-contain border border-white/10'
-                                              />
-                                            )}
-                                          </div>
-                                        ) : (
-                                          <p
+                                        : <p
                                             className={cn(
                                               'text-[11px] font-mono',
                                               ans.correct === undefined ?
@@ -5843,7 +6207,7 @@ export default function QuizPage() {
                                               ),
                                             }}
                                           />
-                                        )}
+                                        }
                                       </div>
                                       {viewingResponses.type === 'quiz' &&
                                         !ans.correct && (
@@ -5876,6 +6240,32 @@ export default function QuizPage() {
                       </Card>
                     ))
                 }
+                {viewingResponses.responsesNextOffset !== null && viewingResponses.responsesNextOffset !== undefined && (
+                  <div className='flex justify-center py-3'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={viewingResponses.responsesLoadingMore}
+                      onClick={async () => {
+                        if (viewingResponses.responsesLoadingMore) return;
+                        setViewingResponses((current) => current ? { ...current, responsesLoadingMore: true } : null);
+                        try {
+                          const page = await HybridStorage.getQuizResponses(viewingResponses.id, viewingResponses.responsesNextOffset || 0);
+                          setViewingResponses((current) => current ? {
+                            ...current,
+                            responses: [...(current.responses || []), ...page.responses],
+                            responsesNextOffset: page.nextOffset,
+                            responsesLoadingMore: false,
+                          } : null);
+                        } catch {
+                          setViewingResponses((current) => current ? { ...current, responsesLoadingMore: false } : null);
+                          toast.error('More responses could not be loaded.');
+                        }
+                      }}>
+                      {viewingResponses.responsesLoadingMore ? 'Loading…' : 'Load more responses'}
+                    </Button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

@@ -170,9 +170,13 @@ export function ComposerLayout() {
 
     try {
       // 1. Dispatch to social publishing API
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/social/publish', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           content: state.baseContent,
           platforms: state.selectedPlatforms,
@@ -415,7 +419,7 @@ export function ComposerLayout() {
             </AnimatePresence>
 
             {/* Schedule Post Dialog Modal */}
-            {showScheduleModal && (
+            {state.isPremium && showScheduleModal && (
               <div className='fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4'>
                 <div className='bg-[#0c0d1c] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white'>
                   <div className='flex items-center gap-2 text-pw-warning'>

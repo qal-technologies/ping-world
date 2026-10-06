@@ -132,12 +132,7 @@ export const Navbar = () => {
     { href: '/', label: 'Home', icon: Home },
     { href: '/tools', label: 'Browse Tools', icon: Wrench },
     { href: '/api', label: 'Developer APIs', icon: Code },
-    {
-      href: '/dashboard',
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-      isLogged: isLoggedIn,
-    },
+
   ];
 
   return (
@@ -217,9 +212,7 @@ export const Navbar = () => {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {navLinks
-            .filter((n) => n.isLogged === undefined || n.isLogged == true)
-            .map((link) => {
+          {navLinks.map((link) => {
               const isActive =
                 pathname === link?.href ||
                 pathname.startsWith(link?.href + '/');
@@ -451,7 +444,6 @@ export const Navbar = () => {
             </div>
 
             {[...navLinks]
-              .filter((n) => n.isLogged !== true)
               .map((link) => {
                 const isActive =
                   pathname === link?.href ||
@@ -513,6 +505,10 @@ export const Navbar = () => {
                   Sign In
                 </Link>
               }
+            </div>
+
+            <div className='hidden'>
+
             </div>
           </div>
         </motion.div>

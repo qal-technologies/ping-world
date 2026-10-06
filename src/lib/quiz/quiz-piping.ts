@@ -226,6 +226,8 @@ export function resolvePipedText(
   // Restore escaped @ symbols as literal @ without replacing with data
   text = text.replace(new RegExp(ESCAPE_TOKEN, 'g'), '@');
 
+  //Find a way to santize if sanitize 
+  if(_sanitizeHtml){}
   return text;
 }
 
@@ -593,8 +595,7 @@ function formatAnswerValue(answer: any, question?: any): string {
     if (question && question.options) {
       const resolved = answer.map((val) => {
         const found = question.options.find(
-          (opt: any, oIdx: number) =>
-            opt.id === val || String(oIdx) === String(val) || opt.text === val,
+          (opt: any) => opt.id === val,
         );
         return found ? (found.text || String(found)) : String(val);
       });
@@ -605,8 +606,7 @@ function formatAnswerValue(answer: any, question?: any): string {
 
   if (question && question.options && typeof answer === 'string') {
     const found = question.options.find(
-      (opt: any, oIdx: number) =>
-        opt.id === answer || String(oIdx) === String(answer) || opt.text === answer,
+      (opt: any) => opt.id === answer,
     );
     if (found) {
       return found.text || String(found);

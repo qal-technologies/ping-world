@@ -1,4 +1,4 @@
-import type { Quiz } from '@/app/(main)/quiz/page';
+import type { Quiz } from '@/app/(main)/quiz/';
 import { packPingWorldMediaUrl } from './quiz-piping';
 
 // Sample tiny packed SVG icons for demonstration of option and question image attachments
@@ -43,7 +43,7 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
   createdAt: Date.now(),
   expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   disclaimer:
-    'Notice: This demonstration showcases all PingWorld Quiz capabilities. Responses are securely cached in local hybrid storage.',
+    'Preview mode: try every feature. Your answers stay in this session and are never submitted or saved.',
   branding: {
     image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1920&q=80',
     opacity: 0.12,
@@ -144,7 +144,10 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
       text: 'Branching Test: Type "skip" to jump straight to the math evaluation question, or type "continue" to proceed step-by-step:',
       type: 'input',
       category: 'Smart Branching',
-      options: ['continue', 'skip'],
+      options: [
+        { id: 'continue', text: 'continue' },
+        { id: 'skip', text: 'skip' },
+      ],
       correctIndex: 'continue',
       caseSensitive: false,
       inputBranchRules: [
@@ -198,8 +201,8 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
       type: 'upload',
       category: 'Media & Attachments',
       options: [],
-      acceptedFormats: ['png', 'jpg', 'pdf', 'webp'],
-      maxSizeMb: 10,
+      allowedTypes: 'images/*',
+      maxFileSize: 10,
       correctIndex: null,
       correctExplanation: 'Uploaded files are packaged with secure envelope tagging and displayed in the completion review.',
     },

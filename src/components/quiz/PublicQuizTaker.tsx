@@ -6,9 +6,7 @@ import {
   Puzzle,
   CheckCircle2,
   ChevronRight,
-  ArrowRight,
   ChevronDown,
-  Check,
   CheckCircle,
   ChevronLeft,
   Brain,
@@ -17,7 +15,6 @@ import {
   Layers,
   FileText,
   BookOpen,
-  ArrowLeft,
   Star,
   StickyNote,
   ShieldCheck,
@@ -31,9 +28,7 @@ import {
   Diamond,
   Badge,
   Trophy,
-  Download,
   X,
-  Maximize2,
   SkipForward,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -51,7 +46,7 @@ import {
 import { HybridStorage } from '@/lib/storage-utils';
 import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
-import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz/page';
+import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
@@ -71,16 +66,10 @@ import {
 } from '@/lib/quiz/quiz-audio';
 import { triggerConfetti } from '@/lib/confetti';
 import { detectClientGeo } from '@/lib/countries/geo-detector';
-
-export type QuestionType =
-  | 'multiple_choice'
-  | 'true_false'
-  | 'dropdown'
-  | 'checkbox'
-  | 'input'
-  | 'range'
-  | 'rating'
-  | 'upload';
+import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
+import { useAppFileViewer } from '@/components/shared/AppFileViewer';
+import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
+import Image from 'next/image';
 
 const NoteSheet = ({ note }: { note: string }) => (
   <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
@@ -381,30 +370,39 @@ const Calculator = () => {
 };
 
 function Taker() {
+  const { openFile } = useAppFileViewer();
   const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
-  const { isLoggedIn } = useAppContext();
-  const { showAlert, showConfirm, showPrompt } = useAppModal();
   setHideNavbar(true);
   setHideFooter(true);
   setPaddingTop('pt-0');
+
+  const { isLoggedIn, username, user } = useAppContext();
+  const { showAlert } = useAppModal();
 
   const params = useParams();
   const routeParamId = (params?.id || params?.customQuizId) as
     | string
     | undefined;
+  const quizSetter = (params?.userId || params?.username || params?.setter) as
+    | string
+    | undefined;
+  const isLocalPreview = routeParamId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
+  const [serverCategoryScores, setServerCategoryScores] = useState<Record<
+    string,
+    { correct: number; total: number }
+  > | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [content, setContent] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [started, setStart] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
   const [shuffledOptions, setShuffledOptions] = useState<
-    Record<string, (string | QuizOption)[]>
+    Record<string, QuizOption[]>
   >({});
 
   /* Ref for auto-scroll to the first question on scroll layout start */
@@ -432,7 +430,6 @@ function Taker() {
     setIsOnline(navigator.onLine);
     const handleOnline = () => {
       setIsOnline(true);
-      toast.success('Internet restored! Online syncing active.');
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -452,11 +449,6 @@ function Taker() {
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
   const [isEndMsgExpanded, setIsEndMsgExpanded] = useState(false);
-  const [fullscreenMedia, setFullscreenMedia] = useState<{
-    url: string;
-    title?: string;
-  } | null>(null);
-
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState('');
   const [reportedStatus, setReportedStatus] = useState(false);
@@ -473,46 +465,337 @@ function Taker() {
   const [cheatAttempts, setCheatAttempts] = useState(0);
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
+  const [quizUnavailable, setQuizUnavailable] = useState(false);
   const pendingUnloadCb = React.useRef<(() => void) | null>(null);
   const correctAnswersRef = React.useRef<Record<string, any>>({});
+  const activeAttemptRef = React.useRef<Record<string, any> | null>(null);
+  const finalizingRef = React.useRef(false);
+  const restoredAttemptTimerRef = React.useRef(false);
+  const restoredQuestionTimerRef = React.useRef(false);
+  const lastAttemptSyncRef = React.useRef('');
 
   // Custom states for reporting quizzes
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportCategory, setReportCategory] = useState('Spam');
 
+  const createAttemptSnapshot = useCallback(
+    (
+      answersOverride?: any[],
+      userDataOverride: Record<string, string> = userData,
+    ) => {
+      const answers: Record<string, any> = {};
+      for (const answer of answersOverride || userAnswers) {
+        if (answer?.questionId) answers[String(answer.questionId)] = answer;
+      }
+      for (const [questionId, answer] of Object.entries(scrollAnswers)) {
+        if (
+          answer !== '' &&
+          answer !== null &&
+          answer !== undefined &&
+          (!Array.isArray(answer) || answer.length)
+        ) {
+          answers[questionId] = {
+            ...(answers[questionId] || {}),
+            questionId,
+            answer,
+          };
+        }
+      }
+      const activeQuestion = activeQuestions[currentQuestion];
+      if (activeQuestion) {
+        let currentAnswer: any;
+        if (activeQuestion.type === 'checkbox') {
+          currentAnswer =
+            quiz?.quizScroll ?
+              scrollAnswers[activeQuestion.id]
+            : selectedOptions;
+        } else if (activeQuestion.type === 'input') {
+          currentAnswer =
+            quiz?.quizScroll ? scrollAnswers[activeQuestion.id] : content;
+        } else if (
+          activeQuestion.type === 'range' ||
+          activeQuestion.type === 'rating'
+        ) {
+          currentAnswer = scrollAnswers[activeQuestion.id];
+        } else if (activeQuestion.type !== 'upload') {
+          currentAnswer = selectedOption;
+        }
+        const hasAnswer =
+          Array.isArray(currentAnswer) ? currentAnswer.length > 0
+          : currentAnswer && typeof currentAnswer === 'object' ? true
+          : String(currentAnswer ?? '').trim().length > 0;
+        if (hasAnswer) {
+          answers[activeQuestion.id] = {
+            ...(answers[activeQuestion.id] || {}),
+            questionId: activeQuestion.id,
+            answer: currentAnswer,
+          };
+        }
+      }
+      const previous = activeAttemptRef.current || {};
+      return {
+        ...previous,
+        quizId: quiz?.id,
+        attemptId: previous.attemptId || crypto.randomUUID(),
+        attemptToken:
+          previous.attemptToken ||
+          Array.from(crypto.getRandomValues(new Uint8Array(48)), (byte) =>
+            byte.toString(16).padStart(2, '0'),
+          ).join(''),
+        status: 'in_progress',
+        startedAt: previous.startedAt || new Date().toISOString(),
+        answers,
+        questionOrder: activeQuestions.map((question) => question.id),
+        userData: userDataOverride,
+        currentQuestionIndex: currentQuestion,
+        scrollAnswers,
+        selectedOption,
+        selectedOptions,
+        content,
+        timeLeft,
+        questionTimeLeft,
+        updatedAt: Date.now(),
+      };
+    },
+    [
+      activeQuestions,
+      content,
+      currentQuestion,
+      questionTimeLeft,
+      quiz,
+      scrollAnswers,
+      selectedOption,
+      selectedOptions,
+      timeLeft,
+      userAnswers,
+      userData,
+    ],
+  );
+
+  const syncAttemptSnapshot = useCallback(
+    async (snapshot: Record<string, any>, keepalive = false) => {
+      if (!quiz || isLocalPreview) return false;
+      let preparedSnapshot = snapshot;
+      if (navigator.onLine) {
+        try {
+          preparedSnapshot = await HybridStorage.prepareQuizAttemptSnapshot(
+            quiz.id,
+            snapshot,
+          );
+        } catch {
+          /* Keep the full local draft and retry media sync on the next save. */
+        }
+      }
+      activeAttemptRef.current = preparedSnapshot;
+      try {
+        await HybridStorage.saveQuizAttemptDraft(quiz.id, preparedSnapshot);
+      } catch {
+        toast.error(
+          'This device could not cache the assessment progress. Keep this tab open and retry.',
+        );
+        return false;
+      }
+      if (!navigator.onLine) return false;
+      const action = preparedSnapshot.remoteStarted ? 'save' : 'start';
+      try {
+        const response = await fetch('/api/quiz-attempts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action,
+            quizId: quiz.id,
+            attemptId: preparedSnapshot.attemptId,
+            attemptToken: preparedSnapshot.attemptToken,
+            answers: preparedSnapshot.answers,
+            questionOrder: preparedSnapshot.questionOrder,
+            userData: preparedSnapshot.userData,
+            currentQuestionIndex: preparedSnapshot.currentQuestionIndex,
+            allowBackwardNavigation: quiz.canGoBack !== false,
+          }),
+          keepalive,
+          signal: keepalive ? undefined : AbortSignal.timeout(5000),
+        });
+        if (!response.ok) return false;
+        const result = await response.json();
+        const nextSnapshot = {
+          ...preparedSnapshot,
+          remoteStarted: true,
+          serverStartedAt:
+            result.startedAt ||
+            preparedSnapshot.serverStartedAt ||
+            preparedSnapshot.startedAt,
+        };
+        activeAttemptRef.current = nextSnapshot;
+        await HybridStorage.saveQuizAttemptDraft(quiz.id, nextSnapshot);
+        lastAttemptSyncRef.current = JSON.stringify({
+          answers: preparedSnapshot.answers,
+          currentQuestionIndex: preparedSnapshot.currentQuestionIndex,
+        });
+        return result;
+      } catch {
+        return false;
+      }
+    },
+    [isLocalPreview, quiz],
+  );
+
+  const startAssessment = useCallback(
+    (initialUserData: Record<string, string> = userData) => {
+      if (!quiz || isLocalPreview) {
+        playQuizStartTone();
+        setStart(true);
+        return;
+      }
+      let snapshot = createAttemptSnapshot([], initialUserData);
+      if (activeAttemptRef.current?.status === 'in_progress') {
+        snapshot = {
+          ...activeAttemptRef.current,
+          ...snapshot,
+          attemptId: activeAttemptRef.current.attemptId,
+          attemptToken: activeAttemptRef.current.attemptToken,
+        };
+      }
+      activeAttemptRef.current = snapshot;
+      setStart(true);
+      playQuizStartTone();
+      void syncAttemptSnapshot(snapshot);
+    },
+    [
+      createAttemptSnapshot,
+      isLocalPreview,
+      quiz,
+      syncAttemptSnapshot,
+      userData,
+    ],
+  );
+
+  useEffect(() => {
+    if (!started || !quiz || isLocalPreview || isFinished) return;
+    const snapshot = createAttemptSnapshot();
+    activeAttemptRef.current = snapshot;
+    void HybridStorage.saveQuizAttemptDraft(quiz.id, snapshot).catch(() => {
+      toast.error('Assessment progress could not be cached on this device.');
+    });
+    const delay =
+      activeQuestions[currentQuestion]?.type === 'input' ? 800 : 250;
+    const timer = window.setTimeout(() => {
+      const fingerprint = JSON.stringify({
+        answers: snapshot.answers,
+        currentQuestionIndex: snapshot.currentQuestionIndex,
+        userData: snapshot.userData,
+      });
+      if (fingerprint !== lastAttemptSyncRef.current)
+        void syncAttemptSnapshot(snapshot);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeQuestions,
+    createAttemptSnapshot,
+    currentQuestion,
+    isFinished,
+    isLocalPreview,
+    quiz,
+    scrollAnswers,
+    selectedOption,
+    selectedOptions,
+    started,
+    syncAttemptSnapshot,
+    userAnswers,
+    userData,
+    content,
+  ]);
+
+  useEffect(() => {
+    if (!started || !quiz || isLocalPreview || isFinished) return;
+    const flush = () => {
+      const snapshot = createAttemptSnapshot();
+      void syncAttemptSnapshot(snapshot, true);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [
+    createAttemptSnapshot,
+    isFinished,
+    isLocalPreview,
+    quiz,
+    started,
+    syncAttemptSnapshot,
+  ]);
+
   // 1. Initial Load
   useEffect(() => {
     const loadQuiz = async () => {
       setLoading(true);
-      const data = await HybridStorage.getAll('quiz');
-      let target = (data.find(
-        (q: any) =>
-          String(q.id) === String(routeParamId) ||
-          String((q as any).custom_id) === String(routeParamId),
-      ) || null) as Quiz | null;
+      let data: Quiz | null = null;
+      if (isLocalPreview && typeof window !== 'undefined') {
+        const stored = JSON.parse(
+          localStorage.getItem('pw_quiz_template') || '',
+        ) as Quiz | null;
+        if (stored?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+          data = stored;
+        }
 
-      if (!target && navigator.onLine && routeParamId) {
-        try {
-          const { data: dbData } = await supabase
-            .from('quizzes')
-            .select('*')
-            .or(`id.eq.${routeParamId},custom_id.eq.${routeParamId}`)
-            .single();
-          if (dbData) target = dbData as Quiz;
-        } catch {
-          // Fall back to local target if fetch fails
+        data ||= DEFAULT_PINGWORLD_SHOWCASE_QUIZ;
+      } else {
+        if (!routeParamId) {
+          data = null;
+        } else {
+          const publicUrl = new URL(
+            `/api/quizzes/${encodeURIComponent(routeParamId)}`,
+            window.location.origin,
+          );
+          if (params?.username && quizSetter)
+            publicUrl.searchParams.set('owner', quizSetter);
+          try {
+            const response = await fetch(publicUrl, { cache: 'no-store' });
+            const payload = response.ok ? await response.json() : null;
+            data = payload?.quiz || null;
+          } catch {
+            data = null;
+          }
         }
       }
+      if (
+        !data &&
+        typeof navigator !== 'undefined' &&
+        !navigator.onLine &&
+        routeParamId
+      ) {
+        data = await HybridStorage.getQuiz(routeParamId);
+      }
+      let target = data as Quiz | null;
+      if (target) {
+        target = {
+          ...target,
+          questions: Array.isArray(target.questions) ? target.questions : [],
+        };
+      }
 
-      if (!target && !navigator.onLine) {
+      if (!target && typeof navigator !== 'undefined' && !navigator.onLine) {
         setIsOfflineUncached(true);
+        setLoading(false);
+        return;
+      }
+      if (!target) {
+        setQuizUnavailable(true);
         setLoading(false);
         return;
       }
 
       if (target) {
+        if (target?.title)
+          document.title = `${capFirst(target.title)} | Ping World`;
+
         // Block expired quizzes from loading
         if (
+          !isLocalPreview &&
           target.expires_at &&
           new Date(target.expires_at).getTime() < Date.now()
         ) {
@@ -531,39 +814,27 @@ function Taker() {
           console.warn('Supabase auth check failed', err);
         }
 
-        if (!target.askDetails && !session) {
+        if (!isLocalPreview && !target.askDetails && !session) {
           setAuthRequired(true);
         }
 
-        // Migration: Ensure options have IDs
         const secureAnswers: Record<string, any> = {};
-        const migratedQuestions = target.questions.map((q) => {
-          let newCorrectIndex = q.correctIndex;
-          if (q.options.length > 0 && typeof q.options[0] === 'string') {
-            const optionsWithIds = q.options.map((opt, idx) => ({
-              id: `${q.id}-opt-${idx}`,
-              text: opt as string,
-            }));
-
-            if (typeof q.correctIndex === 'number' && target.type === 'quiz') {
-              newCorrectIndex = optionsWithIds[q.correctIndex]?.id;
-            } else if (
-              Array.isArray(q.correctIndex) &&
-              q.correctIndex.length > 0 &&
-              typeof q.correctIndex[0] === 'number'
-            ) {
-              newCorrectIndex = q.correctIndex.map(
-                (idx) => optionsWithIds[idx]?.id,
-              );
-            }
-
-            secureAnswers[q.id] = newCorrectIndex;
-            return {
-              ...q,
-              options: optionsWithIds,
-              correctIndex: null,
-            };
-          }
+        const validQuestionData = target.questions.every(
+          (question) =>
+            Array.isArray(question.options) &&
+            question.options.every(
+              (option) =>
+                option &&
+                typeof option.id === 'string' &&
+                typeof option.text === 'string',
+            ),
+        );
+        if (!validQuestionData) {
+          throw new Error(
+            'This assessment contains invalid question data. Ask its owner to review it.',
+          );
+        }
+        const currentQuestions = target.questions.map((q) => {
           secureAnswers[q.id] = q.correctIndex;
           return {
             ...q,
@@ -575,7 +846,7 @@ function Taker() {
 
         const finalQuiz = {
           ...target,
-          questions: migratedQuestions.map((q) => ({
+          questions: currentQuestions.map((q) => ({
             ...q,
             correctIndex: null,
           })),
@@ -583,21 +854,22 @@ function Taker() {
         setQuiz(finalQuiz);
 
         // Completion check
-        const completionMarker = localStorage.getItem(
-          `completed_quiz_${finalQuiz.id}`,
-        );
+        const completionMarker =
+          isLocalPreview ? null : (
+            localStorage.getItem(`completed_quiz_${finalQuiz.id}`)
+          );
         if (completionMarker && !finalQuiz.allowRetry) {
           setHasAlreadyCompleted(true);
         }
 
         /* Map questions by category and independence on load with strict category isolation */
-        let questionsToUse = [...migratedQuestions];
+        let questionsToUse = [...currentQuestions];
         if (finalQuiz.randomizeQuestions) {
-          const uncategorized = migratedQuestions.filter(
+          const uncategorized = currentQuestions.filter(
             (q) => !q.category || q.category.trim() === '',
           );
           const categoriesMap: Record<string, Question[]> = {};
-          migratedQuestions.forEach((q) => {
+          currentQuestions.forEach((q) => {
             if (q.category && q.category.trim() !== '') {
               const catKey = q.category.trim();
               if (!categoriesMap[catKey]) {
@@ -631,12 +903,35 @@ function Taker() {
 
           questionsToUse = [...shuffledUncat, ...shuffledCategories];
         }
+        let restoredDraft: Record<string, any> | null = null;
+        if (!isLocalPreview) {
+          try {
+            const draft = await HybridStorage.getQuizAttemptDraft(finalQuiz.id);
+            if (
+              draft?.status === 'in_progress' &&
+              Array.isArray(draft.questionOrder)
+            )
+              restoredDraft = draft;
+          } catch {
+            /* Start a fresh attempt if local draft storage is unavailable. */
+          }
+        }
+        if (restoredDraft) {
+          const byId = new Map(
+            questionsToUse.map((question) => [question.id, question]),
+          );
+          const restoredOrder = restoredDraft.questionOrder
+            .map((id: string) => byId.get(id))
+            .filter(Boolean) as Question[];
+          if (restoredOrder.length === questionsToUse.length)
+            questionsToUse = restoredOrder;
+        }
         setActiveQuestions(questionsToUse);
         setCurrentQuestion(0);
 
         // Pre-shuffle options
         if (finalQuiz.randomizeOptions) {
-          const shuffled: Record<string, (string | QuizOption)[]> = {};
+          const shuffled: Record<string, QuizOption[]> = {};
           questionsToUse.forEach((question) => {
             const opts = [...question.options];
             for (let i = opts.length - 1; i > 0; i--) {
@@ -647,8 +942,78 @@ function Taker() {
           });
           setShuffledOptions(shuffled);
         }
-        if (quiz?.title)
-          document.title = `${capFirst(quiz.title)} | Ping World`;
+        if (restoredDraft) {
+          const savedAnswers =
+            restoredDraft.answers && typeof restoredDraft.answers === 'object' ?
+              restoredDraft.answers
+            : {};
+          setUserAnswers(Object.values(savedAnswers));
+          setScrollAnswers(
+            restoredDraft.scrollAnswers ||
+              Object.fromEntries(
+                Object.entries(savedAnswers).map(
+                  ([id, value]: [string, any]) => [id, value?.answer],
+                ),
+              ),
+          );
+          setCurrentQuestion(
+            Math.min(
+              Math.max(0, Number(restoredDraft.currentQuestionIndex) || 0),
+              Math.max(0, questionsToUse.length - 1),
+            ),
+          );
+          setUserData(restoredDraft.userData || {});
+          setSelectedOption(restoredDraft.selectedOption ?? null);
+          setSelectedOptions(
+            Array.isArray(restoredDraft.selectedOptions) ?
+              restoredDraft.selectedOptions
+            : [],
+          );
+          setContent(restoredDraft.content || '');
+          setTimeLeft(
+            typeof restoredDraft.timeLeft === 'number' ?
+              restoredDraft.timeLeft
+            : null,
+          );
+          setQuestionTimeLeft(
+            typeof restoredDraft.questionTimeLeft === 'number' ?
+              restoredDraft.questionTimeLeft
+            : null,
+          );
+          activeAttemptRef.current = restoredDraft;
+          restoredAttemptTimerRef.current = true;
+          restoredQuestionTimerRef.current = true;
+          setDetailsCollected(true);
+          setShowDetails(false);
+          setShowIntro(false);
+          setStart(true);
+          if (navigator.onLine && restoredDraft.attemptToken) {
+            void fetch('/api/quiz-attempts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'start',
+                quizId: finalQuiz.id,
+                attemptId: restoredDraft.attemptId,
+                attemptToken: restoredDraft.attemptToken,
+              }),
+            })
+              .then(async (response) => {
+                if (!response.ok) return;
+                const remote = await response.json();
+                if (typeof remote.remainingSeconds === 'number')
+                  setTimeLeft(remote.remainingSeconds);
+                const updated = {
+                  ...restoredDraft,
+                  remoteStarted: true,
+                  serverStartedAt: remote.startedAt,
+                };
+                activeAttemptRef.current = updated;
+                await HybridStorage.saveQuizAttemptDraft(finalQuiz.id, updated);
+              })
+              .catch(() => {});
+          }
+        }
       }
       setLoading(false);
     };
@@ -657,12 +1022,17 @@ function Taker() {
 
   // 2. Timer Setup
   useEffect(() => {
-    if (started && !isFinished && quiz?.hasTimer) {
+    if (started && !isFinished && quiz?.timer?.hasTimer) {
+      if (restoredAttemptTimerRef.current) {
+        restoredAttemptTimerRef.current = false;
+        return;
+      }
       const totalQuestionTimers = activeQuestions.reduce(
         (sum, q) => sum + (q.timer || 0),
         0,
       );
-      const timerValue = typeof quiz.hasTimer === 'number' ? quiz.hasTimer : 10;
+      const timerValue =
+        typeof quiz.timer.hasTimer === 'number' ? quiz.timer.hasTimer : 10;
       const timerUnit = (quiz as any).timerUnit ?? 'minutes';
       let generalTimerSeconds =
         timerUnit === 'seconds' ? timerValue
@@ -693,11 +1063,147 @@ function Taker() {
   useEffect(() => {
     const activeQ = activeQuestions[currentQuestion];
     if (started && activeQ && activeQ.timer && !isFinished) {
-      setQuestionTimeLeft(activeQ.timer);
+      if (restoredQuestionTimerRef.current)
+        restoredQuestionTimerRef.current = false;
+      else setQuestionTimeLeft(activeQ.timer);
     } else {
       setQuestionTimeLeft(null);
     }
   }, [started, currentQuestion, activeQuestions, isFinished]);
+
+  const handleNext = (isAutoSubmit: any = false) => {
+    const autoSubmit = isAutoSubmit === true;
+
+    const currentQId = q?.id || '';
+    let currentSelectedOption =
+      quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
+
+    if (!autoSubmit) {
+      if (q?.type === 'checkbox') {
+        const activeBoxAnswers =
+          quiz?.quizScroll ? scrollAnswers[currentQId] || [] : selectedOptions;
+        if (activeBoxAnswers.length === 0) {
+          return toast.error('Please select at least one answer');
+        }
+      }
+      if (q?.type === 'range' && currentSelectedOption === null) {
+        currentSelectedOption = (q.min || 0).toString();
+      }
+
+      if (
+        currentSelectedOption === null &&
+        q?.type !== 'input' &&
+        q?.type !== 'upload' &&
+        q?.type !== 'checkbox'
+      ) {
+        return toast.error('Please select an answer');
+      }
+    }
+
+    let correct = false;
+    if (quiz?.type === 'quiz' && q) {
+      // Upload type: answer was already stored directly in userAnswers on file pick
+      if (q.type === 'upload') {
+        const existingUpload = userAnswers.find((a) => a.questionId === q.id);
+        if (existingUpload) {
+          // Already recorded as correct — just count score and proceed
+          setScore(userAnswers.filter((a) => a.correct).length);
+          proceedToNext(userAnswers);
+          return;
+        } else {
+          return toast.error('Please upload the required file');
+        }
+      }
+
+      const activeAns =
+        q.type === 'checkbox' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || []
+          : selectedOptions
+        : q.type === 'input' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || ''
+          : content
+        : currentSelectedOption;
+
+      correct = computeIsCorrect(q.id, activeAns);
+
+      if (correct) setScore((s) => s + 1);
+
+      const qId = q.id;
+      const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
+
+      let updatedAnswers;
+      if (existingIdx > -1) {
+        updatedAnswers = [...userAnswers];
+        updatedAnswers[existingIdx] = {
+          questionId: qId,
+          answer: activeAns,
+          correct,
+        };
+      } else {
+        updatedAnswers = [
+          ...userAnswers,
+          { questionId: qId, answer: activeAns, correct },
+        ];
+      }
+
+      setUserAnswers(updatedAnswers);
+      setScore(updatedAnswers.filter((a) => a.correct).length);
+
+      if (quiz?.type === 'quiz' && quiz?.correctOption && isLocalPreview) {
+        setShowFeedback(true);
+        setTimeout(() => {
+          proceedToNext(updatedAnswers);
+        }, 1500);
+      } else {
+        proceedToNext(updatedAnswers);
+      }
+    } else if (q) {
+      // Upload type for surveys: answer was pre-stored on file pick
+      if (q.type === 'upload') {
+        const existingUpload = userAnswers.find((a) => a.questionId === q.id);
+        if (!existingUpload) {
+          // No file — record a skip and proceed
+          const updatedWithSkip = [
+            ...userAnswers,
+            { questionId: q.id, answer: '' },
+          ];
+          setUserAnswers(updatedWithSkip);
+          proceedToNext(updatedWithSkip);
+        } else {
+          proceedToNext(userAnswers);
+        }
+        return;
+      }
+
+      const activeAns =
+        q.type === 'checkbox' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || []
+          : selectedOptions
+        : q.type === 'input' ?
+          quiz?.quizScroll ?
+            scrollAnswers[currentQId] || ''
+          : content
+        : currentSelectedOption;
+
+      const qId = q.id;
+      const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
+      let updatedAnswers;
+      if (existingIdx > -1) {
+        updatedAnswers = [...userAnswers];
+        updatedAnswers[existingIdx] = { questionId: qId, answer: activeAns };
+      } else {
+        updatedAnswers = [
+          ...userAnswers,
+          { questionId: qId, answer: activeAns },
+        ];
+      }
+      setUserAnswers(updatedAnswers);
+      proceedToNext(updatedAnswers);
+    }
+  };
 
   useEffect(() => {
     if (questionTimeLeft === null || questionTimeLeft <= 0 || isFinished) {
@@ -783,7 +1289,7 @@ function Taker() {
     return new Set(userAnswers.map((a) => a.questionId)).size;
   }, [userAnswers]);
 
-  const categoryScores = useMemo(() => {
+  const computedCategoryScores = useMemo(() => {
     if (!quiz || userAnswers.length === 0) return {};
     const catStats: Record<string, { correct: number; total: number }> = {};
     const qMap = new Map(quiz.questions.map((quest) => [quest.id, quest]));
@@ -804,6 +1310,7 @@ function Taker() {
 
     return catStats;
   }, [quiz, userAnswers]);
+  const categoryScores = serverCategoryScores || computedCategoryScores;
 
   const confirmLeaveQuiz = (onConfirm: () => void) => {
     pendingUnloadCb.current = onConfirm;
@@ -879,19 +1386,12 @@ function Taker() {
 
   /* Perfect input keyword matching and input branching evaluation */
   const computeIsCorrect = (qId: string, answer: any) => {
+    if (quiz?.type === 'survey') return false;
     const secureAnswer = correctAnswersRef.current[qId];
     const question = activeQuestions.find((quest) => quest.id === qId);
     if (!question) return false;
 
-    let decodedCorrect: any = secureAnswer;
-    try {
-      if (typeof secureAnswer === 'string' && secureAnswer.length > 5) {
-        const decoded = atob(secureAnswer);
-        decodedCorrect = JSON.parse(decoded);
-      }
-    } catch {
-      decodedCorrect = secureAnswer;
-    }
+    const decodedCorrect = decodeStoredCorrectAnswer(secureAnswer);
 
     if (question.type === 'checkbox') {
       const correctIds =
@@ -904,21 +1404,20 @@ function Taker() {
     } else if (question.type === 'input') {
       const userAns = String(answer || '').trim();
 
-      // Check inputBranchRules first if present
-      if (question.inputBranchRules && question.inputBranchRules.length > 0) {
-        const matchingRule = question.inputBranchRules.find((rule) => {
-          if (!rule.keyword) return false;
-          const kw = String(formatDetailVars(rule.keyword, false, true)).trim();
-          return rule.caseSensitive ?
-              userAns.includes(kw)
-            : userAns.toLowerCase().includes(kw.toLowerCase());
-        });
-        if (matchingRule) return true;
-      }
-
       if (!decodedCorrect && decodedCorrect !== 0) return true;
       const targetAns = String(
-        formatDetailVars(decodedCorrect, false, true),
+        resolvePipedText(
+          JSON.stringify(decodedCorrect),
+          {
+            userData,
+            userAnswers,
+            questions: activeQuestions,
+            score,
+            totalQuestions: activeQuestions.length,
+          },
+          false,
+          String(decodedCorrect),
+        ).trim(),
       ).trim();
       return question.caseSensitive ?
           userAns === targetAns
@@ -949,147 +1448,9 @@ function Taker() {
     proceedToNext(updated);
   };
 
-  const handleNext = (isAutoSubmit: any = false) => {
-    const autoSubmit = isAutoSubmit === true;
-
-    const currentQId = q?.id || '';
-    let currentSelectedOption =
-      quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
-
-    if (!autoSubmit) {
-      if (q?.type === 'checkbox') {
-        const activeBoxAnswers =
-          quiz?.quizScroll ? scrollAnswers[currentQId] || [] : selectedOptions;
-        if (activeBoxAnswers.length === 0) {
-          return toast.error('Please select at least one answer');
-        }
-      }
-      if (q?.type === 'range' && currentSelectedOption === null) {
-        currentSelectedOption = (q.min || 0).toString();
-      }
-
-      if (
-        currentSelectedOption === null &&
-        q?.type !== 'input' &&
-        q?.type !== 'upload' &&
-        q?.type !== 'checkbox'
-      ) {
-        return toast.error('Please select an answer');
-      }
-    }
-
-    let correct = false;
-    if (quiz?.type === 'quiz' && q) {
-      // Upload type: answer was already stored directly in userAnswers on file pick
-      if (q.type === 'upload') {
-        const existingUpload = userAnswers.find((a) => a.questionId === q.id);
-        if (existingUpload) {
-          // Already recorded as correct — just count score and proceed
-          setScore(userAnswers.filter((a) => a.correct).length);
-          proceedToNext(userAnswers);
-          return;
-        }
-        // No file uploaded — still proceed (upload is optional) with a skipped record
-        const skippedRecord = { questionId: q.id, answer: '', correct: true };
-        const updatedWithSkip = [...userAnswers, skippedRecord];
-        setUserAnswers(updatedWithSkip);
-        setScore(updatedWithSkip.filter((a) => a.correct).length);
-        proceedToNext(updatedWithSkip);
-        return;
-      }
-
-      const activeAns =
-        q.type === 'checkbox' ?
-          quiz?.quizScroll ?
-            scrollAnswers[currentQId] || []
-          : selectedOptions
-        : q.type === 'input' ?
-          quiz?.quizScroll ?
-            scrollAnswers[currentQId] || ''
-          : content
-        : currentSelectedOption;
-
-      correct = computeIsCorrect(q.id, activeAns);
-
-      if (correct) setScore((s) => s + 1);
-      setIsCorrect(correct);
-
-      const qId = q.id;
-      const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
-
-      let updatedAnswers;
-      if (existingIdx > -1) {
-        updatedAnswers = [...userAnswers];
-        updatedAnswers[existingIdx] = {
-          questionId: qId,
-          answer: activeAns,
-          correct,
-        };
-      } else {
-        updatedAnswers = [
-          ...userAnswers,
-          { questionId: qId, answer: activeAns, correct },
-        ];
-      }
-
-      setUserAnswers(updatedAnswers);
-      setScore(updatedAnswers.filter((a) => a.correct).length);
-
-      if (quiz?.correctOption) {
-        setShowFeedback(true);
-        setTimeout(() => {
-          proceedToNext(updatedAnswers);
-        }, 1500);
-      } else {
-        proceedToNext(updatedAnswers);
-      }
-    } else if (q) {
-      // Upload type for surveys: answer was pre-stored on file pick
-      if (q.type === 'upload') {
-        const existingUpload = userAnswers.find((a) => a.questionId === q.id);
-        if (!existingUpload) {
-          // No file — record a skip and proceed
-          const updatedWithSkip = [
-            ...userAnswers,
-            { questionId: q.id, answer: '' },
-          ];
-          setUserAnswers(updatedWithSkip);
-          proceedToNext(updatedWithSkip);
-        } else {
-          proceedToNext(userAnswers);
-        }
-        return;
-      }
-
-      const activeAns =
-        q.type === 'checkbox' ?
-          quiz?.quizScroll ?
-            scrollAnswers[currentQId] || []
-          : selectedOptions
-        : q.type === 'input' ?
-          quiz?.quizScroll ?
-            scrollAnswers[currentQId] || ''
-          : content
-        : currentSelectedOption;
-
-      const qId = q.id;
-      const existingIdx = userAnswers.findIndex((a) => a.questionId === qId);
-      let updatedAnswers;
-      if (existingIdx > -1) {
-        updatedAnswers = [...userAnswers];
-        updatedAnswers[existingIdx] = { questionId: qId, answer: activeAns };
-      } else {
-        updatedAnswers = [
-          ...userAnswers,
-          { questionId: qId, answer: activeAns },
-        ];
-      }
-      setUserAnswers(updatedAnswers);
-      proceedToNext(updatedAnswers);
-    }
-  };
-
   const finalizeQuiz = async (finalAnswers: any[]) => {
+    if (finalizingRef.current) return;
+    finalizingRef.current = true;
     setIsFinished(true);
     playQuizCompletionTone();
 
@@ -1098,37 +1459,98 @@ function Taker() {
     }
 
     if (quiz) {
-      if (!quiz.allowRetry) {
-        localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+      if (!isLocalPreview && !quiz.allowRetry) {
+        try {
+          localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+        } catch {
+          // The response can still be submitted when browser storage is full.
+        }
       }
       try {
-        const finalScore = finalAnswers.filter((a) => a.correct).length;
+        let answersToSubmit = finalAnswers;
+        const finalScore =
+          quiz.type === 'quiz' ?
+            finalAnswers.filter((a) => a.correct).length
+          : 0;
 
         // Detect taker's accurate country & continent via geo-detector
         const clientGeo = detectClientGeo();
 
         // Sanitize & trim all participant details to preserve exact values
         const sanitizedUserData: Record<string, string> = {};
-        Object.entries(userData || {}).forEach(([k, v]) => {
+        const authData =
+          isLoggedIn && !quiz.askDetails ?
+            { pingAuthEmail: user?.email, pingAuthName: username }
+          : {};
+
+        Object.entries({ ...userData, ...authData }).forEach(([k, v]) => {
           const cleanKey = k.trim();
           if (cleanKey) {
             sanitizedUserData[cleanKey] = String(v ?? '').trim();
           }
         });
 
-        await HybridStorage.saveResponse(quiz.id, {
-          userData: sanitizedUserData,
-          answers: finalAnswers,
-          score: finalScore,
-          categoryScores,
-          totalQuestions: activeQuestions.length,
-          answeredQuestions: finalAnswers.length,
-          country: clientGeo.country,
-          continent: clientGeo.continent,
-          timezone: clientGeo.timezone,
-        });
+        if (!isLocalPreview) {
+          const attempt = activeAttemptRef.current;
+          if (attempt?.attemptId && attempt?.attemptToken) {
+            try {
+              const finalSnapshot =
+                await HybridStorage.prepareQuizAttemptSnapshot(quiz.id, {
+                  ...createAttemptSnapshot(finalAnswers),
+                  status: 'in_progress',
+                });
+              await syncAttemptSnapshot(finalSnapshot);
+              const persistedAnswers = activeAttemptRef.current?.answers;
+              if (persistedAnswers && typeof persistedAnswers === 'object')
+                answersToSubmit = Object.values(persistedAnswers);
+            } catch {
+              // saveResponse will retain the full file answers locally and retry their upload later.
+            }
+          }
+          const responseSaved = await HybridStorage.saveResponse(quiz.id, {
+            userData: sanitizedUserData,
+            answers: answersToSubmit,
+            score: finalScore,
+            assessmentType: quiz.type,
+            categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
+            totalQuestions: activeQuestions.length,
+            answeredQuestions: finalAnswers.length,
+            country: clientGeo.country,
+            continent: clientGeo.continent,
+            timezone: clientGeo.timezone,
+            submissionId: attempt?.attemptId,
+            attemptId: attempt?.attemptId,
+            attemptToken: attempt?.attemptToken,
+          });
+          if (!responseSaved)
+            toast.error(
+              'Your answers could not be stored. Please copy them before leaving this page.',
+            );
+          else if (
+            typeof responseSaved === 'object' &&
+            'queued' in responseSaved &&
+            responseSaved.queued
+          )
+            toast.warning(
+              'Your answers are saved on this device and will sync when you are back online.',
+            );
+          else if (
+            typeof responseSaved === 'object' &&
+            'score' in responseSaved &&
+            typeof responseSaved.score === 'number'
+          ) {
+            setScore(responseSaved.score);
+            if (responseSaved.categoryScores)
+              setServerCategoryScores(responseSaved.categoryScores);
+            if (attempt?.attemptId)
+              await HybridStorage.deleteQuizAttemptDraft(quiz.id);
+          }
+        }
       } catch (e) {
         console.error('Failed to save response:', e);
+        toast.error(
+          'Your answers could not be synchronized yet. Keep this page open or reconnect to retry.',
+        );
       }
     }
   };
@@ -1161,8 +1583,17 @@ function Taker() {
         if (q.inputBranchRules && q.inputBranchRules.length > 0) {
           const matchedRule = q.inputBranchRules.find((rule) => {
             if (!rule.keyword) return false;
-            const kw = String(
-              formatDetailVars(rule.keyword, false, true),
+            const kw = resolvePipedText(
+              rule.keyword,
+              {
+                userData,
+                userAnswers: answersToSave,
+                questions: activeQuestions,
+                score,
+                totalQuestions: activeQuestions.length,
+              },
+              false,
+              rule.keyword,
             ).trim();
             return rule.caseSensitive ?
                 userText.includes(kw)
@@ -1211,8 +1642,45 @@ function Taker() {
         if (q.skipToCat) branchCat = q.skipToCat;
       }
 
+      // Resolve piped targets at runtime. Invalid or empty targets deliberately
+      // fall through to the ordinary in-group/next-question progression.
+      const pipingContext = {
+        userData,
+        userAnswers: answersToSave,
+        questions: activeQuestions,
+        score,
+        totalQuestions: activeQuestions.length,
+      };
+      if (branchTarget && branchTarget !== 'end') {
+        branchTarget =
+          resolvePipedText(branchTarget, pipingContext, false, '').trim() ||
+          undefined;
+        if (
+          branchTarget &&
+          !activeQuestions.some((question) => question.id === branchTarget)
+        ) {
+          branchTarget = undefined;
+        }
+      }
+      if (branchCat) {
+        branchCat =
+          resolvePipedText(branchCat, pipingContext, false, '').trim() ||
+          undefined;
+        if (
+          branchCat &&
+          branchCat.toLowerCase() !== 'end' &&
+          !activeQuestions.some(
+            (question) =>
+              question.category?.trim().toLowerCase() ===
+              branchCat?.toLowerCase(),
+          )
+        ) {
+          branchCat = undefined;
+        }
+      }
+
       // 4. Evaluate explicit routing target with 3x Loop Limiter Protection
-      if (branchTarget === 'end') {
+      if (branchTarget === 'end' || branchCat?.toLowerCase() === 'end') {
         finalizeQuiz(answersToSave);
         return;
       } else if (branchTarget) {
@@ -1331,7 +1799,7 @@ function Taker() {
   };
 
   // Dynamic variable mention & cross-question piping engine
-   const formatDetailVars = (
+  const formatDetailVars = (
     rawText: string,
     _showPrev?: boolean,
     _hideBold?: boolean,
@@ -1385,13 +1853,14 @@ function Taker() {
           key={quest.id}
           ref={index === 0 ? firstQuestionRef : undefined}
           className={cn(
-            'p-0  rounded-none sm:glass sm:rounded-3xl bg-transparent sm:p-6 sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl ring-0 sm:ring-1 flex flex-col w-full max-w-[600px] mb-8 transition-all duration-300 space-y-0 self-center',
+            'p-0  bg-transparent sm:p-6 ring-0 flex flex-col w-full max-w-[600px] rounded-[0px] mb-8 transition-all duration-300 space-y-0 self-center',
             !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
-            !isScrollLayout && 'bkblur',
+            !isScrollLayout &&
+              'sm:bkblur sm:glass sm:rounded-3xl sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl sm:ring-1 ',
           )}
           style={{ placeSelf: 'center' }}>
           {/* Show Question Category tag if enabled or set */}
-          {(quiz?.showCategory || quest.category) && quest.category && (
+          {(quiz?.category?.show || quest.category) && quest.category && (
             <div>
               <span className='inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pw-primary/10 border border-pw-primary/30 text-pw-primary text-[10px] font-bold bkblur uppercase tracking-wider'>
                 <Folder className='h-3 w-3' /> {quest.category}
@@ -1453,9 +1922,13 @@ function Taker() {
                         posInStack !== -1 ? posInStack + 1 : index + 1;
                       const stackTotal =
                         inStack.length || activeQuestions.length;
-                      return quest.category ?
-                          `Question ${stackPos} of ${stackTotal} in ${quest.category}`
-                        : `Question ${stackPos} of ${stackTotal}`;
+                      return (
+                        quest.category ?
+                          stackTotal === 1 ?
+                            `Question ${stackPos} in ${quest.category}`
+                          : `Question ${stackPos} of ${stackTotal} in ${quest.category}`
+                        : `Question ${stackPos} of ${stackTotal}`
+                      );
                     })()}
                   </span>
                   <h2
@@ -1508,27 +1981,156 @@ function Taker() {
                 placeholder='Type your answer here...'
                 className='w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-pw-primary resize-none'
               />
+            : quest.type === 'range' ?
+              (() => {
+                const min =
+                  Number.isFinite(Number(quest.min)) ? Number(quest.min) : 0;
+                const max =
+                  (
+                    Number.isFinite(Number(quest.max)) &&
+                    Number(quest.max) > min
+                  ) ?
+                    Number(quest.max)
+                  : 10;
+                const step =
+                  (
+                    Number.isFinite(Number(quest.step)) &&
+                    Number(quest.step) > 0
+                  ) ?
+                    Number(quest.step)
+                  : 1;
+                const value = Number(scrollAnswers[quest.id] ?? min);
+                const saveValue = (next: number) => {
+                  setScrollAnswers((previous) => ({
+                    ...previous,
+                    [quest.id]: next,
+                  }));
+                  setUserAnswers((previous) => {
+                    const existing = previous.findIndex(
+                      (answer) => answer.questionId === quest.id,
+                    );
+                    const answer = {
+                      questionId: quest.id,
+                      answer: next,
+                      correct: false,
+                    };
+                    return existing < 0 ?
+                        [...previous, answer]
+                      : previous.map((item, index) =>
+                          index === existing ? answer : item,
+                        );
+                  });
+                };
+                return (
+                  <div className='rounded-2xl border border-white/10 bg-white/[0.035] p-5'>
+                    <div className='mb-4 flex items-center justify-between'>
+                      <span className='text-xs text-white/55'>{min}</span>
+                      <span className='rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-lg font-bold tabular-nums text-cyan-200'>
+                        {Number.isFinite(value) ? value : min}
+                      </span>
+                      <span className='text-xs text-white/55'>{max}</span>
+                    </div>
+                    <input
+                      aria-label='Choose a value'
+                      type='range'
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={
+                        Number.isFinite(value) ?
+                          Math.min(max, Math.max(min, value))
+                        : min
+                      }
+                      onChange={(event) =>
+                        saveValue(Number(event.target.value))
+                      }
+                      className='h-2 w-full cursor-pointer accent-cyan-300'
+                    />
+                  </div>
+                );
+              })()
+            : quest.type === 'rating' ?
+              (() => {
+                const selectedRating = Number(scrollAnswers[quest.id] || 0);
+                const saveRating = (rating: number) => {
+                  setScrollAnswers((previous) => ({
+                    ...previous,
+                    [quest.id]: rating,
+                  }));
+                  setUserAnswers((previous) => {
+                    const existing = previous.findIndex(
+                      (answer) => answer.questionId === quest.id,
+                    );
+                    const answer = {
+                      questionId: quest.id,
+                      answer: rating,
+                      correct: false,
+                    };
+                    return existing < 0 ?
+                        [...previous, answer]
+                      : previous.map((item, index) =>
+                          index === existing ? answer : item,
+                        );
+                  });
+                };
+                return (
+                  <div className='rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-center'>
+                    <div
+                      className='flex justify-center gap-2'
+                      role='radiogroup'
+                      aria-label='Rating from one to five'>
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <button
+                          key={rating}
+                          type='button'
+                          role='radio'
+                          aria-checked={selectedRating === rating}
+                          aria-label={`${rating} ${rating === 1 ? 'star' : 'stars'}`}
+                          onClick={() => saveRating(rating)}
+                          className='rounded-xl p-2 transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300'>
+                          <Star
+                            className={cn(
+                              'h-8 w-8 transition-colors',
+                              rating <= selectedRating ?
+                                'fill-amber-300 text-amber-300'
+                              : 'text-white/30',
+                            )}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <p className='mt-3 text-xs text-white/55'>
+                      {selectedRating ?
+                        `${selectedRating} of 5`
+                      : 'Select a rating'}
+                    </p>
+                  </div>
+                );
+              })()
             : quest.type === 'upload' ?
-              <div className='space-y-3 p-4 bg-white/5 border border-dashed border-white/20 rounded-2xl text-left'>
+              <div className='space-y-2 p-2 bg-white/5 border border-dashed border-white/20 rounded-3xl text-left'>
                 {quest.uploadInstruction && (
-                  <p className='text-xs text-pw-cyan font-semibold mb-2 bg-pw-cyan/5 p-2 rounded-xl border border-pw-cyan/10'>
+                  <p className='text-xs text-pw-cyan font-semibold mb-2 bg-pw-cyan/5 p-1.5 rounded-2xl border border-pw-cyan/10'>
                     ℹ {formatDetailVars(quest.uploadInstruction)}
                   </p>
                 )}
 
-                <div className='flex flex-col gap-2'>
+                <div className='flex flex-col gap-1'>
                   <input
                     type='file'
                     accept={
-                      quest.allowedTypes || 'image/*,.pdf,.doc,.docx,.txt,.zip'
+                      quest?.allowedTypes ||
+                      'image/*,.pdf,.doc,.docx,.txt,.zip,.json,/application/json,video/*,audio/*,'
                     }
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
 
                       // Enforce max size limit (MB)
-                      const maxMb = quest.maxSizeMb || 15;
+                      const maxMb =
+                        quiz?.fromPremium ? quest.maxFileSize || 5 : 5;
                       const sizeInMb = file.size / (1024 * 1024);
+
                       if (sizeInMb > maxMb) {
                         toast.error(
                           `File size (${sizeInMb.toFixed(1)}MB) exceeds limit of ${maxMb}MB`,
@@ -1560,7 +2162,7 @@ function Taker() {
                           answer: file.name,
                           fileName: file.name,
                           fileUrl: packedUrl,
-                          correct: true, // Marked answered & correct on upload
+                          correct: quiz?.type === 'quiz',
                         };
 
                         if (existingIdx > -1) {
@@ -1574,16 +2176,16 @@ function Taker() {
                       };
                       reader.readAsDataURL(file);
                     }}
-                    className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/20 file:text-pw-primary hover:file:bg-pw-primary/30 cursor-pointer w-full'
+                    className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/10 file:text-pw-primary hover:file:bg-pw-primary/20 file:cursor-pointer w-full'
                   />
 
                   {/* Allow taker to customize filename on save */}
                   {(content || scrollAnswers[quest.id]) && (
-                    <div className='mt-2 p-2 bg-black/30 rounded-xl border border-white/10 flex items-center justify-between gap-2 flex-wrap'>
-                      <div className='flex items-center gap-2 text-xs text-pw-success font-bold font-mono'>
+                    <div className='mt-2 p-1 bg-black/30 rounded-xl border border-white/10 flex items-center justify-between gap-2 flex-wrap'>
+                      <div className='flex items-center text-xs text-pw-success font-bold font-mono ml-2'>
                         <span>✓ File Attached</span>
                       </div>
-                      <div className='flex items-center gap-2'>
+                      <div className='flex items-center h-7 w-[30%] max-w-45'>
                         <Input
                           placeholder='Rename file before saving...'
                           value={
@@ -1599,11 +2201,63 @@ function Taker() {
                             );
                             setUserAnswers(updated);
                           }}
-                          className='h-7 w-48 text-[10px] bg-white/5 border-white/10'
+                          className='text-[10px] bg-white/5 border-white/10'
                         />
                       </div>
                     </div>
                   )}
+                  {(() => {
+                    const attached = userAnswers.find(
+                      (answer) => answer.questionId === quest.id,
+                    );
+                    const attachedUrl =
+                      attached?.fileUrl ?
+                        unpackPingWorldMediaUrl(attached.fileUrl).url ||
+                        attached.fileUrl
+                      : '';
+                    if (!attachedUrl) return null;
+                    const isImage =
+                      attachedUrl.startsWith('data:image/') ||
+                      /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
+                        attached?.fileName || '',
+                      );
+                    return (
+                      <div className='mt-2 space-y-1'>
+                        {isImage && (
+                          <button
+                            type='button'
+                            onClick={() =>
+                              openFile({
+                                src: attachedUrl,
+                                name: attached?.fileName || 'Uploaded answer',
+                                mimeType: attached?.fileType,
+                              })
+                            }
+                            className='block w-full cursor-zoom-in text-left'>
+                            <Image
+                              src={attachedUrl}
+                              alt={
+                                attached?.fileName || 'Uploaded answer preview'
+                              }
+                              className='max-h-48 max-w-full rounded-xl border border-white/10 object-contain'
+                            />
+                          </button>
+                        )}
+                        <button
+                          type='button'
+                          onClick={() =>
+                            openFile({
+                              src: attachedUrl,
+                              name: attached?.fileName || 'Uploaded answer',
+                              mimeType: attached?.fileType,
+                            })
+                          }
+                          className='text-[10px] text-pw-cyan hover:underline'>
+                          Preview uploaded file fullscreen
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             : <div className='grid gap-2.5'>
@@ -1623,19 +2277,19 @@ function Taker() {
                     : activeSelected === optId;
 
                   const isFeedbackMode =
-                    showFeedback && quiz?.correctOption && quest.id === q?.id;
+                    quiz?.type === 'quiz' &&
+                    showFeedback &&
+                    quiz?.correctOption &&
+                    quest.id === q?.id;
                   let feedbackClasses =
                     isSelected ?
                       'bg-pw-primary/12 border-pw-primary text-white font-bold'
                     : 'bg-white/5 border-white/10 text-white/90';
 
                   if (isFeedbackMode) {
-                    let decodedCorrect: any = quest.correctIndex;
-                    try {
-                      decodedCorrect = JSON.parse(atob(quest.correctIndex));
-                    } catch {
-                      decodedCorrect = quest.correctIndex;
-                    }
+                    const decodedCorrect = decodeStoredCorrectAnswer(
+                      quest.correctIndex,
+                    );
                     const isCorrectOpt =
                       Array.isArray(decodedCorrect) ?
                         decodedCorrect.includes(optId)
@@ -1714,14 +2368,15 @@ function Taker() {
                           optImage ? 'flex-col sm:flex-row' : 'flex-row',
                         )}>
                         {optImage && (
-                          <img
+                          <Image
                             src={optImage}
                             alt='Option attachment'
                             onClick={(e) => {
                               e.stopPropagation();
-                              setFullscreenMedia({
-                                url: optImage,
-                                title: 'Option Attachment',
+                              openFile({
+                                src: optImage,
+                                name: 'Option attachment',
+                                kind: 'image',
                               });
                             }}
                             className='h-16 w-16 object-cover rounded-lg border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
@@ -1750,45 +2405,48 @@ function Taker() {
             }
 
             {/* Instant Option & Question Explanations when feedback mode is active */}
-            {showFeedback && quiz?.correctOption && quest.id === q?.id && (
-              <div className='mt-3 space-y-2 text-xs'>
-                {(() => {
-                  const selOptObj: any = currentOptions.find(
-                    (o: any, oI: number) =>
-                      (o.id || String(oI)) === activeSelected,
-                  );
-                  const optExp =
-                    selOptObj?.explanation ?
-                      selOptObj?.explanation
-                    : 'No Explanation Available';
-                  return optExp ?
-                      <div className='p-2.5 rounded-xl bg-pw-cyan/10 border border-pw-cyan/20 text-pw-cyan/90 italic whitespace-pre-wrap flex items-start gap-2'>
-                        <span className='font-bold not-italic shrink-0'>
-                          ℹ Option Note:
-                        </span>
-                        <span
-                          dangerouslySetInnerHTML={{
-                            __html: formatDetailVars(optExp),
-                          }}
-                        />
-                      </div>
-                    : null;
-                })()}
+            {quiz?.type === 'quiz' &&
+              showFeedback &&
+              quiz?.correctOption &&
+              quest.id === q?.id && (
+                <div className='mt-3 space-y-2 text-xs'>
+                  {(() => {
+                    const selOptObj: any = currentOptions.find(
+                      (o: any, oI: number) =>
+                        (o.id || String(oI)) === activeSelected,
+                    );
+                    const optExp =
+                      selOptObj?.explanation ?
+                        selOptObj?.explanation
+                      : 'No Explanation Available';
+                    return optExp ?
+                        <div className='p-2.5 rounded-xl bg-pw-cyan/10 border border-pw-cyan/20 text-pw-cyan/90 italic whitespace-pre-wrap flex items-start gap-2'>
+                          <span className='font-bold not-italic shrink-0'>
+                            ℹ Option Note:
+                          </span>
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: formatDetailVars(optExp),
+                            }}
+                          />
+                        </div>
+                      : null;
+                  })()}
 
-                {quest.correctExplanation && (
-                  <div className='p-2.5 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
-                    <span className='font-bold not-italic shrink-0'>
-                      💡 Explanation:
-                    </span>
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: formatDetailVars(quest.correctExplanation),
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+                  {quest.correctExplanation && (
+                    <div className='p-2.5 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
+                      <span className='font-bold not-italic shrink-0'>
+                        💡 Explanation:
+                      </span>
+                      <span
+                        dangerouslySetInnerHTML={{
+                          __html: formatDetailVars(quest.correctExplanation),
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
           </div>
         </Card>
       </motion.div>
@@ -1802,9 +2460,11 @@ function Taker() {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0.1, x: -5 }}
         key='loading-view'
-        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bkblur'>
-        <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-20' />
-        <h2 className='text-2xl font-bold mb-2'>Loading Assessment...</h2>
+        className='flex flex-col items-center justify-center min-h-[90vh] text-center p-6 self-center'>
+        <Puzzle className='h-12 w-12 text-pw-muted mb-4 opacity-70' />
+        <h2 className='text-2xl font-bold mb-2 animate-pulse'>
+          Loading Assessment...
+        </h2>
       </motion.div>
     );
   }
@@ -1812,11 +2472,11 @@ function Taker() {
   if (isOfflineUncached) {
     return (
       <motion.div
-        initial={{ opacity: 0.1, x: 10 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0.1, x: -5 }}
+        initial={{ opacity: 0.1, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0.1, scale: 0.9 }}
         key='not-cached-view'
-        className='flex flex-col items-center justify-center min-h-[60vh] text-center p-4 py-6 bkblur'>
+        className='flex flex-col items-center justify-center min-h-[90vh] text-center p-4 py-6 self-center'>
         <AlertTriangle className='h-12 w-12 text-pw-warning mb-4 animate-pulse' />
         <h2 className='text-2xl font-bold mb-1'>
           Offline: Quiz Not Cached Yet
@@ -1828,13 +2488,29 @@ function Taker() {
     );
   }
 
+  if (quizUnavailable) {
+    return (
+      <div className='flex min-h-[90vh] flex-col items-center justify-center gap-3 p-6 text-center'>
+        <AlertTriangle className='h-12 w-12 text-pw-warning' />
+        <h2 className='text-2xl font-bold'>Assessment unavailable</h2>
+        <p className='max-w-md text-sm text-pw-muted'>
+          This assessment may have expired, or the secure quiz service is not
+          configured. Please check the link or try again later.
+        </p>
+        <Link href='/tools'>
+          <Button className='btn-primary'>Go to tools</Button>
+        </Link>
+      </div>
+    );
+  }
+
   if (isQuizExpired) {
     return (
       <motion.div
         initial={{ opacity: 0.1, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         key='expired-quiz-view'
-        className='flex flex-col items-center justify-center min-h-[70vh] text-center p-6 backdrop-blur-md'>
+        className='flex flex-col items-center justify-center min-h-[90vh] text-center p-6 self-center'>
         <div className='w-16 h-16 bg-pw-warning/10 rounded-full flex items-center justify-center border border-pw-warning/20 mb-4'>
           <Clock className='h-8 w-8 text-pw-warning' />
         </div>
@@ -1865,29 +2541,33 @@ function Taker() {
     return (
       <div
         key='completion-view'
-        className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6 overflow-x-hidden backdrop-blur-md'>
+        className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6 overflow-x-hidden'>
         {/* Persistent Branding Background & Shade */}
-        {quiz?.branding?.shadeColor && (
-          <div
-            className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none transition-all duration-500'
-            style={{
-              backgroundColor: quiz.branding.shadeColor,
-              opacity: quiz.branding.opacity ?? 0.35,
-            }}
-          />
-        )}
-        {quiz?.branding?.image && (
-          <div
-            className='fixed inset-0 min-h-screen w-screen z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-all duration-500'
-            style={{
-              backgroundImage: `url(${unpackPingWorldMediaUrl(quiz.branding.image).url || quiz.branding.image})`,
-              opacity: quiz.branding.opacity ?? 0.25,
-              filter: `blur(${quiz.branding.blur ?? 0}px) brightness(85%)`,
-            }}
-          />
-        )}
-        {(quiz?.branding?.image || quiz?.branding?.shadeColor) && (
-          <div className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60' />
+        {quiz?.fromPremium && (
+          <>
+            {quiz?.branding?.shadeColor && (
+              <div
+                className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none transition-all duration-500'
+                style={{
+                  backgroundColor: quiz.branding.shadeColor,
+                  opacity: 0.35,
+                }}
+              />
+            )}
+            {quiz?.branding?.image && (
+              <div
+                className='fixed inset-0 min-h-screen w-screen z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-all duration-500'
+                style={{
+                  backgroundImage: `url(${unpackPingWorldMediaUrl(quiz.branding.image).url || quiz.branding.image})`,
+                  opacity: quiz.branding.opacity ?? 0.25,
+                  filter: `blur(${quiz.branding.blur ?? 0}px) brightness(80%)`,
+                }}
+              />
+            )}
+            {(quiz?.branding?.image || quiz?.branding?.shadeColor) && (
+              <div className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60' />
+            )}
+          </>
         )}
         <div
           className={cn(
@@ -1995,6 +2675,38 @@ function Taker() {
                       </span>
                     </div>
                   ))}
+
+                  {/* Independent Questions Score Breakdown */}
+                  {(() => {
+                    const independentQs = activeQuestions.filter(
+                      (quest) =>
+                        !quest.category || quest.category.trim() === '',
+                    );
+                    if (independentQs.length === 0) return null;
+                    const independentAns = userAnswers.filter((a) =>
+                      independentQs.some((q) => q.id === a.questionId),
+                    );
+                    const indCorrect = independentAns.filter(
+                      (a) => a.correct,
+                    ).length;
+
+                    return (
+                      <div
+                        key={
+                          quiz?.title +
+                          'independent-questions' +
+                          independentQs.length
+                        }
+                        className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
+                        <span className='font-bold text-white'>
+                          General Questions ({independentQs.length})
+                        </span>
+                        <span className='font-mono text-pw-primary font-bold'>
+                          {indCorrect} / {independentQs.length}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </Card>
@@ -2098,13 +2810,13 @@ function Taker() {
                       {/* Question image attachment if present */}
                       {qImgUrl && (
                         <div className='pl-5 my-1'>
-                          <img
+                          <Image
                             src={qImgUrl}
                             alt='Question media'
                             onClick={() =>
-                              setFullscreenMedia({
-                                url: qImgUrl,
-                                title: `Question Attachment - Q${qi + 1}`,
+                              openFile({
+                                src: qImgUrl,
+                                name: `Question attachment - Q${qi + 1}`,
                               })
                             }
                             className='max-h-24 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
@@ -2128,13 +2840,13 @@ function Taker() {
                           <span className='text-[10px] text-pw-muted'>
                             Selected Image:
                           </span>
-                          <img
+                          <Image
                             src={selOptImgUrl}
                             alt='Selected option attachment'
                             onClick={() =>
-                              setFullscreenMedia({
-                                url: selOptImgUrl,
-                                title: `Selected Option Image - Q${qi + 1}`,
+                              openFile({
+                                src: selOptImgUrl,
+                                name: `Selected option image - Q${qi + 1}`,
                               })
                             }
                             className='h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
@@ -2142,44 +2854,58 @@ function Taker() {
                         </div>
                       )}
 
-                      {/* Uploaded answer file image preview */}
+                      {/* Uploaded answer attachment preview */}
                       {ans?.fileUrl &&
                         (() => {
                           const unpacked =
                             unpackPingWorldMediaUrl(ans.fileUrl).url ||
                             ans.fileUrl;
+                          const fileName =
+                            ans.fileName || `Uploaded answer - Q${qi + 1}`;
+                          const isImage =
+                            ans.fileType?.startsWith('image/') ||
+                            String(unpacked).startsWith('data:image/') ||
+                            /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
+                              fileName,
+                            );
                           return (
-                              String(unpacked).startsWith('data:image/') ||
-                                String(unpacked).startsWith('http')
-                            ) ?
-                              <div className='pl-5 my-1 flex items-center gap-2'>
-                                <span className='text-[10px] text-pw-muted'>
-                                  Uploaded Image:
-                                </span>
-                                <img
+                            <div className='pl-5 my-1 flex items-center gap-2'>
+                              {isImage && (
+                                <Image
                                   src={unpacked}
-                                  alt='Uploaded Answer'
+                                  alt={fileName}
                                   onClick={() =>
-                                    setFullscreenMedia({
-                                      url: unpacked,
-                                      title: `Uploaded Answer - Q${qi + 1}`,
+                                    openFile({
+                                      src: unpacked,
+                                      name: fileName,
+                                      mimeType: ans.fileType,
                                     })
                                   }
                                   className='max-h-28 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
                                 />
-                              </div>
-                            : null;
+                              )}
+                              <button
+                                type='button'
+                                onClick={() =>
+                                  openFile({
+                                    src: unpacked,
+                                    name: fileName,
+                                    mimeType: ans.fileType,
+                                  })
+                                }
+                                className='text-[10px] text-pw-cyan hover:underline'>
+                                Preview {fileName}
+                              </button>
+                            </div>
+                          );
                         })()}
 
                       {/* Show correct answer if taker got it wrong */}
                       {!ans?.correct &&
                         (() => {
-                          let decodedIndex: any = q.correctIndex;
-                          try {
-                            decodedIndex = JSON.parse(atob(q.correctIndex));
-                          } catch {
-                            decodedIndex = q.correctIndex;
-                          }
+                          const decodedIndex = decodeStoredCorrectAnswer(
+                            q.correctIndex,
+                          );
                           const correctOpt = opts.find(
                             (o: any, oI: number) =>
                               o.id === decodedIndex ||
@@ -2213,13 +2939,14 @@ function Taker() {
                                   <span className='text-[10px] text-pw-muted'>
                                     Correct Image:
                                   </span>
-                                  <img
+                                  <Image
                                     src={correctImgUrl}
                                     alt='Correct option attachment'
                                     onClick={() =>
-                                      setFullscreenMedia({
-                                        url: correctImgUrl,
-                                        title: `Correct Option Image - Q${qi + 1}`,
+                                      openFile({
+                                        src: correctImgUrl,
+                                        kind: 'image',
+                                        name: `Correct Option Image - Q${qi + 1}`,
                                       })
                                     }
                                     className='h-12 w-12 rounded-lg object-cover border border-pw-success/30 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
@@ -2271,20 +2998,23 @@ function Taker() {
           </div>
 
           {/* PingWorld compliance disclaimer footer on completion screen */}
-          {!quiz?.hidePingWorldDisclaimer && (
-            <div className='pt-6 border-t border-white/5 mt-6 text-[10px] text-pw-muted leading-tight max-w-sm mx-auto'>
-              <p>
-                {quiz?.customDisclaimer ?
-                  <span
-                    className='whitespace-pre-wrap'
-                    dangerouslySetInnerHTML={{
-                      __html: formatDetailVars(quiz.customDisclaimer),
-                    }}
-                  />
-                : `PingWorld is a service provider hosting this ${quiz?.type ?? 'assessment'}. We are not responsible for any questions, responses, or outcomes generated in this ${quiz?.type ?? 'assessment'}.`}
-              </p>
-            </div>
-          )}
+          <div className='pt-6 border-t border-white/5 mt-6 text-[10px] text-pw-muted leading-tight max-w-sm mx-auto text-center'>
+            <p>
+              {(
+                quiz?.fromPremium &&
+                quiz?.hidePingWorldDisclaimer &&
+                quiz?.disclaimer
+              ) ?
+                <span
+                  className='whitespace-pre-wrap'
+                  dangerouslySetInnerHTML={{
+                    __html: formatDetailVars(quiz.disclaimer),
+                  }}
+                />
+              : `PingWorld is a service provider hosting this ${quiz?.type ?? 'assessment'}. We are not responsible for any questions, responses, or outcomes generated in this ${quiz?.type ?? 'assessment'}.`
+              }
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -2316,27 +3046,32 @@ function Taker() {
       />
 
       {/* Persistent Fullscreen Branding Background & Shade */}
-      {quiz?.branding?.shadeColor && (
-        <div
-          className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none transition-all duration-500'
-          style={{
-            backgroundColor: quiz.branding.shadeColor,
-            opacity: quiz.branding.opacity ?? 0.35,
-          }}
-        />
-      )}
-      {quiz?.branding?.image && (
-        <div
-          className='fixed inset-0 min-h-screen w-screen z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-all duration-500'
-          style={{
-            backgroundImage: `url(${unpackPingWorldMediaUrl(quiz.branding.image).url || quiz.branding.image})`,
-            opacity: quiz.branding.opacity ?? 0.25,
-            filter: `blur(${quiz.branding.blur ?? 0}px) brightness(85%)`,
-          }}
-        />
-      )}
-      {(quiz?.branding?.image || quiz?.branding?.shadeColor) && (
-        <div className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60' />
+
+      {quiz?.fromPremium && (
+        <>
+          {quiz?.branding?.shadeColor && (
+            <div
+              className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none transition-all duration-500'
+              style={{
+                backgroundColor: quiz.branding.shadeColor,
+                opacity: 0.35,
+              }}
+            />
+          )}
+          {quiz?.branding?.image && (
+            <div
+              className='fixed inset-0 min-h-screen w-screen z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-all duration-500'
+              style={{
+                backgroundImage: `url(${unpackPingWorldMediaUrl(quiz.branding.image).url || quiz.branding.image})`,
+                opacity: quiz.branding.opacity ?? 0.25,
+                filter: `blur(${quiz.branding.blur ?? 0}px) brightness(80%)`,
+              }}
+            />
+          )}
+          {(quiz?.branding?.image || quiz?.branding?.shadeColor) && (
+            <div className='fixed inset-0 min-h-screen w-screen z-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60' />
+          )}
+        </>
       )}
 
       {/* Intro Gate */}
@@ -2346,8 +3081,8 @@ function Taker() {
           className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
           <div className='relative z-10'>
             {/* Show clear foreground image/logo if configured */}
-            {quiz?.branding?.icon ?
-              <img
+            {quiz?.fromPremium && quiz?.branding?.icon ?
+              <Image
                 src={quiz?.branding?.icon}
                 alt='Intro Logo'
                 className='h-20 w-20 object-contain rounded-2xl mb-4 mx-auto border-1 border-white/10 shadow-2xl bg-black/40 bkblur'
@@ -2399,10 +3134,7 @@ function Taker() {
                     setDetailsCollected(false);
                     setShowDetails(true);
                     setShowSecurityProtocol(false);
-                  } else {
-                    playQuizStartTone();
-                    setStart(true);
-                  }
+                  } else startAssessment();
                   setShowIntro(false);
                 }}>
                 CONTINUE
@@ -2419,7 +3151,7 @@ function Taker() {
               </p>
             : !quiz?.hidePingWorldDisclaimer ?
               <p className='mb-1 text-[10px] flex flex-col'>
-                {quiz?.customDisclaimer ?
+                {quiz?.fromPremium && quiz?.customDisclaimer ?
                   <span
                     className='whitespace-pre-wrap'
                     dangerouslySetInnerHTML={{
@@ -2456,7 +3188,7 @@ function Taker() {
           <div
             key='security-view'
             className='container relative z-10 mx-auto px-5 py-5 max-w-xl text-center flex-1 flex flex-col justify-center'>
-            <div className='sm:bg-pw-primary/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-pw-primary/20 space-y-8 sm:bkblur'>
+            <div className='sm:bg-pw-primary/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-pw-primary/20 space-y-8 sm:glass sm:bkblur'>
               <div className='flex flex-col items-center gap-4 mt-2'>
                 <ShieldCheck className='h-16 w-16 text-pw-primary animate-pulse' />
                 <div className='text-center'>
@@ -2499,10 +3231,7 @@ function Taker() {
 
                   if (quiz?.askDetails && quiz?.askDetails.length > 0) {
                     setShowDetails(true);
-                  } else {
-                    playQuizStartTone();
-                    setStart(true);
-                  }
+                  } else startAssessment();
                 }}
                 className='w-full btn-primary h-12 text-lg font-bold shadow-2xl relative overflow-hidden group'>
                 I UNDERSTAND & AGREE
@@ -2518,15 +3247,15 @@ function Taker() {
           <div
             key='details-view'
             className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
-            <div className='sm:bkblur sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl sm:bkblur'>
-              <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-pw-cyan text-center'>
+            <div className='sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl sm:glass sm:bkblur'>
+              <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-center'>
                 ENTER YOUR DETAILS
               </h3>
               <div className='space-y-5'>
                 {quiz?.askDetails?.map((detail, idx) => (
                   <div
                     key={(detail?.title as string) + idx}
-                    className='space-y-2'>
+                    className='space-y-1'>
                     <label className='text-[10px] font-bold text-pw-muted uppercase ml-2'>
                       {detail.title || 'Enter Detail'}
                     </label>
@@ -2563,7 +3292,7 @@ function Taker() {
                             className={'w-[40%] min-w-[100px] overflow-hidden'}>
                             <Button
                               variant='outline'
-                              className='h-8 text-xs w-full flex justify-between'>
+                              className='h-8 text-xs w-full flex justify-between rounded-xl bg-pw-surface/60 bkblur'>
                               {userData[detail.title] || 'Select'}
                               <ChevronDown size={16} />
                             </Button>
@@ -2578,8 +3307,11 @@ function Taker() {
                                     [detail.title]: opt,
                                   })
                                 }
-                                className='h-10 rounded-xl focus:bg-pw-primary/10 cursor-pointer'>
-                                {capFirst(opt)}
+                                className='h-8 rounded-xl focus:bg-pw-primary/10 cursor-pointer group justify-between gap-1 text-white/60 hover:text-white'>
+                                <span className='line-clamp-1 truncate'>
+                                  {capFirst(opt)}
+                                </span>{' '}
+                                <ChevronRight className='group-hover:scale-1.05' />
                               </DropdownMenuItem>
                             ))}
                           </DropdownMenuContent>
@@ -2652,18 +3384,25 @@ function Taker() {
                     {(detail.minLength || detail.maxLength) && (
                       <div className='flex justify-between items-center text-[10px] px-1 text-pw-muted mt-1'>
                         <span>
-                          {detail.minLength ? `Min: ${detail.minLength} chars` : ''}
-                          {detail.minLength && detail.maxLength ? ' • ' : ''}
-                          {detail.maxLength ? `Max: ${detail.maxLength} chars` : ''}
+                          {detail.minLength === detail.maxLength ?
+                            `${detail.maxLength} chars expected`
+                          : `
+                          ${detail.minLength ? `Min: ${detail.minLength} chars` : ''}
+                          ${detail.minLength && detail.maxLength ? ' • ' : ''}
+                          ${detail.maxLength ? `Max: ${detail.maxLength} chars` : ''}
+                          `
+                          }
                         </span>
                         <span
                           className={cn(
                             'font-mono',
                             detail.minLength &&
-                              (userData[detail.title]?.length || 0) < detail.minLength &&
+                              (userData[detail.title]?.length || 0) <
+                                detail.minLength &&
                               'text-pw-warning',
                             detail.maxLength &&
-                              (userData[detail.title]?.length || 0) > detail.maxLength &&
+                              (userData[detail.title]?.length || 0) >
+                                detail.maxLength &&
                               'text-pw-danger font-bold',
                           )}>
                           {(userData[detail.title] || '').length}
@@ -2721,7 +3460,9 @@ function Taker() {
                         (d as any).restrictedKeywords &&
                         String((d as any).restrictedKeywords).trim() !== ''
                       ) {
-                        const rawRestricted = String((d as any).restrictedKeywords).trim();
+                        const rawRestricted = String(
+                          (d as any).restrictedKeywords,
+                        ).trim();
                         const restrictedList = rawRestricted
                           .split(',')
                           .map((k) => k.trim().toLowerCase())
@@ -2789,8 +3530,7 @@ function Taker() {
 
                     setUserData(cleanUserData);
                     setDetailsCollected(true);
-                    playQuizStartTone();
-                    setStart(true);
+                    startAssessment(cleanUserData);
                   }}>
                   START {quiz?.type?.toUpperCase() || 'ASSESSMENT'}
                 </Button>
@@ -2804,24 +3544,32 @@ function Taker() {
         <div
           key='assessment-view'
           className={cn(
-            'container relative z-10 mx-auto px-4 md:px-6 pt-8 pb-10 max-w-7xl',
+            'container relative z-10 p-0 mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-10 max-w-7xl flex flex-col',
             quizTheme === 'dark' ? 'text-white' : 'text-black',
           )}>
-          <div className='mb-6 flex flex-col gap-2 w-full'>
-            {!isOnline && (
-              <div className='p-3.5 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-2xl flex items-center gap-2.5 mb-2'>
-                <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning' />
-                <span>
-                  Offline Mode: Your responses will be saved securely on this
-                  device and uploaded once you connect to the internet.
-                </span>
-              </div>
-            )}
+          {!isOnline && (
+            <motion.div
+              className='p-3 bg-pw-warning/10 border border-pw-warning/20 text-pw-warning text-xs font-bold rounded-3xl flex items-center gap-2 mb-2 w-fit self-center'
+              exit={{ opacity: 0, y: -5 }}>
+              <AlertTriangle className='h-4.5 w-4.5 shrink-0 text-pw-warning ml-1' />
+              <span>
+                Offline Mode: Your responses will be saved securely on this
+                device and uploaded once connection is restored.
+              </span>
 
+              <X
+                className='h-4.5 w-4.5 shrink-0 text-pw-warning cursor-pointer'
+                onClick={() => {
+                  setIsOnline(!isOnline);
+                }}
+              />
+            </motion.div>
+          )}
+          <div className='mb-6 flex flex-col gap-2 w-full relative self-center max-w-4xl'>
             {/* Brand Icon */}
-            {quiz?.branding?.icon && (
+            {quiz?.fromPremium && quiz?.branding?.icon && (
               <div className='flex justify-center mb-4'>
-                <img
+                <Image
                   src={quiz?.branding?.icon}
                   alt='Brand Logo'
                   className='h-15 w-auto rounded-xl object-contain drop-shadow-md'
@@ -2830,7 +3578,7 @@ function Taker() {
             )}
 
             {/* Disclaimer Banner */}
-            {quiz?.disclaimer && (
+            {quiz?.fromPremium && quiz?.customDisclaimer && (
               <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
                 <AlertTriangle
                   size={14}
@@ -2839,30 +3587,23 @@ function Taker() {
                 <span
                   className='whitespace-pre-wrap'
                   dangerouslySetInnerHTML={{
-                    __html: formatDetailVars(quiz.disclaimer),
+                    __html: formatDetailVars(quiz.customDisclaimer),
                   }}
                 />
               </div>
             )}
 
             {/* Header Row */}
-            <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-full border border-white/4 bkblur sticky top-1'>
+            <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-4xl border border-white/4 bkblur sticky top-1 w-full max-w-7xl self-center'>
               <div className='flex items-center gap-4 pl-3'>
-                <div className='flex flex-col'>
-                  <h1 className='text-xl md:text-2xl font-bold font-display tracking-tight leading-none'>
-                    <span
-                      className='whitespace-pre-wrap'
-                      dangerouslySetInnerHTML={{
-                        __html: formatDetailVars(quiz?.title || ''),
-                      }}
-                    />
-                  </h1>
+                <h1 className='text-lg md:text-xl font-bold font-display tracking-tight leading-none'>
                   <span
-                    className='text-[8px] leading-none opacity-40 hidden'
-                    style={{ placeSelf: 'flex-start' }}>
-                    {quiz?.type.toUpperCase()}
-                  </span>
-                </div>
+                    className='whitespace-pre-wrap truncate'
+                    dangerouslySetInnerHTML={{
+                      __html: formatDetailVars(quiz?.title || ''),
+                    }}
+                  />
+                </h1>
               </div>
 
               <div className='flex items-center gap-2'>
@@ -2933,12 +3674,12 @@ function Taker() {
               <div
                 className={cn(
                   'flex w-full gap-2 items-center flex-wrap',
-                  quiz?.hasTimer && timeLeft !== null ?
+                  quiz?.timer?.hasTimer && timeLeft !== null ?
                     'justify-between'
                   : 'justify-end',
                 )}>
                 <div className='flex items-center gap-2'>
-                  {quiz?.hasTimer && timeLeft !== null && (
+                  {quiz?.timer?.hasTimer && timeLeft !== null && (
                     <div
                       title={`${capFirst(quiz?.type)} Timer`}
                       className={cn(
@@ -2959,12 +3700,13 @@ function Taker() {
                   )}
 
                   {/* Realtime Live Score Display */}
-                  {(quiz?.showScore || quiz?.showRealtimeScore) && quiz?.type === 'quiz' && (
-                    <div className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md'>
-                      <Brain className='w-3.5 h-3.5' /> {score} /{' '}
-                      {activeQuestions.length}
-                    </div>
-                  )}
+                  {(quiz?.showScore || quiz?.showRealtimeScore) &&
+                    quiz?.type === 'quiz' && (
+                      <div className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md'>
+                        <Brain className='w-3.5 h-3.5' /> {score} /{' '}
+                        {activeQuestions.length}
+                      </div>
+                    )}
                 </div>
 
                 {quiz?.allowEarlySubmit && (
@@ -3240,49 +3982,6 @@ function Taker() {
           </div>
         </div>
       )}
-
-      {/* Fullscreen Lightbox Preview Modal */}
-      <AnimatePresence>
-        {fullscreenMedia && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setFullscreenMedia(null)}
-            className='fixed inset-0 z-[9999] bg-black/90 bkblur flex flex-col items-center justify-center p-4 cursor-pointer'>
-            <div
-              className='relative max-w-4xl max-h-[90vh] flex flex-col items-center gap-3 cursor-default'
-              onClick={(e) => e.stopPropagation()}>
-              <div className='flex items-center justify-between w-full text-white px-2'>
-                <span className='text-xs font-bold text-pw-muted truncate max-w-md'>
-                  {fullscreenMedia.title || 'Attachment Preview'}
-                </span>
-                <div className='flex items-center gap-2'>
-                  <a
-                    href={fullscreenMedia.url}
-                    download='attachment'
-                    target='_blank'
-                    rel='noreferrer'
-                    className='p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all text-xs flex items-center gap-1'>
-                    <Download className='h-4 w-4' />
-                  </a>
-                  <button
-                    onClick={() => setFullscreenMedia(null)}
-                    className='p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all'>
-                    <X className='h-4 w-4' />
-                  </button>
-                </div>
-              </div>
-
-              <img
-                src={fullscreenMedia.url}
-                alt={fullscreenMedia.title || 'Attachment Preview'}
-                className='max-h-[80vh] max-w-[90vw] object-contain rounded-2xl border border-white/10 shadow-2xl bg-black/60'
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

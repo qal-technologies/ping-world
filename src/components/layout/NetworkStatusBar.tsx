@@ -59,11 +59,11 @@ export function NetworkStatusBar() {
           animate={{ y: 0, width: '100%', opacity: 1 }}
           exit={{ y: -40, width: '10%', opacity: 0 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
-          className='fixed top-0 left-0 right-0 z-[100000] select-none flex justify-center items-center overflow-hidden transition-all'
+          className='fixed top-0 left-0 right-0 z-[100000] flex justify-center items-center overflow-hidden transition-all'
           style={{ placeSelf: 'center', alignSelf: 'center' }}>
           <div
             className={cn(
-              'px-4 pr-2 py-1 mt-2 rounded-full text-xs font-semibold flex items-center gap-2 shadow-xl bkblur truncate border transition-all',
+              'px-4 pr-2 py-1 mt-2 rounded-full text-xs font-semibold flex items-center gap-2 shadow-xl bkblur truncate border transition-all select-none',
               isOnline ?
                 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300 shadow-emerald-900/20'
               : 'bg-amber-950/50 border-amber-500/40 text-amber-300 shadow-amber-900/30',

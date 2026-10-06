@@ -1,6 +1,5 @@
 'use client';
 
-
 import { motion } from 'framer-motion';
 import {
   CheckCircle,
@@ -36,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useAppModal } from '@/components/ui/AppModalProvider';
 
 const TIER_ICONS: Record<PremiumTier, React.ReactNode> = {
   free: <Zap className='h-6 w-6' />,
@@ -140,6 +140,7 @@ const TOOL_BENEFITS = [
 
 export default function PricingPage() {
   const { premiumTier, refresh, user } = useAppContext();
+  const { showConfirm } = useAppModal();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTierId, setSelectedTierId] = useState<PremiumTier | null>(
@@ -151,7 +152,7 @@ export default function PricingPage() {
   const [isSimulating, setIsSimulating] = useState(false);
 
   const [selectedFlexibleToolId, setSelectedFlexibleToolId] =
-    useState<string>('all');
+    useState<string>('');
 
   const [currency, setCurrency] = useState('USD');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
@@ -198,6 +199,26 @@ export default function PricingPage() {
             MX: 'MXN',
             ZA: 'ZAR',
             NG: 'NGN',
+            FI: 'EUR',
+            PL: 'PLN',
+            IE: 'EUR',
+            PT: 'EUR',
+            NO: 'NOK',
+            DK: 'DKK',
+            SE: 'SEK',
+            BE: 'EUR',
+            AT: 'EUR',
+            BG: 'BGN',
+            CZ: 'CZK',
+            EE: 'EUR',
+            GR: 'EUR',
+            HU: 'HUF',
+            LT: 'EUR',
+            LU: 'EUR',
+            LV: 'EUR',
+            MT: 'EUR',
+            RO: 'RON',
+            SK: 'EUR',
           };
           const countryCode = locale.split('-')[1]?.toUpperCase();
           if (countryCode && localeMap[countryCode]) {
@@ -276,14 +297,18 @@ export default function PricingPage() {
         billingCycle === 'monthly' ? displayMonthlyPrice : displayYearlyPrice;
 
       // Invoke server-side checkout session creation
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/checkout/session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           tier: selectedTierId,
           billingCycle,
           selectedFlexibleToolId:
-            selectedTierId === 'flexible' ? selectedFlexibleToolId : 'all',
+            selectedTierId === 'flexible' ? selectedFlexibleToolId : undefined,
           price: targetPrice,
         }),
       });
@@ -304,14 +329,15 @@ export default function PricingPage() {
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const existingTools: string[] = Array.isArray(user?.user_metadata?.purchased_tools)
-        ? user.user_metadata.purchased_tools
+      const existingTools: any[] =
+        Array.isArray(user?.user_metadata?.purchased_tools) ?
+          user.user_metadata.purchased_tools
         : [];
 
       const newTools =
-        selectedTierId === 'flexible'
-          ? Array.from(new Set([...existingTools, selectedFlexibleToolId]))
-          : ['all'];
+        selectedTierId === 'flexible' ?
+          Array.from(new Set([...existingTools, selectedFlexibleToolId]))
+        : [];
 
       const { error } = await supabase.auth.updateUser({
         data: {
@@ -343,21 +369,35 @@ export default function PricingPage() {
       toast.error('Please log in first to manage your subscription.');
       return;
     }
-    try {
-      toast.loading('Switching to Free Plan...');
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          tier: 'free',
-          purchased_tools: [],
-        },
-      });
-      if (error) throw error;
-      await refresh();
-      toast.dismiss();
-      toast.success('Switched back to Free plan successfully.');
-    } catch (err: any) {
-      toast.dismiss();
-      toast.error('Failed to change plan: ' + (err?.message || 'Please try again.'));
+    const confirmed = await showConfirm(
+      `Are you sure you want to downgrade to the free plan? \n\n This will remove all your premium features and customizations. You will lose access to all your premium settings and templates.`,
+      {
+        title: 'Confirm Downgrade',
+        confirmText: 'Yes, Downgrade',
+        cancelText: 'Cancel',
+        type: 'danger',
+      },
+    );
+
+    if (confirmed) {
+      try {
+        toast.loading('Switching to Free Plan...');
+        const { error } = await supabase.auth.updateUser({
+          data: {
+            tier: 'free',
+            purchased_tools: [],
+          },
+        });
+        if (error) throw error;
+        await refresh();
+        toast.dismiss();
+        toast.success('Switched to Free plan successfully.');
+      } catch (err: any) {
+        toast.dismiss();
+        toast.error(
+          'Failed to change plan: ' + (err?.message || 'Please try again.'),
+        );
+      }
     }
   };
 
@@ -389,8 +429,6 @@ export default function PricingPage() {
             {COMPANY.name} utilities.
           </p>
         </div>
-
-
 
         {/* Tier Cards */}
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-20'>
@@ -465,7 +503,10 @@ export default function PricingPage() {
                       currency !== 'USD' &&
                       tier.price.monthly !== null && (
                         <p className='text-xs text-pw-success font-bold font-mono mt-1'>
-                          ~ {(tier.price.monthly * exchangeRate).toFixed(2)}{' '}
+                          ~{' '}
+                          {formatCurrencyAmount(
+                            tier.price.monthly * exchangeRate,
+                          )}{' '}
                           {currency} / month
                         </p>
                       )}
@@ -586,72 +627,108 @@ export default function PricingPage() {
                     </li>
                   </ul>
 
-              
-                      {tierId === 'flexible' && isCurrent && (
-                        <div className='pt-3 border-t border-white/5 space-y-2.5'>
-                          {/* Purchased Tools List */}
-                          {(user?.user_metadata?.purchased_tools || []).length > 0 && (
-                            <div className='space-y-1'>
-                              <span className='text-[10px] font-bold uppercase tracking-wider text-pw-success block'>
-                                Purchased Tools:
-                              </span>
-                              <div className='flex flex-wrap gap-1'>
-                                {(user?.user_metadata?.purchased_tools || []).map((tId: string) => {
-                                  const feat = FLEXIBLE_FEATURES.find((f) => f.id === tId);
-                                  return (
-                                    <span
-                                      key={tId}
-                                      className='text-[9px] font-bold px-2 py-0.5 rounded-md bg-pw-success/15 text-pw-success border border-pw-success/20'>
-                                      ✓ {feat ? feat.label : tId}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className='space-y-1.5'>
-                            <label className='text-[10px] font-bold text-pw-primary uppercase block'>
-                              Select Tool to Purchase
-                            </label>
-                            <div className='flex gap-1.5'>
-                              <select
-                                value={selectedFlexibleToolId}
-                                onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
-                                className='w-full h-8 px-2 bg-[#0c0d1c] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
-                                {FLEXIBLE_FEATURES.filter(
-                                  (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
-                                ).map((feat: any) => (
-                                  <option key={feat.id} value={feat.id} className='bg-[#0c0d1c]'>
-                                    {feat.label} (${feat.monthly}/mo)
-                                  </option>
-                                ))}
-                                {FLEXIBLE_FEATURES.filter(
-                                  (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
-                                ).length === 0 && (
-                                  <option value='' className='bg-[#0c0d1c]'>
-                                    All Tools Purchased
-                                  </option>
-                                )}
-                              </select>
-                              <Button
-                                size='sm'
-                                onClick={() => {
-                                  setSelectedTierId('flexible');
-                                  setIsModalOpen(true);
-                                }}
-                                disabled={
-                                  FLEXIBLE_FEATURES.filter(
-                                    (feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)
-                                  ).length === 0
-                                }
-                                className='btn-primary h-8 text-[10px] font-bold px-3 shrink-0'>
-                                Buy
-                              </Button>
-                            </div>
+                  {tierId === 'flexible' && isCurrent && (
+                    <div className='pt-3 border-t border-white/5 space-y-2.5'>
+                      {/* Purchased Tools List */}
+                      {(user?.user_metadata?.purchased_tools || []).length >
+                        0 && (
+                        <div className='space-y-1'>
+                          <span className='text-[10px] font-bold uppercase tracking-wider text-pw-success block'>
+                            Purchased Tools:
+                          </span>
+                          <div className='flex flex-wrap gap-1'>
+                            {(user?.user_metadata?.purchased_tools || []).map(
+                              (tId: string) => {
+                                const feat = FLEXIBLE_FEATURES.find(
+                                  (f) => f.id === tId,
+                                );
+                                return (
+                                  <span
+                                    key={tId}
+                                    className='text-[9px] font-bold px-2 py-0.5 rounded-md bg-pw-success/15 text-pw-success border border-pw-success/20'>
+                                    ✓ {feat ? feat.label : tId}
+                                  </span>
+                                );
+                              },
+                            )}
                           </div>
                         </div>
                       )}
+
+                      <div className='space-y-1.5'>
+                        <label className='text-[10px] font-bold text-pw-primary uppercase block'>
+                          Select Tool to Purchase
+                        </label>
+                        <div className='flex gap-1.5'>
+                          <select
+                            value={selectedFlexibleToolId}
+                            onChange={(e) =>
+                              setSelectedFlexibleToolId(e.target.value)
+                            }
+                            className='w-full h-8 px-2 bg-[#0c0d1c] border border-white/10 rounded-lg text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
+                            <option value=''>Select Tool</option>
+                            {FLEXIBLE_FEATURES.filter(
+                              (feat: any) =>
+                                !(
+                                  user?.user_metadata?.purchased_tools || []
+                                ).includes(feat.id),
+                            ).map((feat: any) => (
+                              <option
+                                key={feat.id}
+                                value={feat.id}
+                                className='bg-[#0c0d1c]'>
+                                {feat.label} (${feat.monthly}/mo)
+                              </option>
+                            ))}
+                            {FLEXIBLE_FEATURES.filter(
+                              (feat: any) =>
+                                !(
+                                  user?.user_metadata?.purchased_tools || []
+                                ).includes(feat.id),
+                            ).length === 0 && (
+                              <option
+                                value=''
+                                className='bg-[#0c0d1c]'>
+                                All Tools Purchased
+                              </option>
+                            )}
+                          </select>
+                          <Button
+                            size='sm'
+                            onClick={() => {
+                              setSelectedTierId('flexible');
+                              setIsModalOpen(true);
+                            }}
+                            disabled={
+                              !selectedFlexibleToolId ||
+                              FLEXIBLE_FEATURES.filter(
+                                (feat: any) =>
+                                  !(
+                                    user?.user_metadata?.purchased_tools || []
+                                  ).includes(feat.id),
+                              ).length === 0
+                            }
+                            className={cn(
+                              'h-8 text-[10px] px-3 font-bold shrink-0 max-w-20 tracking-wide',
+                              (
+                                !selectedFlexibleToolId ||
+                                  FLEXIBLE_FEATURES.filter(
+                                    (feat: any) =>
+                                      !(
+                                        user?.user_metadata?.purchased_tools ||
+                                        []
+                                      ).includes(feat.id),
+                                  ).length === 0
+                              ) ?
+                                'bg-white/10 text-pw-muted cursor-none opacity-80':'btn-primary'
+                              ,
+                            )}>
+                            Buy
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* CTA */}
                   <Button
@@ -900,7 +977,6 @@ export default function PricingPage() {
                       </span>
                     </div>
                   )}
-
               </div>
 
               {selectedTierId === 'flexible' && (
@@ -912,18 +988,29 @@ export default function PricingPage() {
                     value={selectedFlexibleToolId}
                     onChange={(e) => setSelectedFlexibleToolId(e.target.value)}
                     className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
-                    {FLEXIBLE_FEATURES
-                      .filter((feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id))
-                      .map((feat: any) => (
-                        <option
-                          key={feat.id}
-                          value={feat.id}
-                          className='bg-[#0c0d1c] py-2'>
-                          {feat.label} (${formatCurrencyAmount(feat.monthly)}/mo)
-                        </option>
-                      ))}
-                    {FLEXIBLE_FEATURES.filter((feat: any) => !(user?.user_metadata?.purchased_tools || []).includes(feat.id)).length === 0 && (
-                      <option value='all' className='bg-[#0c0d1c]'>
+                    <option value=''>Select Tool</option>
+                    {FLEXIBLE_FEATURES.filter(
+                      (feat: any) =>
+                        !(user?.user_metadata?.purchased_tools || []).includes(
+                          feat.id,
+                        ),
+                    ).map((feat: any) => (
+                      <option
+                        key={feat.id}
+                        value={feat.id}
+                        className='bg-[#0c0d1c] py-2'>
+                        {feat.label} (${formatCurrencyAmount(feat.monthly)}/mo)
+                      </option>
+                    ))}
+                    {FLEXIBLE_FEATURES.filter(
+                      (feat: any) =>
+                        !(user?.user_metadata?.purchased_tools || []).includes(
+                          feat.id,
+                        ),
+                    ).length === 0 && (
+                      <option
+                        value='all'
+                        className='bg-[#0c0d1c]'>
                         All Flexible Tools Already Unlocked
                       </option>
                     )}
@@ -952,8 +1039,8 @@ export default function PricingPage() {
                 </button>
                 <button
                   onClick={handleCheckout}
-                  disabled={isSimulating}
-                  className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5'>
+                  disabled={selectedTierId === 'flexible' && !selectedFlexibleToolId.trim() ||isSimulating}
+                  className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-80'>
                   {isSimulating ? 'Processing...' : `Subscribe`}
                 </button>
               </DialogFooter>

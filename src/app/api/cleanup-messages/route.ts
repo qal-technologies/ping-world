@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 
 /**
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json(
       { error: 'Unauthorized cron request' },
       { status: 401 },
@@ -31,16 +31,16 @@ export async function GET(req: NextRequest) {
   try {
     const now = new Date().toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseAdmin()
       .from('messages')
       .delete()
       .lt('expires_at', now)
       .select('id');
 
     if (error) {
-      console.error('[cleanup-messages] Supabase delete error:', error);
+      console.error('[cleanup-messages] Supabase cleanup failed:', error.code || 'unknown');
       return NextResponse.json(
-        { success: false, error: error.message },
+        { success: false, error: 'Cleanup failed.' },
         { status: 500 },
       );
     }
@@ -55,10 +55,10 @@ export async function GET(req: NextRequest) {
       deleted: deletedCount,
       timestamp: now,
     });
-  } catch (err: any) {
-    console.error('[cleanup-messages] Unexpected error:', err);
+  } catch {
+    console.error('[cleanup-messages] Unexpected cleanup failure.');
     return NextResponse.json(
-      { success: false, error: err.message || 'Unknown error' },
+      { success: false, error: 'Cleanup failed.' },
       { status: 500 },
     );
   }

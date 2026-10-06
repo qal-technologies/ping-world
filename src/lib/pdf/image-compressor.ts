@@ -26,8 +26,8 @@ export async function compressImageForPdf(
       }
 
       const canvas = document.createElement('canvas');
-      canvas.width = Math.max(width, 100);
-      canvas.height = Math.max(height, 100);
+      canvas.width = Math.max(1, Math.round(width));
+      canvas.height = Math.max(1, Math.round(height));
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -38,7 +38,8 @@ export async function compressImageForPdf(
           const dataUrl = canvas.toDataURL('image/jpeg', quality);
           resolve({ dataUrl, width: canvas.width, height: canvas.height });
           return;
-        } catch (e) {
+        } catch(e) {
+          console.error(e);
           // fallback to original src
         }
       }

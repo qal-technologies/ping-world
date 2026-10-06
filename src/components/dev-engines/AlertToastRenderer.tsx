@@ -53,8 +53,8 @@ export default function AlertToastRenderer() {
   const handleConfirmDialog = async () => {
     setDialogResult('Awaiting user confirm action...');
     const res = await engine.confirm(
-      'Database Migration Warning',
-      'This operation is irreversible and will delete 24 legacy record collections. Do you wish to proceed?',
+      'Confirm demo action',
+      'This demonstration does not change or delete saved data. Continue?',
       {
         confirmText: 'Confirm',
         cancelText: 'Cancel'

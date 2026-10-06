@@ -123,7 +123,7 @@ export function resolveTier(raw: unknown): PremiumTier {
 }
 
 /**
- * Whether the given tier can access a feature gated to targetTier or above.
+ * Whether the given tier can access a feature gated to target Tier or above.
  */
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 export function tierAtLeast(userTier: PremiumTier, required: PremiumTier): boolean {

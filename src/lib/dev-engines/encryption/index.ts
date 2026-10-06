@@ -44,7 +44,8 @@ export class EncryptionEngine {
 
       // AES-GCM encryption
       return await this._encryptAesGcm(textData, key);
-    } catch (e) {
+    } catch(e) {
+      console.error(e)
       // Fallback to XOR if Web Crypto fails
       return this._encryptXor(
         typeof data === 'object' ? JSON.stringify(data) : String(data),

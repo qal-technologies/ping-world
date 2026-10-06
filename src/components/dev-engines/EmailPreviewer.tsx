@@ -63,9 +63,9 @@ export default function EmailPreviewer() {
   };
 
   const htmlResult = useModular
-    ? engine.generateTemplate('modular', { title: '', body: {text: '', buttons: []}, modularConfig: modularParams })
+    ? engine.generateTemplate('modular', modularParams)
     : engine.generateTemplate(templateType, {
-      title: simpleTitle,
+      header: { title: simpleTitle },
       body: {text: simpleBody},
         companyName,
       primaryColor,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Calendar, Crown, DollarSign, Save, AlertTriangle, Trash2, ShieldCheck } from 'lucide-react';
+import { Calendar, Crown, DollarSign, Save, AlertTriangle, Trash2, ShieldCheck, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
 import ProfileAvatarDesigner from '@/components/profile/ProfileAvatarDesigner';
+import Image from 'next/image';
 
 interface AccountTabProps {
   displayName: string;
@@ -28,7 +29,7 @@ export default function AccountTab({
   handleDeleteAccount,
   onNavigateSecurityTab,
 }: AccountTabProps) {
-  const { user, refresh, premiumTier, purchasedTools } = useAppContext();
+  const { user, refresh, premiumTier, purchasedTools, username, dp } = useAppContext();
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -41,16 +42,19 @@ export default function AccountTab({
     setIsUpdatingProfile(true);
     try {
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: displayName.trim() },
+        data: {
+          display_name: displayName.trim(),
+        },
       });
 
       if (error) throw error;
 
       if (user?.id) {
-        await supabase
+        const { error: profileError } = await supabase
           .from('profiles')
           .update({ display_name: displayName.trim() })
           .eq('id', user.id);
+        if (profileError) throw profileError;
       }
 
       await refresh();
@@ -87,15 +91,24 @@ export default function AccountTab({
         {/* Account Info Card */}
         <Card className='bg-transparent ring-0 px-2 sm:px-0 space-y-4 md:col-span-1'>
           <div className='flex items-center gap-3 border-b border-white/5 pb-4'>
-            <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'>
-              {displayName ? displayName[0].toUpperCase() : 'U'}
-            </div>
+            {dp.trim() ?
+              <Image
+                width={undefined}
+                height={undefined}
+                src={dp}
+                alt={username}
+                className='w-12 h-12 rounded-2xl object-cover object-center border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'
+              />
+              : <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'>
+                {displayName ? displayName[0].toUpperCase() : 'U'}
+              </div>
+            }
             <div className='min-w-0 flex-1'>
               <h3 className='text-sm font-bold text-white truncate'>
-                {displayName || 'Ping World User'}
+                {displayName || 'User'}
               </h3>
               <p className='text-[10px] text-pw-muted truncate font-mono'>
-                {email}
+                @{username}
               </p>
             </div>
           </div>
@@ -103,7 +116,15 @@ export default function AccountTab({
           <div className='space-y-3 text-xs'>
             <div className='flex items-center justify-between text-pw-muted'>
               <span className='flex items-center gap-1.5'>
-                <Calendar className='h-3.5 w-3.5 text-pw-primary' /> Member Since
+                <Mail className='h-3.5 w-3.5 text-pw-cyan'/> Email
+              </span>
+              <span className='font-mono text-white text-[11px]'>{email}</span>
+            </div>
+
+            <div className='flex items-center justify-between text-pw-muted'>
+              <span className='flex items-center gap-1.5'>
+                <Calendar className='h-3.5 w-3.5 text-pw-primary' /> Member
+                Since
               </span>
               <span className='font-mono text-white text-[11px]'>
                 {createdAtFormatted}
@@ -119,22 +140,23 @@ export default function AccountTab({
               </span>
             </div>
 
-            {premiumTier === 'flexible' && formattedPurchasedList.length > 0 && (
-              <div className='p-2 bg-pw-primary/2 border border-pw-primary/5 rounded-xl space-y-1'>
-                <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider block flex items-center gap-1'>
-                  <ShieldCheck className='h-3 w-3' /> Active Tools
-                </span>
-                <div className='flex flex-wrap gap-1'>
-                  {formattedPurchasedList.map((name) => (
-                    <span
-                      key={name}
-                      className='text-[9px] font-semibold bg-pw-primary/15 text-pw-primary border border-pw-primary/20 rounded px-1.5 py-0.5'>
-                      {name}
-                    </span>
-                  ))}
+            {premiumTier === 'flexible' &&
+              formattedPurchasedList.length > 0 && (
+                <div className='p-2 bg-pw-primary/2 border border-pw-primary/5 rounded-xl space-y-1'>
+                  <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider block flex items-center gap-1'>
+                    <ShieldCheck className='h-3 w-3' /> Active Tools
+                  </span>
+                  <div className='flex flex-wrap gap-1'>
+                    {formattedPurchasedList.map((name) => (
+                      <span
+                        key={name}
+                        className='text-[9px] font-semibold bg-pw-primary/15 text-pw-primary border border-pw-primary/20 rounded px-1.5 py-0.5'>
+                        {name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
           <Link href='/pricing'>
@@ -164,6 +186,7 @@ export default function AccountTab({
               </label>
               <Input
                 value={displayName}
+                maxLength={20}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder='Your Name or Brand'
                 className='h-10 bg-white/2 bkblur border-white/5 text-xs font-semibold'
@@ -204,22 +227,24 @@ export default function AccountTab({
 
       {/* Profile Avatar Designer with Object Mocks */}
       <ProfileAvatarDesigner
-        initialImage={user?.user_metadata?.avatar_url || null}
+        initialImage={dp || null}
         displayName={displayName}
         onSaveAvatar={async (avatarDataUrl: string) => {
           try {
             if (user?.id) {
-              await supabase
+              const { error: profileError } = await supabase
                 .from('profiles')
                 .update({ avatar_url: avatarDataUrl })
                 .eq('id', user.id);
+              if (profileError) throw profileError;
             }
-            await supabase.auth.updateUser({
+            const { error: authError } = await supabase.auth.updateUser({
               data: { avatar_url: avatarDataUrl },
             });
+            if (authError) throw authError;
             await refresh();
           } catch (err: any) {
-            console.warn('Failed to update avatar', err);
+            throw new Error(err?.message || 'Failed to update avatar.');
           }
         }}
       />
@@ -233,7 +258,8 @@ export default function AccountTab({
           <div>
             <h3 className='text-sm font-bold text-white'>Danger Zone</h3>
             <p className='text-xs text-pw-muted'>
-              Permanently delete your account and all associated studio creations.
+              Permanently delete your account and all associated studio
+              creations.
             </p>
           </div>
         </div>

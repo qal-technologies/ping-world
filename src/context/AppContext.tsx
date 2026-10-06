@@ -38,6 +38,8 @@ export interface AppContextValue {
   refresh: () => Promise<void>;
   /** Check if a specific paid tool/feature is unlocked */
   isFeatureUnlocked: (featureId: string) => boolean;
+  /**Avatar url for display profile */
+  dp: string;
 }
 
 // ─── Context ────────────────────────────────────────────────────
@@ -52,16 +54,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [hasCache, setHasCache] = useState(false);
-  const [offlineToastShown, setOfflineToastShown] = useState(false);
+  const [dp, setDp] = useState('');
 
   // ── Online / offline detection
-  // jules edit: Suppress initial visit online toast and check for prior visits
+  //Suppress initial visit online toast and check for prior visits
   useEffect(() => {
-    let initialVisit = false;
     if (typeof window !== 'undefined') {
       const hasVisited = localStorage.getItem('pw_has_visited');
       if (!hasVisited) {
-        initialVisit = true;
         localStorage.setItem('pw_has_visited', 'true');
       }
     }
@@ -90,8 +90,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Cache check
   const checkCache = useCallback(async () => {
     try {
-      const cached = await HybridStorage.getAll('message');
-      setHasCache(Array.isArray(cached) && cached.length > 0);
+      const cached = await HybridStorage.getCacheCounts();
+      setHasCache(Object.values(cached).some((count) => count > 0));
     } catch {
       setHasCache(false);
     }
@@ -104,9 +104,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data: { session: authSession } } = await supabase.auth.getSession();
       if (authSession?.user) {
         const authUser = authSession.user;
+        await HybridStorage.setUserId(authUser.id);
         setUser(authUser);
         const meta = authUser.user_metadata ?? {};
-        setUsername(meta.username || meta.full_name || 'user');
+        setUsername(meta.username || 'user');
+        setDp(meta.avatar_url || '');
         const resolved = resolveTier(meta.tier);
         setPremiumTier(resolved);
 
@@ -130,12 +132,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn('[Firebase Auth Bridge] Session bridging was bypassed or failed:', firebaseErr);
         }
       } else {
+        await HybridStorage.setUserId('guest');
         setUser(null);
         setUsername('');
+        setDp('');
         setPremiumTier('free');
         setPurchasedTools([]);
 
-     
         try {
           const { signInAnonymously } = await import('firebase/auth');
           const { auth: firebaseAuth } = await import('@/lib/firebase');
@@ -146,16 +149,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error('[loadSession] Error occurred during auth initialization:', err);
+      await HybridStorage.setUserId('guest');
       setUser(null);
     } finally {
       setIsLoading(false);
+      void HybridStorage.flushPendingResponses();
     }
   }, []);
 
   const isFeatureUnlocked = useCallback((featureId: string): boolean => {
     if (premiumTier === 'pro' || premiumTier === 'standard') return true;
     if (premiumTier === 'flexible') {
-      if (purchasedTools.includes('all')) return true;
 
       // Normalize feature aliases
       const normalizedMap: Record<string, string[]> = {
@@ -176,10 +180,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [premiumTier, purchasedTools]);
 
   useEffect(() => {
-    HybridStorage.cleanupExpiredItems();
-
-    loadSession();
-    checkCache();
+    void loadSession().then(() => {
+      void HybridStorage.cleanupExpiredItems();
+      void checkCache();
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       loadSession();
@@ -195,6 +199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     purchasedTools,
     isPremium: premiumTier !== 'free',
     isOnline,
+    dp,
     isLoading,
     hasCache,
     refresh: loadSession,

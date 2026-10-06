@@ -1,6 +1,6 @@
 
 import PublicQuizTaker from '@/components/quiz/PublicQuizTaker';
-import { supabase } from '@/lib/supabase';
+import {HybridStorage} from '@/lib/storage-utils';
 import type { Metadata } from 'next';
 
 interface QuizParams {
@@ -10,11 +10,9 @@ interface QuizParams {
 export async function generateMetadata({ params }: QuizParams): Promise<Metadata> {
   const { id } = await params;
   try {
-    const { data: quiz } = await supabase
-      .from('quizzes')
-      .select('title, description')
-      .or(`id.eq.${id},custom_id.eq.${id}`)
-      .single();
+
+    const data = await HybridStorage.getQuiz(id, 'title, description');
+    const quiz = data;
 
     if (quiz) {
       const title = `${quiz.title} | Assessment with Quizzable`;

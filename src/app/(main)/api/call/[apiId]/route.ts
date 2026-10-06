@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DevEngineRegistry } from '@/lib/dev-engines';
-import { supabase } from '@/lib/supabase';
 import { PREMIUM_TIERS, PremiumTier, resolveTier } from '@/lib/config/premium';
 import { isRateLimited, getClientIp } from '@/lib/rate-limiter';
 import { sanitizeInput } from '@/lib/general/sanitize';
 import { AiQuotaSyncer } from '@/lib/general/ai-quota-syncer';
+import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
 
 export const runtime = 'edge';
 
@@ -19,49 +19,13 @@ function getCanonicalFeatureId(id: string): string {
   return mapping[id] || id;
 }
 
-function enforcePlanLimitsAndAuth(request: NextRequest, apiId: string) {
-  const userTierRaw = request.headers.get('x-user-tier') || 'free';
-  const userTier = resolveTier(userTierRaw);
-  const tierConfig = PREMIUM_TIERS[userTier];
-
-  const userAllowedTools = (request.headers.get('x-flexible-tools') || '')
-    .split(',')
-    .map((s) => s.trim())
-    .map(getCanonicalFeatureId);
-
-  const canonId = getCanonicalFeatureId(apiId);
-
-  // 1. Flexible Plan Tool Isolation
-  if (userTier === 'flexible') {
-    if (!userAllowedTools.includes('all') && !userAllowedTools.includes(canonId)) {
-      return {
-        authorized: false,
-        error: `Tool '${apiId}' (gated under '${canonId}') is not authorized on your flexible plan. Please upgrade or purchase this tool add-on.`,
-        status: 403,
-      };
-    }
-  }
-
-  // 2. Rate Limiting Enforcements
-  const limit = tierConfig.aiRequestsPerMinute || 2;
-  const ip = getClientIp(request);
-  const { limited, remaining, reset } = isRateLimited(
-    ip,
-    `api-${apiId}`,
-    limit,
-    60000,
+const blockedMethodNames = new Set(['constructor', '__proto__', 'prototype', 'toString', 'valueOf']);
+function isCallableEngineMethod(engine: Record<string, any>, method: string) {
+  if (blockedMethodNames.has(method)) return false;
+  const prototype = Object.getPrototypeOf(engine);
+  return typeof engine[method] === 'function' && (
+    Object.hasOwn(engine, method) || (prototype && prototype !== Object.prototype && Object.hasOwn(prototype, method))
   );
-
-  if (limited) {
-    return {
-      authorized: false,
-      error: `Rate limit exceeded for ${userTier.toUpperCase()} tier (${limit} req/min). Please upgrade to Standard or Pro for higher limits.`,
-      status: 429,
-      headers: { 'X-RateLimit-Reset': reset.toString() },
-    };
-  }
-
-  return { authorized: true };
 }
 
 export async function POST(
@@ -83,44 +47,25 @@ export async function POST(
       );
     }
 
-    const authCheck = enforcePlanLimitsAndAuth(request, apiId);
-    if (!authCheck.authorized) {
-      return NextResponse.json(
-        { success: false, error: authCheck.error },
-        { status: authCheck.status, headers: authCheck.headers },
-      );
-    }
-
-    // ── SECURE PLAN ISOLATION & AUTHORIZATION CHECKING ──
-    const url = new URL(request.url);
-    const bypassAuth = url.searchParams.get('bypassAuth') === 'true' || request.headers.get('x-bypass-auth') === 'true';
-
     let userTier: PremiumTier = 'free';
     let purchasedTools: string[] = [];
-
-    if (bypassAuth) {
-      // Offline/Local sandbox bypass simulation
-      userTier = (request.headers.get('x-test-tier') as PremiumTier) || 'pro';
-      const toolsHeader = request.headers.get('x-test-tools');
-      purchasedTools = toolsHeader ? toolsHeader.split(',').map(getCanonicalFeatureId) : ['all'];
-    } else {
-      // Securely resolve user session from Bearer Auth Token or cookie
-      const authHeader = request.headers.get('Authorization');
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-      if (token) {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (user && !error) {
-          const meta = user.user_metadata || {};
-          userTier = resolveTier(meta.tier);
-          const tools = meta.purchased_tools || [];
-          purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
-        }
-      }
+    const user = await getRequestUser(request);
+    if (user) {
+      const meta = user.user_metadata || {};
+      userTier = resolveTier(meta.tier);
+      const tools = meta.purchased_tools || [];
+      purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
     }
 
-    const body = await request.json().catch(() => ({}));
-    const method = body.method || body.action || 'analyze';
+    const parsed = await readJsonWithinLimit(request, 64 * 1024);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return NextResponse.json({ success: false, error: 'Invalid request body.' }, { status: 400 });
+    }
+    const body = parsed as Record<string, any>;
+    const method = typeof body.method === 'string' ? body.method : typeof body.action === 'string' ? body.action : 'analyze';
+    if (!/^[a-zA-Z][\w]*$/.test(method)) {
+      return NextResponse.json({ success: false, error: 'Invalid API method.' }, { status: 400 });
+    }
 
     // Enforce Flexible Plan Tool Isolation
     if (userTier === 'flexible') {
@@ -159,8 +104,9 @@ export async function POST(
 
     const clientIp = getClientIp(request);
     const rateCheck = isRateLimited(clientIp, `api_call_${apiId}`, rpmLimit, 60 * 1000);
+    const accountRateCheck = user ? isRateLimited(user.id, `api_call_account_${apiId}`, rpmLimit, 60 * 1000) : { limited: false, remaining: rpmLimit, reset: Date.now() + 60_000 };
 
-    if (rateCheck.limited) {
+    if (rateCheck.limited || accountRateCheck.limited) {
       return NextResponse.json(
         {
           success: false,
@@ -182,7 +128,7 @@ export async function POST(
       });
     }
 
-    if (typeof engine[method] !== 'function') {
+    if (!isCallableEngineMethod(engine, method)) {
       return NextResponse.json(
         {
           success: false,
@@ -213,10 +159,14 @@ export async function POST(
       remainingQuota: rateCheck.remaining,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'PAYLOAD_TOO_LARGE') {
+      return NextResponse.json({ success: false, error: 'Request is too large.' }, { status: 413 });
+    }
+    console.error('[api/call] Engine request failed.');
     return NextResponse.json(
       {
         success: false,
-        error: (error as Error).message || 'API Execution Error',
+        error: 'API execution failed.',
         executionTimeMs: Date.now() - startTime,
         timestamp: new Date().toISOString(),
       },
@@ -241,38 +191,14 @@ export async function GET(
       );
     }
 
-    const authCheck = enforcePlanLimitsAndAuth(request, apiId);
-    if (!authCheck.authorized) {
-      return NextResponse.json(
-        { success: false, error: authCheck.error },
-        { status: authCheck.status, headers: authCheck.headers },
-      );
-    }
-
-    // ── SECURE PLAN ISOLATION & AUTHORIZATION CHECKING ──
-    const url = new URL(request.url);
-    const bypassAuth = url.searchParams.get('bypassAuth') === 'true' || request.headers.get('x-bypass-auth') === 'true';
-
     let userTier: PremiumTier = 'free';
     let purchasedTools: string[] = [];
-
-    if (bypassAuth) {
-      userTier = (request.headers.get('x-test-tier') as PremiumTier) || 'pro';
-      const toolsHeader = request.headers.get('x-test-tools');
-      purchasedTools = toolsHeader ? toolsHeader.split(',').map(getCanonicalFeatureId) : ['all'];
-    } else {
-      const authHeader = request.headers.get('Authorization');
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-      if (token) {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (user && !error) {
-          const meta = user.user_metadata || {};
-          userTier = resolveTier(meta.tier);
-          const tools = meta.purchased_tools || [];
-          purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
-        }
-      }
+    const user = await getRequestUser(request);
+    if (user) {
+      const meta = user.user_metadata || {};
+      userTier = resolveTier(meta.tier);
+      const tools = meta.purchased_tools || [];
+      purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
     }
 
     if (userTier === 'flexible') {
@@ -294,8 +220,9 @@ export async function GET(
 
     const clientIp = getClientIp(request);
     const rateCheck = isRateLimited(clientIp, `api_call_get_${apiId}`, rpmLimit, 60 * 1000);
+    const accountRateCheck = user ? isRateLimited(user.id, `api_call_get_account_${apiId}`, rpmLimit, 60 * 1000) : { limited: false, remaining: rpmLimit, reset: Date.now() + 60_000 };
 
-    if (rateCheck.limited) {
+    if (rateCheck.limited || accountRateCheck.limited) {
       return NextResponse.json(
         {
           success: false,
@@ -323,7 +250,7 @@ export async function GET(
       });
     }
 
-    if (typeof engine[method] !== 'function') {
+    if (!/^[a-zA-Z][\w]*$/.test(method) || !isCallableEngineMethod(engine, method)) {
       return NextResponse.json(
         {
           success: false,
@@ -335,6 +262,9 @@ export async function GET(
 
     const paramInput = searchParams.get('data') || searchParams.get('text') || searchParams.get('query') || searchParams.get('code') || searchParams.get('color');
     const secondaryInput = searchParams.get('param') || searchParams.get('tone') || searchParams.get('targetTone');
+    if ([paramInput, secondaryInput].some((value) => value && value.length > 12_000)) {
+      return NextResponse.json({ success: false, error: 'Request text is too long.' }, { status: 413 });
+    }
 
     const args = [paramInput, secondaryInput].filter(Boolean);
     const sanitizedArgs = args.map((arg: any) => sanitizeInput(arg));
@@ -350,10 +280,11 @@ export async function GET(
       remainingQuota: rateCheck.remaining,
     });
   } catch (error) {
+    console.error('[api/call] Engine request failed.');
     return NextResponse.json(
       {
         success: false,
-        error: (error as Error).message || 'API Execution Error',
+        error: 'API execution failed.',
         executionTimeMs: Date.now() - startTime,
       },
       { status: 500 },

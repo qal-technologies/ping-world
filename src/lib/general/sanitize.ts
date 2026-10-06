@@ -12,9 +12,9 @@ export function sanitizeInput<T>(input: T): T {
   }
 
   if (typeof input === 'string') {
-    let cleaned = input;
+    const cleaned = input;
     if (handler.hasInjectionRisk(cleaned)) {
-      console.warn('[Security Shield] Malicious injection risk blocked and sanitized:', cleaned);
+      console.warn('[Security Shield] Suspicious input was sanitized.');
     }
     return handler.sanitizeInput(cleaned) as unknown as T;
   }

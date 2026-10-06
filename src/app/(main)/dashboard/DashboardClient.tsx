@@ -27,7 +27,7 @@ import { SITE } from '@/lib/config/site';
 import {useRouter} from 'next/navigation';
 
 export default function GeneralDashboard() {
-  const {premiumTier, user, username} = useAppContext();
+  const {premiumTier, username, user} = useAppContext();
     const router = useRouter();
   
   const tierConfig = PREMIUM_TIERS[premiumTier];
@@ -38,7 +38,7 @@ export default function GeneralDashboard() {
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  // jules edit: Verify auth session safely using Supabase session check to prevent login redirect loops
+  // Verify auth session safely using Supabase session check to prevent login redirect loops
   useEffect(() => {
     const verifyUser = async () => {
       const { supabase } = await import('@/lib/supabase');
@@ -83,13 +83,13 @@ export default function GeneralDashboard() {
       <div className='flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12'>
         <div>
           <h1 className='text-4xl font-extrabold font-display leading-tight'>
-            Welcome back, <span className='gradient-text'>@{username || 'User'}</span>
+            Welcome back, <span className='gradient-text'>{user?.user_metadata?.display_name || username || 'User'}</span>
           </h1>
           <p className='text-pw-muted mt-2'>
             Manage your creative ecosystem and track your tool performance.
           </p>
         </div>
-        <div className='flex gap-3'>
+        <div className='flex gap-3 flex-wrap'>
           <Link href='/settings'>
             <Button
               variant='outline'

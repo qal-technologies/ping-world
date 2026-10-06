@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { PREMIUM_TIERS, PremiumTier } from '@/lib/config/premium';
+import {PremiumTier } from '@/lib/config/premium';
 
 export interface QuotaStatus {
   used: number;

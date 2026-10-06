@@ -302,6 +302,8 @@ export function PlatformEditor({
               <div className='relative'>
                 <textarea
                   ref={platform === activePlatformTab ? textareaRef : undefined}
+                  autoCorrect='text'
+                  spellCheck
                   value={content}
                   onChange={(e) =>
                     overridden ?

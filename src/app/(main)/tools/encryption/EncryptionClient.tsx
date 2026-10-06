@@ -296,7 +296,7 @@ export default function EncryptionDecryptionPage() {
                   AES (Standard Secure)
                 </option>
                 <option value='TripleDES' className='bg-pw-surface text-pw-text'>
-                  TripleDES (Legacy Complex)
+                  TripleDES
                 </option>
                 <option value='RC4' className='bg-pw-surface text-pw-text'>
                   RC4 (Fast Stream)
@@ -414,7 +414,7 @@ export default function EncryptionDecryptionPage() {
                   AES (Standard Secure)
                 </option>
                 <option value='TripleDES' className='bg-pw-surface text-pw-text'>
-                  TripleDES (Legacy Complex)
+                  TripleDES
                 </option>
                 <option value='RC4' className='bg-pw-surface text-pw-text'>
                   RC4 (Fast Stream)

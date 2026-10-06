@@ -8,6 +8,7 @@ import { ComposerProvider } from '@/lib/composer/useComposerStore';
 import { NetworkStatusBar } from '@/components/layout/NetworkStatusBar';
 import './globals.css';
 import { PageLayoutProvider } from '@/components/layout';
+import { AppFileViewerProvider } from '@/components/shared/AppFileViewer';
 
 export const metadata: Metadata = {
   title: {
@@ -133,7 +134,9 @@ export default function RootLayout({
         <AppProvider>
           <PageLayoutProvider>
             <AppModalProvider>
-              <ComposerProvider>{children}</ComposerProvider>
+              <ComposerProvider>
+                <AppFileViewerProvider>{children}</AppFileViewerProvider>
+              </ComposerProvider>
             </AppModalProvider>
           </PageLayoutProvider>
         </AppProvider>

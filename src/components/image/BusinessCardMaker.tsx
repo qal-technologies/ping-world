@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { makeHtml2CanvasCloneColorSafe } from '@/lib/image/html2canvas-color-safety';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
 
@@ -250,14 +251,14 @@ function BusinessCardPreview({
 
       {/* Subtle non-intrusive preview watermark on screen (removed during 6x export) */}
       {!isExporting && (
-        <div className='absolute inset-0 pointer-events-none select-none z-30 flex items-center justify-center overflow-hidden'>
-          <div className='rotate-[-25deg] flex flex-col items-center gap-1 opacity-[0.14]'>
-            <div className='flex items-center gap-1.5 text-[10px] font-black tracking-[0.25em] text-white uppercase font-mono'>
+        <div className='absolute inset-x-0 bottom-0 pointer-events-none select-none z-30 flex items-center justify-center overflow-hidden'>
+          <div className=' flex flex-col items-center gap-1 opacity-[0.15]'>
+            <div className='h-[1px] w-48 bg-white/40' />
+            <div className='flex items-center gap-1.5 text-[8px] pb-1 font-black tracking-[0.25em] text-white uppercase font-mono'>
               <span>PINGWORLD</span>
               <span>•</span>
-              <span>STUDIO PREVIEW</span>
+              <span>CARD PREVIEW</span>
             </div>
-            <div className='h-[1px] w-48 bg-white/40' />
           </div>
         </div>
       )}
@@ -726,6 +727,7 @@ export default function BusinessCardMaker() {
   const exportCard = async (side: 'front' | 'back') => {
     const ref = side === 'front' ? frontRef : backRef;
     if (!ref.current) return;
+    ref.current.dataset.captureRoot ||= crypto.randomUUID();
     setExporting(true);
     try {
       const { default: html2canvas } = await import('html2canvas');
@@ -736,6 +738,7 @@ export default function BusinessCardMaker() {
         allowTaint: false,
         logging: false,
         onclone: (clonedDoc) => {
+          makeHtml2CanvasCloneColorSafe(ref.current!, clonedDoc);
           // Remove watermark overlay from exported high-res canvas
           const watermarkOverlays = clonedDoc.querySelectorAll('.pointer-events-none.select-none.z-30');
           watermarkOverlays.forEach((el) => el.remove());
@@ -747,8 +750,8 @@ export default function BusinessCardMaker() {
       a.download = `business-card-${side}-${Date.now()}.png`;
       a.click();
       toast.success(`${side === 'front' ? 'Front' : 'Back'} card exported at print-ready 6× resolution!`);
-    } catch {
-      toast.error('Export failed. Please try again.');
+    } catch (e) {
+      toast.error(`Export failed. Please try again.  ${e}`);
     } finally {
       setExporting(false);
     }
