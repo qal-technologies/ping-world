@@ -2678,7 +2678,7 @@ function Taker() {
             <p
               className={cn(
                 'text-pw-muted text-xs mb-1 whitespace-pre-wrap transition-all',
-                !isEndMsgExpanded && endMsg.length > 180 ?
+                !isEndMsgExpanded && endMsg.length > 80 ?
                   'line-clamp-3 max-h-24 overflow-hidden'
                 : 'max-h-96 overflow-y-auto pr-1',
               )}
@@ -2708,6 +2708,9 @@ function Taker() {
               </div>
 
               {/* Independent Questions Score Breakdown */}
+              {quiz?.category?.inPerformance &&
+                Object.keys(categoryScores).length > 0 && (
+                <>
               {(() => {
                 const independentQs = activeQuestions.filter(
                   (quest) => !quest.category || quest.category.trim() === '',
@@ -2735,8 +2738,7 @@ function Taker() {
               })()}
 
               {/* Group / Category Questions Score Breakdown */}
-              {quiz?.category?.inPerformance &&
-                Object.keys(categoryScores).length > 0 && (
+              
                   <div className='border-t border-white/5 pt-3 space-y-2'>
                     <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
                       Category Scores
@@ -2755,6 +2757,7 @@ function Taker() {
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
             </Card>
           )}
