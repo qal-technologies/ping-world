@@ -736,8 +736,7 @@ function Taker() {
         if (isLocalPreview && typeof window !== 'undefined') {
           try {
             const raw =
-              localStorage.getItem('pw_quiz_template') ||
-              localStorage.getItem('pw_quiz_seed_template_v1');
+              localStorage.getItem('pw_quiz_template_v1');
             const stored = raw ? (JSON.parse(raw) as Quiz | null) : null;
             if (stored?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
               data = stored;
@@ -763,9 +762,16 @@ function Taker() {
             try {
               const response = await fetch(publicUrl, { cache: 'no-store' });
               const payload = response.ok ? await response.json() : null;
-              data = payload?.quiz || null;
-            } catch {
+
+              if(response.ok) {
+                data = payload?.quiz || null;
+              } else {
+                data = await HybridStorage.getQuiz(routeParamId) || null;
+                
+              }
+            } catch (e){
               data = null;
+              console.error(e);
             }
           }
         }
@@ -1361,12 +1367,6 @@ function Taker() {
     );
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const confirmSubmitQuiz = () => {
     toast(
       <div className='flex flex-col gap-3 py-1'>
@@ -1576,22 +1576,22 @@ function Taker() {
             categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
           };
           try {
-            const rawStored = localStorage.getItem('pw_template_responses');
+            const rawStored = localStorage.getItem('pw_template_v1_responses');
             const storedList = rawStored ? JSON.parse(rawStored) : [];
             const updatedList = [
               templateResp,
               ...(Array.isArray(storedList) ? storedList : []),
             ];
             localStorage.setItem(
-              'pw_template_responses',
+              'pw_template_v1_responses',
               JSON.stringify(updatedList),
             );
 
             // Also persist into the seed template responses in local storage
-            const seedKey = 'pw_quiz_seed_template_v1';
+            const seedKey = 'pw_quiz_template_v1';
             const rawSeed =
               localStorage.getItem(seedKey) ||
-              localStorage.getItem('pw_quiz_template');
+              localStorage.getItem('pw_quiz_template_v1');
             if (rawSeed) {
               const parsedSeed = JSON.parse(rawSeed);
               parsedSeed.responses = [
@@ -1602,7 +1602,7 @@ function Taker() {
               ];
               localStorage.setItem(seedKey, JSON.stringify(parsedSeed));
               localStorage.setItem(
-                'pw_quiz_template',
+                'pw_quiz_template_v1',
                 JSON.stringify(parsedSeed),
               );
             }

@@ -28,6 +28,7 @@ import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import {checkFileSize} from '@/app/(main)/tools/pdf/PdfClient';
 
 export type AppFileKind =
   | 'image'
@@ -42,6 +43,7 @@ export interface AppFileDescriptor {
   name?: string;
   mimeType?: string;
   kind?: AppFileKind;
+  size?: number;
 }
 
 interface AppFileViewerContextValue {
@@ -123,6 +125,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
         ...nextFile,
         name: nextFile.name || unpacked.name,
         mimeType: nextFile.mimeType || unpacked.type,
+        size: nextFile?.size || unpacked?.size,
         src: unpacked.url || nextFile.src.trim(),
       };
     });
@@ -268,7 +271,11 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
       if (event.key === 'Escape') closeFile();
       if (event.key === '+' || event.key === '=')
         setZoom((value) => Math.min(4, value + 0.2));
-      if (event.key === '-') setZoom((value) => Math.max(0.4, value - 0.2));
+      if(event.key === '-') setZoom((value) => Math.max(0.4, value - 0.2));
+      if (event.key === 'Enter') {
+        if (mediaRef.current?.paused) mediaRef.current?.play();
+        else mediaRef.current?.pause();
+      }
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -285,16 +292,6 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
     [openFile, closeFile],
   );
 
-  useEffect(() => {
-    if (typeof window !== undefined) {
-      window.addEventListener('keypress', (e) => {
-        if (e.key === 'ENTER') {
-          if (mediaRef.current?.paused) mediaRef.current?.play();
-          else mediaRef.current?.pause();
-        }
-      });
-    }
-  }, []);
 
   return (
     <AppFileViewerContext.Provider value={contextValue}>
@@ -320,7 +317,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   {file.name || 'File preview'}
                 </p>
                 <p className='text-[10px] uppercase tracking-wider text-white/50'>
-                  {kind}
+                  {kind} {' '} {file?.size ? `(${checkFileSize(file.size)})` : ''}
                 </p>
               </div>
               {(kind === 'image' || kind === 'pdf') && (

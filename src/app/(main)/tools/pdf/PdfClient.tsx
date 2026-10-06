@@ -233,6 +233,23 @@ To load brand logo graphics directly inside your text content streams, use the I
   updatedAt: new Date().toISOString(),
 };
 
+export function checkFileSize (size: number) {
+  let mainSize = size;
+  let output;
+
+  if(mainSize / (1024 * 1024) > 900) {
+    output = `${(mainSize / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+  else if(mainSize / (1024 * 1024) > 0.5) {
+    output = `${(mainSize / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  else {
+    output = `${(mainSize / 1024).toFixed(1)} KB`;
+  }
+
+  return output;
+}
+
 export default function PdfToolStudioPage() {
   const { openFile } = useAppFileViewer();
   const { isFeatureUnlocked, isPremium, user } = useAppContext();
@@ -3878,8 +3895,8 @@ export default function PdfToolStudioPage() {
               id='pdf-merge-file-input'
               type='file'
               multiple
-              accept='*'
               // accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
+              accept='*'
               className='hidden'
               onChange={(e) => {
                 const files = e.target.files;
@@ -3887,12 +3904,12 @@ export default function PdfToolStudioPage() {
                   const arr = Array.from(files).map((f) => ({
                     id: `merge-${Date.now()}-${Math.random()}`,
                     name: f.name,
-                    size: `${(f.size / 1024).toFixed(1)} KB`,
+                    size: checkFileSize(f.size),
                     type:
-                      f.type.includes('pdf') ? 'Pdf'
-                      : f.type.includes('.document') ? 'Word'
-                      : f.type.includes('.presentation') ? 'PPT'
-                      : f.type.includes('image') ? 'Image'
+                      ['pdf'].includes(f.type) ? 'Pdf'
+                      : ['word', 'document', 'docx', 'docs', 'doc'].includes(f.type) ? 'Word'
+                      : ['presentation', 'ppt', 'pptx', 'powerpoint'].includes(f.type) ? 'PPT'
+                      : ['image', 'webp', 'jpeg', 'jpg', 'bmp', 'png'].includes(f.type) ? 'Image'
                       : 'File',
                     file: f,
                   }));

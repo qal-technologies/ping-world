@@ -858,9 +858,9 @@ export const HybridStorage = {
     const cachePrefixes = [
       'pw_quizzes', 'pw_messages', 'pw_posts', 'pw_links', 'pw_games',
       'pw_documents', 'pw_composer_history', 'pw_quiz_drafts',
-      'pw_queue:', 'pw_quiz_responses_pending_', 'pw_storage_legacy_migrated_v1_', 'pw_quiz_seed_template_', 'pw_quiz_template',
+      'pw_queue:', 'pw_quiz_responses_pending_', 'pw_storage_legacy_migrated_v1_', 'pw_quiz_seed_template_', 'pw_quiz_template_',
       'pw_quiz_attempt:', 'pw_quiz_submission:',
-      'pw_quiz_template_seeded_', 'completed_quiz_',
+      'completed_quiz_',
     ];
     Object.keys(localStorage).forEach((key) => {
       if (cachePrefixes.some((prefix) => key.startsWith(prefix))) localStorage.removeItem(key);
@@ -1215,7 +1215,7 @@ export const HybridStorage = {
     // Check seed template cache if needed
     if (!exactQuiz && typeof window !== 'undefined') {
       try {
-        const seedStr = localStorage.getItem('pw_quiz_seed_template_v1') || localStorage.getItem('pw_quiz_template');
+        const seedStr = localStorage.getItem('pw_quiz_template_v1');
         if (seedStr) {
           const seedQuiz = JSON.parse(seedStr);
           if (seedQuiz?.id === id || seedQuiz?.customUrl === id || seedQuiz?.custom_id === id) {

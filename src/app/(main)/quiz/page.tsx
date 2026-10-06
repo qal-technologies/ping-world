@@ -102,7 +102,7 @@ import type {
 import {supabase} from '@/lib/supabase';
 
 const seedTemplateStorageKey = () =>
-  `pw_quiz_template`;
+  `pw_quiz_template_v1`;
 
 // Helper: compute a capped expiry date max 3 days out
 export function computeQuizExpiry(daysUntilExpiry: number): string {
@@ -4751,11 +4751,18 @@ export default function QuizPage() {
           const localSeed = JSON.parse(
             localStorage.getItem(localSeedKey) || 'null',
           ) as Quiz | null;
-          if (localSeed?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+          if (localSeed && localSeed?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
             return [
               localSeed,
               ...items.filter((item) => item.id !== localSeed.id),
             ];
+          } else {
+            localStorage.setItem(
+              localSeedKey,
+              JSON.stringify(DEFAULT_PINGWORLD_SHOWCASE_QUIZ),
+            );
+
+            includeLocalSeed(items);
           }
         } catch {
           console.warn('[Quiz] Ignoring an unreadable local showcase draft.');
@@ -4985,9 +4992,7 @@ export default function QuizPage() {
         await HybridStorage.deleteQuizDraft(quizToSave.id);
         if (originalQuizId !== quizToSave.id) await HybridStorage.deleteQuizDraft(originalQuizId);
         if (originalQuizId !== quizToSave.id) await HybridStorage.delete(originalQuizId, 'quiz');
-        if (originalQuizId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
-          localStorage.removeItem(seedTemplateStorageKey());
-        }
+      
       }
 
       const retainedQuizzes = quizzes.filter((item) => item.id !== originalQuizId || originalQuizId === quizToSave.id);
@@ -5258,7 +5263,8 @@ export default function QuizPage() {
                           className={cn(
                             'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest flex-wrap',
                           )}>
-                          {(quiz as any).is_synced ?
+                          {quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id &&
+                            ((quiz as any).is_synced ?
                             <span
                               className='text-pw-success flex items-center gap-1.5'
                               title='Synced'>
@@ -5268,7 +5274,7 @@ export default function QuizPage() {
                               className='text-pw-warning flex items-center gap-1.5'
                               title='Not synced'>
                               <Clock className='h-3 w-3' />
-                            </span>
+                            </span>)
                           }
                           {quiz?.questions?.length} Qts
                           {responseCounts[quiz.id] || quiz?.responses && quiz?.responses?.length > 0 && (
@@ -5495,8 +5501,8 @@ export default function QuizPage() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               className='relative h-full w-full max-w-2xl bg-pw-surface/80 bkblur sm:border-l sm:border-white/10 p-3 sm:p-6 sm:shadow-2xl overflow-y-auto'>
-              <div className='flex justify-between items-center mb-8 gap-1 flex-wrap pt-4'>
-                <div>
+              <div className='flex justify-between items-center mb-8 gap-3 flex-wrap pt-4'>
+                <div className='mb-1'>
                   <h2 className='text-2xl font-bold'>
                     {(
                       viewingResponses.responses &&
@@ -5513,7 +5519,8 @@ export default function QuizPage() {
                     {viewingResponses.title}
                   </p>
                 </div>
-                <div className='flex gap-2 flex-wrap'>
+
+                <div className='flex items-center justify-between gap-2 flex-wrap'>
                   {viewingResponses.responses &&
                     viewingResponses.responses.length > 0 && (
                       <>

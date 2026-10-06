@@ -11,7 +11,6 @@ export async function generateMetadata ({params}: QuizParams): Promise<Metadata>
   
   const { id } = await params;
   try {
-
     const timeout = new Promise<null>((res) => setTimeout(() => res(null), 1500));
     const quiz = await Promise.race([
       HybridStorage.getQuiz(id, 'title, description').catch(() => null),
