@@ -123,7 +123,7 @@ export interface Quiz {
     textAlign?: 'left' | 'center' | 'right'; // End screen text alignment
   };
   correctOption?: boolean;
-  correctOptionDes?: boolean;
+  correctOptionDes?: 'in-question' | 'in-result';
   createdAt: number;
   responses?: QuizTakerResponse[];
   responsesNextOffset?: number | null;

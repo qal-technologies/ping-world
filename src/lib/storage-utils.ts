@@ -83,39 +83,57 @@ function openCacheDb(): Promise<IDBDatabase | null> {
       void navigator.storage.persist().catch(() => false);
     }
     cacheDbPromise = new Promise((resolve) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
+      }, 1500);
+
+      const safeResolve = (val: IDBDatabase | null) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          resolve(val);
+        }
+      };
+
       let request: IDBOpenDBRequest;
       try {
         request = indexedDB.open(CACHE_DB_NAME, 1);
       } catch {
-        resolve(null);
+        safeResolve(null);
         return;
       }
-      let fallbackResolved = false;
       request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
-          db.createObjectStore(CACHE_STORE_NAME, { keyPath: 'key' });
+        try {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+            db.createObjectStore(CACHE_STORE_NAME, { keyPath: 'key' });
+          }
+        } catch {
+          safeResolve(null);
         }
       };
       request.onsuccess = () => {
-        if (fallbackResolved) {
-          request.result.close();
-          return;
+        try {
+          const db = request.result;
+          db.onversionchange = () => {
+            db.close();
+            cacheDbPromise = null;
+          };
+          safeResolve(db);
+        } catch {
+          safeResolve(null);
         }
-        const db = request.result;
-        db.onversionchange = () => {
-          db.close();
-          cacheDbPromise = null;
-        };
-        resolve(db);
       };
       request.onerror = () => {
-        fallbackResolved = true;
-        resolve(null);
+        cacheDbPromise = null;
+        safeResolve(null);
       };
       request.onblocked = () => {
-        fallbackResolved = true;
-        resolve(null);
+        safeResolve(null);
       };
     });
   }
@@ -126,47 +144,90 @@ const cacheRecordKey = (type: StorageItem['type'], userId = activeStorageUserId)
   `${encodeURIComponent(userId)}:${type}`;
 
 async function readCacheValue<T>(key: string): Promise<T | null> {
-  const db = await openCacheDb();
-  if (!db) {
+  try {
+    const db = await openCacheDb();
+    if (!db) {
+      try { return JSON.parse(localStorage.getItem(`pw_${key}`) || 'null') as T | null; }
+      catch { return null; }
+    }
+    return await new Promise<T | null>((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) { done = true; resolve(null); }
+      }, 1000);
+      try {
+        const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
+        const req = tx.objectStore(CACHE_STORE_NAME).get(key);
+        req.onsuccess = () => {
+          if (!done) { done = true; clearTimeout(timer); resolve((req.result?.value as T) ?? null); }
+        };
+        req.onerror = () => {
+          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+        };
+        tx.onerror = () => {
+          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+        };
+        tx.onabort = () => {
+          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+        };
+      } catch {
+        if (!done) { done = true; clearTimeout(timer); resolve(null); }
+      }
+    });
+  } catch {
     try { return JSON.parse(localStorage.getItem(`pw_${key}`) || 'null') as T | null; }
     catch { return null; }
   }
-  return new Promise((resolve) => {
-    const request = db.transaction(CACHE_STORE_NAME, 'readonly')
-      .objectStore(CACHE_STORE_NAME).get(key);
-    request.onsuccess = () => resolve((request.result?.value as T) ?? null);
-    request.onerror = () => resolve(null);
-  });
 }
 
 async function writeCacheValue<T>(key: string, value: T) {
-  const db = await openCacheDb();
-  if (!db) {
+  try {
     localStorage.setItem(`pw_${key}`, JSON.stringify(value));
-    return;
-  }
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
-    transaction.objectStore(CACHE_STORE_NAME).put({ key, value, updatedAt: Date.now() });
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error);
-  });
+  } catch {}
+  try {
+    const db = await openCacheDb();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) { done = true; resolve(); }
+      }, 1000);
+      try {
+        const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
+        transaction.objectStore(CACHE_STORE_NAME).put({ key, value, updatedAt: Date.now() });
+        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+      } catch {
+        if (!done) { done = true; clearTimeout(timer); resolve(); }
+      }
+    });
+  } catch {}
 }
 
 async function deleteCacheValue(key: string) {
-  const db = await openCacheDb();
-  if (!db) {
+  try {
     localStorage.removeItem(`pw_${key}`);
-    return;
-  }
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
-    transaction.objectStore(CACHE_STORE_NAME).delete(key);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error);
-  });
+  } catch {}
+  try {
+    const db = await openCacheDb();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) { done = true; resolve(); }
+      }, 1000);
+      try {
+        const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
+        transaction.objectStore(CACHE_STORE_NAME).delete(key);
+        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+      } catch {
+        if (!done) { done = true; clearTimeout(timer); resolve(); }
+      }
+    });
+  } catch {}
 }
 
 function createUuid(): string {
@@ -181,18 +242,30 @@ async function readLocal(type: StorageItem['type'], owner = activeStorageUserId)
   try {
     const db = await openCacheDb();
     if (db) {
-      const record = await new Promise<any>((resolve, reject) => {
-        const request = db.transaction(CACHE_STORE_NAME, 'readonly')
-          .objectStore(CACHE_STORE_NAME).get(cacheRecordKey(type, owner));
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+      const record = await new Promise<any>((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => {
+          if (!done) { done = true; resolve(null); }
+        }, 1000);
+        try {
+          const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
+          const req = tx.objectStore(CACHE_STORE_NAME).get(cacheRecordKey(type, owner));
+          req.onsuccess = () => { if (!done) { done = true; clearTimeout(timer); resolve(req.result); } };
+          req.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
+          tx.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
+          tx.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
+        } catch {
+          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+        }
       });
-      if (Array.isArray(record?.items)) {
+      if (Array.isArray(record?.items) && record.items.length > 0) {
         return record.items.filter((item: StorageItem) =>
           !item.ownerId || item.ownerId === owner,
         );
       }
     }
+  } catch {}
+  try {
     const raw = localStorage.getItem(localStorageKey(type, owner));
     const list: StorageItem[] = raw ? JSON.parse(raw) : [];
     return list.filter((item) => !item.ownerId || item.ownerId === owner);
@@ -205,23 +278,29 @@ async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner 
   const scopedList = list.filter((item) => !item.ownerId || item.ownerId === owner)
     .map((item) => ({ ...item, ownerId: owner }));
   try {
+    localStorage.setItem(localStorageKey(type, owner), JSON.stringify(scopedList));
+  } catch {}
+  try {
     const db = await openCacheDb();
     if (db) {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
-        transaction.objectStore(CACHE_STORE_NAME).put({
-          key: cacheRecordKey(type, owner), items: scopedList, updatedAt: Date.now(),
-        });
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error);
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => { if (!done) { done = true; resolve(); } }, 1000);
+        try {
+          const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
+          transaction.objectStore(CACHE_STORE_NAME).put({
+            key: cacheRecordKey(type, owner), items: scopedList, updatedAt: Date.now(),
+          });
+          transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+          transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+          transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        } catch {
+          if (!done) { done = true; clearTimeout(timer); resolve(); }
+        }
       });
-      return;
     }
-    localStorage.setItem(localStorageKey(type, owner), JSON.stringify(scopedList));
   } catch (error) {
-    console.warn(`[HybridStorage] Local ${type} cache could not be written:`, error);
-    throw error;
+    console.warn(`[HybridStorage] Local ${type} cache write failed:`, error);
   }
 }
 
@@ -574,6 +653,9 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
           });
 
           item.is_synced = true;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+          }
         } else {
           const payload = await buildSupabasePayload(
             type,
@@ -598,6 +680,9 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
 
           if (!error) {
             item.is_synced = true;
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+            }
           }
         }
       } catch (e) {
@@ -848,44 +933,98 @@ export const HybridStorage = {
     await deleteCacheValue(key);
   },
 
-  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null }> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Sign in to view assessment responses.');
-    const responseResult = await fetch(`/api/quizzes/${encodeURIComponent(quizId)}/responses?offset=${Math.max(0, Math.floor(offset))}&limit=100`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: 'no-store',
-    });
-    if (!responseResult.ok) throw new Error('Responses could not be loaded. Check access and database setup.');
-    const { responses: data = [], nextOffset = null } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null };
-    const mapped = await Promise.all((data || []).map(async (row: any) => {
-      const metadata = row.userData || {};
-      const userData = { ...metadata };
-      delete userData.country;
-      delete userData.continent;
-      delete userData.timezone;
-      delete userData.submissionReason;
-      delete userData.assessmentType;
-      delete userData.categoryScores;
-      delete userData.answeredQuestions;
-      delete userData.responseMediaExternalized;
-      const answers = Array.isArray(row.answers) ? row.answers : [];
-      return {
-        id: row.id,
-        timestamp: row.timestamp,
-        score: row.score || 0,
-        totalQuestions: row.totalQuestions || 0,
-        userData,
-        answers,
-        ...(row.status ? { status: row.status, startedAt: row.startedAt } : {}),
-        country: metadata.country,
-        continent: metadata.continent,
-        submissionReason: metadata.submissionReason,
-        assessmentType: metadata.assessmentType,
-        categoryScores: metadata.categoryScores,
-        answeredQuestions: metadata.answeredQuestions,
-      };
-    }));
-    return { responses: mapped, nextOffset };
+  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; isLocalOnly?: boolean }> {
+    let session = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session;
+    } catch {}
+
+    const responseCacheKey = `quiz_responses:${encodeURIComponent(activeStorageUserId)}:${encodeURIComponent(quizId)}:${Math.max(0, Math.floor(offset))}`;
+
+    const loadLocalResponses = async () => {
+      const cachedPage = await readCacheValue<{ responses: any[]; nextOffset: number | null }>(responseCacheKey);
+      if (cachedPage && Array.isArray(cachedPage.responses)) {
+        return { ...cachedPage, isLocalOnly: true, isCached: true };
+      }
+      
+      const localQuizzes = await readLocal('quiz', activeStorageUserId);
+      const guestQuizzes = activeStorageUserId !== 'guest' ? await readLocal('quiz', 'guest') : [];
+      const allLocal = [...flattenItems(localQuizzes), ...flattenItems(guestQuizzes)];
+      const targetQuiz = allLocal.find((q) => q.id === quizId);
+      let localResponses = Array.isArray(targetQuiz?.responses) ? [...targetQuiz.responses] : [];
+
+      if (quizId === 'pingworld-mastery-showcase' || quizId === 'pingworld-showcase-assessment') {
+        try {
+          const templateStored = JSON.parse(localStorage.getItem('pw_template_responses') || '[]');
+          if (Array.isArray(templateStored) && templateStored.length > 0) {
+            localResponses = [...templateStored, ...localResponses];
+          }
+        } catch {}
+      }
+
+      try {
+        const queueKey = pendingResponsesKey();
+        const pending = (await readCacheValue<Array<{ quizId: string; response: any }>>(queueKey)) || [];
+        const matchingPending = pending.filter((item) => item.quizId === quizId).map((item) => item.response);
+        if (matchingPending.length > 0) {
+          localResponses = [...matchingPending, ...localResponses];
+        }
+      } catch {}
+
+      return { responses: localResponses, nextOffset: null, isLocalOnly: true };
+    };
+
+    if (!session?.access_token) {
+      return loadLocalResponses();
+    }
+
+    try {
+      const responseResult = await fetch(`/api/quizzes/${encodeURIComponent(quizId)}/responses?offset=${Math.max(0, Math.floor(offset))}&limit=100`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      });
+      if (!responseResult.ok) {
+        return loadLocalResponses();
+      }
+      const { responses: data = [], nextOffset = null } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null };
+      const mapped = (data || []).map((row: any) => {
+        const metadata = row.userData || {};
+        const userData = { ...metadata };
+        delete userData.country;
+        delete userData.continent;
+        delete userData.timezone;
+        delete userData.submissionReason;
+        delete userData.assessmentType;
+        delete userData.categoryScores;
+        delete userData.answeredQuestions;
+        delete userData.responseMediaExternalized;
+        const answers = Array.isArray(row.answers) ? row.answers : [];
+        return {
+          id: row.id,
+          timestamp: row.timestamp,
+          score: row.score || 0,
+          totalQuestions: row.totalQuestions || 0,
+          userData,
+          answers,
+          ...(row.status ? { status: row.status, startedAt: row.startedAt } : {}),
+          country: metadata.country,
+          continent: metadata.continent,
+          submissionReason: metadata.submissionReason,
+          assessmentType: metadata.assessmentType,
+          categoryScores: metadata.categoryScores,
+          answeredQuestions: metadata.answeredQuestions,
+        };
+      });
+      
+      await writeCacheValue(responseCacheKey, {
+        responses: mapped,
+        nextOffset,
+      });
+      return { responses: mapped, nextOffset, isLocalOnly: false };
+    } catch {
+      return loadLocalResponses();
+    }
   },
 
   async clearQuizResponses(quizId: string) {
@@ -962,6 +1101,9 @@ export const HybridStorage = {
             const i = refreshed.findIndex((r) => r.id === item.id);
             if (i >= 0) refreshed[i].is_synced = true;
             await writeLocal(type, refreshed, saveOwner);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+            }
           } else {
             const payload = await buildSupabasePayload(
               type,
@@ -997,6 +1139,9 @@ export const HybridStorage = {
               const i = refreshed.findIndex((r) => r.id === item.id);
               if (i >= 0) refreshed[i].is_synced = true;
               await writeLocal(type, refreshed, saveOwner);
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+              }
             }
           }
         } catch (e) {
@@ -1029,10 +1174,8 @@ export const HybridStorage = {
       await setActiveStorageUser(currentUserId);
     }
     const cacheOwner = activeStorageUserId;
-    try {
-      await navigator.storage?.persist?.();
-    } catch {
-      // Best effort: browser-managed persistence remains subject to user-agent policy.
+    if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+      void navigator.storage.persist().catch(() => false);
     }
 
     // 1. Return local immediately filtered by user_id rule
@@ -1049,6 +1192,7 @@ export const HybridStorage = {
 
   /* A way to get an exact quiz by it's id without reading an entire collection from it */
   async getQuiz(id?: string, columns?: string, ownerUsername?: string): Promise<Quiz | null> {
+    if (!id) return null;
     const currentUserId = await getActiveUserId();
     if (currentUserId && currentUserId !== activeStorageUserId) {
       await setActiveStorageUser(currentUserId);
@@ -1056,35 +1200,60 @@ export const HybridStorage = {
     const cacheOwner = activeStorageUserId;
     const local = await readLocal('quiz', cacheOwner);
     const localFlat = flattenItems(local);
-    const exactQuiz = localFlat.find((i) =>
+    let exactQuiz = localFlat.find((i) =>
       i.id === id || (!ownerUsername && (i.customUrl === id || i.custom_id === id)),
     );
-    if (!id) return null;
+
+    // If not found in active user's cache, check 'guest' cache
+    if (!exactQuiz && cacheOwner !== 'guest') {
+      const guestLocal = await readLocal('quiz', 'guest');
+      exactQuiz = flattenItems(guestLocal).find((i) =>
+        i.id === id || (!ownerUsername && (i.customUrl === id || i.custom_id === id)),
+      );
+    }
+
+    // Check seed template cache if needed
+    if (!exactQuiz && typeof window !== 'undefined') {
+      try {
+        const seedStr = localStorage.getItem('pw_quiz_seed_template_v1') || localStorage.getItem('pw_quiz_template');
+        if (seedStr) {
+          const seedQuiz = JSON.parse(seedStr);
+          if (seedQuiz?.id === id || seedQuiz?.customUrl === id || seedQuiz?.custom_id === id) {
+            exactQuiz = seedQuiz;
+          }
+        }
+      } catch {}
+    }
 
     if (isOnline()) {
-      const selectedColumns = columns || '*';
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      const byId = isUuid && !ownerUsername
-        ? await supabase.from(tableName('quiz')).select(selectedColumns).eq('id', id).maybeSingle()
-        : { data: null, error: null };
-      let ownerId: string | null = null;
-      if (ownerUsername) {
-        const { data: profile } = await supabase.from('profiles')
-          .select('id').eq('username', ownerUsername).maybeSingle();
-        ownerId = profile?.id || null;
-      }
-      let customQuery = supabase.from(tableName('quiz')).select(selectedColumns).eq('custom_id', id);
-      if (ownerUsername) {
-        if (!ownerId) return null;
-        customQuery = customQuery.eq('user_id', ownerId) as typeof customQuery;
-      }
-      const onlineQuiz: any = byId.data ? byId : await customQuery.maybeSingle();
+      try {
+        const selectedColumns = columns || '*';
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+        const timeoutPromise = new Promise<{ data: null; error: any }>((res) =>
+          setTimeout(() => res({ data: null, error: new Error('timeout') }), 2500)
+        );
 
-      if (!onlineQuiz.error && onlineQuiz.data) {
-        return {
-          ...normalizeQuizRow(onlineQuiz.data),
-        } as Quiz;
-      }
+        let queryPromise;
+        if (isUuid && !ownerUsername) {
+          queryPromise = supabase.from(tableName('quiz')).select(selectedColumns).eq('id', id).maybeSingle();
+        } else {
+          let customQuery = supabase.from(tableName('quiz')).select(selectedColumns).eq('custom_id', id);
+          if (ownerUsername) {
+            const { data: profile } = await supabase.from('profiles').select('id').eq('username', ownerUsername).maybeSingle();
+            if (profile?.id) {
+              customQuery = customQuery.eq('user_id', profile.id);
+            }
+          }
+          queryPromise = customQuery.maybeSingle();
+        }
+
+        const onlineQuiz: any = await Promise.race([queryPromise, timeoutPromise]);
+        if (!onlineQuiz.error && onlineQuiz.data) {
+          return {
+            ...normalizeQuizRow(onlineQuiz.data),
+          } as Quiz;
+        }
+      } catch {}
     }
     return exactQuiz ?? null;
   },

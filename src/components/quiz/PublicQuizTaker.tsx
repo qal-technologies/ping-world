@@ -380,11 +380,9 @@ function Taker() {
   const { showAlert } = useAppModal();
 
   const params = useParams();
-  const routeParamId = (params?.id || params?.customQuizId) as
-    | string
-    | undefined;
-  const quizSetter = (params?.userId || params?.username || params?.setter) as
-    | string
+  const routeParamId = (params?.id || params?.customQuizId) as string;
+  
+  const quizSetter = (params?.userId || params?.username || params?.setter) as | string
     | undefined;
   const isLocalPreview = routeParamId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
 
@@ -733,289 +731,305 @@ function Taker() {
   useEffect(() => {
     const loadQuiz = async () => {
       setLoading(true);
-      let data: Quiz | null = null;
-      if (isLocalPreview && typeof window !== 'undefined') {
-        const stored = JSON.parse(
-          localStorage.getItem('pw_quiz_template') || '',
-        ) as Quiz | null;
-        if (stored?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
-          data = stored;
-        }
-
-        data ||= DEFAULT_PINGWORLD_SHOWCASE_QUIZ;
-      } else {
-        if (!routeParamId) {
-          data = null;
-        } else {
-          const publicUrl = new URL(
-            `/api/quizzes/${encodeURIComponent(routeParamId)}`,
-            window.location.origin,
-          );
-          if (params?.username && quizSetter)
-            publicUrl.searchParams.set('owner', quizSetter);
+      try {
+        let data: Quiz | null = null;
+        if (isLocalPreview && typeof window !== 'undefined') {
           try {
-            const response = await fetch(publicUrl, { cache: 'no-store' });
-            const payload = response.ok ? await response.json() : null;
-            data = payload?.quiz || null;
-          } catch {
+            const raw =
+              localStorage.getItem('pw_quiz_template') ||
+              localStorage.getItem('pw_quiz_seed_template_v1');
+            const stored = raw ? (JSON.parse(raw) as Quiz | null) : null;
+            if (stored?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+              data = stored;
+            }
+          } catch {}
+
+          data ||= DEFAULT_PINGWORLD_SHOWCASE_QUIZ;
+        } else {
+          if (!routeParamId) {
             data = null;
+          } else if (
+            routeParamId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id ||
+            routeParamId === 'template'
+          ) {
+            data = DEFAULT_PINGWORLD_SHOWCASE_QUIZ;
+          } else {
+            const publicUrl = new URL(
+              `/api/quizzes/${encodeURIComponent(routeParamId)}`,
+              window.location.origin,
+            );
+            if (params?.username && quizSetter)
+              publicUrl.searchParams.set('owner', quizSetter);
+            try {
+              const response = await fetch(publicUrl, { cache: 'no-store' });
+              const payload = response.ok ? await response.json() : null;
+              data = payload?.quiz || null;
+            } catch {
+              data = null;
+            }
           }
         }
-      }
-      if (
-        !data &&
-        typeof navigator !== 'undefined' &&
-        !navigator.onLine &&
-        routeParamId
-      ) {
-        data = await HybridStorage.getQuiz(routeParamId);
-      }
-      let target = data as Quiz | null;
-      if (target) {
-        target = {
-          ...target,
-          questions: Array.isArray(target.questions) ? target.questions : [],
-        };
-      }
+        if (!data && routeParamId) {
+          data = await HybridStorage.getQuiz(routeParamId);
+        }
+        let target = data as Quiz | null;
+        if (target) {
+          target = {
+            ...target,
+            questions: Array.isArray(target.questions) ? target.questions : [],
+          };
+        }
 
-      if (!target && typeof navigator !== 'undefined' && !navigator.onLine) {
-        setIsOfflineUncached(true);
-        setLoading(false);
-        return;
-      }
-      if (!target) {
-        setQuizUnavailable(true);
-        setLoading(false);
-        return;
-      }
-
-      if (target) {
-        if (target?.title)
-          document.title = `${capFirst(target.title)} | Ping World`;
-
-        // Block expired quizzes from loading
-        if (
-          !isLocalPreview &&
-          target.expires_at &&
-          new Date(target.expires_at).getTime() < Date.now()
-        ) {
-          setIsQuizExpired(true);
-          setQuiz(null);
+        if (!target && typeof navigator !== 'undefined' && !navigator.onLine) {
+          setIsOfflineUncached(true);
+          setLoading(false);
+          return;
+        }
+        if (!target) {
+          setQuizUnavailable(true);
           setLoading(false);
           return;
         }
 
-        // Auth check if enabled
-        let session = null;
-        try {
-          const { data } = await supabase.auth.getSession();
-          session = data?.session;
-        } catch (err) {
-          console.warn('Supabase auth check failed', err);
-        }
+        if (target) {
+          if (target?.title)
+            document.title = `${capFirst(target.title)} | Ping World`;
 
-        if (!isLocalPreview && !target.askDetails && !session) {
-          setAuthRequired(true);
-        }
-
-        const secureAnswers: Record<string, any> = {};
-        const validQuestionData = target.questions.every(
-          (question) =>
-            Array.isArray(question.options) &&
-            question.options.every(
-              (option) =>
-                option &&
-                typeof option.id === 'string' &&
-                typeof option.text === 'string',
-            ),
-        );
-        if (!validQuestionData) {
-          throw new Error(
-            'This assessment contains invalid question data. Ask its owner to review it.',
-          );
-        }
-        const currentQuestions = target.questions.map((q) => {
-          secureAnswers[q.id] = q.correctIndex;
-          return {
-            ...q,
-            correctIndex: null,
-          };
-        });
-
-        correctAnswersRef.current = secureAnswers;
-
-        const finalQuiz = {
-          ...target,
-          questions: currentQuestions.map((q) => ({
-            ...q,
-            correctIndex: null,
-          })),
-        };
-        setQuiz(finalQuiz);
-
-        // Completion check
-        const completionMarker =
-          isLocalPreview ? null : (
-            localStorage.getItem(`completed_quiz_${finalQuiz.id}`)
-          );
-        if (completionMarker && !finalQuiz.allowRetry) {
-          setHasAlreadyCompleted(true);
-        }
-
-        /* Map questions by category and independence on load with strict category isolation */
-        let questionsToUse = [...currentQuestions];
-        if (finalQuiz.randomizeQuestions) {
-          const uncategorized = currentQuestions.filter(
-            (q) => !q.category || q.category.trim() === '',
-          );
-          const categoriesMap: Record<string, Question[]> = {};
-          currentQuestions.forEach((q) => {
-            if (q.category && q.category.trim() !== '') {
-              const catKey = q.category.trim();
-              if (!categoriesMap[catKey]) {
-                categoriesMap[catKey] = [];
-              }
-              categoriesMap[catKey].push(q);
-            }
-          });
-
-          const shuffledUncat = [...uncategorized];
-          for (let i = shuffledUncat.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffledUncat[i], shuffledUncat[j]] = [
-              shuffledUncat[j],
-              shuffledUncat[i],
-            ];
+          // Block expired quizzes from loading
+          if (
+            !isLocalPreview &&
+            target.expires_at &&
+            new Date(target.expires_at).getTime() < Date.now()
+          ) {
+            setIsQuizExpired(true);
+            setQuiz(null);
+            setLoading(false);
+            return;
           }
 
-          const shuffledCategories: Question[] = [];
-          Object.entries(categoriesMap).forEach(([, questions]) => {
-            const shuffledCat = [...questions];
-            for (let i = shuffledCat.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [shuffledCat[i], shuffledCat[j]] = [
-                shuffledCat[j],
-                shuffledCat[i],
-              ];
-            }
-            shuffledCategories.push(...shuffledCat);
-          });
-
-          questionsToUse = [...shuffledUncat, ...shuffledCategories];
-        }
-        let restoredDraft: Record<string, any> | null = null;
-        if (!isLocalPreview) {
+          // Auth check if enabled
+          let session = null;
           try {
-            const draft = await HybridStorage.getQuizAttemptDraft(finalQuiz.id);
-            if (
-              draft?.status === 'in_progress' &&
-              Array.isArray(draft.questionOrder)
-            )
-              restoredDraft = draft;
-          } catch {
-            /* Start a fresh attempt if local draft storage is unavailable. */
+            const { data } = await supabase.auth.getSession();
+            session = data?.session;
+          } catch (err) {
+            console.warn('Supabase auth check failed', err);
           }
-        }
-        if (restoredDraft) {
-          const byId = new Map(
-            questionsToUse.map((question) => [question.id, question]),
-          );
-          const restoredOrder = restoredDraft.questionOrder
-            .map((id: string) => byId.get(id))
-            .filter(Boolean) as Question[];
-          if (restoredOrder.length === questionsToUse.length)
-            questionsToUse = restoredOrder;
-        }
-        setActiveQuestions(questionsToUse);
-        setCurrentQuestion(0);
 
-        // Pre-shuffle options
-        if (finalQuiz.randomizeOptions) {
-          const shuffled: Record<string, QuizOption[]> = {};
-          questionsToUse.forEach((question) => {
-            const opts = [...question.options];
-            for (let i = opts.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [opts[i], opts[j]] = [opts[j], opts[i]];
-            }
-            shuffled[question.id] = opts;
-          });
-          setShuffledOptions(shuffled);
-        }
-        if (restoredDraft) {
-          const savedAnswers =
-            restoredDraft.answers && typeof restoredDraft.answers === 'object' ?
-              restoredDraft.answers
-            : {};
-          setUserAnswers(Object.values(savedAnswers));
-          setScrollAnswers(
-            restoredDraft.scrollAnswers ||
-              Object.fromEntries(
-                Object.entries(savedAnswers).map(
-                  ([id, value]: [string, any]) => [id, value?.answer],
-                ),
+          if (!isLocalPreview && !target.askDetails && !session) {
+            setAuthRequired(true);
+          }
+
+          const secureAnswers: Record<string, any> = {};
+          const validQuestionData = target.questions.every(
+            (question) =>
+              Array.isArray(question.options) &&
+              question.options.every(
+                (option) =>
+                  option &&
+                  typeof option.id === 'string' &&
+                  typeof option.text === 'string',
               ),
           );
-          setCurrentQuestion(
-            Math.min(
-              Math.max(0, Number(restoredDraft.currentQuestionIndex) || 0),
-              Math.max(0, questionsToUse.length - 1),
-            ),
-          );
-          setUserData(restoredDraft.userData || {});
-          setSelectedOption(restoredDraft.selectedOption ?? null);
-          setSelectedOptions(
-            Array.isArray(restoredDraft.selectedOptions) ?
-              restoredDraft.selectedOptions
-            : [],
-          );
-          setContent(restoredDraft.content || '');
-          setTimeLeft(
-            typeof restoredDraft.timeLeft === 'number' ?
-              restoredDraft.timeLeft
-            : null,
-          );
-          setQuestionTimeLeft(
-            typeof restoredDraft.questionTimeLeft === 'number' ?
-              restoredDraft.questionTimeLeft
-            : null,
-          );
-          activeAttemptRef.current = restoredDraft;
-          restoredAttemptTimerRef.current = true;
-          restoredQuestionTimerRef.current = true;
-          setDetailsCollected(true);
-          setShowDetails(false);
-          setShowIntro(false);
-          setStart(true);
-          if (navigator.onLine && restoredDraft.attemptToken) {
-            void fetch('/api/quiz-attempts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'start',
-                quizId: finalQuiz.id,
-                attemptId: restoredDraft.attemptId,
-                attemptToken: restoredDraft.attemptToken,
-              }),
-            })
-              .then(async (response) => {
-                if (!response.ok) return;
-                const remote = await response.json();
-                if (typeof remote.remainingSeconds === 'number')
-                  setTimeLeft(remote.remainingSeconds);
-                const updated = {
-                  ...restoredDraft,
-                  remoteStarted: true,
-                  serverStartedAt: remote.startedAt,
-                };
-                activeAttemptRef.current = updated;
-                await HybridStorage.saveQuizAttemptDraft(finalQuiz.id, updated);
+          if (!validQuestionData) {
+            throw new Error(
+              'This assessment contains invalid question data. Ask its owner to review it.',
+            );
+          }
+          const currentQuestions = target.questions.map((q) => {
+            secureAnswers[q.id] = q.correctIndex;
+            return {
+              ...q,
+              correctIndex: null,
+            };
+          });
+
+          correctAnswersRef.current = secureAnswers;
+
+          const finalQuiz = {
+            ...target,
+            questions: currentQuestions.map((q) => ({
+              ...q,
+              correctIndex: null,
+            })),
+          };
+          setQuiz(finalQuiz);
+
+          // Completion check
+          const completionMarker =
+            isLocalPreview ? null : (
+              localStorage.getItem(`completed_quiz_${finalQuiz.id}`)
+            );
+          if (completionMarker && !finalQuiz.allowRetry) {
+            setHasAlreadyCompleted(true);
+          }
+
+          /* Map questions by category and independence on load with strict category isolation */
+          let questionsToUse = [...currentQuestions];
+          if (finalQuiz.randomizeQuestions) {
+            const uncategorized = currentQuestions.filter(
+              (q) => !q.category || q.category.trim() === '',
+            );
+            const categoriesMap: Record<string, Question[]> = {};
+            currentQuestions.forEach((q) => {
+              if (q.category && q.category.trim() !== '') {
+                const catKey = q.category.trim();
+                if (!categoriesMap[catKey]) {
+                  categoriesMap[catKey] = [];
+                }
+                categoriesMap[catKey].push(q);
+              }
+            });
+
+            const shuffledUncat = [...uncategorized];
+            for (let i = shuffledUncat.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [shuffledUncat[i], shuffledUncat[j]] = [
+                shuffledUncat[j],
+                shuffledUncat[i],
+              ];
+            }
+
+            const shuffledCategories: Question[] = [];
+            Object.entries(categoriesMap).forEach(([, questions]) => {
+              const shuffledCat = [...questions];
+              for (let i = shuffledCat.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffledCat[i], shuffledCat[j]] = [
+                  shuffledCat[j],
+                  shuffledCat[i],
+                ];
+              }
+              shuffledCategories.push(...shuffledCat);
+            });
+
+            questionsToUse = [...shuffledUncat, ...shuffledCategories];
+          }
+          let restoredDraft: Record<string, any> | null = null;
+          if (!isLocalPreview) {
+            try {
+              const draft = await HybridStorage.getQuizAttemptDraft(
+                finalQuiz.id,
+              );
+              if (
+                draft?.status === 'in_progress' &&
+                Array.isArray(draft.questionOrder)
+              )
+                restoredDraft = draft;
+            } catch {
+              /* Start a fresh attempt if local draft storage is unavailable. */
+            }
+          }
+          if (restoredDraft) {
+            const byId = new Map(
+              questionsToUse.map((question) => [question.id, question]),
+            );
+            const restoredOrder = restoredDraft.questionOrder
+              .map((id: string) => byId.get(id))
+              .filter(Boolean) as Question[];
+            if (restoredOrder.length === questionsToUse.length)
+              questionsToUse = restoredOrder;
+          }
+          setActiveQuestions(questionsToUse);
+          setCurrentQuestion(0);
+
+          // Pre-shuffle options
+          if (finalQuiz.randomizeOptions) {
+            const shuffled: Record<string, QuizOption[]> = {};
+            questionsToUse.forEach((question) => {
+              const opts = [...question.options];
+              for (let i = opts.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [opts[i], opts[j]] = [opts[j], opts[i]];
+              }
+              shuffled[question.id] = opts;
+            });
+            setShuffledOptions(shuffled);
+          }
+          if (restoredDraft) {
+            const savedAnswers =
+              (
+                restoredDraft.answers &&
+                typeof restoredDraft.answers === 'object'
+              ) ?
+                restoredDraft.answers
+              : {};
+            setUserAnswers(Object.values(savedAnswers));
+            setScrollAnswers(
+              restoredDraft.scrollAnswers ||
+                Object.fromEntries(
+                  Object.entries(savedAnswers).map(
+                    ([id, value]: [string, any]) => [id, value?.answer],
+                  ),
+                ),
+            );
+            setCurrentQuestion(
+              Math.min(
+                Math.max(0, Number(restoredDraft.currentQuestionIndex) || 0),
+                Math.max(0, questionsToUse.length - 1),
+              ),
+            );
+            setUserData(restoredDraft.userData || {});
+            setSelectedOption(restoredDraft.selectedOption ?? null);
+            setSelectedOptions(
+              Array.isArray(restoredDraft.selectedOptions) ?
+                restoredDraft.selectedOptions
+              : [],
+            );
+            setContent(restoredDraft.content || '');
+            setTimeLeft(
+              typeof restoredDraft.timeLeft === 'number' ?
+                restoredDraft.timeLeft
+              : null,
+            );
+            setQuestionTimeLeft(
+              typeof restoredDraft.questionTimeLeft === 'number' ?
+                restoredDraft.questionTimeLeft
+              : null,
+            );
+            activeAttemptRef.current = restoredDraft;
+            restoredAttemptTimerRef.current = true;
+            restoredQuestionTimerRef.current = true;
+            setDetailsCollected(true);
+            setShowDetails(false);
+            setShowIntro(false);
+            setStart(true);
+            if (navigator.onLine && restoredDraft.attemptToken) {
+              void fetch('/api/quiz-attempts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'start',
+                  quizId: finalQuiz.id,
+                  attemptId: restoredDraft.attemptId,
+                  attemptToken: restoredDraft.attemptToken,
+                }),
               })
-              .catch(() => {});
+                .then(async (response) => {
+                  if (!response.ok) return;
+                  const remote = await response.json();
+                  if (typeof remote.remainingSeconds === 'number')
+                    setTimeLeft(remote.remainingSeconds);
+                  const updated = {
+                    ...restoredDraft,
+                    remoteStarted: true,
+                    serverStartedAt: remote.startedAt,
+                  };
+                  activeAttemptRef.current = updated;
+                  await HybridStorage.saveQuizAttemptDraft(
+                    finalQuiz.id,
+                    updated,
+                  );
+                })
+                .catch(() => {});
+            }
           }
         }
+      } catch (err) {
+        console.error('[PublicQuizTaker] Error loading quiz:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     loadQuiz();
   }, [routeParamId]);
@@ -1545,6 +1559,62 @@ function Taker() {
             if (attempt?.attemptId)
               await HybridStorage.deleteQuizAttemptDraft(quiz.id);
           }
+        } else {
+          // Template / Preview response saving LOCALLY only
+          const templateResp = {
+            id: `template_resp_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            score: finalScore,
+            totalQuestions: activeQuestions.length,
+            answeredQuestions: finalAnswers.length,
+            userData: sanitizedUserData,
+            answers: answersToSubmit,
+            country: clientGeo.country,
+            continent: clientGeo.continent,
+            timezone: clientGeo.timezone,
+            assessmentType: quiz.type,
+            categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
+          };
+          try {
+            const rawStored = localStorage.getItem('pw_template_responses');
+            const storedList = rawStored ? JSON.parse(rawStored) : [];
+            const updatedList = [
+              templateResp,
+              ...(Array.isArray(storedList) ? storedList : []),
+            ];
+            localStorage.setItem(
+              'pw_template_responses',
+              JSON.stringify(updatedList),
+            );
+
+            // Also persist into the seed template responses in local storage
+            const seedKey = 'pw_quiz_seed_template_v1';
+            const rawSeed =
+              localStorage.getItem(seedKey) ||
+              localStorage.getItem('pw_quiz_template');
+            if (rawSeed) {
+              const parsedSeed = JSON.parse(rawSeed);
+              parsedSeed.responses = [
+                templateResp,
+                ...(Array.isArray(parsedSeed.responses) ?
+                  parsedSeed.responses
+                : []),
+              ];
+              localStorage.setItem(seedKey, JSON.stringify(parsedSeed));
+              localStorage.setItem(
+                'pw_quiz_template',
+                JSON.stringify(parsedSeed),
+              );
+            }
+          } catch (err) {
+            console.warn(
+              '[PublicQuizTaker] Local template response save error:',
+              err,
+            );
+          }
+          toast.success(
+            'Preview assessment completed! Response saved locally for test review.',
+          );
         }
       } catch (e) {
         console.error('Failed to save response:', e);
@@ -1860,7 +1930,7 @@ function Taker() {
           )}
           style={{ placeSelf: 'center' }}>
           {/* Show Question Category tag if enabled or set */}
-          {(quiz?.category?.show || quest.category) && quest.category && (
+          {quiz?.category?.show && quest.category && (
             <div>
               <span className='inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pw-primary/10 border border-pw-primary/30 text-pw-primary text-[10px] font-bold bkblur uppercase tracking-wider'>
                 <Folder className='h-3 w-3' /> {quest.category}
@@ -2280,6 +2350,7 @@ function Taker() {
                     quiz?.type === 'quiz' &&
                     showFeedback &&
                     quiz?.correctOption &&
+                    quiz?.correctOptionDes === 'in-question' &&
                     quest.id === q?.id;
                   let feedbackClasses =
                     isSelected ?
@@ -2408,6 +2479,7 @@ function Taker() {
             {quiz?.type === 'quiz' &&
               showFeedback &&
               quiz?.correctOption &&
+              quiz?.correctOptionDes === 'in-question' &&
               quest.id === q?.id && (
                 <div className='mt-3 space-y-2 text-xs'>
                   {(() => {
@@ -2434,7 +2506,7 @@ function Taker() {
                   })()}
 
                   {quest.correctExplanation && (
-                    <div className='p-2.5 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
+                    <div className='p-2 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
                       <span className='font-bold not-italic shrink-0'>
                         💡 Explanation:
                       </span>
@@ -2534,7 +2606,7 @@ function Taker() {
       quiz?.endScreen?.title || 'Assessment Completed!',
     );
     const endMsg = formatDetailVars(
-      quiz?.endScreen?.message ||
+      quiz?.endScreen?.message.trim() ||
         'Thank you for completing this assessment, @name! You scored @score out of @total (@percentage).',
     );
 
@@ -2571,7 +2643,7 @@ function Taker() {
         )}
         <div
           className={cn(
-            'max-w-md w-full space-y-2 relative z-10',
+            'max-w-md w-full space-y-2 relative z-10 text-center',
             quiz?.endScreen?.textAlign === 'center' && 'text-center',
             quiz?.endScreen?.textAlign === 'left' && 'text-left',
             quiz?.endScreen?.textAlign === 'right' && 'text-right',
@@ -2585,6 +2657,10 @@ function Taker() {
                 'bg-pw-primary/10 border-pw-primary/20',
               quiz?.endScreen?.completionIcon === 'trophy' &&
                 'bg-pw-warning/10 border-pw-warning/20',
+
+              quiz?.endScreen?.textAlign === 'center' && 'items-center',
+              quiz?.endScreen?.textAlign === 'left' && 'items-start',
+              quiz?.endScreen?.textAlign === 'right' && 'items-end',
             )}>
             {quiz?.endScreen?.completionIcon === 'diamond' ?
               <Diamond className='h-9 w-9 text-pw-success' />
@@ -2608,7 +2684,7 @@ function Taker() {
               )}
               dangerouslySetInnerHTML={{ __html: endMsg }}
             />
-            {endMsg.length > 180 && (
+            {endMsg.length > 80 && (
               <button
                 type='button'
                 onClick={() => setIsEndMsgExpanded(!isEndMsgExpanded)}
@@ -2618,8 +2694,10 @@ function Taker() {
             )}
           </div>
 
+          <div className='divider my-4 sm:hidden' />
+
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-            <Card className='p-4 sm:p-6 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-4 mt-4 text-left'>
+            <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
               <div className='text-center'>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
                   TOTAL OVERALL SCORE
@@ -2657,71 +2735,43 @@ function Taker() {
               })()}
 
               {/* Group / Category Questions Score Breakdown */}
-              {Object.keys(categoryScores).length > 0 && (
-                <div className='border-t border-white/5 pt-3 space-y-2'>
-                  <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
-                    Category Scores
-                  </span>
+              {quiz?.category?.inPerformance &&
+                Object.keys(categoryScores).length > 0 && (
+                  <div className='border-t border-white/5 pt-3 space-y-2'>
+                    <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
+                      Category Scores
+                    </span>
 
-                  {Object.entries(categoryScores).map(([cat, stats], idx) => (
-                    <div
-                      key={cat + idx}
-                      className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
-                      <span className='font-bold text-white'>
-                        📁 {capFirst(cat)} ({stats.total})
-                      </span>
-                      <span className='font-mono text-pw-primary font-bold'>
-                        {stats.correct} / {stats.total}
-                      </span>
-                    </div>
-                  ))}
-
-                  {/* Independent Questions Score Breakdown */}
-                  {(() => {
-                    const independentQs = activeQuestions.filter(
-                      (quest) =>
-                        !quest.category || quest.category.trim() === '',
-                    );
-                    if (independentQs.length === 0) return null;
-                    const independentAns = userAnswers.filter((a) =>
-                      independentQs.some((q) => q.id === a.questionId),
-                    );
-                    const indCorrect = independentAns.filter(
-                      (a) => a.correct,
-                    ).length;
-
-                    return (
+                    {Object.entries(categoryScores).map(([cat, stats], idx) => (
                       <div
-                        key={
-                          quiz?.title +
-                          'independent-questions' +
-                          independentQs.length
-                        }
+                        key={cat + idx}
                         className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
                         <span className='font-bold text-white'>
-                          General Questions ({independentQs.length})
+                          📁 {capFirst(cat)} ({stats.total})
                         </span>
                         <span className='font-mono text-pw-primary font-bold'>
-                          {indCorrect} / {independentQs.length}
+                          {stats.correct} / {stats.total}
                         </span>
                       </div>
-                    );
-                  })()}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
             </Card>
           )}
 
+          <div className='divider my-4 sm:hidden' />
+
           {/* Per-question explanation review */}
           {quiz?.type === 'quiz' &&
-            (quiz?.correctOptionDes ||
-              activeQuestions.some(
-                (q) =>
-                  q.correctExplanation ||
-                  (q.options as any[])?.some((o: any) => o.explanation),
-              )) &&
+            quiz?.correctOption &&
+            quiz?.correctOptionDes === 'in-result' &&
+            activeQuestions.some(
+              (q) =>
+                q.correctExplanation ||
+                (q.options as any[])?.some((o: any) => o.explanation),
+            ) &&
             userAnswers.length > 0 && (
-              <Card className='p-4 sm:p-5 bg-white/[0.02] bkblur border border-white/5 rounded-2xl space-y-3 mt-4 text-left backdrop-blur-md'>
+              <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left max-h-[300px] overflow-y-auto'>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block'>
                   Question Review & Explanations
                 </span>
@@ -2770,7 +2820,7 @@ function Taker() {
                     <div
                       key={q.id}
                       className={cn(
-                        'p-3 rounded-xl border text-xs space-y-1.5',
+                        'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5',
                         ans?.correct ?
                           'bg-pw-success/5 border-pw-success/20'
                         : 'bg-pw-danger/5 border-pw-danger/20',
@@ -3307,7 +3357,7 @@ function Taker() {
                                     [detail.title]: opt,
                                   })
                                 }
-                                className='h-8 rounded-xl focus:bg-pw-primary/10 cursor-pointer group justify-between gap-1 text-white/60 hover:text-white'>
+                                className='h-8 rounded-xl focus:bg-pw-primary/10 cursor-pointer group justify-between gap-1 text-white/90 hover:text-white'>
                                 <span className='line-clamp-1 truncate'>
                                   {capFirst(opt)}
                                 </span>{' '}

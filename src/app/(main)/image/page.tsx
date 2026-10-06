@@ -736,7 +736,7 @@ export default function ImageToolkitPage() {
               )}>
               {isEditorFullscreen && (
                 <>
-                  <div className='absolute right-2 top-2 z-30 flex gap-1 bg-black/30 bkblur p-1 rounded-full h-10 items-center justify-evenly px-2'>
+                  <div className='absolute right-1 top-2 z-30 flex sm:flex-row flex-col gap-1 bg-black/30 bkblur p-1 rounded-full h-fit items-center justify-evenly sm:px-2'>
                     <Button
                       variant='ghost'
                     onClick={handleReset}
@@ -1284,10 +1284,10 @@ export default function ImageToolkitPage() {
                         : 'bg-card',
                       )}>
                       {activeTab === 'adjust' && (
-                        <div className='space-y-5 flex items-center flex-col w-full relative pb-2'>
+                        <div className='space-y-5 flex items-center flex-col max-w-full relative pb-2'>
                           <div
                             className={cn(
-                              'flex items-center justify-between w-full gap-1 overflow-x-auto self-center',
+                              'flex items-center justify-between max-w-[100%] gap-1 scrollable-row shrink-0 flex-1',
                               !isEditorFullscreen &&
                                 'border border-white/5 bg-white/[0.03] rounded-full p-1',
                             )}
@@ -1307,7 +1307,7 @@ export default function ImageToolkitPage() {
                                     )
                                   }
                                   className={cn(
-                                    'flex h-12 w-12 items-center justify-center rounded-full transition-all',
+                                    'flex h-12 w-12 items-center justify-center rounded-full transition-all shrink-0',
                                     focusedAdjustment === key ?
                                       'bg-pw-primary text-white shadow-sm shadow-pw-primary/10'
                                     : 'text-pw-muted hover:bg-white/10 hover:text-white',

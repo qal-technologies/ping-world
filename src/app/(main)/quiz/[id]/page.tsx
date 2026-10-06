@@ -8,10 +8,13 @@ interface QuizParams {
 }
 
 export async function generateMetadata({ params }: QuizParams): Promise<Metadata> {
-  const { id } = await params;
-  try {
-          const data = await HybridStorage.getQuiz(id, 'title, description');
-    const quiz = data;
+  const {id} = await params;
+  try{
+    const timeout = new Promise<null>((res) => setTimeout(() => res(null), 1500));
+    const quiz = await Promise.race([
+      HybridStorage.getQuiz(id, 'title, description').catch(() => null),
+      timeout,
+    ]);
 
     if (quiz) {
       const title = `${quiz.title} | Assessment - Ping World`;

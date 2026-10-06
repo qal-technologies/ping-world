@@ -80,7 +80,6 @@ import {
 } from '@/lib/config/premium';
 import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
 import {
-  cleanTextForCSV,
   exportResponsesToCSV,
   exportResponsesToJSON,
   exportResponsesToText,
@@ -97,10 +96,8 @@ import type {
   Question,
   Quiz,
   QuizOption,
-  Details,
   InputBranchRule,
   QuestionType,
-  QuizTakerResponse,
 } from '.';
 import {supabase} from '@/lib/supabase';
 
@@ -1126,7 +1123,12 @@ const QuizBuilder = ({
                             key={'custom-quiz-input'}
                             maxLength={premiumTier === 'pro' ? 12 : 8}
                             onChange={(e) =>
-                              setQuizId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 12))
+                              setQuizId(
+                                e.target.value
+                                  .toLowerCase()
+                                  .replace(/[^a-z0-9_-]/g, '')
+                                  .slice(0, 12),
+                              )
                             }
                             placeholder={`my-${editedQuiz.type}-url`}
                             className='bg-white/5 border-white/10 h-9 focus:border-pw-primary mt-1'
@@ -1701,6 +1703,62 @@ const QuizBuilder = ({
                         </QuizSettingItem>
 
                         <QuizSettingItem
+                          label='Correct Option'
+                          description='Display mark for correct options and their explanation either in the question or in the result section.'>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger>
+                              <Button
+                                variant='outline'
+                                className='h-10 w-full justify-between bg-white/5 border-white/10 text-xs text-pw-text px-4 rounded-xl'>
+                                {editedQuiz?.correctOption ? capFirst(editedQuiz?.correctOptionDes?.toString()?.replace('-', ' ') || '') : 'Disabled' }
+                                <ChevronDown className='h-4 w-4 opacity-50' />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 rounded-2xl'>
+                              {[
+                                { title: 'In Question', id: 'in-question' },
+                                { title: 'In Result', id: 'in-result' },
+                                { title: 'Disable', id: 'disable' },
+                              ].map(({ title, id }, i) => {
+                               
+                                return (
+                                  <DropdownMenuItem
+                                    key={`option-explanation-${id}` + i}
+                                    disabled={
+                                      editedQuiz.correctOptionDes === id
+                                    }
+                                    onClick={() => {
+                                      if (id !== 'disable') {
+                                        setEditedQuiz({
+                                          ...editedQuiz,
+                                          correctOption: true,
+                                          correctOptionDes:
+                                            id as typeof editedQuiz.correctOptionDes,
+                                        });
+                                      } else {
+                                        setEditedQuiz({
+                                          ...editedQuiz,
+                                          correctOption: false,
+                                          correctOptionDes: undefined,
+                                        });
+                                      }
+                                    }}
+                                    className={cn(
+                                      'h-10 text-xs rounded-xl flex items-center justify-between cursor-pointer px-4',
+                                      editedQuiz.correctOptionDes === id &&
+                                        'opacity-40 grayscale pointer-events-none',
+                                    )}>
+                                    <p>
+                                      {title}
+                                    </p>
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </QuizSettingItem>
+
+                        <QuizSettingItem
                           label='Next Only'
                           description='Disable back navigation. Takers cannot go back to previous questions.'>
                           <Button
@@ -1860,161 +1918,163 @@ const QuizBuilder = ({
                           </div>
                         </QuizSettingItem>
 
-                        <QuizSettingItem
-                          label='Active Lifespan (Expiry)'
-                          description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
-                          <div className='flex flex-col gap-2 w-full'>
-                            {editedQuiz.isExpiryLocked ?
-                              <div className='flex items-center gap-2 p-2 rounded-xl bg-pw-warning/8 border border-pw-warning/30'>
-                                <Lock className='h-4 w-4 text-pw-warning shrink-0' />
-                                <div>
-                                  <p className='text-xs font-bold text-pw-warning'>
-                                    Expiry setter locked
-                                  </p>
-                                  <p className='text-[10px] text-pw-muted'>
-                                    Maximum 3 expiry changes reached. Upgrade
-                                    your plan to extend.
-                                  </p>
+                        {quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id &&
+                          <QuizSettingItem
+                            label='Active Lifespan (Expiry)'
+                            description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
+                            <div className='flex flex-col gap-2 w-full'>
+                              {editedQuiz.isExpiryLocked ?
+                                <div className='flex items-center gap-2 p-2 rounded-xl bg-pw-warning/8 border border-pw-warning/30'>
+                                  <Lock className='h-4 w-4 text-pw-warning shrink-0' />
+                                  <div>
+                                    <p className='text-xs font-bold text-pw-warning'>
+                                      Expiry setter locked
+                                    </p>
+                                    <p className='text-[10px] text-pw-muted'>
+                                      Maximum 3 expiry changes reached. Upgrade
+                                      your plan to extend.
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            : <DropdownMenu>
-                                <DropdownMenuTrigger>
-                                  <Button
-                                    variant='outline'
-                                    className='h-10 w-full justify-between bg-white/5 border-white/10 text-xs text-pw-text px-4 rounded-xl'>
-                                    <span>
-                                      {(() => {
-                                        let currentDays = 2; // Default
-                                        if (editedQuiz.expires_at) {
-                                          const diff =
-                                            new Date(
-                                              editedQuiz.expires_at,
-                                            ).getTime() - Date.now();
-                                          currentDays = Math.max(
-                                            1,
-                                            Math.round(
-                                              diff / (1000 * 60 * 60 * 24),
-                                            ),
-                                          );
-                                        }
-                                        const closestSelected = [
-                                          1, 2, 3, 5, 7, 14, 30,
-                                        ].reduce((prev, curr) =>
-                                          (
-                                            Math.abs(curr - currentDays) <
-                                            Math.abs(prev - currentDays)
-                                          ) ?
-                                            curr
-                                          : prev,
-                                        );
-                                        return `${closestSelected} ${closestSelected === 1 ? 'Day' : 'Days'} ${closestSelected <= 2 ? ' (Free)' : ''}`;
-                                      })()}
-                                    </span>
-                                    <ChevronDown className='h-4 w-4 opacity-50' />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 rounded-2xl'>
-                                  {[
-                                    { days: 1, tier: 'free' },
-                                    { days: 2, tier: 'free' },
-                                    { days: 3, tier: 'flexible' },
-                                    { days: 5, tier: 'flexible' },
-                                    { days: 7, tier: 'flexible' },
-                                    { days: 14, tier: 'standard' },
-                                    { days: 30, tier: 'pro' },
-                                  ].map(({ days, tier }, i) => {
-                                    const tier4Flex =
-                                      quizUnlocked ? 'flexible' : 'free';
-
-                                    const tier2use =
-                                      tier === 'flexible' ? tier4Flex : tier;
-
-                                    const isEligible = tierAtLeast(
-                                      premiumTier,
-                                      tier2use as any,
-                                    );
-                                    return (
-                                      <DropdownMenuItem
-                                        key={`exp-select-${days}` + i}
-                                        disabled={!isEligible}
-                                        onClick={() => {
-                                          if (isEligible) {
-                                            const newExpiry = computeExpiry(
-                                              premiumTier,
-                                              days,
-                                            );
-                                            const oldExpiry = [
-                                              ...(editedQuiz.expiryHistory ||
-                                                []),
-                                            ];
-
-                                            setEditedQuiz({
-                                              ...editedQuiz,
-                                              expires_at:
-                                                newExpiry.toISOString(),
-                                              expiryHistory: [
-                                                ...oldExpiry,
-                                                newExpiry.toISOString(),
-                                              ],
-                                            });
-                                            toast.success(
-                                              `Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`,
-                                            );
-                                          } else {
-                                            toast.info(
-                                              `Unlock ${days} days expiry with the ${tier} tier.`,
+                                : <DropdownMenu>
+                                  <DropdownMenuTrigger>
+                                    <Button
+                                      variant='outline'
+                                      className='h-10 w-full justify-between bg-white/5 border-white/10 text-xs text-pw-text px-4 rounded-xl'>
+                                      <span>
+                                        {(() => {
+                                          let currentDays = 2; // Default
+                                          if(editedQuiz.expires_at) {
+                                            const diff =
+                                              new Date(
+                                                editedQuiz.expires_at,
+                                              ).getTime() - Date.now();
+                                            currentDays = Math.max(
+                                              1,
+                                              Math.round(
+                                                diff / (1000 * 60 * 60 * 24),
+                                              ),
                                             );
                                           }
-                                        }}
-                                        className={cn(
-                                          'h-10 text-xs rounded-xl flex items-center justify-between cursor-pointer px-4',
-                                          !isEligible &&
-                                            'opacity-40 grayscale pointer-events-none',
-                                        )}>
-                                        <span>
-                                          {days} {days === 1 ? 'Day' : 'Days'}
-                                        </span>
-                                        {!isEligible && (
-                                          <Lock className='h-3.5 w-3.5 opacity-60 text-pw-warning' />
-                                        )}
-                                      </DropdownMenuItem>
-                                    );
-                                  })}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            }
-
-                            <p className='text-[10px] text-pw-muted pl-1'>
-                              {!editedQuiz.isExpiryLocked &&
-                                (editedQuiz.expires_at ?
-                                  <>
-                                    Expires:{' '}
-                                    <span className='text-pw-primary font-bold'>
-                                      {new Date(
-                                        editedQuiz.expires_at,
-                                      ).toLocaleDateString()}
-                                    </span>
-                                    {(editedQuiz.expiryHistory?.length ?? 0) >
-                                      0 && (
-                                      <span className='ml-1 text-pw-warning'>
-                                        {' '}
-                                        ({editedQuiz.expiryHistory!.length}/3
-                                        changes used
-                                        {editedQuiz.expiryHistory!.length >= 2 ?
-                                          ' - 1 change remaining!'
-                                        : ''}
-                                        )
+                                          const closestSelected = [
+                                            1, 2, 3, 5, 7, 14, 30,
+                                          ].reduce((prev, curr) =>
+                                            (
+                                              Math.abs(curr - currentDays) <
+                                              Math.abs(prev - currentDays)
+                                            ) ?
+                                              curr
+                                              : prev,
+                                          );
+                                          return `${closestSelected} ${closestSelected === 1 ? 'Day' : 'Days'} ${closestSelected <= 2 ? ' (Free)' : ''}`;
+                                        })()}
                                       </span>
-                                    )}
-                                  </>
-                                : <>Default lifespan is 2 days</>)}
-                              <span className='block mt-0.5 text-pw-error/70'>
-                                ⚠ Expired quizzes are auto-deleted after 48
-                                hours.
-                              </span>
-                            </p>
-                          </div>
-                        </QuizSettingItem>
+                                      <ChevronDown className='h-4 w-4 opacity-50' />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent className='bg-pw-surface/70 bkblur border-white/10 w-56 rounded-2xl'>
+                                    {[
+                                      {days: 1, tier: 'free'},
+                                      {days: 2, tier: 'free'},
+                                      {days: 3, tier: 'flexible'},
+                                      {days: 5, tier: 'flexible'},
+                                      {days: 7, tier: 'flexible'},
+                                      {days: 14, tier: 'standard'},
+                                      {days: 30, tier: 'pro'},
+                                    ].map(({days, tier}, i) => {
+                                      const tier4Flex =
+                                        quizUnlocked ? 'flexible' : 'free';
+
+                                      const tier2use =
+                                        tier === 'flexible' ? tier4Flex : tier;
+
+                                      const isEligible = tierAtLeast(
+                                        premiumTier,
+                                        tier2use as any,
+                                      );
+                                      return (
+                                        <DropdownMenuItem
+                                          key={`exp-select-${days}` + i}
+                                          disabled={!isEligible}
+                                          onClick={() => {
+                                            if(isEligible) {
+                                              const newExpiry = computeExpiry(
+                                                premiumTier,
+                                                days,
+                                              );
+                                              const oldExpiry = [
+                                                ...(editedQuiz.expiryHistory ||
+                                                  []),
+                                              ];
+
+                                              setEditedQuiz({
+                                                ...editedQuiz,
+                                                expires_at:
+                                                  newExpiry.toISOString(),
+                                                expiryHistory: [
+                                                  ...oldExpiry,
+                                                  newExpiry.toISOString(),
+                                                ],
+                                              });
+                                              toast.success(
+                                                `Expiry set to ${days} ${days === 1 ? 'day' : 'days'}!`,
+                                              );
+                                            } else {
+                                              toast.info(
+                                                `Unlock ${days} days expiry with the ${tier} tier.`,
+                                              );
+                                            }
+                                          }}
+                                          className={cn(
+                                            'h-10 text-xs rounded-xl flex items-center justify-between cursor-pointer px-4',
+                                            !isEligible &&
+                                            'opacity-40 grayscale pointer-events-none',
+                                          )}>
+                                          <span>
+                                            {days} {days === 1 ? 'Day' : 'Days'}
+                                          </span>
+                                          {!isEligible && (
+                                            <Lock className='h-3.5 w-3.5 opacity-60 text-pw-warning' />
+                                          )}
+                                        </DropdownMenuItem>
+                                      );
+                                    })}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              }
+
+                              <p className='text-[10px] text-pw-muted pl-1'>
+                                {!editedQuiz.isExpiryLocked &&
+                                  (editedQuiz.expires_at ?
+                                    <>
+                                      Expires:{' '}
+                                      <span className='text-pw-primary font-bold'>
+                                        {new Date(
+                                          editedQuiz.expires_at,
+                                        ).toLocaleDateString()}
+                                      </span>
+                                      {(editedQuiz.expiryHistory?.length ?? 0) >
+                                        0 && (
+                                          <span className='ml-1 text-pw-warning'>
+                                            {' '}
+                                            ({editedQuiz.expiryHistory!.length}/3
+                                            changes used
+                                            {editedQuiz.expiryHistory!.length >= 2 ?
+                                              ' - 1 change remaining!'
+                                              : ''}
+                                            )
+                                          </span>
+                                        )}
+                                    </>
+                                    : <>Default lifespan is 2 days</>)}
+                                <span className='block mt-0.5 text-pw-error/70'>
+                                  ⚠ Expired quizzes are auto-deleted after 48
+                                  hours.
+                                </span>
+                              </p>
+                            </div>
+                          </QuizSettingItem>
+                        }
                       </div>
                     </Wrapper>
 
@@ -2953,11 +3013,53 @@ const QuizBuilder = ({
                     </label>
 
                     <div className='w-full bg-white/5 border border-white/10 rounded-xl p-2 sm:p-4 text-sm sm:pb-2'>
-                      <div className='flex items-center gap-1 border-b border-white/5 pb-2 mb-1' aria-label='Question text formatting'>
-                        <Button type='button' size='sm' variant='ghost' title='Bold selected text' aria-label='Bold' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('b')} className='h-7 w-7 p-0'><Bold size={14} /></Button>
-                        <Button type='button' size='sm' variant='ghost' title='Italic selected text' aria-label='Italic' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('i')} className='h-7 w-7 p-0'><Italic size={14} /></Button>
-                        <Button type='button' size='sm' variant='ghost' title='Underline selected text' aria-label='Underline' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('u')} className='h-7 w-7 p-0'><Underline size={14} /></Button>
-                        <Button type='button' size='sm' variant='ghost' title='Highlight selected text' aria-label='Highlight' onMouseDown={(event) => event.preventDefault()} onClick={() => formatQuestionText('mark')} className='h-7 w-7 p-0'><Highlighter size={14} /></Button>
+                      <div
+                        className='flex items-center gap-1 border-b border-white/5 pb-2 mb-1'
+                        aria-label='Question text formatting'>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='ghost'
+                          title='Bold selected text'
+                          aria-label='Bold'
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => formatQuestionText('b')}
+                          className='h-7 w-7 p-0'>
+                          <Bold size={14} />
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='ghost'
+                          title='Italic selected text'
+                          aria-label='Italic'
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => formatQuestionText('i')}
+                          className='h-7 w-7 p-0'>
+                          <Italic size={14} />
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='ghost'
+                          title='Underline selected text'
+                          aria-label='Underline'
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => formatQuestionText('u')}
+                          className='h-7 w-7 p-0'>
+                          <Underline size={14} />
+                        </Button>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='ghost'
+                          title='Highlight selected text'
+                          aria-label='Highlight'
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => formatQuestionText('mark')}
+                          className='h-7 w-7 p-0'>
+                          <Highlighter size={14} />
+                        </Button>
                       </div>
                       <div className='relative'>
                         <textarea
@@ -4491,6 +4593,7 @@ export default function QuizPage() {
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(true);
+  const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
@@ -4564,69 +4667,6 @@ export default function QuizPage() {
     return resolveAnswerToText(quiz, questionId, decodedVal);
   };
 
-  const exportResponsesAsCSV = (quiz: Quiz) => {
-    if (!quiz.responses || quiz.responses.length === 0) return;
-
-    const userKeys = Array.from(
-      new Set(
-        quiz.responses.flatMap((resp) => Object.keys(resp.userData || {})),
-      ),
-    );
-
-    const headers = [
-      'Timestamp',
-      'Score',
-      'Total',
-      ...userKeys.map((k) => k.toUpperCase()),
-      ...quiz.questions.map((q, i) => `Q${i + 1}: ${q.text}`),
-    ];
-
-    // Build perfectly aligned rows with nested quote escaping
-    const rows = quiz.responses.map((resp) => [
-      `"${new Date(resp.timestamp).toLocaleString().replace(/"/g, '""')}"`,
-      `"${resp.score}"`,
-      `"${resp.totalQuestions}"`,
-      ...userKeys.map(
-        (k) => `"${String(resp.userData[k] || '').replace(/"/g, '""')}"`,
-      ),
-      ...quiz.questions.map((q) => {
-        const a = resp.answers.find((ans: any) => ans.questionId === q.id);
-        if (!a) return '""';
-        const resolvedText = formatDetailVars(
-          resolveAnswerToText(quiz, q.id, a.answer),
-          resp.userData,
-          true,
-          true,
-        );
-        const cleaned = cleanTextForCSV(resolvedText);
-        return `"${cleaned.replace(/"/g, '""')}"`;
-      }),
-    ]);
-
-    const csvContent = [
-      headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','),
-      ...rows.map((row) => row.join(',')),
-    ].join('\n');
-
-    triggerExport(
-      `${quiz.title.replace(/\s+/g, '_')}_responses`,
-      'csv',
-      (filename) => {
-        const blob = new Blob([csvContent], {
-          type: 'text/csv;charset=utf-8;',
-        });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('Responses exported to CSV!');
-      },
-    );
-  };
 
   const exportResponses = (quiz: Quiz, format: 'csv' | 'json' | 'txt') => {
     if (!quiz.responses || quiz.responses.length === 0) {
@@ -4690,6 +4730,8 @@ export default function QuizPage() {
           return;
         }
       }
+
+      setResponseCounts((current) => ({ ...current, [quizId]: 0 }));
       setQuizzes((current) =>
         current.map((item) => (item.id === quizId ? updated : item)),
       );
@@ -4701,53 +4743,66 @@ export default function QuizPage() {
   };
 
   const loadQuizzes = async () => {
-    const localSeedKey = seedTemplateStorageKey();
-    const includeLocalSeed = (items: Quiz[]) => {
-      try {
-        const localSeed = JSON.parse(
-          localStorage.getItem(localSeedKey) || 'null',
-        ) as Quiz | null;
-        if (localSeed?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
-          return [
-            localSeed,
-            ...items.filter((item) => item.id !== localSeed.id),
-          ];
-        }
-      } catch {
-        console.warn('[Quiz] Ignoring an unreadable local showcase draft.');
-      }
-      return items;
-    };
-    const normalizeItems = (items: any[]) => items.map(normalizeQuizRecord);
-    // 1. Serve local cache immediately
-    const localData = await HybridStorage.getAll('quiz', async (freshItems) => {
-      // 2. Called in background when remote data arrives — silently refresh
-      const remoteItems = normalizeItems(freshItems).filter((item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id);
-      const processed = await processExpiryStatus(remoteItems);
-      setQuizzes(includeLocalSeed(processed));
-    });
-    const localQuizzes = normalizeItems(localData).filter((item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id);
-    const processed = includeLocalSeed(await processExpiryStatus(localQuizzes));
-
-    // Auto-seed default showcase template on first time visiting the quiz section
-    if (typeof window !== 'undefined') {
-      const seeded = localStorage.getItem(localSeedKey);
-      if (!seeded && processed.length === 0) {
+    setIsLoadingQuizzes(true);
+    try {
+      const localSeedKey = seedTemplateStorageKey();
+      const includeLocalSeed = (items: Quiz[]) => {
         try {
-          localStorage.setItem(
-            localSeedKey,
-            JSON.stringify(DEFAULT_PINGWORLD_SHOWCASE_QUIZ),
-          );
-          localStorage.setItem(localSeedKey, 'true');
-          setQuizzes([DEFAULT_PINGWORLD_SHOWCASE_QUIZ]);
-          return;
+          const localSeed = JSON.parse(
+            localStorage.getItem(localSeedKey) || 'null',
+          ) as Quiz | null;
+          if (localSeed?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+            return [
+              localSeed,
+              ...items.filter((item) => item.id !== localSeed.id),
+            ];
+          }
         } catch {
-          // Continue if storage fails
+          console.warn('[Quiz] Ignoring an unreadable local showcase draft.');
+        }
+        return items;
+      };
+      const normalizeItems = (items: any[]) => items.map(normalizeQuizRecord);
+      // 1. Serve local cache immediately
+      const localData = await HybridStorage.getAll(
+        'quiz',
+        async (freshItems) => {
+          // 2. Called in background when remote data arrives — silently refresh
+          const remoteItems = normalizeItems(freshItems).filter(
+            (item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
+          );
+          const processed = await processExpiryStatus(remoteItems);
+          setQuizzes(includeLocalSeed(processed));
+        },
+      );
+      const localQuizzes = normalizeItems(localData).filter(
+        (item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
+      );
+      const processed = includeLocalSeed(
+        await processExpiryStatus(localQuizzes),
+      );
+
+      // Auto-seed default showcase template on first time visiting the quiz section
+      if (typeof window !== 'undefined') {
+        const seeded = localStorage.getItem(localSeedKey);
+        if (!seeded && processed.length === 0) {
+          try {
+            localStorage.setItem(
+              localSeedKey,
+              JSON.stringify(DEFAULT_PINGWORLD_SHOWCASE_QUIZ),
+            );
+            setQuizzes([DEFAULT_PINGWORLD_SHOWCASE_QUIZ]);
+            return;
+          } catch {
+            // Continue if storage fails
+          }
         }
       }
-    }
 
-    setQuizzes(processed);
+      setQuizzes(processed);
+    } finally {
+      setIsLoadingQuizzes(false);
+    }
   };
 
   // Auto-tag expired quizzes & purge those expired for > 48h
@@ -5150,7 +5205,7 @@ export default function QuizPage() {
                   title='Refresh Quiz'
                   onClick={loadQuizzes}
                   className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
-                  <RefreshCw className='h-4 w-4' />
+                  <RefreshCw className={cn('h-4 w-4', isLoadingQuizzes && 'animate-spin')} />
                 </Button>
                 <div className='relative'>
                   <Button
@@ -5178,8 +5233,16 @@ export default function QuizPage() {
             </div>
 
             {isLoadingQuizzes ?
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' aria-busy='true' aria-label='Loading assessments'>
-                {Array.from({ length: 4 }, (_, index) => <div key={index} className='h-56 animate-pulse rounded-2xl border border-white/5 bg-white/[0.035]' />)}
+              <div
+                className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+                aria-busy='true'
+                aria-label='Loading assessments'>
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div
+                    key={index}
+                    className='h-56 animate-pulse rounded-2xl border border-white/5 bg-white/[0.035]'
+                  />
+                ))}
               </div>
             : quizzes.length > 0 ?
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
@@ -5208,12 +5271,18 @@ export default function QuizPage() {
                             </span>
                           }
                           {quiz?.questions?.length} Qts
-                          {quiz?.responses && quiz?.responses?.length > 0 && (
-                            <span className='text-pw-primary'>
-                              {(quiz as any).responses?.length || 0} Ans
+                          {responseCounts[quiz.id] || quiz?.responses && quiz?.responses?.length > 0 && (
+                            <span
+                              className='text-pw-primary'
+                              title='Responses available in the latest loaded data or local cache'>
+                              {responseCounts[quiz.id] ??
+                                (Array.isArray(quiz.responses) ?
+                                  quiz.responses.length
+                                : 0)}{' '}
+                              Ans
                             </span>
                           )}
-                          {quiz?.expires_at &&
+                          {quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && quiz?.expires_at &&
                             (() => {
                               const { label, urgent } = quizExpiryCountdown(
                                 quiz?.expires_at || '',
@@ -5243,9 +5312,36 @@ export default function QuizPage() {
                             size='icon'
                             onClick={async () => {
                               try {
-                                const result = quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id
-                                  ? { responses: quiz.responses || [], nextOffset: null }
-                                  : await HybridStorage.getQuizResponses(quiz.id);
+                                const result =
+                                  (
+                                    quiz.id ===
+                                    DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id
+                                  ) ?
+                                    {
+                                      responses: quiz.responses || [],
+                                      nextOffset: null,
+                                    }
+                                  : await HybridStorage.getQuizResponses(
+                                      quiz.id,
+                                    );
+                                
+                                    setResponseCounts((current) => ({
+                                      ...current,
+                                      [quiz.id]: result.responses.length,
+                                    }));
+                                    if (
+                                      (result as any).isCached ||
+                                      (result as any).isLocalOnly
+                                    ) {
+                                      toast.info(
+                                        (
+                                          typeof navigator !== 'undefined' &&
+                                            !navigator.onLine
+                                        ) ?
+                                          'Showing cached responses. Connect to the internet and sign in (if required) to refresh them.'
+                                        : 'Showing locally saved responses. Sign in and connect to the internet to fetch the latest responses.',
+                                      );
+                                    }
                                 setViewingResponses({
                                   ...normalizeQuizRecord(quiz),
                                   questions: quiz.questions,
@@ -5253,13 +5349,16 @@ export default function QuizPage() {
                                   responsesNextOffset: result.nextOffset,
                                 });
                               } catch (error: any) {
-                                toast.error(error?.message || 'Could not load assessment responses.');
+                                toast.error(
+                                  error?.message ||
+                                    'Could not load assessment responses.',
+                                );
                               }
                             }}
                             className='h-8 w-8 text-pw-muted hover:text-pw-cyan'>
                             <MessageSquare className='h-4 w-4' />
                           </Button>
-                          <Button
+                          { quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && <Button
                             variant='ghost'
                             title='Download as JSON'
                             size='icon'
@@ -5267,6 +5366,7 @@ export default function QuizPage() {
                             className='h-8 w-8 text-pw-muted hover:text-pw-primary'>
                             <Download className='h-4 w-4' />
                           </Button>
+                          }
                           <Button
                             variant='ghost'
                             size='icon'
@@ -5278,8 +5378,12 @@ export default function QuizPage() {
                                   `This ${quiz.type || 'assessment'} has expired, adjust expiry time.`,
                                 );
                               }
-                              const draft = await HybridStorage.getQuizDraft(quiz.id);
-                              setActiveQuiz(draft ? { ...quiz, ...draft } : quiz);
+                              const draft = await HybridStorage.getQuizDraft(
+                                quiz.id,
+                              );
+                              setActiveQuiz(
+                                draft ? { ...quiz, ...draft } : quiz,
+                              );
                               setIsCreating(true);
                             }}
                             className='h-8 w-8 text-pw-muted hover:text-pw-primary'>
@@ -5322,8 +5426,9 @@ export default function QuizPage() {
                           variant='outline'
                           title='Share link'
                           onClick={() => {
-                            const route = quiz.customUrl && username
-                              ? `/u/${encodeURIComponent(username)}/q/${encodeURIComponent(quiz.customUrl)}`
+                            const route =
+                              quiz.customUrl && username ?
+                                `/u/${encodeURIComponent(username)}/q/${encodeURIComponent(quiz.customUrl)}`
                               : `/q/${encodeURIComponent(quiz.id)}`;
                             const url = `${window.location.origin}${route}`;
                             navigator.clipboard.writeText(url);
@@ -5390,18 +5495,25 @@ export default function QuizPage() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               className='relative h-full w-full max-w-2xl bg-pw-surface/80 bkblur sm:border-l sm:border-white/10 p-3 sm:p-6 sm:shadow-2xl overflow-y-auto'>
-              <div className='flex justify-between items-center mb-8 flex-wrap pt-4'>
+              <div className='flex justify-between items-center mb-8 gap-1 flex-wrap pt-4'>
                 <div>
                   <h2 className='text-2xl font-bold'>
-                    Feedback{' '}
-                    {viewingResponses.responses &&
-                      `(${viewingResponses.responses?.length})`}
+                    {(
+                      viewingResponses.responses &&
+                      viewingResponses.responses.length > 0
+                    ) ?
+                      `Feedback 
+                    ${
+                      viewingResponses.responses &&
+                      `(${viewingResponses.responses?.length})`
+                    }`
+                    : 'No Feedback'}
                   </h2>
                   <p className='text-sm text-pw-muted'>
                     {viewingResponses.title}
                   </p>
                 </div>
-                <div className='flex gap-2'>
+                <div className='flex gap-2 flex-wrap'>
                   {viewingResponses.responses &&
                     viewingResponses.responses.length > 0 && (
                       <>
@@ -5441,8 +5553,27 @@ export default function QuizPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                        <Button variant='outline' size='sm' disabled={isEmailingExport || !user?.email_confirmed_at || premiumTier === 'free' || viewingResponses.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id} title={premiumTier === 'free' ? 'Email export is available to active paid subscribers' : 'Email the full export to your verified account email'} onClick={() => void emailResponseExport(viewingResponses.id, 'csv')} className='h-9 gap-1.5 border-white/10 text-xs'>
-                          <Mail size={15} /> {isEmailingExport ? 'Sending…' : 'Email CSV'}
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          disabled={
+                            isEmailingExport ||
+                            !user?.email_confirmed_at ||
+                            premiumTier === 'free' ||
+                            viewingResponses.id ===
+                              DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id
+                          }
+                          title={
+                            premiumTier === 'free' ?
+                              'Email export is available to active paid subscribers'
+                            : 'Email the full export to your verified account email'
+                          }
+                          onClick={() =>
+                            void emailResponseExport(viewingResponses.id, 'csv')
+                          }
+                          className='h-9 gap-1.5 border-white/10 text-xs'>
+                          <Mail size={15} />{' '}
+                          {isEmailingExport ? 'Sending…' : 'Email CSV'}
                         </Button>
                         <Button
                           variant='outline'
@@ -6124,72 +6255,74 @@ export default function QuizPage() {
                                           ANSWER:
                                         </p>
                                         {ans.fileUrl ?
-                                            <div className='flex items-center w-full justify-between bg-white/5 rounded-2xl border border-white/10 overflow-hidden'>
-                                              {(() => {
-                                                const previewUrl =
-                                                  unpackPingWorldMediaUrl(
-                                                    String(ans.fileUrl),
-                                                  ).url || String(ans.fileUrl);
-                                                const fileType =
-                                                  (
-                                                    previewUrl.startsWith(
-                                                      'data:image/',
-                                                    )
-                                                  ) ?
-                                                    'image'
-                                                  : (
-                                                    previewUrl.startsWith(
-                                                      'data:video/',
-                                                    )
-                                                  ) ?
-                                                    'video'
-                                                  : (
-                                                    previewUrl.startsWith(
-                                                      'data:audio/',
-                                                    )
-                                                  ) ?
-                                                    'audio'
-                                                  : 'documents';
-                                                return fileType ?
-                                                    <button
-                                                      type='button'
-                                                      onClick={() =>
-                                                        openFile({
-                                                          src: previewUrl,
-                                                          name: String(
-                                                            ans.fileName ||
-                                                              'Response image',
-                                                          ),
-                                                        })
-                                                      }
-                                                      className='flex flex-col gap-1 w-full cursor-zoom-in'>
-                                                      {fileType === 'image' ?
-                                                        <img
-                                                          src={previewUrl}
-                                                          alt='Uploaded response preview'
-                                                          className='max-h-48 max-w-full rounded-xl object-contain'
-                                                        />
-                                                      : fileType === 'video' ?
-                                                        <video
-                                                          src={previewUrl}
-                                                          about='Iploaded response preview'
-                                                          controls
-                                                          playsInline
-                                                          className='max-w-full rounded-xl object-contain'
-                                                        />
-                                                      : <div className='flex flex-1 gap-2 items-center bg-white/5 text-primary rounded-xl p-2 px-2.5 m-1'>
-                                                          <File className='text-white text-sm'/>{' '}
-                                                          {ans.fileName}
-                                                        </div>
-                                                      }
-                                                      <span className='text-[10px] text-pw-cyan p-1 text-center w-full'>
-                                                        Click {String(fileType) || 'Response'}{' '}
-                                                        to view full screen
-                                                      </span>
-                                                    </button>
-                                                  : null;
-                                              })()}
-                                            </div>
+                                          <div className='flex items-center w-full justify-between bg-white/5 rounded-2xl border border-white/10 overflow-hidden'>
+                                            {(() => {
+                                              const previewUrl =
+                                                unpackPingWorldMediaUrl(
+                                                  String(ans.fileUrl),
+                                                ).url || String(ans.fileUrl);
+                                              const fileType =
+                                                (
+                                                  previewUrl.startsWith(
+                                                    'data:image/',
+                                                  )
+                                                ) ?
+                                                  'image'
+                                                : (
+                                                  previewUrl.startsWith(
+                                                    'data:video/',
+                                                  )
+                                                ) ?
+                                                  'video'
+                                                : (
+                                                  previewUrl.startsWith(
+                                                    'data:audio/',
+                                                  )
+                                                ) ?
+                                                  'audio'
+                                                : 'documents';
+                                              return fileType ?
+                                                  <button
+                                                    type='button'
+                                                    onClick={() =>
+                                                      openFile({
+                                                        src: previewUrl,
+                                                        name: String(
+                                                          ans.fileName ||
+                                                            'Response image',
+                                                        ),
+                                                      })
+                                                    }
+                                                    className='flex flex-col gap-1 w-full cursor-zoom-in'>
+                                                    {fileType === 'image' ?
+                                                      <img
+                                                        src={previewUrl}
+                                                        alt='Uploaded response preview'
+                                                        className='max-h-48 max-w-full rounded-xl object-contain'
+                                                      />
+                                                    : fileType === 'video' ?
+                                                      <video
+                                                        src={previewUrl}
+                                                        about='Iploaded response preview'
+                                                        controls
+                                                        playsInline
+                                                        className='max-w-full rounded-xl object-contain'
+                                                      />
+                                                    : <div className='flex flex-1 gap-2 items-center bg-white/5 text-primary rounded-xl p-2 px-2.5 m-1'>
+                                                        <File className='text-white text-sm' />{' '}
+                                                        {ans.fileName}
+                                                      </div>
+                                                    }
+                                                    <span className='text-[10px] text-pw-cyan p-1 text-center w-full'>
+                                                      Click{' '}
+                                                      {String(fileType) ||
+                                                        'Response'}{' '}
+                                                      to view full screen
+                                                    </span>
+                                                  </button>
+                                                : null;
+                                            })()}
+                                          </div>
                                         : <p
                                             className={cn(
                                               'text-[11px] font-mono',
@@ -6240,32 +6373,53 @@ export default function QuizPage() {
                       </Card>
                     ))
                 }
-                {viewingResponses.responsesNextOffset !== null && viewingResponses.responsesNextOffset !== undefined && (
-                  <div className='flex justify-center py-3'>
-                    <Button
-                      variant='outline'
-                      size='sm'
-                      disabled={viewingResponses.responsesLoadingMore}
-                      onClick={async () => {
-                        if (viewingResponses.responsesLoadingMore) return;
-                        setViewingResponses((current) => current ? { ...current, responsesLoadingMore: true } : null);
-                        try {
-                          const page = await HybridStorage.getQuizResponses(viewingResponses.id, viewingResponses.responsesNextOffset || 0);
-                          setViewingResponses((current) => current ? {
-                            ...current,
-                            responses: [...(current.responses || []), ...page.responses],
-                            responsesNextOffset: page.nextOffset,
-                            responsesLoadingMore: false,
-                          } : null);
-                        } catch {
-                          setViewingResponses((current) => current ? { ...current, responsesLoadingMore: false } : null);
-                          toast.error('More responses could not be loaded.');
-                        }
-                      }}>
-                      {viewingResponses.responsesLoadingMore ? 'Loading…' : 'Load more responses'}
-                    </Button>
-                  </div>
-                )}
+                {viewingResponses.responsesNextOffset !== null &&
+                  viewingResponses.responsesNextOffset !== undefined && (
+                    <div className='flex justify-center py-3'>
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        disabled={viewingResponses.responsesLoadingMore}
+                        onClick={async () => {
+                          if (viewingResponses.responsesLoadingMore) return;
+                          setViewingResponses((current) =>
+                            current ?
+                              { ...current, responsesLoadingMore: true }
+                            : null,
+                          );
+                          try {
+                            const page = await HybridStorage.getQuizResponses(
+                              viewingResponses.id,
+                              viewingResponses.responsesNextOffset || 0,
+                            );
+                            setViewingResponses((current) =>
+                              current ?
+                                {
+                                  ...current,
+                                  responses: [
+                                    ...(current.responses || []),
+                                    ...page.responses,
+                                  ],
+                                  responsesNextOffset: page.nextOffset,
+                                  responsesLoadingMore: false,
+                                }
+                              : null,
+                            );
+                          } catch {
+                            setViewingResponses((current) =>
+                              current ?
+                                { ...current, responsesLoadingMore: false }
+                              : null,
+                            );
+                            toast.error('More responses could not be loaded.');
+                          }
+                        }}>
+                        {viewingResponses.responsesLoadingMore ?
+                          'Loading…'
+                        : 'Load more responses'}
+                      </Button>
+                    </div>
+                  )}
               </div>
             </motion.div>
           </div>

@@ -41,7 +41,6 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
   allowRetry: true,
   randomizeQuestions: false,
   createdAt: Date.now(),
-  expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   disclaimer:
     'Preview mode: try every feature. Your answers stay in this session and are never submitted or saved.',
   branding: {
