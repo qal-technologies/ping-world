@@ -1,5 +1,22 @@
 import { PREMIUM_TIERS, type PremiumTier } from '@/lib/config/premium';
 
+/**
+ * Detects whether a quiz item is a template.
+ */
+export function isQuizTemplate(quiz: any): boolean {
+  if (!quiz) return false;
+  return (
+    quiz.isTemplate === true ||
+    quiz.is_template === true ||
+    quiz.type === 'template' ||
+    quiz.id === 'pingworld_showcase_v1' ||
+    String(quiz.id || '').startsWith('template') ||
+    quiz.settings?.isTemplate === true ||
+    (Array.isArray(quiz.tags) && quiz.tags.includes('template')) ||
+    String(quiz.title || '').toLowerCase().includes('template')
+  );
+}
+
 export interface ExpiryRateMetrics {
   totalExtensions: number;
   averageExtensionDays: number;

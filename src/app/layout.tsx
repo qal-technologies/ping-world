@@ -9,6 +9,7 @@ import { NetworkStatusBar } from '@/components/layout/NetworkStatusBar';
 import './globals.css';
 import { PageLayoutProvider } from '@/components/layout';
 import { AppFileViewerProvider } from '@/components/shared/AppFileViewer';
+import { SnapchatNotificationBanner } from '@/components/notifications/SnapchatNotificationBanner';
 
 export const metadata: Metadata = {
   title: {
@@ -140,6 +141,7 @@ export default function RootLayout({
             </AppModalProvider>
           </PageLayoutProvider>
         </AppProvider>
+        <SnapchatNotificationBanner />
         <Toaster
           position='bottom-right'
           toastOptions={{

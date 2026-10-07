@@ -57,7 +57,6 @@ export async function POST(
     const { error: dbError } = await admin.from('quiz_reports').insert(reportPayload);
 
     if (dbError) {
-      // If table does not exist or schema differs, log securely and queue to admin notification batches
       console.warn('[api/report] quiz_reports table insert fallback:', dbError.message);
       try {
         await admin.from('notification_batches').insert({
@@ -70,10 +69,41 @@ export async function POST(
       } catch {}
     }
 
+    // Auto-Pause Evaluation Algorithm
+    // Evaluates report count and severity to automatically pause suspicious/flagged assessments for verification
+    let autoPaused = false;
+    try {
+      const { data: existingReports } = await admin
+        .from('quiz_reports')
+        .select('id, category')
+        .eq('quiz_id', id);
+
+      const reportList = existingReports || [reportPayload];
+      const totalReportCount = reportList.length;
+      const severeReportCount = reportList.filter((r: any) =>
+        ['Harassment', 'Inappropriate Content', 'Copyright'].includes(r.category)
+      ).length;
+
+      if (totalReportCount >= 3 || severeReportCount >= 2) {
+        autoPaused = true;
+        await admin.from('quizzes').update({
+          status: 'paused',
+          is_paused: true,
+          pause_reason: 'Assessment automatically paused for verification following multiple user report flags.',
+          updated_at: new Date().toISOString(),
+        }).eq('id', id);
+      }
+    } catch (pauseError) {
+      console.warn('[api/report] Auto-pause evaluation notice:', pauseError);
+    }
+
     return NextResponse.json({
       success: true,
       reportId,
-      message: 'Assessment reported successfully. Our team will review this within 24 hours.',
+      autoPaused,
+      message: autoPaused
+        ? 'Assessment reported and automatically paused pending review.'
+        : 'Assessment reported successfully. Our team will review this within 24 hours.',
     });
   } catch (error: any) {
     console.error('[api/report] Unexpected error submitting report:', error);
