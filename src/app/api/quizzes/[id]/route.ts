@@ -17,28 +17,21 @@ export async function GET(
     const ownerUsername = request.nextUrl.searchParams.get('owner');
     const admin = getSupabaseAdmin();
     let query = admin.from('quizzes').select('*');
-    if (
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        id,
-      ) &&
-      !ownerUsername
-    ) {
-      query = query.eq('id', id);
-    } else {
-      query = query.eq('custom_id', id);
-      if (ownerUsername) {
-        const { data: profile } = await admin
-          .from('profiles')
-          .select('id')
-          .eq('username', ownerUsername)
-          .maybeSingle();
-        if (!profile?.id)
-          return NextResponse.json(
-            { error: 'Assessment not found.' },
-            { status: 404 },
-          );
-        query = query.eq('user_id', profile.id);
+    if (ownerUsername) {
+      const { data: profile } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('username', ownerUsername)
+        .maybeSingle();
+      if (!profile?.id) {
+        return NextResponse.json(
+          { error: 'Assessment owner not found.' },
+          { status: 404 },
+        );
       }
+      query = query.eq('user_id', profile.id).or(`id.eq.${id},custom_id.eq.${id}`);
+    } else {
+      query = query.or(`id.eq.${id},custom_id.eq.${id}`);
     }
     const { data: row, error } = await query.maybeSingle();
     if (

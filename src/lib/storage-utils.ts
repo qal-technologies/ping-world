@@ -327,32 +327,58 @@ async function setActiveStorageUser(userId?: string | null) {
 
 async function mergeIntoLocal(type: StorageItem['type'], remoteRows: any[], owner = activeStorageUserId) {
   const local = await readLocal(type, owner);
-  const map = new Map<string, StorageItem>();
+  const remoteMap = new Map<string, any>();
+  remoteRows.forEach((row) => remoteMap.set(row.id, row));
 
-  // Start with local
-  local.forEach((item) => map.set(item.id, item));
+  const finalItems: StorageItem[] = [];
 
-  // Remote wins for synced items
-  remoteRows.forEach((row) => {
-    const normalizedRow = type === 'quiz'
-      ? normalizeQuizRow(row)
-      : row;
-    const existing = map.get(row.id);
-    if (existing && !existing.is_synced) return;
-    map.set(row.id, {
-      ...(existing || {}),
-      id: row.id,
-      ownerId: row.user_id || row.creator_id || row.recipient_id || activeStorageUserId,
+  for (const localItem of local) {
+    const remoteRow = remoteMap.get(localItem.id);
+
+    if (remoteRow) {
+      // Record exists in DB: merge remote content and mark as synced
+      const normalizedRow = type === 'quiz' ? normalizeQuizRow(remoteRow) : remoteRow;
+      finalItems.push({
+        ...localItem,
+        id: remoteRow.id,
+        ownerId: remoteRow.user_id || remoteRow.creator_id || remoteRow.recipient_id || owner,
+        type,
+        content: { ...(localItem.content || {}), ...normalizedRow },
+        updated_at: remoteRow.updated_at || new Date().toISOString(),
+        is_synced: true,
+      });
+      remoteMap.delete(localItem.id);
+    } else {
+      // Record not present in remote DB query result
+      if (localItem.is_synced) {
+        // Was previously synced to DB, but now missing -> deleted remotely on another device. Purge locally.
+        console.log(`[HybridStorage] Purging local item ${localItem.id} (${type}) as it was deleted on remote.`);
+      } else {
+        // Unsynced local creation -> keep locally
+        finalItems.push(localItem);
+      }
+    }
+  }
+
+  // Add new items created on another device
+  for (const remoteRow of remoteMap.values()) {
+    const normalizedRow = type === 'quiz' ? normalizeQuizRow(remoteRow) : remoteRow;
+    finalItems.push({
+      id: remoteRow.id,
+      ownerId: remoteRow.user_id || remoteRow.creator_id || remoteRow.recipient_id || owner,
       type,
-      content: { ...(existing?.content || {}), ...normalizedRow },
-      updated_at: row.updated_at || new Date().toISOString(),
+      content: normalizedRow,
+      updated_at: remoteRow.updated_at || new Date().toISOString(),
       is_synced: true,
     });
-  });
+  }
 
-  const merged = [...map.values()];
-  await writeLocal(type, merged, owner);
-  return merged;
+  await writeLocal(type, finalItems, owner);
+
+  // Auto-sync any unsynced local creations to DB
+  void pushUnsyncedItems(type);
+
+  return finalItems;
 }
 
 function flattenItems(items: StorageItem[]): any[] {

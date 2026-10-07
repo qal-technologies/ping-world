@@ -17,8 +17,15 @@ export async function optimizeImageForStorage(input: Blob, maxDimension = 2400, 
     canvas.height = height;
     const context = canvas.getContext('2d', { alpha: true });
     if (!context) return input;
+
+    // Explicitly clear canvas to preserve alpha channel transparency for WebP/PNG
+    context.clearRect(0, 0, width, height);
     context.drawImage(bitmap, 0, 0, width, height);
-    const compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+
+    let compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+    if (!compressed || compressed.type !== 'image/webp') {
+      compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    }
     return compressed && compressed.size < input.size ? compressed : input;
   } catch {
     // Keep unusual/unsupported formats intact rather than failing a submission.

@@ -85,7 +85,7 @@ import {
   exportResponsesToText,
 } from '@/lib/quiz/text-parser';
 import QuizLanguageModal from '@/components/quiz/QuizLanguageModal';
-import { validateQuizExpiry } from '@/lib/quiz/quiz-expiry';
+import { validateQuizExpiry, isQuizTemplate } from '@/lib/quiz/quiz-expiry';
 import {
   resolvePipedText,
   unpackPingWorldMediaUrl,
@@ -4671,11 +4671,27 @@ export default function QuizPage() {
     return findText(val);
   };
 
+  const [lastViewedCounts, setLastViewedCounts] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      return JSON.parse(localStorage.getItem('pw_last_viewed_counts') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
   const resolveCorrectText = (quiz: Quiz, questionId: string) => {
     const question = quiz.questions?.find((q) => q.id === questionId);
-    if (!question) return '';
+    if (!question) return 'No correct answer';
+    if (question.correctIndex === undefined || question.correctIndex === null || question.correctIndex === '') {
+      return 'No correct answer';
+    }
     const decodedVal = safeDecodeBase64(question.correctIndex);
-    return resolveAnswerToText(quiz, questionId, decodedVal);
+    if (decodedVal === undefined || decodedVal === null || decodedVal === '') {
+      return 'No correct answer';
+    }
+    const resolved = resolveAnswerToText(quiz, questionId, decodedVal);
+    return resolved && resolved !== 'undefined' ? resolved : 'No correct answer';
   };
 
 
@@ -4753,8 +4769,8 @@ export default function QuizPage() {
     }
   };
 
-  const loadQuizzes = async () => {
-    setIsLoadingQuizzes(true);
+  const loadQuizzes = async (silent = false) => {
+    if (!silent) setIsLoadingQuizzes(true);
     try {
       const localSeedKey = seedTemplateStorageKey();
       const includeLocalSeed = (items: Quiz[]) => {
@@ -4819,16 +4835,20 @@ export default function QuizPage() {
 
       setQuizzes(processed);
     } finally {
-      setIsLoadingQuizzes(false);
+      if (!silent) setIsLoadingQuizzes(false);
     }
   };
 
-  // Auto-tag expired quizzes & purge those expired for > 48h
+  // Auto-tag expired quizzes & purge those expired for > 48h (Templates do not expire)
   const processExpiryStatus = async (items: Quiz[]): Promise<Quiz[]> => {
     const now = Date.now();
     const twoDaysMs = 48 * 60 * 60 * 1000;
     const toKeep: Quiz[] = [];
     for (const quiz of items) {
+      if (isQuizTemplate(quiz)) {
+        toKeep.push({ ...quiz, isTemplate: true } as any);
+        continue;
+      }
       if (quiz.expires_at) {
         const expiresAt = new Date(quiz.expires_at).getTime();
         const isExpired = expiresAt < now;
@@ -4846,14 +4866,31 @@ export default function QuizPage() {
     return toKeep;
   };
 
+  // Real-time sync listener
+  useEffect(() => {
+    const handleSyncStatus = (e: Event) => {
+      const customEvent = e as CustomEvent<{ id: string; is_synced: boolean }>;
+      if (customEvent.detail?.id) {
+        setQuizzes((prev) =>
+          prev.map((q) =>
+            q.id === customEvent.detail.id
+              ? { ...q, is_synced: customEvent.detail.is_synced }
+              : q,
+          ),
+        );
+      }
+    };
+    window.addEventListener('pw_sync_status', handleSyncStatus);
+    return () => window.removeEventListener('pw_sync_status', handleSyncStatus);
+  }, []);
+
   // Load from hybrid storage (offline-first)
   useEffect(() => {
     if (!isLoading) {
-      setIsLoadingQuizzes(true);
-      void loadQuizzes().catch((error) => {
+      const isInitial = quizzes.length === 0;
+      void loadQuizzes(!isInitial).catch((error) => {
         console.error('[Quiz] Local/remote assessment list failed to load.', error);
-        toast.error('Assessments could not be loaded. Check your connection and retry.');
-      }).finally(() => setIsLoadingQuizzes(false));
+      });
     }
   }, [isLoading, user?.id]);
 
@@ -5274,6 +5311,13 @@ export default function QuizPage() {
                           className={cn(
                             'flex items-center gap-2 text-[10px] text-pw-muted font-mono uppercase tracking-widest flex-wrap',
                           )}>
+                          {isQuizTemplate(quiz) && (
+                            <span
+                              className='bg-pw-primary/10 text-pw-primary border border-pw-primary/20 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider'
+                              title='Template item - does not expire'>
+                              Template
+                            </span>
+                          )}
                           {quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id &&
                             ((quiz as any).is_synced ?
                             <span
@@ -5288,17 +5332,29 @@ export default function QuizPage() {
                             </span>)
                           }
                           {quiz?.questions?.length} Qts
-                          {responseCounts[quiz.id] || quiz?.responses && quiz?.responses?.length > 0 && (
-                            <span
-                              className='text-pw-primary'
-                              title='Responses available in the latest loaded data or local cache'>
-                              {responseCounts[quiz.id] ??
-                                (Array.isArray(quiz.responses) ?
-                                  quiz.responses.length
-                                : 0)}{' '}
-                              Ans
-                            </span>
-                          )}
+                          {(() => {
+                            const currentCount = responseCounts[quiz.id] ?? (Array.isArray(quiz.responses) ? quiz.responses.length : 0);
+                            const lastViewed = lastViewedCounts[quiz.id] ?? currentCount;
+                            const newResponses = Math.max(0, currentCount - lastViewed);
+                            return (
+                              <div className='flex items-center gap-1.5 flex-wrap'>
+                                {currentCount > 0 && (
+                                  <span
+                                    className='text-pw-primary'
+                                    title='Total responses available'>
+                                    {currentCount} Ans
+                                  </span>
+                                )}
+                                {newResponses > 0 && (
+                                  <span
+                                    className='bg-pw-success/20 text-pw-success border border-pw-success/30 px-1.5 py-0.5 rounded-full text-[9px] font-bold animate-pulse'
+                                    title='New responses since last view'>
+                                    +{newResponses} New
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && quiz?.expires_at &&
                             (() => {
                               const { label, urgent } = quizExpiryCountdown(
@@ -5328,6 +5384,12 @@ export default function QuizPage() {
                             title='View Feedback'
                             size='icon'
                             onClick={async () => {
+                              setViewingResponses({
+                                ...normalizeQuizRecord(quiz),
+                                questions: quiz.questions,
+                                responses: [],
+                                responsesLoading: true,
+                              } as any);
                               try {
                                 const result =
                                   (
@@ -5342,30 +5404,36 @@ export default function QuizPage() {
                                       quiz.id,
                                     );
                                 
+                                    const respLen = result.responses?.length || 0;
                                     setResponseCounts((current) => ({
                                       ...current,
-                                      [quiz.id]: result.responses.length,
+                                      [quiz.id]: respLen,
                                     }));
-                                    if (
-                                      (result as any).isCached ||
-                                      (result as any).isLocalOnly
-                                    ) {
-                                      toast.info(
-                                        (
-                                          typeof navigator !== 'undefined' &&
-                                            !navigator.onLine
-                                        ) ?
-                                          'Showing cached responses. Connect to the internet and sign in (if required) to refresh them.'
-                                        : 'Showing locally saved responses. Sign in and connect to the internet to fetch the latest responses.',
-                                      );
+                                    setLastViewedCounts((current) => {
+                                      const updated = { ...current, [quiz.id]: respLen };
+                                      try { localStorage.setItem('pw_last_viewed_counts', JSON.stringify(updated)); } catch {}
+                                      return updated;
+                                    });
+
+                                    const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+                                    if (!online && isLoggedIn) {
+                                      toast.info('Offline mode: Showing locally saved responses. Reconnect to sync latest.');
+                                    } else if (!online && !isLoggedIn) {
+                                      toast.info('Offline & signed out: Showing cached local responses.');
+                                    } else if (online && !isLoggedIn) {
+                                      toast.info('Signed out: Sign in to view cloud responses across devices.');
+                                    } else if ((result as any).isCached || (result as any).isLocalOnly) {
+                                      toast.info('Showing locally saved responses.');
                                     }
                                 setViewingResponses({
                                   ...normalizeQuizRecord(quiz),
                                   questions: quiz.questions,
                                   responses: result.responses,
                                   responsesNextOffset: result.nextOffset,
-                                });
+                                  responsesLoading: false,
+                                } as any);
                               } catch (error: any) {
+                                setViewingResponses(null);
                                 toast.error(
                                   error?.message ||
                                     'Could not load assessment responses.',
@@ -6135,10 +6203,12 @@ export default function QuizPage() {
                     );
                   })()}
 
-                {(
-                  !viewingResponses.responses ||
-                  viewingResponses.responses.length === 0
-                ) ?
+                {(viewingResponses as any).responsesLoading ? (
+                  <div className='py-20 text-center flex flex-col items-center justify-center gap-3'>
+                    <div className='animate-spin rounded-full h-8 w-8 border-2 border-pw-cyan border-t-transparent' />
+                    <p className='text-xs font-semibold text-pw-muted'>Loading responses and media feedback...</p>
+                  </div>
+                ) : (!viewingResponses.responses || viewingResponses.responses.length === 0) ? (
                   <div className='py-20 text-center opacity-40'>
                     <MessageSquare
                       size={40}
@@ -6146,8 +6216,8 @@ export default function QuizPage() {
                     />
                     <p>No responses yet.</p>
                   </div>
-                : [...(viewingResponses.responses || [])]
-                    .reverse()
+                ) : [...(viewingResponses.responses || [])]
+                    .sort((a, b) => new Date(b.timestamp || b.startedAt || 0).getTime() - new Date(a.timestamp || a.startedAt || 0).getTime())
                     .map((resp, idx) => (
                       <Card
                         key={idx}

@@ -370,6 +370,43 @@ const Calculator = () => {
   );
 };
 
+function getOrCreateDeviceTag(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    let deviceTag = localStorage.getItem('pw_device_tag');
+    if (!deviceTag) {
+      const screenInfo = `${window.screen?.width || 0}x${window.screen?.height || 0}`;
+      const navInfo = `${navigator.userAgent || ''}_${navigator.language || ''}`;
+      const randomSeed = Math.random().toString(36).substring(2, 10);
+      deviceTag = `dev_${btoa(`${screenInfo}_${navInfo}_${randomSeed}`).replace(/=/g, '').slice(-24)}`;
+      localStorage.setItem('pw_device_tag', deviceTag);
+    }
+    return deviceTag;
+  } catch {
+    return 'dev_fallback_tag';
+  }
+}
+
+function formatAllowedFileTypes(accept?: string): string {
+  if (!accept || accept.trim() === '' || accept === '*/*') {
+    return 'All supported formats (Documents, Images, Audio, Video, Archives)';
+  }
+  const parts = accept.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const mapped = parts.map((p) => {
+    if (p.includes('image/*') || p === 'image/*') return 'Images (JPEG, PNG, WebP, GIF, SVG)';
+    if (p.includes('video/*') || p === 'video/*') return 'Videos (MP4, WebM, MOV)';
+    if (p.includes('audio/*') || p === 'audio/*') return 'Audio files (MP3, WAV, AAC)';
+    if (p.includes('pdf')) return 'PDF Document (.pdf)';
+    if (p.includes('doc')) return 'Word Document (.doc, .docx)';
+    if (p.includes('txt')) return 'Text File (.txt)';
+    if (p.includes('zip') || p.includes('rar')) return 'Archive (.zip, .rar)';
+    if (p.includes('json')) return 'JSON File (.json)';
+    if (p.startsWith('.')) return `${p.substring(1).toUpperCase()} File`;
+    return p;
+  });
+  return Array.from(new Set(mapped)).join(', ');
+}
+
 function Taker() {
   const { openFile } = useAppFileViewer();
   const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
@@ -388,6 +425,11 @@ function Taker() {
   const isLocalPreview = routeParamId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [isPrivateLocked, setIsPrivateLocked] = useState(false);
+  const [enteredPrivateKey, setEnteredPrivateKey] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [serverCategoryScores, setServerCategoryScores] = useState<Record<
@@ -481,6 +523,19 @@ function Taker() {
   const restoredAttemptTimerRef = React.useRef(false);
   const restoredQuestionTimerRef = React.useRef(false);
   const lastAttemptSyncRef = React.useRef('');
+  const isPickingFileRef = React.useRef(false);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isPickingFileRef.current) {
+        setTimeout(() => {
+          isPickingFileRef.current = false;
+        }, 500);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
 
   // Custom states for reporting quizzes
   const [showReportModal, setShowReportModal] = useState(false);
@@ -909,6 +964,26 @@ function Taker() {
 
           correctAnswersRef.current = secureAnswers;
 
+          if (target.status === 'paused' || target.is_paused) {
+            setIsPaused(true);
+            setPauseReason(target.pause_reason || 'This assessment is currently paused for verification and investigation due to report flags.');
+          }
+
+          if (target.isPrivate || target.is_private) {
+            const allowed = Array.isArray(target.allowedUsernames)
+              ? target.allowedUsernames
+              : Array.isArray(target.allowed_usernames)
+              ? target.allowed_usernames
+              : String(target.allowedUsernames || target.allowed_usernames || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+            const currentUsername = String(username || user?.email?.split('@')[0] || '').trim().toLowerCase();
+            const isAllowedUser = isLoggedIn && currentUsername && allowed.map((a: string) => a.toLowerCase()).includes(currentUsername);
+
+            if (!isAllowedUser) {
+              setIsPrivateLocked(true);
+            }
+          }
+
           const finalQuiz = {
             ...target,
             questions: currentQuestions.map((q) => ({
@@ -918,10 +993,12 @@ function Taker() {
           };
           setQuiz(finalQuiz);
 
-          // Completion check
+          // Completion check with device fallback token
+          const deviceTag = getOrCreateDeviceTag();
           const completionMarker =
             isLocalPreview ? null : (
-              localStorage.getItem(`completed_quiz_${finalQuiz.id}`)
+              localStorage.getItem(`completed_quiz_${finalQuiz.id}`) ||
+              (deviceTag ? localStorage.getItem(`completed_quiz_${deviceTag}_${finalQuiz.id}`) : null)
             );
           if (completionMarker && !finalQuiz.allowRetry) {
             setHasAlreadyCompleted(true);
@@ -1139,7 +1216,7 @@ function Taker() {
 
   useEffect(() => {
     const activeQ = activeQuestions[currentQuestion];
-    if (started && activeQ && activeQ.timer && !isFinished) {
+    if (started && activeQ && activeQ.timer && activeQ.type !== 'upload' && !isFinished) {
       if (restoredQuestionTimerRef.current)
         restoredQuestionTimerRef.current = false;
       else setQuestionTimeLeft(activeQ.timer);
@@ -1304,6 +1381,9 @@ function Taker() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
+        if (isPickingFileRef.current) {
+          return;
+        }
         const nextAttempts = cheatAttempts + 1;
         setCheatAttempts(nextAttempts);
 
@@ -1520,8 +1600,9 @@ function Taker() {
   };
 
   const finalizeQuiz = async (finalAnswers: any[]) => {
-    if (finalizingRef.current) return;
+    if (finalizingRef.current || isSubmitting) return;
     finalizingRef.current = true;
+    setIsSubmitting(true);
     setIsFinished(true);
     playQuizCompletionTone();
 
@@ -1532,7 +1613,11 @@ function Taker() {
     if (quiz) {
       if (!isLocalPreview && !quiz.allowRetry) {
         try {
+          const deviceTag = getOrCreateDeviceTag();
           localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+          if (deviceTag) {
+            localStorage.setItem(`completed_quiz_${deviceTag}_${quiz.id}`, 'true');
+          }
         } catch {
           // The response can still be submitted when browser storage is full.
         }
@@ -2245,6 +2330,9 @@ function Taker() {
                 <div className='flex flex-col gap-1'>
                   <input
                     type='file'
+                    onClick={() => {
+                      isPickingFileRef.current = true;
+                    }}
                     accept={
                       quest?.allowedTypes ||
                       'image/*,.pdf,.doc,.docx,.txt,.zip,.json,/application/json,video/*,audio/*,'
@@ -2317,6 +2405,9 @@ function Taker() {
                     className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/10 file:text-pw-primary hover:file:bg-pw-primary/20 file:cursor-pointer w-full'
                   />
 
+                  <p className='text-[11px] font-medium text-pw-muted/80 mt-1'>
+                    Expected format: {formatAllowedFileTypes(quest?.allowedTypes)}
+                  </p>
                   {/* Allow taker to customize filename on save */}
                   {(content || scrollAnswers[quest.id]) && (
                     <div className='mt-2 p-1 bg-black/30 rounded-xl border border-white/10 flex items-center justify-between gap-2 flex-wrap'>
@@ -3890,12 +3981,26 @@ function Taker() {
 
                 <div className='flex items-center gap-3 mt-4'>
                   <Button
-                    onClick={() => finalizeQuiz(userAnswers)}
-                    disabled={userAnswers.length < activeQuestions.length}
+                    onClick={() => {
+                      if (userAnswers.length < activeQuestions.length) {
+                        toast.error('Please answer all questions before submitting.');
+                        return;
+                      }
+                      finalizeQuiz(userAnswers);
+                    }}
+                    disabled={userAnswers.length < activeQuestions.length || isSubmitting}
                     className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none'>
-                    {quiz?.nextButtonText ||
-                      `FINISH ${quiz?.type || 'Assessment'}`}
-                    <CheckCircle2 className='h-5 w-5' />
+                    {isSubmitting ? (
+                      <>
+                        <div className='animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent' />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        {quiz?.nextButtonText || `FINISH ${quiz?.type || 'Assessment'}`}
+                        <CheckCircle2 className='h-5 w-5' />
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
