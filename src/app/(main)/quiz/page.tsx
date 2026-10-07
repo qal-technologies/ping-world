@@ -4601,6 +4601,17 @@ export default function QuizPage() {
   const [isSavingQuiz, setIsSavingQuiz] = useState(false);
   const [isEmailingExport, setIsEmailingExport] = useState(false);
 
+  useEffect(() => {
+    const onSyncError = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string; message?: string }>).detail;
+      if (detail?.type === 'quiz') {
+        toast.error(detail.message || 'Quiz media or cloud save failed. Your local copy is still available.');
+      }
+    };
+    window.addEventListener('pw_sync_error', onSyncError);
+    return () => window.removeEventListener('pw_sync_error', onSyncError);
+  }, []);
+
   const emailResponseExport = async (quizId: string, format: 'csv' | 'json' = 'csv') => {
     if (isEmailingExport) return;
     setIsEmailingExport(true);

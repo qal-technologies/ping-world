@@ -303,7 +303,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
             role='dialog'
             aria-modal='true'
             aria-label={file.name || 'File viewer'}>
-            <header className='flex min-h-14 items-center gap-3 border-b border-white/10 bg-white/[0.045] px-3 py-2 pt-3 shadow-lg shadow-black/20 backdrop-blur-xl sm:px-5 relative'>
+            <header className='flex min-h-14 items-center gap-3 flex-wrap border-b border-white/10 bg-white/[0.045] px-3 py-2 pt-3 shadow-lg shadow-black/20 backdrop-blur-xl sm:px-5 relative'>
               <button
                 type='button'
                 onClick={closeFile}
@@ -320,6 +320,8 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   {kind} {' '} {file?.size ? `(${checkFileSize(file.size)})` : ''}
                 </p>
               </div>
+
+              <div className='flex gap-3 flex-wrap items-center'>
               {(kind === 'image' || kind === 'pdf') && (
                 <>
                   <button
@@ -373,6 +375,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                 className='rounded-lg p-2 hover:bg-white/10'>
                 <X size={19} />
               </button>
+              </div>
             </header>
             <main className='flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.07),transparent_55%)] p-2 sm:p-5 relative'>
               {kind === 'image' && (

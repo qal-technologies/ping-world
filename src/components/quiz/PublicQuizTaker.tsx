@@ -44,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HybridStorage } from '@/lib/storage-utils';
+import { optimizeImageForStorage } from '@/lib/media-optimization';
 import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
 import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz';
@@ -441,6 +442,15 @@ function Taker() {
     };
   }, []);
 
+  useEffect(() => {
+    const onResponseSyncError = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      toast.error(`${detail?.message || 'Response upload failed.'} Your response remains saved on this device.`);
+    };
+    window.addEventListener('pw_quiz_response_sync_error', onResponseSyncError);
+    return () => window.removeEventListener('pw_quiz_response_sync_error', onResponseSyncError);
+  }, []);
+
   const [showIntro, setShowIntro] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
   const [isLoading, setLoading] = useState(true);
@@ -574,6 +584,53 @@ function Taker() {
     async (snapshot: Record<string, any>, keepalive = false) => {
       if (!quiz || isLocalPreview) return false;
       let preparedSnapshot = snapshot;
+      try {
+        await HybridStorage.saveQuizAttemptDraft(quiz.id, snapshot);
+      } catch {
+        toast.error('This device could not cache the assessment progress. Keep this tab open and retry.');
+        return false;
+      }
+      if (!navigator.onLine) {
+        activeAttemptRef.current = snapshot;
+        return false;
+      }
+
+      const hasPendingResponseMedia = Object.values(snapshot.answers || {}).some((answer: any) => {
+        if (typeof answer?.fileUrl !== 'string') return false;
+        const source = unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl;
+        return source.startsWith('data:');
+      });
+
+      // Create the remote attempt before signing response-media uploads. The upload signer
+      // verifies the attempt token and will correctly reject an attempt that does not exist yet.
+      if (!preparedSnapshot.remoteStarted && hasPendingResponseMedia) {
+        try {
+          const startResponse = await fetch('/api/quiz-attempts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'start', quizId: quiz.id, attemptId: snapshot.attemptId,
+              attemptToken: snapshot.attemptToken, questionOrder: snapshot.questionOrder,
+              userData: snapshot.userData, currentQuestionIndex: snapshot.currentQuestionIndex,
+              allowBackwardNavigation: quiz.canGoBack !== false,
+            }),
+            keepalive,
+            signal: keepalive ? undefined : AbortSignal.timeout(5000),
+          });
+          if (!startResponse.ok) return false;
+          const startResult = await startResponse.json();
+          preparedSnapshot = {
+            ...snapshot,
+            remoteStarted: true,
+            serverStartedAt: startResult.startedAt || snapshot.serverStartedAt || snapshot.startedAt,
+          };
+          activeAttemptRef.current = preparedSnapshot;
+          await HybridStorage.saveQuizAttemptDraft(quiz.id, preparedSnapshot);
+        } catch {
+          return false;
+        }
+      }
+
       if (navigator.onLine) {
         try {
           preparedSnapshot = await HybridStorage.prepareQuizAttemptSnapshot(
@@ -2197,8 +2254,9 @@ function Taker() {
                       if (!file) return;
 
                       // Enforce max size limit (MB)
-                      const maxMb =
-                        quiz?.fromPremium ? quest.maxFileSize || 5 : 5;
+                      const maxMb = quiz?.fromPremium
+                        ? Math.min(Number(quest.maxFileSize) || 5, 50)
+                        : 5;
                       const sizeInMb = file.size / (1024 * 1024);
 
                       if (sizeInMb > maxMb) {
@@ -2208,43 +2266,53 @@ function Taker() {
                         return;
                       }
 
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        const rawBase64 = reader.result as string;
-                        // Wrap with PingWorld media envelope for security tagging
-                        const packedUrl = packPingWorldMediaUrl(rawBase64);
-                        if (quiz?.quizScroll) {
-                          setScrollAnswers((prev) => ({
-                            ...prev,
-                            [quest.id]: packedUrl,
-                          }));
-                        } else {
-                          setContent(packedUrl);
-                        }
+                      void (async () => {
+                        try {
+                          const optimizedFile = await optimizeImageForStorage(file);
+                          const reader = new FileReader();
+                          reader.onerror = () => toast.error('Could not read this file. Please try another one.');
+                          reader.onload = () => {
+                            const rawBase64 = reader.result as string;
+                            const packedUrl = packPingWorldMediaUrl(rawBase64);
+                            if (quiz?.quizScroll) {
+                              setScrollAnswers((prev) => ({
+                                ...prev,
+                                [quest.id]: packedUrl,
+                              }));
+                            } else {
+                              setContent(packedUrl);
+                            }
 
-                        // Auto-score as correct on upload
-                        const existingIdx = userAnswers.findIndex(
-                          (a) => a.questionId === quest.id,
-                        );
-                        let updated;
-                        const uploadRecord = {
-                          questionId: quest.id,
-                          answer: file.name,
-                          fileName: file.name,
-                          fileUrl: packedUrl,
-                          correct: quiz?.type === 'quiz',
-                        };
+                            const existingIdx = userAnswers.findIndex(
+                              (a) => a.questionId === quest.id,
+                            );
+                            let updated;
+                            const uploadRecord = {
+                              questionId: quest.id,
+                              answer: file.name,
+                              fileName: file.name,
+                              fileUrl: packedUrl,
+                              fileType: optimizedFile.type || file.type,
+                              correct: quiz?.type === 'quiz',
+                            };
 
-                        if (existingIdx > -1) {
-                          updated = [...userAnswers];
-                          updated[existingIdx] = uploadRecord;
-                        } else {
-                          updated = [...userAnswers, uploadRecord];
+                            if (existingIdx > -1) {
+                              updated = [...userAnswers];
+                              updated[existingIdx] = uploadRecord;
+                            } else {
+                              updated = [...userAnswers, uploadRecord];
+                            }
+                            setUserAnswers(updated);
+                            const savedKb = Math.max(1, Math.round(optimizedFile.size / 1024));
+                            toast.success(optimizedFile.size < file.size
+                              ? `Optimized to ${savedKb} KB and attached.`
+                              : `Attached: ${file.name}`);
+                          };
+                          reader.readAsDataURL(optimizedFile);
+                        } catch {
+                          toast.error('Could not prepare this file for upload.');
                         }
-                        setUserAnswers(updated);
-                        toast.success(`Uploaded & Verified: ${file.name}`);
-                      };
-                      reader.readAsDataURL(file);
+                      })();
                     }}
                     className='text-xs text-pw-muted file:mr-3 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-xs file:font-bold file:bg-pw-primary/10 file:text-pw-primary hover:file:bg-pw-primary/20 file:cursor-pointer w-full'
                   />
@@ -2650,7 +2718,7 @@ function Taker() {
           )}>
           <div
             className={cn(
-              'w-16 h-16 rounded-full flex items-center justify-center mx-auto border mb-3',
+              'w-20 h-20 rounded-full flex items-center justify-center mx-auto border mb-3',
               quiz?.endScreen?.completionIcon === 'diamond' &&
                 'bg-pw-success/10 border-pw-success/20',
               quiz?.endScreen?.completionIcon === 'badge' &&
@@ -2663,12 +2731,12 @@ function Taker() {
               quiz?.endScreen?.textAlign === 'right' && 'items-end',
             )}>
             {quiz?.endScreen?.completionIcon === 'diamond' ?
-              <Diamond className='h-9 w-9 text-pw-success' />
+              <Diamond className='h-12 w-12 text-pw-success' />
             : quiz?.endScreen?.completionIcon === 'badge' ?
-              <Badge className='h-9 w-9 text-pw-primary' />
+              <Badge className='h-12 w-12 text-pw-primary' />
             : quiz?.endScreen?.completionIcon === 'trophy' ?
-              <Trophy className='h-9 w-9 text-pw-warning' />
-            : <CheckCircle className='h-9 w-9 text-pw-success' />}
+              <Trophy className='h-12 w-12 text-pw-warning' />
+            : <CheckCircle className='h-12 w-12 text-pw-success' />}
           </div>
           <h1
             className='text-lg font-extrabold font-display whitespace-pre-wrap'
@@ -2677,7 +2745,7 @@ function Taker() {
           <div className='relative'>
             <p
               className={cn(
-                'text-pw-muted text-xs mb-1 whitespace-pre-wrap transition-all',
+                'text-pw-muted text-sm mb-1 whitespace-pre-wrap transition-all',
                 !isEndMsgExpanded && endMsg.length > 80 ?
                   'line-clamp-3 max-h-24 overflow-hidden'
                 : 'max-h-96 overflow-y-auto pr-1',
@@ -2762,7 +2830,10 @@ function Taker() {
             </Card>
           )}
 
-          <div className='divider my-4 sm:hidden' />
+          {quiz?.type === 'quiz' &&
+
+            <div className='divider my-4 sm:hidden' />
+          }
 
           {/* Per-question explanation review */}
           {quiz?.type === 'quiz' &&

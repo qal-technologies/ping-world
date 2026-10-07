@@ -4,7 +4,7 @@ This guide provides the complete database schemas, table creation statements, ro
 
 ## Required server environment
 
-Set `SUPABASE_SERVICE_ROLE_KEY` only in the server/deployment environment (never in a `NEXT_PUBLIC_*` variable or browser bundle). The API routes use it to return redacted public quizzes, grade submissions, and run cleanup jobs. Configure `CRON_SECRET` for scheduled cleanup, `FIREBASE_SERVICE_ACCOUNT_KEY` only if the Firebase bridge is enabled, and a free VAPID key pair (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY_BASE64`, `VAPID_SUBJECT`) for Web Push delivery. Keep `VAPID_PRIVATE_KEY_BASE64` server-only. The admin client fails closed when the service role key is missing.
+Set `SUPABASE_SERVICE_ROLE_KEY` only in the server/deployment environment (never in a `NEXT_PUBLIC_*` variable or browser bundle). The API routes use it to return redacted public quizzes, grade submissions, sign quiz-media uploads scoped to the authenticated owner's quiz path, and run cleanup jobs. Image bytes upload directly from the browser to Supabase Storage using the short-lived signed token, so they do not pass through the app server. Configure `CRON_SECRET` for scheduled cleanup, `FIREBASE_SERVICE_ACCOUNT_KEY` only if the Firebase bridge is enabled, and a free VAPID key pair (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY_BASE64`, `VAPID_SUBJECT`) for Web Push delivery. Keep `VAPID_PRIVATE_KEY_BASE64` server-only. The admin client fails closed when the service role key is missing.
 
 Generate a free VAPID P-256 key pair with Node's built-in crypto (no added package):
 
@@ -330,7 +330,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_user_custom_id ON public.quizzes(u
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('quiz-media', 'quiz-media', true, 52428800)
-ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800;
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800, allowed_mime_types = NULL;
 DROP POLICY IF EXISTS "Public can read assessment media" ON storage.objects;
 DROP POLICY IF EXISTS "Owners can upload assessment media" ON storage.objects;
 DROP POLICY IF EXISTS "Owners can update assessment media" ON storage.objects;
@@ -354,15 +354,13 @@ CREATE POLICY "Owners can delete assessment media" ON storage.objects
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('quiz-response-media', 'quiz-response-media', false, 52428800)
-ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 52428800;
+ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 52428800, allowed_mime_types = NULL;
 DROP POLICY IF EXISTS "Participants can upload response media" ON storage.objects;
 DROP POLICY IF EXISTS "Quiz owners can read response media" ON storage.objects;
 DROP POLICY IF EXISTS "Quiz owners can delete response media" ON storage.objects;
-CREATE POLICY "Participants can upload response media" ON storage.objects
-  FOR INSERT TO anon, authenticated WITH CHECK (
-    bucket_id = 'quiz-response-media'
-    AND public.can_upload_quiz_response_media((storage.foldername(name))[1]::uuid)
-  );
+-- Response uploads are authorized by /api/quiz-response-media using a verified,
+-- active attempt and short-lived path-scoped Storage upload token. Do not grant
+-- anonymous INSERT access or depend on a client-callable upload RPC here.
 CREATE POLICY "Quiz owners can read response media" ON storage.objects
   FOR SELECT TO authenticated USING (
     bucket_id = 'quiz-response-media'

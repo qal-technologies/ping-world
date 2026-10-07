@@ -1,5 +1,6 @@
 import type { Quiz } from '@/app/(main)/quiz/';
-import { supabase } from './supabase';
+import { supabase, supabaseStorage } from './supabase';
+import { optimizeImageForStorage } from './media-optimization';
 import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 interface BaseQuiz {
   user_id: string;
@@ -28,6 +29,18 @@ type StorageName = { bucket: string; table?: string };
 /** Check browser/Node navigator.onLine — fastest possible signal */
 const isOnline = (): boolean =>
   typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+function reportSyncFailure(type: StorageItem['type'], id: string, error: unknown) {
+  if (typeof window === 'undefined') return;
+  const message = error instanceof Error ? error.message : 'Remote save failed.';
+  window.dispatchEvent(new CustomEvent('pw_sync_error', { detail: { type, id, message } }));
+}
+
+function reportResponseSyncFailure(error: unknown) {
+  if (typeof window === 'undefined') return;
+  const message = error instanceof Error ? error.message : 'Response media upload failed.';
+  window.dispatchEvent(new CustomEvent('pw_quiz_response_sync_error', { detail: { message } }));
+}
 
 const storageNames: Record<StorageItem['type'], StorageName> = {
   quiz: { bucket: 'quizzes', table: 'quizzes' },
@@ -403,23 +416,45 @@ async function persistQuizMedia(value: any, path: string) {
 
   const response = await fetch(source);
   if (!response.ok) throw new Error('Could not read uploaded assessment media.');
-  const blob = await response.blob();
-  const extension = (blob.type.split('/')[1] || 'bin').split(';')[0].replace(/[^a-zA-Z0-9]/g, '') || 'bin';
+  const blob = await optimizeImageForStorage(await response.blob());
+  if (blob.size > 50 * 1024 * 1024) throw new Error('Quiz images must be smaller than 50 MB to upload.');
+  const extension = (blob.type.split('/')[1] || 'bin').split(';')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'bin';
   const storagePath = `${path}-${await blobFingerprint(blob)}.${extension}`;
-  const mediaStorage = supabase.storage.from('quiz-media');
-  const { data: exists, error: existsError } = await mediaStorage.exists(storagePath);
-  if (existsError || !exists) {
-    const { error } = await mediaStorage.upload(storagePath, blob, {
-      upsert: false,
-      contentType: blob.type || unpacked.type || 'application/octet-stream',
-      cacheControl: '31536000',
-    });
-    if (error) {
-      const { data: uploadedInParallel } = await mediaStorage.exists(storagePath);
-      if (!uploadedInParallel) throw error;
-    }
+  const contentType = blob.type || unpacked.type || 'application/octet-stream';
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Sign in with your Ping World account before uploading quiz images.');
+
+  const signingResponse = await fetch('/api/quiz-media', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken: session.access_token, quizId: path.split('/')[1] || '', objectPath: storagePath, contentType }),
+  });
+  const signedUpload = await signingResponse.json().catch(() => null);
+  if (!signingResponse.ok || typeof signedUpload?.token !== 'string') {
+    throw new Error(signedUpload?.error || `Could not authorize quiz image upload (HTTP ${signingResponse.status}).`);
   }
-  return supabase.storage.from('quiz-media').getPublicUrl(storagePath).data.publicUrl;
+  const { error: uploadError } = await supabaseStorage.storage.from('quiz-media').uploadToSignedUrl(
+    storagePath,
+    signedUpload.token,
+    blob,
+    { contentType, cacheControl: '3600', upsert: true },
+  );
+  if (uploadError) {
+    console.error('[QuizMedia] Signed Storage upload failed:', {
+      message: uploadError.message,
+      status: (uploadError as any).status,
+      statusCode: (uploadError as any).statusCode,
+      bucket: 'quiz-media',
+      storagePath,
+      blobType: contentType,
+      blobSize: blob.size,
+    });
+    throw new Error(`Supabase image upload failed: ${uploadError.message}`);
+  }
+  if (typeof signedUpload.publicUrl !== 'string' || !signedUpload.publicUrl) {
+    throw new Error('Quiz image uploaded, but Supabase did not return its public URL.');
+  }
+  return signedUpload.publicUrl;
 }
 
 async function externalizeQuizMedia(quiz: any, userId: string) {
@@ -683,9 +718,10 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
             }
-          }
+          } else throw error;
         }
       } catch (e) {
+        reportSyncFailure(type, item.id, e);
         console.error(`[HybridStorage] Failed to push item ${item.id}:`, e);
       }
     }
@@ -759,22 +795,34 @@ async function externalizeResponseMedia(quizId: string, response: any) {
     if (!source.startsWith('data:')) return answer;
     const media = await fetch(source);
     if (!media.ok) throw new Error('Could not read uploaded response file.');
-    const blob = await media.blob();
-    const extension = (blob.type.split('/')[1] || 'bin').split(';')[0].replace(/[^a-zA-Z0-9]/g, '') || 'bin';
-    const path = `${safeStorageSegment(quizId)}/${safeStorageSegment(response.submissionId)}/${safeStorageSegment(String(answer.questionId || index))}-${await blobFingerprint(blob)}.${extension}`;
-    const mediaStorage = supabase.storage.from('quiz-response-media');
-    const { data: exists, error: existsError } = await mediaStorage.exists(path);
-    if (existsError || !exists) {
-      const { error } = await mediaStorage.upload(path, blob, {
-        contentType: blob.type || unpacked.type || 'application/octet-stream',
-        cacheControl: '31536000',
-        upsert: false,
-      });
-      if (error) {
-        const { data: uploadedInParallel } = await mediaStorage.exists(path);
-        if (!uploadedInParallel) throw error;
-      }
+    const blob = await optimizeImageForStorage(await media.blob());
+    if (blob.size > 50 * 1024 * 1024) throw new Error('Response files must be smaller than 50 MB to upload.');
+    const extension = (blob.type.split('/')[1] || 'bin').split(';')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'bin';
+    const path = `${safeStorageSegment(quizId)}/${safeStorageSegment(String(response.submissionId || response.attemptId || 'pending'))}/${safeStorageSegment(String(answer.questionId || index))}-${await blobFingerprint(blob)}.${extension}`;
+    if (!response.attemptId || !response.attemptToken) {
+      throw new Error('This response upload has no active attempt authorization. Keep the response saved locally and retry from the assessment.');
     }
+    const contentType = blob.type || unpacked.type || 'application/octet-stream';
+    const signingResponse = await fetch('/api/quiz-response-media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quizId,
+        attemptId: response.attemptId,
+        attemptToken: response.attemptToken,
+        questionId: String(answer.questionId || ''),
+        objectPath: path,
+        contentType,
+      }),
+    });
+    const signed = await signingResponse.json().catch(() => null);
+    if (!signingResponse.ok || typeof signed?.token !== 'string') {
+      throw new Error(signed?.error || `Could not authorize response file upload (HTTP ${signingResponse.status}).`);
+    }
+    const { error: uploadError } = await supabaseStorage.storage.from('quiz-response-media').uploadToSignedUrl(
+      path, signed.token, blob, { contentType, cacheControl: '3600', upsert: true },
+    );
+    if (uploadError) throw new Error(`Response file upload failed: ${uploadError.message}`);
     return { ...answer, fileUrl: path, fileType: blob.type || unpacked.type };
   }));
 }
@@ -800,7 +848,8 @@ async function flushPendingResponses() {
       index--;
       if (queueKey !== pendingResponsesKey()) return;
       await writeCacheValue(queueKey, pending);
-    } catch {
+    } catch (error) {
+      reportResponseSyncFailure(error);
       break;
     }
   }
@@ -911,7 +960,12 @@ export const HybridStorage = {
     const answers = snapshot.answers && typeof snapshot.answers === 'object' ? snapshot.answers : {};
     const items = Object.values(answers);
     if (!items.some((answer: any) => typeof answer?.fileUrl === 'string' && (unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl).startsWith('data:'))) return snapshot;
-    const externalized = await externalizeResponseMedia(quizId, { submissionId: snapshot.attemptId, answers: items });
+    const externalized = await externalizeResponseMedia(quizId, {
+      submissionId: snapshot.attemptId,
+      attemptId: snapshot.attemptId,
+      attemptToken: snapshot.attemptToken,
+      answers: items,
+    });
     return { ...snapshot, answers: Object.fromEntries(externalized.filter((answer: any) => answer?.questionId).map((answer: any) => [String(answer.questionId), answer])) };
   },
 
@@ -1142,9 +1196,10 @@ export const HybridStorage = {
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
               }
-            }
+            } else throw error;
           }
         } catch (e) {
+          reportSyncFailure(type, item.id, e);
           console.warn('[HybridStorage] Background push failed:', e);
         }
       })();
@@ -1278,6 +1333,7 @@ export const HybridStorage = {
         const saved = await insertQuizResponse(quizId, responseToSave);
         if (saved) return saved;
       } catch (error) {
+        reportResponseSyncFailure(error);
         console.warn('[HybridStorage] Response insert failed; queueing locally:', error);
       }
     }
