@@ -93,10 +93,11 @@ export default function AccountTab({
           <div className='flex items-center gap-3 border-b border-white/5 pb-4'>
             {dp.trim() ?
               <Image
-                width={undefined}
-                height={undefined}
+                width={48}
+                height={48}
                 src={dp}
                 alt={username}
+                unoptimized
                 className='w-12 h-12 rounded-2xl object-cover object-center border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'
               />
               : <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'>

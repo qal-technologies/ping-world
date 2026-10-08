@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
+import { getRequestUser, getRequestUserFromToken, readJsonWithinLimit } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 
 export const dynamic = 'force-dynamic';
-export async function GET(request: NextRequest) {
+async function listNotifications(request: NextRequest, accessToken?: string) {
   if (isRateLimited(getClientIp(request), 'api:in-app-notifications', 120, 60_000).limited) {
     return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
   }
-  const user = await getRequestUser(request);
+  const user = accessToken ? await getRequestUserFromToken(accessToken) : await getRequestUser(request);
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
   if (isRateLimited(user.id, 'api:in-app-notifications:user', 120, 60_000).limited) {
     return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
@@ -38,11 +38,31 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// The access token is sent in a bounded JSON body instead of an HTTP header.
+// Some local reverse proxies reject large Supabase JWT headers with 431.
+export async function POST(request: NextRequest) {
+  try {
+    const body = await readJsonWithinLimit(request, 8 * 1024) as { accessToken?: unknown };
+    const token = typeof body.accessToken === 'string' ? body.accessToken : '';
+    if (!token || token.length > 16 * 1024) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    return listNotifications(request, token);
+  } catch {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  return listNotifications(request);
+}
+
 export async function PATCH(request: NextRequest) {
-  const user = await getRequestUser(request);
+  let body: { id?: unknown; action?: unknown; accessToken?: unknown };
+  try { body = await readJsonWithinLimit(request, 12 * 1024) as typeof body; }
+  catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }); }
+  const token = typeof body.accessToken === 'string' ? body.accessToken : '';
+  const user = token ? await getRequestUserFromToken(token) : await getRequestUser(request);
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
   try {
-    const body = await readJsonWithinLimit(request, 4 * 1024) as { id?: unknown; action?: unknown };
     const id = typeof body.id === 'string' ? body.id : '';
     const action = body.action === 'done' ? 'done' : 'read';
     if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'Invalid notification.' }, { status: 400 });

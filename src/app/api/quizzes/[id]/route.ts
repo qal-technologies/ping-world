@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { getRequestUser } from '@/lib/api-auth';
 import { verifyQuizAccessToken } from '@/lib/quiz/private-access-token';
-import { resolveQuizPrivacySettings } from '@/lib/quiz/quiz-privacy';
+import { hasActiveQuizProTier, resolveQuizPrivacySettings } from '@/lib/quiz/quiz-privacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,12 +18,12 @@ export async function GET(
   try {
     const { id } = await context.params;
     const ownerUsername = request.nextUrl.searchParams.get('owner');
+    const isQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+    if (!isQuizUuid && !ownerUsername) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
     const admin = getSupabaseAdmin();
     let query = admin.from('quizzes').select('*');
     if (
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        id,
-      ) &&
+      isQuizUuid &&
       !ownerUsername
     ) {
       query = query.eq('id', id);
@@ -54,9 +54,13 @@ export async function GET(
         { status: 404 },
       );
     }
+    const ownerIsActivePro = await hasActiveQuizProTier(admin, row.user_id);
+    if (!isQuizUuid && !ownerIsActivePro) {
+      return NextResponse.json({ error: 'This custom assessment URL is no longer active.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+    }
     let settings =
       row.settings && typeof row.settings === 'object' ? row.settings : {};
-    settings = await resolveQuizPrivacySettings(admin, { id: row.id, user_id: row.user_id }, settings);
+    settings = await resolveQuizPrivacySettings(admin, { id: row.id, user_id: row.user_id }, settings, ownerIsActivePro);
     if (settings.moderationStatus === 'under_review') {
       return NextResponse.json(
         { error: 'This assessment is paused while it is reviewed.' },
@@ -84,6 +88,7 @@ export async function GET(
     delete columns.settings;
     delete columns.responses;
     delete columns.user_id;
+    delete columns.custom_id;
     // Settings contain owner-only data (private-key hash, allowlist, moderation
     // metadata, etc.). Only expose quiz-taking settings and an access flag.
     const publicSettings = { ...settings } as Record<string, unknown>;
@@ -101,7 +106,7 @@ export async function GET(
       type: row.type || settings.type || 'quiz',
       questions: sanitizedQuestions,
       endScreen: row.endScreen || settings.endScreen,
-      customUrl: row.custom_id || '',
+      customUrl: ownerIsActivePro ? String(row.custom_id || settings.customUrl || '') : '',
       isPrivate,
       accessGranted,
       responses: [],

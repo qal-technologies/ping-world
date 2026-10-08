@@ -45,7 +45,7 @@ export default function InAppNotificationCenter() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
       const response = await fetch('/api/notifications/in-app', {
-        headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', credentials: 'omit',
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: session.access_token }), cache: 'no-store', credentials: 'omit',
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not load notifications.');
@@ -87,9 +87,9 @@ export default function InAppNotificationCenter() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sign in to update notifications.');
       const response = await fetch('/api/notifications/in-app', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         credentials: 'omit',
-        body: JSON.stringify({ id: item.id, action }),
+        body: JSON.stringify({ id: item.id, action, accessToken: session.access_token }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not update notification.');

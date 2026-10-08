@@ -1,6 +1,7 @@
 
 "use client";
 
+import NextImage from "next/image";
 import { useState, useRef, useEffect } from "react";
 import {
   Palette,
@@ -514,11 +515,12 @@ export default function ColorPalettePage() {
                   Extraction Image Preview
                 </p>
                 <div className='aspect-video w-full rounded-xl overflow-hidden border border-white/5 relative'>
-                  <img
+                  <NextImage
                     src={imageSrc}
                     alt='Extract Source'
                     width={640}
                     height={360}
+                    unoptimized
                     className='w-full h-full object-cover'
                   />
                   <button

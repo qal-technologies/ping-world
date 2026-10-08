@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
       const verifiedAttempt = data;
       attempt = verifiedAttempt;
       if (verifiedAttempt.status === 'submitted') {
-        const { data: prior } = await admin.from('quiz_responses').select('score,total_questions,user_data').eq('id', submitted.submissionId).eq('quiz_id', quizId).maybeSingle();
-        if (prior) return NextResponse.json({ success: true, score: prior.score, totalQuestions: prior.total_questions, categoryScores: prior.user_data?.categoryScores || {} }, { status: 200 });
+        const { data: prior } = await admin.from('quiz_responses').select('id,score,total_questions,user_data').eq('id', submitted.submissionId).eq('quiz_id', quizId).maybeSingle();
+        if (prior) return NextResponse.json({ success: true, responseId: prior.id, score: prior.score, totalQuestions: prior.total_questions, categoryScores: prior.user_data?.categoryScores || {} }, { status: 200 });
         return NextResponse.json({ error: 'Attempt has already been submitted.' }, { status: 409 });
       }
       if (verifiedAttempt.status !== 'in_progress') return NextResponse.json({ error: 'Attempt is no longer active.' }, { status: 409 });
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     if ((quiz.settings as Record<string, unknown> | null)?.isPrivate && !attempt) {
       return NextResponse.json({ error: 'Private assessments require a verified attempt.' }, { status: 403 });
     }
-    const answers = rawAnswers.flatMap((raw: unknown) => {
+    let answers = rawAnswers.flatMap((raw: unknown) => {
       if (!raw || typeof raw !== 'object') return [];
       const candidate = raw as Record<string, unknown>;
       const questionId = String(candidate.questionId || '');
@@ -94,8 +94,21 @@ export async function POST(request: NextRequest) {
         : Array.isArray(answer) ? answer.filter((value) => typeof value === 'string').slice(0, 100).map((value) => value.slice(0, 2_000))
         : answer && typeof answer === 'object' ? Object.fromEntries(Object.entries(answer as Record<string, unknown>).slice(0, 30))
         : answer;
-      return [{ ...candidate, questionId, answer: cleanAnswer, ...(typeof correct === 'boolean' ? { correct } : {}) }];
+      // Correctness is derived only from the saved question key on the server;
+      // discard any client-supplied `correct` field (including for surveys and
+      // questions that intentionally have no answer key).
+      const safeCandidate = { ...candidate };
+      delete safeCandidate.correct;
+      return [{ ...safeCandidate, questionId, answer: cleanAnswer, ...(typeof correct === 'boolean' ? { correct } : {}) }];
     });
+    const orderedQuestionIds = Array.isArray(attempt?.question_order)
+      ? attempt.question_order.map(String)
+      : questions.map((question: any) => String(question.id));
+    const answerPosition = new Map(orderedQuestionIds.map((questionId, index) => [questionId, index]));
+    answers = answers.sort((left: any, right: any) =>
+      (answerPosition.get(String(left.questionId)) ?? Number.MAX_SAFE_INTEGER) -
+      (answerPosition.get(String(right.questionId)) ?? Number.MAX_SAFE_INTEGER),
+    );
     const userDataInput = attempt?.user_data && typeof attempt.user_data === 'object'
       ? attempt.user_data
       : submitted.userData && typeof submitted.userData === 'object' ? submitted.userData as Record<string, unknown> : {};
@@ -103,6 +116,27 @@ export async function POST(request: NextRequest) {
       .filter(([key]) => key !== 'categoryScores')
       .slice(0, 40)
       .map(([key, value]) => [key.slice(0, 100), String(value ?? '').slice(0, 1000)]));
+    const configuredDetails = Array.isArray((quiz.settings as any)?.askDetails) ? (quiz.settings as any).askDetails : [];
+    const today = new Date();
+    const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    for (const detail of configuredDetails) {
+      if (detail?.type !== 'dob' || typeof detail.title !== 'string') continue;
+      const rawDob = String(userData[detail.title] || '').trim();
+      if (!rawDob) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDob)) {
+        return NextResponse.json({ error: 'Enter a valid date of birth.' }, { status: 422 });
+      }
+      const dob = new Date(`${rawDob}T00:00:00.000Z`);
+      if (!Number.isFinite(dob.getTime()) || dob.toISOString().slice(0, 10) !== rawDob || dob > todayUtc) {
+        return NextResponse.json({ error: 'Date of birth must be a valid date that is not in the future.' }, { status: 422 });
+      }
+      const minAge = Math.max(0, Math.min(120, Math.floor(Number(detail.minAge) || 0)));
+      const cutoff = new Date(todayUtc);
+      cutoff.setUTCFullYear(cutoff.getUTCFullYear() - minAge);
+      if (minAge > 0 && dob > cutoff) {
+        return NextResponse.json({ error: `Participants must be at least ${minAge} years old.` }, { status: 422 });
+      }
+    }
     const categoryTotals = new Map<string, { correct: number; total: number }>();
     for (const answer of answers) {
       const question = questionMap.get(answer.questionId);
@@ -116,24 +150,43 @@ export async function POST(request: NextRequest) {
     userData.answeredQuestions = answers.length;
     const score = quiz.type === 'quiz' ? answers.filter((answer) => answer.correct).length : 0;
     const row = {
-      id: typeof submitted.submissionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submitted.submissionId) ? submitted.submissionId : crypto.randomUUID(),
+      // Attempts own their response ID. Never let the client select an
+      // unrelated ID to bypass idempotency or response/attempt linkage.
+      id: attempt ? attempt.id : typeof submitted.submissionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submitted.submissionId) ? submitted.submissionId : crypto.randomUUID(),
       quiz_id: quizId, timestamp: new Date().toISOString(), score,
       total_questions: questions.length, user_data: userData, answers,
     };
-    const { error } = await admin.from('quiz_responses').insert(row);
-    if (error) {
-      if (error.code === '23505') {
-        const { data: existing } = await admin.from('quiz_responses').select('score,total_questions,user_data')
-          .eq('id', row.id).eq('quiz_id', quizId).maybeSingle();
-        if (existing) return NextResponse.json({ success: true, score: existing.score, totalQuestions: existing.total_questions, categoryScores: existing.user_data?.categoryScores || {} }, { status: 200 });
-      }
-      console.error('[api/quiz-responses] Insert failed:', error.code || 'unknown');
-      return NextResponse.json({ error: 'Could not save this response.' }, { status: 503 });
-    }
     if (attempt) {
-      const { error: closeError } = await admin.from('quiz_attempts').update({ status: 'submitted', updated_at: new Date().toISOString() })
-        .eq('id', attempt.id).eq('status', 'in_progress');
-      if (closeError) console.error('[api/quiz-responses] Response stored; attempt close pending:', closeError.code || 'unknown');
+      // Store the result and close the attempt in one database transaction. This
+      // keeps a saved response from being reported as failed or remaining active
+      // if one half of the operation fails.
+      const { data: submittedRows, error } = await admin.rpc('submit_quiz_attempt_response', {
+        response_uuid: row.id,
+        quiz_uuid: quizId,
+        response_score: score,
+        response_total: questions.length,
+        response_user_data: userData,
+        response_answers: answers,
+        attempt_uuid: attempt.id,
+        attempt_token_hash: createHash('sha256').update(String(submitted.attemptToken)).digest('hex'),
+      });
+      const submittedRow = Array.isArray(submittedRows) ? submittedRows[0] : submittedRows;
+      if (error || !submittedRow?.response_id) {
+        console.error('[api/quiz-responses] Atomic response save failed:', error?.code || 'unknown');
+        return NextResponse.json({ error: 'Could not safely save this response. Please retry.' }, { status: 503 });
+      }
+      row.id = submittedRow.response_id;
+    } else {
+      const { error } = await admin.from('quiz_responses').insert(row);
+      if (error) {
+        if (error.code === '23505') {
+          const { data: existing } = await admin.from('quiz_responses').select('id,score,total_questions,user_data')
+            .eq('id', row.id).eq('quiz_id', quizId).maybeSingle();
+          if (existing) return NextResponse.json({ success: true, responseId: existing.id, score: existing.score, totalQuestions: existing.total_questions, categoryScores: existing.user_data?.categoryScores || {} }, { status: 200 });
+        }
+        console.error('[api/quiz-responses] Insert failed:', error.code || 'unknown');
+        return NextResponse.json({ error: 'Could not save this response.' }, { status: 503 });
+      }
     }
     if (typeof quiz.user_id === 'string') {
       const { error: notificationError } = await admin.rpc('queue_assessment_response_notification', {
@@ -174,7 +227,7 @@ export async function POST(request: NextRequest) {
         }
       });
     }
-    return NextResponse.json({ success: true, score, totalQuestions: questions.length, categoryScores: userData.categoryScores }, { status: 201 });
+    return NextResponse.json({ success: true, responseId: row.id, score, totalQuestions: questions.length, categoryScores: userData.categoryScores }, { status: 201 });
   } catch (error: unknown) {
     if (error instanceof Error && error.message === 'PAYLOAD_TOO_LARGE') {
       return NextResponse.json({ error: 'Submission is too large.' }, { status: 413 });

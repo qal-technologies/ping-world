@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { HybridStorage } from '@/lib/storage-utils';
 
 /**
  * Client-side feedback helper with local cache to throttle continuous API fetches.
@@ -32,9 +33,9 @@ export async function fetchQuizFeedback(quizId: string, options: FeedbackFilterO
       return cached.data;
     }
     try {
-      const stored = localStorage.getItem(`pw_${feedbackStorageKey(quizId, query.toString())}`);
+      const stored = await HybridStorage.getOfflineValue<unknown>(feedbackStorageKey(quizId, query.toString()));
       if (stored) {
-        const parsed = JSON.parse(stored);
+        const parsed = stored;
         localData = parsed;
         clientFeedbackCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
         if (!navigator.onLine) return parsed;
@@ -61,7 +62,7 @@ export async function fetchQuizFeedback(quizId: string, options: FeedbackFilterO
     }
     const data = await res.json();
     clientFeedbackCache.set(cacheKey, { data, timestamp: Date.now() });
-    try { localStorage.setItem(`pw_${feedbackStorageKey(quizId, query.toString())}`, JSON.stringify(data)); } catch {}
+    try { await HybridStorage.setOfflineValue(feedbackStorageKey(quizId, query.toString()), data); } catch {}
     return data;
   } catch (error) {
     if (localData) return localData;

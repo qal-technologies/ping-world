@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   Download,
   Maximize2,
-  Minimize2,
   Minus,
   Pause,
   Play,
@@ -28,7 +27,6 @@ import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import {checkFileSize} from '@/app/(main)/tools/pdf/PdfClient';
 
 export type AppFileKind =
   | 'image'
@@ -56,20 +54,24 @@ const AppFileViewerContext = createContext<AppFileViewerContextValue | null>(
 );
 
 function classifyFile(file: AppFileDescriptor): AppFileKind {
-  if (file.kind) return file.kind;
-  const mime = file.mimeType?.toLowerCase() || '';
-  const path = `${file.name || ''} ${file.src.slice(0, 160)}`.toLowerCase();
-  if (mime.startsWith('image/') || path.match(/data:image\//)) return 'image';
+  const mime = (file.mimeType || '').split(';')[0].trim().toLowerCase();
+  let urlPath = file.src;
+  try { urlPath = new URL(file.src, window.location.href).pathname; } catch { /* data/blob URL */ }
+  const path = `${file.name || ''} ${urlPath} ${file.src.slice(0, 100)}`.toLowerCase();
+  // MIME/extension repair stale descriptors from Supabase records; explicit
+  // caller kinds remain a fallback for extensionless formats.
+  const explicitKind = file.kind && file.kind !== 'unknown' ? file.kind : null;
+  if (mime.startsWith('image/') || path.match(/data:image\//) || /\.(png|jpe?g|gif|webp|avif|svg|bmp|tiff?|ico|heic|heif)(?:[?#]|$)/.test(path)) return 'image';
   if (
     mime.startsWith('audio/') ||
     path.match(/data:audio\//) ||
-    /\.(mp3|wav|ogg|m4a|aac|flac)(?:[?#]|$)/.test(path)
+    /\.(mp3|wav|ogg|oga|m4a|aac|flac|aiff?|wma|opus)(?:[?#]|$)/.test(path)
   )
     return 'audio';
   if (
     mime.startsWith('video/') ||
     path.match(/data:video\//) ||
-    /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/.test(path)
+    /\.(mp4|webm|mov|m4v|ogv|mkv|avi|3gp|mpeg|mpg)(?:[?#]|$)/.test(path)
   )
     return 'video';
   if (
@@ -84,7 +86,7 @@ function classifyFile(file: AppFileDescriptor): AppFileKind {
     /wordprocessingml|msword|spreadsheetml|presentationml/.test(mime)
   )
     return 'document';
-  return 'unknown';
+  return explicitKind || 'unknown';
 }
 
 export function useAppFileViewer() {
@@ -108,6 +110,8 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const closeFile = useCallback(
     () =>
       setFile((current) => {
@@ -137,13 +141,76 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
     setCurrentTime(0);
     setDuration(0);
     setMuted(false);
+    setImageFailed(false);
+    setHideBar(false);
   }, []);
   const kind = useMemo(() => (file ? classifyFile(file) : 'unknown'), [file]);
+
+  const downloadFile = useCallback(async () => {
+    if (!file || downloadBusy) return;
+    setDownloadBusy(true);
+    const filename = (file.name || `pingwrld-file.${kind === 'image' ? 'jpg' : kind === 'pdf' ? 'pdf' : 'bin'}`)
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 180);
+    try {
+      // `download` is ignored for many cross-origin Supabase URLs. Fetch to a
+      // local blob URL so the browser performs an actual named download.
+      const response = await fetch(file.src, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      if (!response.ok) throw new Error('Download request failed.');
+      const contentLength = Number(response.headers.get('content-length') || 0);
+      if (contentLength > 64 * 1024 * 1024) throw new Error('Use the direct download for large files.');
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Streaming download is unavailable.');
+      const chunks: ArrayBuffer[] = [];
+      let size = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 64 * 1024 * 1024) {
+          await reader.cancel();
+          throw new Error('Use the direct download for large files.');
+        }
+        chunks.push(value.slice().buffer as ArrayBuffer);
+      }
+      const blob = new Blob(chunks, { type: response.headers.get('content-type') || file.mimeType || 'application/octet-stream' });
+      if (!blob.size) throw new Error('The file is empty.');
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.rel = 'noopener';
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+    } catch (error) {
+      // Still give the user a usable open-in-new-tab fallback if CORS forbids
+      // downloading; do not silently claim that a download happened.
+      console.warn('[AppFileViewer] Download fallback:', error instanceof Error ? error.message : 'request failed');
+      const fallback = new URL(file.src, window.location.href);
+      if (/supabase\.co$/i.test(fallback.hostname)) fallback.searchParams.set('download', filename);
+      const anchor = document.createElement('a');
+      anchor.href = fallback.toString();
+      anchor.download = filename;
+      anchor.rel = 'noopener';
+      anchor.target = '_blank';
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+    } finally { setDownloadBusy(false); }
+  }, [downloadBusy, file, kind]);
 
   useEffect(() => {
     if (!file) return;
     let cancelled = false;
-    setHideBar(false);
+    if (classifyFile(file) === 'unknown') {
+      void fetch(file.src, { method: 'HEAD', credentials: 'omit', cache: 'no-store' }).then((response) => {
+        const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim();
+        if (!cancelled && response.ok && mimeType && mimeType !== 'application/octet-stream') {
+          setFile((current) => current?.src === file.src ? { ...current, mimeType } : current);
+        }
+      }).catch(() => { /* type inference is optional; keep the download fallback */ });
+    }
     if (classifyFile(file) === 'pdf') {
       void (async () => {
         try {
@@ -317,7 +384,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   {file.name || 'File preview'}
                 </p>
                 <p className='text-[10px] uppercase tracking-wider text-white/50'>
-                  {kind} {' '} {file?.size ? `(${checkFileSize(file.size)})` : ''}
+                  {kind} {' '} {file?.size ? `(${formatFileSize(file.size)})` : ''}
                 </p>
               </div>
 
@@ -359,15 +426,11 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   <RotateCcw size={17} />
                 </button>
               )}
-              <a
-                href={file.src}
-                download={file.name || undefined}
-                target='_blank'
-                rel='noreferrer'
-                aria-label='Download file'
-                className='rounded-lg p-2 hover:bg-white/10'>
+              <button type='button' onClick={() => void downloadFile()} disabled={downloadBusy}
+                aria-label={downloadBusy ? 'Downloading file' : 'Download file'}
+                className='rounded-lg p-2 hover:bg-white/10 disabled:opacity-50'>
                 <Download size={17} />
-              </a>
+              </button>
               <button
                 type='button'
                 onClick={closeFile}
@@ -378,18 +441,13 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
               </div>
             </header>
             <main className='flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.07),transparent_55%)] p-2 sm:p-5 relative'>
-              {kind === 'image' && (
-                <Image
-                  width={200}
-                  height={200}
-                  src={file.src}
-                  alt={file.name || 'Preview'}
+              {kind === 'image' && !imageFailed && (
+                <Image unoptimized width={1600} height={1200} src={file.src} alt={file.name || 'Preview'}
+                  onError={() => setImageFailed(true)}
                   className='max-h-full max-w-full object-contain transition-transform duration-150'
-                  style={{
-                    transform: `scale(${zoom}) rotate(${rotated ? 90 : 0}deg)`,
-                  }}
-                />
+                  style={{ width: 'auto', height: 'auto', transform: `scale(${zoom}) rotate(${rotated ? 90 : 0}deg)` }} />
               )}
+              {kind === 'image' && imageFailed && <div className='max-w-lg rounded-2xl border border-white/10 bg-white/5 p-6 text-center'><h2 className='mb-2 font-semibold'>Image preview unavailable</h2><p className='mb-4 text-sm text-white/65'>The image URL may have expired or the object is not accessible. Try downloading it or reopen the file.</p><button type='button' onClick={() => void downloadFile()} className='rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black'>Download image</button></div>}
               {(kind === 'audio' || kind === 'video') && (
                 <div
                   className={`relative flex max-h-full w-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950/80 bkblur shadow-2xl shadow-pw-cyan/20 ${kind === 'audio' ? 'max-w-3xl p-4 sm:p-6' : 'max-w-6xl'}`}>
@@ -400,7 +458,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                           <div
                             className={cn(
                               'flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-200 z-50',
-                              !mediaRef.current?.paused && 'animate-pulse',
+                              playing && 'animate-pulse',
                             )}
                             onClick={() => {
                               const media = mediaRef.current;
@@ -446,7 +504,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                       <div
                         className={cn(
                           'absolute left-[-20px] gradient-brand w-25 h-25 blur-lg opacity-60 rounded-full z-10',
-                          !mediaRef.current?.paused && 'animate-pulse',
+                          playing && 'animate-pulse',
                         )}
                       />
                       <input
@@ -511,7 +569,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   )}
 
                   {kind === 'video' &&
-                    (!hideBar || mediaRef.current?.paused) && (
+                    (!hideBar || !playing) && (
                       <>
                         <motion.div
                           initial={{ opacity: 0, y: -5 }}
@@ -659,12 +717,9 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                       This file type cannot be rendered safely in the browser.
                       Download it to open in a compatible app.
                     </p>
-                    <a
-                      href={file.src}
-                      download={file.name || undefined}
-                      className='inline-flex rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black'>
+                    <button type='button' onClick={() => void downloadFile()} className='inline-flex rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black'>
                       Download document
-                    </a>
+                    </button>
                   </div>)}
               {kind === 'unknown' && (
                 <div className='max-w-lg rounded-2xl border border-white/10 bg-white/5 p-6 text-center'>
@@ -673,12 +728,9 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   <p className='mb-4 text-sm text-white/65 px-1'>
                     This file type is not supported for in-browser preview.
                   </p>
-                  <a
-                    href={file.src}
-                    download={file.name || undefined}
-                    className='inline-flex rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black'>
+                  <button type='button' onClick={() => void downloadFile()} className='inline-flex rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black'>
                     Download file
-                  </a>
+                  </button>
                 </div>
               )}
             </main>
@@ -698,4 +750,11 @@ function formatTime(value: number) {
   return `${Math.floor(value / 60)}:${Math.floor(value % 60)
     .toString()
     .padStart(2, '0')}`;
+}
+
+function formatFileSize(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  return `${(value / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }

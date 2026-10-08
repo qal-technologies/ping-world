@@ -55,8 +55,6 @@ const storageNames: Record<StorageItem['type'], StorageName> = {
 
 const LOCAL_ONLY_TYPES: StorageItem['type'][] = ['post', 'document', 'composer_history', 'draft'];
 
-const keyPrefix = (type: StorageItem['type']) => storageNames[type].bucket;
-
 const tableName = (type: StorageItem['type']) => {
   const table = storageNames[type].table;
   if (!table) throw new Error(`Storage type "${type}" is local-only and has no Supabase table`);
@@ -80,16 +78,58 @@ function getAttemptSessionId() {
   }
   return (localAttemptSessionId = createUuid());
 }
-const localStorageKey = (type: StorageItem['type'], userId = activeStorageUserId) =>
-  `pw_${keyPrefix(type)}_${encodeURIComponent(userId)}`;
-
 const CACHE_DB_NAME = 'pingworld-local-cache-v1';
 const CACHE_STORE_NAME = 'records';
 let cacheDbPromise: Promise<IDBDatabase | null> | null = null;
+let cacheStoreUpgradePromise: Promise<IDBDatabase | null> | null = null;
 let persistenceRequested = false;
+let abandonedNamespaceCleanup: Promise<void> | null = null;
+let localDurableCopiesCleaned = false;
 
-function openCacheDb(): Promise<IDBDatabase | null> {
+function removeLocalDurableCopies() {
+  if (typeof localStorage === 'undefined' || localDurableCopiesCleaned) return;
+  localDurableCopiesCleaned = true;
+  const durablePrefixes = [
+    'pw_quizzes_', 'pw_messages_', 'pw_links_', 'pw_games_', 'pw_posts_',
+    'pw_documents_', 'pw_composer_history_', 'pw_quiz_drafts_',
+    'pw_quiz_attempt:', 'pw_quiz_submission:', 'pw_quiz_responses:',
+    'pw_quiz_feedback:', 'pw_queue:', 'pw_quiz_response_queue_',
+  ];
+  for (const key of Object.keys(localStorage)) {
+    if (durablePrefixes.some((prefix) => key.startsWith(prefix)) ||
+      key === 'pw_template_v1_responses' || key === 'pw_template_responses') {
+      try { localStorage.removeItem(key); } catch {}
+    }
+  }
+}
+
+function attachCacheDb(db: IDBDatabase) {
+  removeLocalDurableCopies();
+  db.onversionchange = () => {
+    db.close();
+    cacheDbPromise = null;
+  };
+  if (!abandonedNamespaceCleanup) {
+    abandonedNamespaceCleanup = new Promise<void>((done) => {
+      try {
+        if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) { done(); return; }
+        const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(CACHE_STORE_NAME);
+        const keys = store.getAllKeys();
+        keys.onsuccess = () => keys.result.forEach((key) => {
+          if (String(key).startsWith('v2:')) store.delete(key);
+        });
+        transaction.oncomplete = () => done();
+        transaction.onerror = () => done();
+        transaction.onabort = () => done();
+      } catch { done(); }
+    });
+  }
+}
+
+function openCacheDb(createStore = false): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (!cacheDbPromise && cacheStoreUpgradePromise) return cacheStoreUpgradePromise;
   if (!cacheDbPromise) {
     if (!persistenceRequested && typeof navigator !== 'undefined' && navigator.storage?.persist) {
       persistenceRequested = true;
@@ -114,17 +154,16 @@ function openCacheDb(): Promise<IDBDatabase | null> {
 
       let request: IDBOpenDBRequest;
       try {
-        request = indexedDB.open(CACHE_DB_NAME, 1);
+        // Opening for reads must not create an object store. The store is
+        // created lazily only when a real item is written.
+        request = indexedDB.open(CACHE_DB_NAME);
       } catch {
         safeResolve(null);
         return;
       }
       request.onupgradeneeded = () => {
         try {
-          const db = request.result;
-          if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
-            db.createObjectStore(CACHE_STORE_NAME, { keyPath: 'key' });
-          }
+          // A brand new database remains store-free until the first write.
         } catch {
           safeResolve(null);
         }
@@ -132,10 +171,10 @@ function openCacheDb(): Promise<IDBDatabase | null> {
       request.onsuccess = () => {
         try {
           const db = request.result;
-          db.onversionchange = () => {
-            db.close();
-            cacheDbPromise = null;
-          };
+          attachCacheDb(db);
+          // If a slow open crossed the short caller timeout, retain the
+          // successful connection for subsequent IndexedDB operations.
+          cacheDbPromise = Promise.resolve(db);
           safeResolve(db);
         } catch {
           safeResolve(null);
@@ -150,27 +189,112 @@ function openCacheDb(): Promise<IDBDatabase | null> {
       };
     });
   }
-  return cacheDbPromise;
+  return cacheDbPromise.then(async (db) => {
+    if (!db || !createStore || db.objectStoreNames.contains(CACHE_STORE_NAME)) return db;
+    if (cacheStoreUpgradePromise) return cacheStoreUpgradePromise;
+    cacheStoreUpgradePromise = new Promise<IDBDatabase | null>((resolve) => {
+      const nextVersion = Math.max(1, db.version + 1);
+      db.close();
+      cacheDbPromise = null;
+      let request: IDBOpenDBRequest;
+      try { request = indexedDB.open(CACHE_DB_NAME, nextVersion); }
+      catch { cacheStoreUpgradePromise = null; resolve(null); return; }
+      request.onupgradeneeded = () => {
+        try {
+          if (!request.result.objectStoreNames.contains(CACHE_STORE_NAME)) {
+            request.result.createObjectStore(CACHE_STORE_NAME, { keyPath: 'key' });
+          }
+        } catch { /* surfaced as an unavailable cache below */ }
+      };
+      request.onsuccess = () => {
+        const upgraded = request.result;
+        if (!upgraded.objectStoreNames.contains(CACHE_STORE_NAME)) {
+          upgraded.close();
+          cacheStoreUpgradePromise = null;
+          resolve(null);
+          return;
+        }
+        attachCacheDb(upgraded);
+        cacheDbPromise = Promise.resolve(upgraded);
+        cacheStoreUpgradePromise = null;
+        resolve(upgraded);
+      };
+      request.onerror = () => { cacheStoreUpgradePromise = null; resolve(null); };
+      request.onblocked = () => {
+        // Existing tabs close their connections on versionchange. Keep this
+        // single upgrade promise pending so no competing version request starts.
+      };
+    });
+    return cacheStoreUpgradePromise;
+  });
+}
+
+async function pruneEmptyCacheStore(db: IDBDatabase) {
+  if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) return;
+  const count = await new Promise<number>((resolve) => {
+    try {
+      const transaction = db.transaction(CACHE_STORE_NAME, 'readonly');
+      const request = transaction.objectStore(CACHE_STORE_NAME).count();
+      request.onsuccess = () => resolve(Number(request.result) || 0);
+      request.onerror = () => resolve(1);
+      transaction.onerror = () => resolve(1);
+    } catch { resolve(1); }
+  });
+  if (count !== 0 || cacheStoreUpgradePromise) return;
+
+  cacheStoreUpgradePromise = new Promise<IDBDatabase | null>((resolve) => {
+    db.close();
+    cacheDbPromise = null;
+    let request: IDBOpenDBRequest;
+    try { request = indexedDB.open(CACHE_DB_NAME, db.version + 1); }
+    catch { cacheStoreUpgradePromise = null; resolve(null); return; }
+    request.onupgradeneeded = () => {
+      const upgradeDb = request.result;
+      if (!upgradeDb.objectStoreNames.contains(CACHE_STORE_NAME)) return;
+      // Recount in the version-change transaction to avoid deleting a store
+      // another tab populated after the initial empty check.
+      const transaction = request.transaction;
+      if (!transaction) return;
+      const recount = transaction.objectStore(CACHE_STORE_NAME).count();
+      recount.onsuccess = () => {
+        if (recount.result === 0 && upgradeDb.objectStoreNames.contains(CACHE_STORE_NAME)) {
+          upgradeDb.deleteObjectStore(CACHE_STORE_NAME);
+        }
+      };
+    };
+    request.onsuccess = () => {
+      const nextDb = request.result;
+      attachCacheDb(nextDb);
+      cacheDbPromise = Promise.resolve(nextDb);
+      cacheStoreUpgradePromise = null;
+      resolve(nextDb);
+    };
+    request.onerror = () => { cacheStoreUpgradePromise = null; resolve(null); };
+    request.onblocked = () => {
+      // Other tabs close their connection on versionchange; the request will
+      // continue when they do. Keep callers from trying to create parallel DBs.
+    };
+  });
+  await cacheStoreUpgradePromise;
 }
 
 const cacheRecordKey = (type: StorageItem['type'], userId = activeStorageUserId) =>
   `${encodeURIComponent(userId)}:${type}`;
 
 async function readCacheValue<T>(key: string): Promise<T | null> {
+  removeLocalDurableCopies();
+  const currentKey = key;
   try {
     const db = await openCacheDb();
-    if (!db) {
-      try { return JSON.parse(localStorage.getItem(`pw_${key}`) || 'null') as T | null; }
-      catch { return null; }
-    }
-    return await new Promise<T | null>((resolve) => {
+    if (!db || !db.objectStoreNames.contains(CACHE_STORE_NAME)) return null;
+    const cached = await new Promise<T | null>((resolve) => {
       let done = false;
       const timer = setTimeout(() => {
         if (!done) { done = true; resolve(null); }
       }, 1000);
       try {
         const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
-        const req = tx.objectStore(CACHE_STORE_NAME).get(key);
+        const req = tx.objectStore(CACHE_STORE_NAME).get(currentKey);
         req.onsuccess = () => {
           if (!done) { done = true; clearTimeout(timer); resolve((req.result?.value as T) ?? null); }
         };
@@ -187,60 +311,60 @@ async function readCacheValue<T>(key: string): Promise<T | null> {
         if (!done) { done = true; clearTimeout(timer); resolve(null); }
       }
     });
+    if (cached === null) await pruneEmptyCacheStore(db);
+    return cached;
   } catch {
-    try { return JSON.parse(localStorage.getItem(`pw_${key}`) || 'null') as T | null; }
-    catch { return null; }
+    return null;
   }
 }
 
-async function writeCacheValue<T>(key: string, value: T) {
+async function writeCacheValue<T>(key: string, value: T): Promise<boolean> {
+  const currentKey = key;
+  if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
+    return deleteCacheValue(currentKey);
+  }
   try {
-    localStorage.setItem(`pw_${key}`, JSON.stringify(value));
-  } catch {}
-  try {
-    const db = await openCacheDb();
-    if (!db) return;
-    await new Promise<void>((resolve) => {
+    const db = await openCacheDb(true);
+    if (!db || !db.objectStoreNames.contains(CACHE_STORE_NAME)) return false;
+    return await new Promise<boolean>((resolve) => {
       let done = false;
-      const timer = setTimeout(() => {
-        if (!done) { done = true; resolve(); }
-      }, 1000);
+      const timer = setTimeout(() => { if (!done) { done = true; resolve(false); } }, 5000);
       try {
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
-        transaction.objectStore(CACHE_STORE_NAME).put({ key, value, updatedAt: Date.now() });
-        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
-        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
-        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        transaction.objectStore(CACHE_STORE_NAME).put({ key: currentKey, value, updatedAt: Date.now() });
+        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
+        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
+        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
       } catch {
-        if (!done) { done = true; clearTimeout(timer); resolve(); }
+        if (!done) { done = true; clearTimeout(timer); resolve(false); }
       }
     });
-  } catch {}
+  } catch { return false; }
 }
 
-async function deleteCacheValue(key: string) {
-  try {
-    localStorage.removeItem(`pw_${key}`);
-  } catch {}
+async function deleteCacheValue(key: string): Promise<boolean> {
+  const currentKey = key;
   try {
     const db = await openCacheDb();
-    if (!db) return;
-    await new Promise<void>((resolve) => {
+    if (!db || !db.objectStoreNames.contains(CACHE_STORE_NAME)) return true;
+    const deleted = await new Promise<boolean>((resolve) => {
       let done = false;
       const timer = setTimeout(() => {
-        if (!done) { done = true; resolve(); }
-      }, 1000);
+        if (!done) { done = true; resolve(false); }
+      }, 5000);
       try {
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
-        transaction.objectStore(CACHE_STORE_NAME).delete(key);
-        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
-        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
-        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+        transaction.objectStore(CACHE_STORE_NAME).delete(currentKey);
+        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
+        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
+        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
       } catch {
-        if (!done) { done = true; clearTimeout(timer); resolve(); }
+        if (!done) { done = true; clearTimeout(timer); resolve(false); }
       }
     });
-  } catch {}
+    if (deleted) await pruneEmptyCacheStore(db);
+    return deleted;
+  } catch { return false; }
 }
 
 function createUuid(): string {
@@ -252,9 +376,11 @@ function createUuid(): string {
 }
 
 async function readLocal(type: StorageItem['type'], owner = activeStorageUserId): Promise<StorageItem[]> {
+  removeLocalDurableCopies();
   try {
     const db = await openCacheDb();
-    if (db) {
+    if (db && db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+      await abandonedNamespaceCleanup;
       const record = await new Promise<any>((resolve) => {
         let done = false;
         const timer = setTimeout(() => {
@@ -271,30 +397,38 @@ async function readLocal(type: StorageItem['type'], owner = activeStorageUserId)
           if (!done) { done = true; clearTimeout(timer); resolve(null); }
         }
       });
-      if (Array.isArray(record?.items) && record.items.length > 0) {
-        return record.items.filter((item: StorageItem) =>
-          !item.ownerId || item.ownerId === owner,
-        );
+      if (Array.isArray(record?.items)) {
+        return record.items.filter((item: StorageItem) => !item.ownerId || item.ownerId === owner);
       }
+      await pruneEmptyCacheStore(db);
     }
   } catch {}
-  try {
-    const raw = localStorage.getItem(localStorageKey(type, owner));
-    const list: StorageItem[] = raw ? JSON.parse(raw) : [];
-    return list.filter((item) => !item.ownerId || item.ownerId === owner);
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner = activeStorageUserId) {
+async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner = activeStorageUserId): Promise<boolean> {
   const scopedList = list.filter((item) => !item.ownerId || item.ownerId === owner)
     .map((item) => ({ ...item, ownerId: owner }));
+  // Empty collections are represented by absence. Do not create a database
+  // or object store merely because a page requested an empty list.
+  if (scopedList.length === 0) {
+    const existingDb = await openCacheDb();
+    if (!existingDb || !existingDb.objectStoreNames.contains(CACHE_STORE_NAME)) return true;
+    const removed = await new Promise<boolean>((resolve) => {
+      try {
+        const transaction = existingDb.transaction(CACHE_STORE_NAME, 'readwrite');
+        transaction.objectStore(CACHE_STORE_NAME).delete(cacheRecordKey(type, owner));
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = () => resolve(false);
+        transaction.onabort = () => resolve(false);
+      } catch { resolve(false); }
+    });
+    if (removed) await pruneEmptyCacheStore(existingDb);
+    return removed;
+  }
+  let persisted = false;
   try {
-    localStorage.setItem(localStorageKey(type, owner), JSON.stringify(scopedList));
-  } catch {}
-  try {
-    const db = await openCacheDb();
+    const db = await openCacheDb(true);
     if (db) {
       await new Promise<void>((resolve) => {
         let done = false;
@@ -304,7 +438,7 @@ async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner 
           transaction.objectStore(CACHE_STORE_NAME).put({
             key: cacheRecordKey(type, owner), items: scopedList, updatedAt: Date.now(),
           });
-          transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+          transaction.oncomplete = () => { persisted = true; if (!done) { done = true; clearTimeout(timer); resolve(); } };
           transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
           transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
         } catch {
@@ -315,6 +449,7 @@ async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner 
   } catch (error) {
     console.warn(`[HybridStorage] Local ${type} cache write failed:`, error);
   }
+  return persisted;
 }
 
 async function setActiveStorageUser(userId?: string | null) {
@@ -766,6 +901,143 @@ const ALL_TYPES: StorageItem['type'][] = ['quiz', 'message', 'link', 'games'];
 const pendingResponsesKey = () =>
   `queue:${encodeURIComponent(activeStorageUserId)}`;
 
+async function clearQuizScopedCache(quizId: string, removeCompletionMarker = false) {
+  if (typeof window === 'undefined' || !quizId) return;
+  const encodedId = encodeURIComponent(quizId);
+  const encodedOwnerId = encodeURIComponent(activeStorageUserId);
+  const db = await openCacheDb();
+  if (db) {
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(CACHE_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(CACHE_STORE_NAME);
+        const keysRequest = store.getAllKeys();
+        keysRequest.onsuccess = () => {
+          for (const rawKey of keysRequest.result) {
+            const key = String(rawKey);
+            const isCurrentOwnerData = key.includes(encodedOwnerId);
+            const scopedAttemptOrResponse =
+              (key.includes('quiz_attempt:') || key.includes('quiz_submission:') || key.includes('quiz_responses:')) &&
+              (key.includes(quizId) || key.includes(encodedId)) && (removeCompletionMarker || isCurrentOwnerData);
+            if (scopedAttemptOrResponse) store.delete(rawKey);
+            if ((key.endsWith(':draft') || key === 'draft') && (removeCompletionMarker || isCurrentOwnerData)) {
+              const draftRequest = store.get(rawKey);
+              draftRequest.onsuccess = () => {
+                const record = draftRequest.result;
+                if (!Array.isArray(record?.items)) return;
+                const items = record.items.filter((item: StorageItem) => item.id !== `draft-${quizId}`);
+                if (items.length !== record.items.length) store.put({ ...record, items, updatedAt: Date.now() });
+              };
+            }
+            if (key.startsWith('queue:') && (removeCompletionMarker || key === pendingResponsesKey())) {
+              const queueRequest = store.get(rawKey);
+              queueRequest.onsuccess = () => {
+                const record = queueRequest.result;
+                const queue = Array.isArray(record?.value) ? record.value : [];
+                const filtered = queue.filter((entry: any) => entry?.quizId !== quizId);
+                if (filtered.length === queue.length) return;
+                if (filtered.length) store.put({ ...record, value: filtered, updatedAt: Date.now() });
+                else store.delete(rawKey);
+              };
+            }
+            if (removeCompletionMarker && key.endsWith(':quiz')) {
+              const quizRequest = store.get(rawKey);
+              quizRequest.onsuccess = () => {
+                const record = quizRequest.result;
+                if (!Array.isArray(record?.items)) return;
+                const items = record.items.filter((item: StorageItem) => item.id !== quizId);
+                if (items.length !== record.items.length) store.put({ ...record, items, updatedAt: Date.now() });
+              };
+            }
+          }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch { resolve(); }
+    });
+  }
+
+  for (const type of ['attempt', 'submission', 'responses'] as const) {
+    for (const key of Object.keys(localStorage)) {
+      if (key.includes(encodedId) && key.includes(`quiz_${type}:`) && (removeCompletionMarker || key.includes(encodedOwnerId))) {
+        localStorage.removeItem(key);
+      }
+    }
+  }
+
+  // Remove this assessment's queued response from every account namespace on
+  // this device. A deleted assessment must not be resurrected by a later sync.
+  {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('pw_queue:') || key.startsWith('pw_quiz_response_queue_')) localStorage.removeItem(key);
+    }
+  }
+
+  // Remove the local assessment draft record across cached owners, without
+  // touching the assessment itself or its one-time completion marker.
+  try {
+    const draftKey = `draft-${quizId}`;
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('pw_quiz_drafts_')) localStorage.removeItem(key);
+    }
+    const draftRows = await readLocal('draft', activeStorageUserId);
+    if (draftRows.some((row) => row.id === draftKey)) {
+      await writeLocal('draft', draftRows.filter((row) => row.id !== draftKey), activeStorageUserId);
+    }
+  } catch {}
+  if (removeCompletionMarker) {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('pw_quizzes_')) localStorage.removeItem(key);
+    }
+    try { localStorage.removeItem(`completed_quiz_${quizId}`); } catch {}
+  }
+  if (db) await pruneEmptyCacheStore(db);
+}
+
+async function clearQuizResponsePageCache(quizId: string) {
+  if (typeof window === 'undefined' || !quizId) return;
+  const encodedQuizId = encodeURIComponent(quizId);
+  const db = await openCacheDb();
+  if (db) {
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(CACHE_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(CACHE_STORE_NAME);
+        const request = store.getAllKeys();
+        request.onsuccess = () => {
+          for (const rawKey of request.result) {
+            const key = String(rawKey);
+            if (key.includes('quiz_responses:') && (key.includes(quizId) || key.includes(encodedQuizId))) store.delete(rawKey);
+          }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch { resolve(); }
+    });
+  }
+  for (const key of Object.keys(localStorage)) {
+    if (key.includes('quiz_responses:') && (key.includes(quizId) || key.includes(encodedQuizId))) localStorage.removeItem(key);
+  }
+
+  // Remove response snapshots from local quiz objects while retaining the
+  // quiz and its authoring data.
+  for (const owner of new Set([activeStorageUserId, 'guest'])) {
+    const quizzes = await readLocal('quiz', owner);
+    let changed = false;
+    const updated = quizzes.map((item) => {
+      if (item.id !== quizId || !Array.isArray(item.content?.responses)) return item;
+      const responses: any[] = [];
+      if (responses.length === item.content.responses.length) return item;
+      changed = true;
+      return { ...item, content: { ...item.content, responses } };
+    });
+    if (changed) await writeLocal('quiz', updated, owner);
+  }
+  if (db) await pruneEmptyCacheStore(db);
+}
+
 async function insertQuizResponse(quizId: string, response: any) {
   const persistedResponse = response.attemptId
     ? (await HybridStorage.getAttemptResponseDraft(quizId, response.attemptId)) || response
@@ -897,6 +1169,21 @@ if (typeof window !== 'undefined') {
 // ---------------------------------------------------------------------------
 
 export const HybridStorage = {
+  async getOfflineValue<T>(key: string): Promise<T | null> {
+    const currentUserId = await getActiveUserId();
+    if (currentUserId && currentUserId !== activeStorageUserId) await setActiveStorageUser(currentUserId);
+    return readCacheValue<T>(`app:${encodeURIComponent(activeStorageUserId)}:${key}`);
+  },
+  async setOfflineValue<T>(key: string, value: T): Promise<void> {
+    const currentUserId = await getActiveUserId();
+    if (currentUserId && currentUserId !== activeStorageUserId) await setActiveStorageUser(currentUserId);
+    if (!await writeCacheValue(`app:${encodeURIComponent(activeStorageUserId)}:${key}`, value)) throw new Error('Could not save data to IndexedDB on this device.');
+  },
+  async removeOfflineValue(key: string): Promise<void> {
+    const currentUserId = await getActiveUserId();
+    if (currentUserId && currentUserId !== activeStorageUserId) await setActiveStorageUser(currentUserId);
+    if (!await deleteCacheValue(`app:${encodeURIComponent(activeStorageUserId)}:${key}`)) throw new Error('Could not remove data from IndexedDB on this device.');
+  },
   /** Select the isolated browser cache for the active account. */
   setUserId(userId?: string | null) {
     return setActiveStorageUser(userId);
@@ -920,7 +1207,7 @@ export const HybridStorage = {
   },
   async clearLocalCache() {
     const db = await openCacheDb();
-    if (db) {
+    if (db && db.objectStoreNames.contains(CACHE_STORE_NAME)) {
       await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
         const store = transaction.objectStore(CACHE_STORE_NAME);
@@ -929,17 +1216,25 @@ export const HybridStorage = {
         transaction.onerror = () => reject(transaction.error);
         transaction.onabort = () => reject(transaction.error);
       });
+      await pruneEmptyCacheStore(db);
     }
     const cachePrefixes = [
       'pw_quizzes', 'pw_messages', 'pw_posts', 'pw_links', 'pw_games',
-      'pw_documents', 'pw_composer_history', 'pw_quiz_drafts',
-      'pw_queue:', 'pw_quiz_responses_pending_', 'pw_storage_legacy_migrated_v1_', 'pw_quiz_seed_template_', 'pw_quiz_template_',
-      'pw_quiz_attempt:', 'pw_quiz_submission:',
+      'pw_documents', 'pw_composer_history', 'pw_quiz_drafts', 'pw2_', 'pw_v2:',
+      'pw_queue:', 'pw_quiz_responses_pending_', 'pw_storage_legacy_migrated_v1_', 'pw_quiz_seed_template_',
+      'pw_quiz_attempt:', 'pw_quiz_submission:', 'pw_quiz_feedback:',
+      'pw_quiz_response_queue_v2:', 'pw2_', 'pw_v2:',
       'completed_quiz_',
     ];
     Object.keys(localStorage).forEach((key) => {
-      if (cachePrefixes.some((prefix) => key.startsWith(prefix))) localStorage.removeItem(key);
+      if (key !== 'pw_quiz_template_v1' && cachePrefixes.some((prefix) => key.startsWith(prefix))) localStorage.removeItem(key);
     });
+  },
+  async clearQuizLocalData(quizId: string, options?: { removeCompletionMarker?: boolean }) {
+    await clearQuizScopedCache(quizId, Boolean(options?.removeCompletionMarker));
+  },
+  async clearQuizResponseCache(quizId: string) {
+    await clearQuizResponsePageCache(quizId);
   },
   // Add dedicated post helpers
   async savePost(postData: any) {
@@ -958,6 +1253,23 @@ export const HybridStorage = {
     return this.save(`draft-${quizId}`, content, 'draft');
   },
 
+  async saveTemplatePreviewResponse(quizId: string, response: Record<string, any>) {
+    const key = `template_responses:${encodeURIComponent(quizId)}`;
+    const existing = await readCacheValue<any[]>(key) || [];
+    const responseId = String(response.id || response.timestamp || createUuid());
+    const next = [response, ...existing.filter((item) => String(item?.id || item?.timestamp || '') !== responseId)].slice(0, 100);
+    if (!await writeCacheValue(key, next)) {
+      throw new Error('Preview response could not be saved in IndexedDB.');
+    }
+  },
+
+  async clearTemplatePreviewResponses(quizId: string) {
+    if (!await deleteCacheValue(`template_responses:${encodeURIComponent(quizId)}`)) {
+      throw new Error('Could not clear template preview responses from IndexedDB.');
+    }
+    await clearQuizResponsePageCache(quizId);
+  },
+
   async getQuizDraft(quizId: string): Promise<Quiz | null> {
     const drafts = await readLocal('draft');
     return (drafts.find((item) => item.id === `draft-${quizId}`)?.content as Quiz) || null;
@@ -969,7 +1281,9 @@ export const HybridStorage = {
 
   async saveQuizAttemptDraft(quizId: string, draft: Record<string, unknown>) {
     const key = `quiz_attempt:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}`;
-    await writeCacheValue(key, { ...draft, updatedAt: Date.now() });
+    if (!await writeCacheValue(key, { ...draft, updatedAt: Date.now() })) {
+      throw new Error('Assessment progress could not be saved to IndexedDB on this device.');
+    }
   },
 
   async getQuizAttemptDraft(quizId: string): Promise<Record<string, any> | null> {
@@ -979,7 +1293,7 @@ export const HybridStorage = {
 
   async deleteQuizAttemptDraft(quizId: string) {
     const key = `quiz_attempt:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}`;
-    await deleteCacheValue(key);
+    if (!await deleteCacheValue(key)) throw new Error('Assessment attempt cache could not be cleared from IndexedDB.');
   },
 
   async prepareQuizAttemptSnapshot(quizId: string, snapshot: Record<string, any>) {
@@ -999,7 +1313,9 @@ export const HybridStorage = {
     const answers = await externalizeResponseMedia(quizId, response);
     const compactResponse = { ...response, answers, responseMediaExternalized: true };
     const key = `quiz_submission:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}:${encodeURIComponent(String(response.attemptId || response.submissionId || 'pending'))}`;
-    await writeCacheValue(key, compactResponse);
+    if (!await writeCacheValue(key, compactResponse)) {
+      throw new Error('The response could not be cached in IndexedDB on this device.');
+    }
     return compactResponse;
   },
 
@@ -1010,7 +1326,7 @@ export const HybridStorage = {
 
   async deleteAttemptResponseDraft(quizId: string, attemptId: string) {
     const key = `quiz_submission:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}:${encodeURIComponent(attemptId)}`;
-    await deleteCacheValue(key);
+    if (!await deleteCacheValue(key)) throw new Error('Assessment response cache could not be cleared from IndexedDB.');
   },
 
   async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; totalCount?: number; isLocalOnly?: boolean, isCached?:boolean }> {
@@ -1037,7 +1353,7 @@ export const HybridStorage = {
 
       if (quizId === 'pingworld-mastery-showcase' || quizId === 'pingworld-showcase-assessment') {
         try {
-          const templateStored = JSON.parse(localStorage.getItem('pw_template_responses') || '[]');
+          const templateStored = await readCacheValue<any[]>(`template_responses:${encodeURIComponent(quizId)}`) || [];
           if (Array.isArray(templateStored) && templateStored.length > 0) {
             localResponses = [...templateStored, ...localResponses];
           }
@@ -1118,20 +1434,14 @@ export const HybridStorage = {
   },
 
   async clearQuizResponses(quizId: string) {
-    const { data: rows, error: loadError } = await supabase.from('quiz_responses')
-      .select('id,answers').eq('quiz_id', quizId);
-    if (loadError) throw loadError;
-    const paths = (rows || []).flatMap((row: any) =>
-      (Array.isArray(row.answers) ? row.answers : [])
-        .map((answer: any) => answer?.fileUrl)
-        .filter((path: any) => typeof path === 'string' && !path.startsWith('http') && !path.startsWith('data:')),
-    );
-    if (paths.length) {
-      const { error: mediaError } = await supabase.storage.from('quiz-response-media').remove(paths);
-      if (mediaError) throw mediaError;
-    }
-    const { error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
-    if (error) throw error;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Sign in to clear assessment responses.');
+    const result = await fetch(`/api/quizzes/${encodeURIComponent(quizId)}/responses?all=1`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store',
+    });
+    const payload = await result.json();
+    if (!result.ok || payload.success !== true) throw new Error(payload.error || 'Could not clear assessment responses.');
+    await clearQuizResponsePageCache(quizId);
   },
 
   /**
@@ -1158,11 +1468,8 @@ export const HybridStorage = {
     const idx = local.findIndex((i) => i.id === item.id);
     if (idx >= 0) local[idx] = item;
     else local.unshift(item);
-    try {
-      await writeLocal(type, local, saveOwner);
-    } catch {
-      // Still attempt cloud persistence if this device has exhausted its cache quota.
-    }
+    const savedLocally = await writeLocal(type, local, saveOwner);
+    if (!savedLocally) throw new Error('Could not save this item on this device. Free up storage and try again.');
 
     // 2. Push to remote in background (non-blocking)
     const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id);
@@ -1345,7 +1652,10 @@ export const HybridStorage = {
     }
   },
 
-  async saveResponse(quizId: string, response: any) {
+  async saveResponse(quizId: string, response: any, options?: { requireRemote?: boolean }) {
+    if (options?.requireRemote && !isOnline()) {
+      throw new Error('You are offline. Reconnect to the internet and try submitting again.');
+    }
     const submissionId = typeof response.submissionId === 'string' && /^[0-9a-f-]{36}$/i.test(response.submissionId)
       ? response.submissionId
       : createUuid();
@@ -1355,7 +1665,7 @@ export const HybridStorage = {
       timestamp: response.timestamp || new Date().toISOString(),
     };
     if (isOnline()) {
-      await flushPendingResponses();
+      if (!options?.requireRemote) await flushPendingResponses();
       try {
         responseToSave = {
           ...responseToSave,
@@ -1363,17 +1673,26 @@ export const HybridStorage = {
           responseMediaExternalized: true,
         };
         const saved = await insertQuizResponse(quizId, responseToSave);
-        if (saved) return saved;
+        if (saved) {
+          if (responseToSave.attemptId) await this.deleteAttemptResponseDraft(quizId, responseToSave.attemptId).catch(() => {});
+          await clearQuizScopedCache(quizId, false);
+          return saved;
+        }
+        if (options?.requireRemote) throw new Error('The assessment response was not confirmed by the server. Please retry submission.');
       } catch (error) {
         reportResponseSyncFailure(error);
+        if (options?.requireRemote) throw error;
         console.warn('[HybridStorage] Response insert failed; queueing locally:', error);
       }
+    }
+    if (options?.requireRemote) {
+      throw new Error('You are offline. Reconnect to the internet and try submitting again.');
     }
     const queued = { quizId, response: responseToSave };
     try {
       const queueKey = pendingResponsesKey();
       let current = (await readCacheValue<Array<{ quizId: string; response: any }>>(queueKey)) || [];
-      await writeCacheValue(queueKey, [...current, queued]);
+      if (!await writeCacheValue(queueKey, [...current, queued])) throw new Error('IndexedDB could not save the pending response.');
     } catch (error) {
       console.error('[HybridStorage] Could not queue quiz response locally:', error);
       return null;
@@ -1390,6 +1709,7 @@ export const HybridStorage = {
     const local = (await readLocal(type, owner)).filter((i) => i.id !== id);
     if (activeStorageUserId !== owner) return false;
     await writeLocal(type, local, owner);
+    if (type === 'quiz') await clearQuizScopedCache(id, true);
 
     // 2. Background remote delete
     const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);

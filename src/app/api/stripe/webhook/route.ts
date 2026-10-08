@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendThemedEmail } from '@/lib/email/resend';
+import { FLEXIBLE_FEATURES } from '@/lib/config/premium';
+import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
 
 export const runtime = 'nodejs';
 
@@ -31,17 +33,35 @@ export async function POST(request: NextRequest) {
   try {
     const event = JSON.parse(rawBody) as { type?: string; data?: { object?: Record<string, any> } };
     const admin = getSupabaseAdmin();
-    if (event.type === 'customer.subscription.deleted') {
+    if (event.type === 'customer.subscription.deleted' || event.type === 'customer.subscription.updated') {
       const subscription = event.data?.object;
+      if (!subscription) return NextResponse.json({ error: 'Subscription event is incomplete.' }, { status: 400 });
       const userId = String(subscription?.metadata?.user_id || '');
-      if (/^[0-9a-f-]{36}$/i.test(userId)) {
-        const { data: account } = await admin.auth.admin.getUserById(userId);
-        if (account.user) {
-          const { error } = await admin.auth.admin.updateUserById(userId, {
-            app_metadata: { ...account.user.app_metadata, tier: 'free', tier_expires_at: new Date().toISOString(), purchased_tools: [] },
-            user_metadata: { ...account.user.user_metadata, tier: 'free', tier_expires_at: new Date().toISOString(), purchased_tools: [] },
-          });
-          if (error) return NextResponse.json({ error: 'Could not update subscription status.' }, { status: 503 });
+      if (!/^[0-9a-f-]{36}$/i.test(userId)) return NextResponse.json({ received: true });
+      const subscriptionActive = event.type === 'customer.subscription.updated' &&
+        ['active', 'trialing'].includes(String(subscription?.status)) &&
+        Number.isFinite(Number(subscription?.current_period_end));
+      const tier = subscriptionActive && ['flexible', 'standard', 'pro'].includes(String(subscription?.metadata?.tier))
+        ? String(subscription.metadata.tier) : 'free';
+      const expiresAt = subscriptionActive
+        ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
+        : new Date().toISOString();
+      const selectedTool = String(subscription?.metadata?.selectedFlexibleToolId || '');
+      const tools = tier === 'free' ? [] : tier === 'flexible'
+        ? (FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ? [selectedTool] : [])
+        : ['all'];
+      const { data: account, error: accountError } = await admin.auth.admin.getUserById(userId);
+      if (accountError || !account.user) return NextResponse.json({ error: 'Subscription account is unavailable.' }, { status: 503 });
+      const { error } = await admin.auth.admin.updateUserById(userId, {
+        app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: tier === 'free' ? expiresAt : null, purchased_tools: tools },
+      });
+      if (error) return NextResponse.json({ error: 'Could not update subscription status.' }, { status: 503 });
+      await admin.from('profiles').upsert({ id: userId, tier, updated_at: new Date().toISOString() });
+      if (tier === 'free') {
+        try { await clearExpiredPremiumQuizData(admin, userId); }
+        catch (cleanupError) {
+          console.error('[stripe/webhook] Premium quiz cleanup failed:', cleanupError instanceof Error ? cleanupError.message : 'unknown');
+          return NextResponse.json({ error: 'Plan changed, but premium quiz cleanup will retry.' }, { status: 503 });
         }
       }
       return NextResponse.json({ received: true });
@@ -56,6 +76,9 @@ export async function POST(request: NextRequest) {
     const selectedTool = String(session.metadata?.selectedFlexibleToolId || 'all');
     if (!/^[0-9a-f-]{36}$/i.test(userId) || !['flexible', 'standard', 'pro'].includes(tier) || typeof session.subscription !== 'string') {
       return NextResponse.json({ error: 'Invalid checkout metadata.' }, { status: 400 });
+    }
+    if (tier === 'flexible' && !FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool)) {
+      return NextResponse.json({ error: 'Invalid flexible plan feature.' }, { status: 400 });
     }
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) return NextResponse.json({ error: 'Billing is not configured.' }, { status: 503 });
@@ -72,8 +95,8 @@ export async function POST(request: NextRequest) {
     if (userError || !account.user?.email || !account.user.email_confirmed_at) return NextResponse.json({ error: 'Subscription account is unavailable.' }, { status: 503 });
     const expiresAt = new Date(subscription.current_period_end * 1000).toISOString();
     const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
-      app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'], stripe_customer_id: String(session.customer || ''), stripe_subscription_id: session.subscription },
-      user_metadata: { ...account.user.user_metadata, tier, tier_expires_at: expiresAt, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'] },
+      app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: null, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'], stripe_customer_id: String(session.customer || ''), stripe_subscription_id: session.subscription },
+      user_metadata: { ...account.user.user_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: null, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'] },
     });
     if (updateError) return NextResponse.json({ error: 'Could not apply subscription.' }, { status: 503 });
 

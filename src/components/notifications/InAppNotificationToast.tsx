@@ -50,7 +50,7 @@ export default function InAppNotificationToast() {
       if (document.visibilityState !== 'visible') return;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token || stopped) return;
-      const response = await fetch('/api/notifications/in-app', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store', credentials: 'omit' }).catch(() => null);
+      const response = await fetch('/api/notifications/in-app', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: session.access_token }), cache: 'no-store', credentials: 'omit' }).catch(() => null);
       if (!response?.ok || stopped) return;
       const data = await response.json().catch(() => ({}));
       const items = Array.isArray(data.notifications) ? data.notifications as Item[] : [];
@@ -70,7 +70,7 @@ export default function InAppNotificationToast() {
         const markRead = async () => {
           const { data: { session: currentSession } } = await supabase.auth.getSession();
           if (!currentSession?.access_token) return;
-          await fetch('/api/notifications/in-app', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${currentSession.access_token}` }, credentials: 'omit', body: JSON.stringify({ id: item.id, action: 'read' }) });
+          await fetch('/api/notifications/in-app', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'omit', body: JSON.stringify({ id: item.id, action: 'read', accessToken: currentSession.access_token }) });
         };
         toast.custom((id) => (
           <motion.div
@@ -97,12 +97,51 @@ export default function InAppNotificationToast() {
       }
       for (const item of items) seen.current.set(item.id, item.totalCount);
     };
+    const onDirectNotification = (event: Event) => {
+      const item = (event as CustomEvent<Item>).detail;
+      if (!item || typeof item.id !== 'string' || typeof item.title !== 'string') return;
+      const previous = seen.current?.get(item.id) || 0;
+      const total = Number(item.totalCount) || previous + 1;
+      if (total <= previous) return;
+      if (!seen.current) seen.current = new Map();
+      seen.current.set(item.id, total);
+      if (effects.current.haptics && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate([18, 32, 18]); } catch { /* optional */ }
+      }
+      if (effects.current.sound) playInAppNotificationTone();
+      const open = () => { if (item.action?.href) router.push(item.action.href); };
+      const markRead = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        await fetch('/api/notifications/in-app', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
+          body: JSON.stringify({ id: item.id, action: 'read', accessToken: session.access_token }),
+        }).catch(() => null);
+      };
+      toast.custom((toastId) => (
+        <motion.div initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -18, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          className='w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-pw-primary/25 bg-pw-surface/80 p-4 text-pw-text shadow-2xl backdrop-blur-2xl'>
+          <div className='flex items-start gap-3'><div className='grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pw-primary/15 text-pw-primary'><BellRing className='h-5 w-5' /></div>
+            <div className='min-w-0 flex-1'><p className='mb-1 text-[9px] font-black uppercase tracking-[.2em] text-pw-primary'>Pingwrld · Update</p><p className='font-semibold'>{item.title}</p>{item.body && <p className='mt-1 text-sm text-pw-muted'>{item.body}</p>}
+              <div className='mt-3 flex flex-wrap gap-2'>{item.action && <button onClick={() => { toast.dismiss(toastId); open(); }} className='rounded-xl bg-pw-primary px-3 py-2 text-xs font-bold text-white'>{item.action.label}<ArrowUpRight className='ml-1 inline h-3.5 w-3.5' /></button>}
+                <button onClick={() => { void markRead(); toast.dismiss(toastId); }} className='rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold'><Check className='mr-1 inline h-3.5 w-3.5' />Read</button>
+                <button aria-label='Dismiss notification' onClick={() => toast.dismiss(toastId)} className='ml-auto p-2 text-pw-muted'><X className='h-4 w-4' /></button></div>
+            </div></div>
+        </motion.div>
+      ), { id: `pw-notification-${item.id}-${total}`, duration: 9000, position: position.current });
+    };
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 30_000);
+    // Realtime gives prompt delivery where the database publication is enabled;
+    // the short poll remains the reliable fallback for local/dev deployments.
+    const channel = supabase.channel(`in-app-notifications-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_batches', filter: `recipient_id=eq.${userId}` }, () => void refresh())
+      .subscribe();
+    const timer = window.setInterval(() => void refresh(), 10_000);
+    window.addEventListener('pw_in_app_notification', onDirectNotification);
     const wake = () => { if (document.visibilityState === 'visible') void refresh(); };
     window.addEventListener('focus', wake);
     document.addEventListener('visibilitychange', wake);
-    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('focus', wake); document.removeEventListener('visibilitychange', wake); };
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('pw_in_app_notification', onDirectNotification); void supabase.removeChannel(channel); window.removeEventListener('focus', wake); document.removeEventListener('visibilitychange', wake); };
   }, [isLoggedIn, notificationPrefs, reduceMotion, router, userId]);
   return null;
 }

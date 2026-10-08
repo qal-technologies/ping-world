@@ -12,10 +12,11 @@ const denied = () =>
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  if (isRateLimited(ip, 'api:login', 10, 15 * 60_000).limited) {
+  const ipLimit = isRateLimited(ip, 'api:login', 10, 15 * 60_000);
+  if (ipLimit.limited) {
     return NextResponse.json(
       { error: 'Too many sign-in attempts. Wait 15 minutes and try again.' },
-      { status: 429, headers: { 'Cache-Control': 'no-store' } },
+      { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(Math.max(1, Math.ceil((ipLimit.reset - Date.now()) / 1000))) } },
     );
   }
   try {
@@ -34,10 +35,11 @@ export async function POST(request: NextRequest) {
     )
       return denied();
     const key = identifier.toLowerCase();
-    if (isRateLimited(key, 'api:login-identifier', 8, 15 * 60_000).limited) {
+    const identifierLimit = isRateLimited(key, 'api:login-identifier', 8, 15 * 60_000);
+    if (identifierLimit.limited) {
       return NextResponse.json(
         { error: 'Too many sign-in attempts. Wait 15 minutes and try again.' },
-        { status: 429, headers: { 'Cache-Control': 'no-store' } },
+        { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(Math.max(1, Math.ceil((identifierLimit.reset - Date.now()) / 1000))) } },
       );
     }
     let email = key;

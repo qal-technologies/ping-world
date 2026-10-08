@@ -519,6 +519,30 @@ pre {
   outline-offset: 0;
 }
 
+
+.no-scrollbar {
+  scrollbar-width: none;
+  scrollbar-color: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+.no-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 0;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: transparent;
+}
+
 /* ─── Animations ────────────────────────────────────────────── */
 @keyframes shimmer {
   0% {

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestUser } from '@/lib/api-auth';
+import { getRequestUserFromToken, readJsonWithinLimit } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendThemedEmail } from '@/lib/email/resend';
 import { isRateLimited } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
-  const user = await getRequestUser(request);
+  let body: { accessToken?: unknown };
+  try { body = await readJsonWithinLimit(request, 8 * 1024) as typeof body; }
+  catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }); }
+  const token = typeof body.accessToken === 'string' ? body.accessToken : '';
+  const user = token.length <= 16 * 1024 ? await getRequestUserFromToken(token) : null;
   if (!user || !user.email || !user.email_confirmed_at) return NextResponse.json({ ok: false }, { status: 401 });
   if (isRateLimited(user.id, 'api:welcome-email', 2, 24 * 60 * 60_000).limited) return NextResponse.json({ ok: true });
   const admin = getSupabaseAdmin();

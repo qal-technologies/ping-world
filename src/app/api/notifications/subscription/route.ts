@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY_BASE64 || !process.env.VAPID_SUBJECT) {
+    if (!process.env.NEXT_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY_BASE64 || !process.env.VAPID_SUBJECT) {
       return NextResponse.json({ error: 'Push delivery has not been configured by the site yet.' }, { status: 503 });
     }
     const body = await readJsonWithinLimit(request, 8 * 1024) as Record<string, any>;

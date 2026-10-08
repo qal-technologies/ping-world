@@ -23,6 +23,23 @@ export default function LoginPage() {
   const router = useRouter();
   const { user, username, refresh } = useAppContext();
   const [pageLoading, setPageLoading] = useState(true);
+  const [lockoutUntil, setLockoutUntil] = useState(0);
+  const [lockoutLabel, setLockoutLabel] = useState('');
+
+  useEffect(() => {
+    try { setLockoutUntil(Number(localStorage.getItem('pw_login_lockout_until') || 0)); } catch {}
+  }, []);
+
+  useEffect(() => {
+    const update = () => {
+      const seconds = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+      setLockoutLabel(seconds > 0 ? `Try again in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}.` : '');
+      if (!seconds && lockoutUntil) { setLockoutUntil(0); try { localStorage.removeItem('pw_login_lockout_until'); } catch {} }
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [lockoutUntil]);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -43,6 +60,7 @@ export default function LoginPage() {
     if (!formData.email || !formData.password) {
       return toast.error('Please fill in all fields');
     }
+    if (lockoutUntil > Date.now()) return;
 
     setLoading(true);
     try {
@@ -55,6 +73,12 @@ export default function LoginPage() {
         }),
       });
       const result = await response.json();
+      if (response.status === 429) {
+        const seconds = Math.max(1, Number(response.headers.get('Retry-After')) || 900);
+        const until = Date.now() + seconds * 1000;
+        setLockoutUntil(until);
+        try { localStorage.setItem('pw_login_lockout_until', String(until)); } catch {}
+      }
       if (response.status === 403 && result.code === 'EMAIL_NOT_VERIFIED') {
         toast.error('Please verify your email address before signing in. Check your inbox for the confirmation link.');
         return;
@@ -90,7 +114,7 @@ export default function LoginPage() {
     setResetLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/settings?tab=security`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
       toast.success(
@@ -220,7 +244,7 @@ export default function LoginPage() {
               disabled={
                 resetMode ?
                   resetLoading || !formData.email
-                : loading || !formData.email || !formData.password
+                : loading || !formData.email || !formData.password || lockoutUntil > Date.now()
               }
               className='btn-primary w-full h-12 text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-100 flex gap-2'>
               {resetMode ?
@@ -234,6 +258,7 @@ export default function LoginPage() {
                 <ArrowRight size={18} />
               )}
             </Button>
+            {!resetMode && lockoutLabel && <p role='status' className='text-center text-sm text-pw-warning'>{lockoutLabel}</p>}
 
             <button
               type='button'

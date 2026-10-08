@@ -603,8 +603,10 @@ const QuizBuilder = ({
       <div
         key={q.id + idx + catName + i}
         onClick={(e) => {
+          e.stopPropagation();
+
           setCurrentStep(i);
-          // handleQuestionScroll();
+          handleQuestionScroll();
           setShowBranchRules(false);
         }}
         className={cn(
@@ -843,8 +845,8 @@ const QuizBuilder = ({
 
               onSave({
                 ...editedQuiz,
-                isCustom: Boolean(quizId),
-                customUrl: quizId || undefined,
+                isCustom: premiumTier === 'pro' && Boolean(quizId),
+                customUrl: premiumTier === 'pro' ? quizId || undefined : undefined,
                 userId: user?.id || '',
                 fromPremium: quizUnlocked,
               });
@@ -1466,6 +1468,30 @@ const QuizBuilder = ({
                                     <p className='text-[8px] text-pw-muted italic'>
                                       Comma-separated options.
                                     </p>
+                                  </div>
+                                )}
+
+                                {detail.type === 'dob' && (
+                                  <div className='space-y-1 border-t border-white/5 pt-2'>
+                                    <label className='text-[10px] font-semibold text-white'>Minimum age (optional)</label>
+                                    <Input
+                                      type='number'
+                                      min={0}
+                                      max={120}
+                                      step={1}
+                                      placeholder='No minimum age'
+                                      value={detail.minAge ?? ''}
+                                      onKeyDown={(event) => event.stopPropagation()}
+                                      onChange={(event) => {
+                                        const input = event.target.value;
+                                        const minAge = input === '' ? undefined : Math.min(120, Math.max(0, Math.floor(Number(input))));
+                                        const askDetails = [...(editedQuiz.askDetails || [])];
+                                        askDetails[idx] = { ...askDetails[idx], minAge };
+                                        setEditedQuiz({ ...editedQuiz, askDetails });
+                                      }}
+                                      className='h-7 bg-black/40 text-[10px]'
+                                    />
+                                    <p className='text-[9px] text-pw-muted'>Participants younger than this age cannot continue.</p>
                                   </div>
                                 )}
 
@@ -3075,10 +3101,11 @@ const QuizBuilder = ({
                             </DropdownMenuContent>
                           </DropdownMenu>
 
-                          {editedQuiz.questions[currentStep].accessory ===
-                            'note' && (
-                            <Input
-                              placeholder='Add your note/formula here...'
+                          {['note', 'glossary', 'formula_sheet'].includes(editedQuiz.questions[currentStep].accessory || '') && (
+                            <textarea
+                              rows={editedQuiz.questions[currentStep].accessory === 'note' ? 4 : 3}
+                              aria-label={editedQuiz.questions[currentStep].accessory === 'glossary' ? 'Glossary terms' : 'Accessory reference content'}
+                              placeholder={editedQuiz.questions[currentStep].accessory === 'glossary' ? 'One term per line: Term — definition' : editedQuiz.questions[currentStep].accessory === 'formula_sheet' ? 'One formula per line: Name = formula' : 'Add reference notes, instructions, or formulas…'}
                               onKeyDown={(e) => e.stopPropagation()}
                               value={
                                 editedQuiz.questions[currentStep]
@@ -3091,7 +3118,7 @@ const QuizBuilder = ({
                                 };
                                 updateQuestion(currentStep, q);
                               }}
-                              className='h-9 text-xs bg-white/5 border-white/10 min-w-[200px] mt-1'
+                              className='mt-2 min-h-16 w-full resize-y rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-pw-text outline-none focus:border-pw-primary'
                             />
                           )}
                         </div>
@@ -4755,7 +4782,13 @@ export default function QuizPage() {
         right.template === true ||
         right.kind === 'template';
       if (leftTemplate !== rightTemplate) return leftTemplate ? 1 : -1;
-      return Number(right.createdAt || 0) - Number(left.createdAt || 0);
+      const createdTime = (quiz: Quiz) => {
+        const value = quiz.createdAt || (quiz as Quiz & { created_at?: string }).created_at;
+        if (typeof value === 'number') return value;
+        const parsed = Date.parse(String(value || ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      return createdTime(right) - createdTime(left);
     });
 
   const openFeedback = async (sourceQuiz: Quiz) => {
@@ -4773,10 +4806,7 @@ export default function QuizPage() {
       } catch {}
     }
     try {
-      const result =
-        quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id ?
-          { responses: quiz.responses || [], nextOffset: null }
-        : await HybridStorage.getQuizResponses(quiz.id);
+      const result = await HybridStorage.getQuizResponses(quiz.id);
       setResponseCounts((current) => ({
         ...current,
         [quiz.id]: result.totalCount ?? result.responses.length,
@@ -5046,6 +5076,12 @@ export default function QuizPage() {
     if (data) {
       const updated = { ...data, responses: [] };
       if (quizId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+        try {
+          await HybridStorage.clearTemplatePreviewResponses(quizId);
+        } catch (error: any) {
+          toast.error(error?.message || 'Could not clear preview responses.');
+          return;
+        }
         localStorage.setItem(seedTemplateStorageKey(), JSON.stringify(updated));
       } else {
         try {
@@ -5057,6 +5093,7 @@ export default function QuizPage() {
           return;
         }
       }
+      await HybridStorage.clearQuizResponseCache(quizId);
 
       setResponseCounts((current) => ({ ...current, [quizId]: 0 }));
       setQuizzes((current) =>
@@ -5282,10 +5319,6 @@ export default function QuizPage() {
       'true_false',
       'dropdown',
       'checkbox',
-      'input',
-      'range',
-      'rating',
-      'upload',
     ];
     const invalid = quiz.questions.some((question) => {
       if (!question.text?.trim()) return true;
@@ -5943,7 +5976,7 @@ export default function QuizPage() {
                   </p>
                 </div>
 
-                <div className='flex items-center justify-between gap-3 flex-wrap px-2'>
+                <div className='flex items-center justify-between gap-2 flex-wrap px-2'>
                   {viewingResponses.responses &&
                     viewingResponses.responses.length > 0 && (
                       <>
@@ -6562,7 +6595,6 @@ export default function QuizPage() {
                     <p>No responses yet.</p>
                   </div>
                 : [...(viewingResponses.responses || [])]
-                    .reverse()
                     .map((resp, idx) => (
                       <Card
                         key={idx}

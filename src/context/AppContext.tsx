@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -54,6 +55,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCache, setHasCache] = useState(false);
   const [dp, setDp] = useState('');
+  const hasLoadedSession = useRef(false);
 
   // ── Online / offline detection
   //Suppress initial visit online toast and check for prior visits
@@ -99,11 +101,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Session loader
   const loadSession = useCallback(async () => {
-    setIsLoading(true);
+    if (!hasLoadedSession.current) setIsLoading(true);
     try {
       const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (authSession?.user) {
-        const authUser = authSession.user;
+      let authUser = authSession?.user || null;
+      // Auth JWT claims can lag behind a completed Stripe webhook. Refresh the
+      // account record online so app_metadata reflects the server's latest tier.
+      if (authSession && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const { data, error } = await supabase.auth.getUser();
+          if (!error && data.user) authUser = data.user;
+        } catch { /* retain the locally cached session while offline */ }
+      }
+      if (authUser) {
         if (!authUser.email_confirmed_at) {
           await supabase.auth.signOut({ scope: 'local' });
           await HybridStorage.setUserId('guest');
@@ -132,6 +142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPurchasedTools(Array.isArray(tools) ? tools : [tools]);
 
         try {
+          if (!authSession?.access_token) throw new Error('No Supabase access token is available.');
           const res = await fetch('/api/auth/firebase-token', {
             method: 'POST',
             headers: { Authorization: `Bearer ${authSession.access_token}` },
@@ -169,6 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await HybridStorage.setUserId('guest');
       setUser(null);
     } finally {
+      hasLoadedSession.current = true;
       setIsLoading(false);
       void HybridStorage.flushPendingResponses();
     }

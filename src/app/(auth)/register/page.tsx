@@ -16,7 +16,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 export default function RegisterPage() {
   const [secure, setSecure] = useState(true);
@@ -28,9 +27,24 @@ export default function RegisterPage() {
   });
   const [canSubmit, setCanSubmit] = useState(false);
   const [available, setAvailable] = useState('');
+  const [registrationLockedUntil, setRegistrationLockedUntil] = useState(0);
+  const [registrationCountdown, setRegistrationCountdown] = useState('');
 
 
   const router = useRouter();
+  useEffect(() => {
+    try { setRegistrationLockedUntil(Number(localStorage.getItem('pw_register_lockout_until') || 0)); } catch {}
+  }, []);
+  useEffect(() => {
+    const update = () => {
+      const seconds = Math.max(0, Math.ceil((registrationLockedUntil - Date.now()) / 1000));
+      setRegistrationCountdown(seconds ? `Try again in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}.` : '');
+      if (!seconds && registrationLockedUntil) { setRegistrationLockedUntil(0); try { localStorage.removeItem('pw_register_lockout_until'); } catch {} }
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [registrationLockedUntil]);
   const passwordChecks = [
     formData.password.length >= 10,
     /[a-z]/.test(formData.password),
@@ -96,6 +110,7 @@ export default function RegisterPage() {
     if (!formData.name || !formData.email || !formData.password) {
       return toast.error('Please fill in all fields');
     }
+    if (registrationLockedUntil > Date.now()) return;
     if (formData.password.length < 10 || !/[a-z]/.test(formData.password) || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) {
       return toast.error('Use at least 10 characters with lowercase, uppercase, a number, and a symbol.');
     }
@@ -107,18 +122,25 @@ export default function RegisterPage() {
       if (!usernameCheck.ok || typeof usernameResult.available !== 'boolean') throw new Error(usernameResult.error || 'Could not verify username.');
       if (!usernameResult.available) throw new Error('Username is already taken.');
 
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            username: formData.name.trim().toLowerCase(),
-            display_name: formData.name.trim(),
-          },
-        },
+      const registerResponse = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          username: formData.name.trim().toLowerCase(),
+          displayName: formData.name.trim(),
+        }),
       });
-
-      if (error) throw error;
+      const registration = await registerResponse.json();
+      if (registerResponse.status === 429) {
+        const until = Date.now() + Math.max(1, Number(registerResponse.headers.get('Retry-After')) || 3600) * 1000;
+        setRegistrationLockedUntil(until);
+        try { localStorage.setItem('pw_register_lockout_until', String(until)); } catch {}
+      }
+      if (!registerResponse.ok) throw new Error(registration.error || 'Could not register.');
+      const data = { user: registration.user, session: registration.session };
 
       // Send a separate welcome only when signup immediately returns a
       // confirmed session. With email confirmation enabled, Supabase sends
@@ -126,7 +148,8 @@ export default function RegisterPage() {
       if (data.session?.access_token && data.user?.email_confirmed_at) {
         void fetch('/api/auth/welcome-email', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: data.session.access_token }),
           credentials: 'omit',
           keepalive: true,
         }).catch(() => undefined);
@@ -281,6 +304,7 @@ export default function RegisterPage() {
               type='submit'
               disabled={
                 loading ||
+                registrationLockedUntil > Date.now() ||
                 !formData.email ||
                 !formData.password ||
                 !formData.name ||
@@ -295,6 +319,7 @@ export default function RegisterPage() {
               {loading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
               {!loading && <ArrowRight size={18} />}
             </Button>
+            {registrationCountdown && <p role='status' className='text-center text-sm text-pw-warning'>{registrationCountdown}</p>}
 
             <div className='flex justify-center items-center gap-2 text-sm text-pw-muted'>
               Have an account?{' '}

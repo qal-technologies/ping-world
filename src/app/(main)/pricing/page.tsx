@@ -314,6 +314,7 @@ export default function PricingPage() {
       });
 
       const sessionData = await res.json();
+      if (!res.ok) throw new Error(sessionData.error || 'Could not start checkout.');
 
       if (sessionData.url) {
         toast.dismiss();
@@ -329,24 +330,13 @@ export default function PricingPage() {
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const existingTools: any[] =
-        Array.isArray(user?.user_metadata?.purchased_tools) ?
-          user.user_metadata.purchased_tools
-        : [];
-
-      const newTools =
-        selectedTierId === 'flexible' ?
-          Array.from(new Set([...existingTools, selectedFlexibleToolId]))
-        : [];
-
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          tier: selectedTierId,
-          purchased_tools: newTools,
-        },
+      const sandboxResponse = await fetch('/api/checkout/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify({ tier: selectedTierId, selectedFlexibleToolId: selectedTierId === 'flexible' ? selectedFlexibleToolId : 'all' }),
       });
-
-      if (error) throw error;
+      const sandboxResult = await sandboxResponse.json();
+      if (!sandboxResponse.ok || sandboxResult.success !== true) throw new Error(sandboxResult.error || 'Sandbox upgrade is unavailable.');
 
       // Force instant refresh of the global app context auth state
       await refresh();
@@ -382,13 +372,13 @@ export default function PricingPage() {
     if (confirmed) {
       try {
         toast.loading('Switching to Free Plan...');
-        const { error } = await supabase.auth.updateUser({
-          data: {
-            tier: 'free',
-            purchased_tools: [],
-          },
+        const { data: { session } } = await supabase.auth.getSession();
+        const downgrade = await fetch('/api/checkout/sandbox', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+          body: JSON.stringify({ tier: 'free' }),
         });
-        if (error) throw error;
+        const downgradeResult = await downgrade.json();
+        if (!downgrade.ok || downgradeResult.success !== true) throw new Error(downgradeResult.error || 'Could not downgrade.');
         await refresh();
         toast.dismiss();
         toast.success('Switched to Free plan successfully.');

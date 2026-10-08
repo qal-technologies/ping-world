@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
@@ -31,6 +31,9 @@ import {
   X,
   SkipForward,
   LoaderCircle,
+  Atom,
+  Search,
+  Copy,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -48,7 +51,12 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { optimizeImageForStorage } from '@/lib/media-optimization';
 import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
-import { quizHaptic, type Question, type Quiz, type QuizOption } from '@/app/(main)/quiz';
+import {
+  quizHaptic,
+  type Question,
+  type Quiz,
+  type QuizOption,
+} from '@/app/(main)/quiz';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
@@ -79,7 +87,9 @@ function getAssessmentDeviceKey(): string {
     const keyName = 'pw_assessment_device_key_v1';
     let key = localStorage.getItem(keyName);
     if (!key) {
-      key = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      key = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+      ).join('');
       localStorage.setItem(keyName, key);
     }
     return key;
@@ -89,32 +99,48 @@ function getAssessmentDeviceKey(): string {
 }
 
 function getPrivateQuizAccessToken(quizId: string): string {
-  try { return sessionStorage.getItem(`pw_private_quiz_access_v1_${quizId}`) || ''; } catch { return ''; }
+  try {
+    return sessionStorage.getItem(`pw_private_quiz_access_v1_${quizId}`) || '';
+  } catch {
+    return '';
+  }
 }
 
 function describeAcceptedFiles(accept = '') {
   const value = accept.toLowerCase();
   const labels = [
-    value.includes('image') || /\.(png|jpe?g|gif|webp|svg|avif)/.test(value) ? 'images' : '',
-    value.includes('video') || /\.(mp4|mov|webm|mkv)/.test(value) ? 'videos' : '',
-    value.includes('audio') || /\.(mp3|wav|m4a|ogg|aac)/.test(value) ? 'audio' : '',
-    /\.(pdf|docx?|txt|rtf|odt)/.test(value) || value.includes('pdf') ? 'documents' : '',
+    value.includes('image') || /\.(png|jpe?g|gif|webp|svg|avif)/.test(value) ?
+      'images'
+    : '',
+    value.includes('video') || /\.(mp4|mov|webm|mkv)/.test(value) ?
+      'videos'
+    : '',
+    value.includes('audio') || /\.(mp3|wav|m4a|ogg|aac)/.test(value) ?
+      'audio'
+    : '',
+    /\.(pdf|docx?|txt|rtf|odt)/.test(value) || value.includes('pdf') ?
+      'documents'
+    : '',
     /\.(zip|7z|rar)/.test(value) ? 'archives' : '',
   ].filter(Boolean);
   return labels.length ? labels.join(', ') : accept || 'supported files';
 }
 
-const NoteSheet = ({ note }: { note: string }) => (
-  <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
-    <div className='flex items-center gap-2 mb-4 text-pw-primary'>
-      <StickyNote size={20} />
-      <h3 className='font-bold uppercase tracking-widest text-xs'>Note</h3>
-    </div>
-    <div className='text-sm leading-relaxed text-pw-text whitespace-pre-wrap whitespace-pre-line'>
-      {note}
-    </div>
-  </Card>
-);
+const NoteSheet = ({ note }: { note: string }) => {
+  const [personalNote, setPersonalNote] = useState('');
+  return (
+    <Card className='w-full max-w-2xl rounded-2xl border-white/10 bg-pw-surface p-4 shadow-2xl bkblur sm:p-6'>
+      <div className='mb-4 flex items-center gap-2 text-pw-primary'>
+        <StickyNote size={20} />
+        <h3 className='text-xs font-bold uppercase tracking-widest'>Reference Notes</h3>
+      </div>
+      {note.trim() ? <div className='mb-4 max-h-[35vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/15 p-4 text-sm leading-relaxed text-pw-text'>{note}</div> : <p className='mb-4 rounded-xl border border-white/10 bg-black/15 p-4 text-sm text-pw-muted'>No reference note was provided for this question.</p>}
+      <label className='mb-2 block text-xs font-semibold text-pw-muted' htmlFor='quiz-personal-notes'>Your scratch notes (only kept while this question is open)</label>
+      <textarea id='quiz-personal-notes' value={personalNote} onChange={(event) => setPersonalNote(event.target.value)} maxLength={5000} placeholder='Write working notes here…' className='min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-3 text-sm text-pw-text outline-none focus:border-pw-primary/60' />
+      <p className='mt-1 text-right text-[10px] text-pw-muted'>{personalNote.length}/5000</p>
+    </Card>
+  );
+};
 
 const PeriodicTable = () => {
   const elements = [
@@ -281,31 +307,32 @@ const FormulaSheet = ({
   );
 };
 
-const Glossary = () => (
-  <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
-    <div className='flex items-center gap-2 mb-4 text-pw-success'>
-      <BookOpen size={20} />
-      <h3 className='font-bold uppercase tracking-widest text-xs'>
-        Terminology
-      </h3>
-    </div>
-    <div className='space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar'>
-      <div>
-        <p className='font-bold text-pw-success mb-1'>Hypothesis</p>
-        <p className='text-[10px] leading-relaxed text-pw-muted'>
-          A proposed explanation made on the basis of limited evidence as a
-          starting point for further investigation.
-        </p>
+const Glossary = ({ terms = '' }: { terms?: string }) => {
+  const [filter, setFilter] = useState('');
+  const entries = terms.split(/\r?\n/).map((line) => {
+    const separator = line.search(/\s[=:—-]\s/);
+    return separator < 0 ? null : { word: line.slice(0, separator).trim(), definition: line.slice(separator + 3).trim() };
+  }).filter((entry): entry is { word: string; definition: string } => Boolean(entry?.word && entry.definition));
+  const builtIns = [
+    { word: 'Hypothesis', definition: 'A proposed explanation that can be tested through evidence.' },
+    { word: 'Variable', definition: 'A factor that can change or be changed in an investigation.' },
+    { word: 'Velocity', definition: 'Speed in a specified direction.' },
+    { word: 'Inference', definition: 'A conclusion drawn from observations and evidence.' },
+    { word: 'Evidence', definition: 'Information used to support or challenge a claim.' },
+  ];
+  const visible = (entries.length ? entries : builtIns).filter((entry) => `${entry.word} ${entry.definition}`.toLowerCase().includes(filter.trim().toLowerCase()));
+  return (
+    <Card className='m-2 w-full max-w-2xl border-white/10 bg-pw-surface p-4 shadow-2xl bkblur sm:p-6'>
+      <div className='mb-4 flex items-center gap-2 text-pw-success'><BookOpen size={20} /><h3 className='text-xs font-bold uppercase tracking-widest'>Glossary</h3></div>
+      <Input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder='Search terms…' aria-label='Search glossary' className='mb-4 bg-black/20' />
+      <div className='max-h-[65vh] space-y-3 overflow-y-auto pr-2 custom-scrollbar'>
+        {visible.map((entry) => <article key={entry.word} className='rounded-xl border border-white/5 bg-white/[.03] p-3'><h4 className='mb-1 font-bold text-pw-success'>{entry.word}</h4><p className='text-sm leading-relaxed text-pw-muted'>{entry.definition}</p></article>)}
+        {!visible.length && <p className='py-8 text-center text-sm text-pw-muted'>No matching terms.</p>}
       </div>
-      <div>
-        <p className='font-bold text-pw-success mb-1'>Velocity</p>
-        <p className='text-[10px] leading-relaxed text-pw-muted'>
-          The speed of something in a given direction.
-        </p>
-      </div>
-    </div>
-  </Card>
-);
+      {terms.trim() && <p className='mt-3 text-[10px] text-pw-muted'>Custom terms supplied for this assessment.</p>}
+    </Card>
+  );
+};
 
 // --- Calculator Component ---
 const Calculator = () => {
@@ -414,8 +441,9 @@ function Taker() {
 
   const params = useParams();
   const routeParamId = (params?.id || params?.customQuizId) as string;
-  
-  const quizSetter = (params?.userId || params?.username || params?.setter) as | string
+
+  const quizSetter = (params?.userId || params?.username || params?.setter) as
+    | string
     | undefined;
   const isLocalPreview = routeParamId === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
 
@@ -452,8 +480,16 @@ function Taker() {
   }, [started, quiz?.quizScroll]);
 
   useEffect(() => {
-    if (!started || !quiz?.quizScroll || quiz.quizLayout !== 'scroll_show') return;
-    const timer = window.setTimeout(() => firstQuestionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    if (!started || !quiz?.quizScroll || quiz.quizLayout !== 'scroll_show')
+      return;
+    const timer = window.setTimeout(
+      () =>
+        firstQuestionRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        }),
+      80,
+    );
     return () => window.clearTimeout(timer);
   }, [currentQuestion, started, quiz?.quizScroll, quiz?.quizLayout]);
 
@@ -465,7 +501,10 @@ function Taker() {
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    const handleWindowFocus = () => window.setTimeout(() => { uploadPickerOpenRef.current = false; }, 250);
+    const handleWindowFocus = () =>
+      window.setTimeout(() => {
+        uploadPickerOpenRef.current = false;
+      }, 250);
     const handleOnline = () => {
       setIsOnline(true);
     };
@@ -486,10 +525,16 @@ function Taker() {
   useEffect(() => {
     const onResponseSyncError = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
-      toast.error(`${detail?.message || 'Response upload failed.'} Your response remains saved on this device.`);
+      toast.error(
+        `${detail?.message || 'Response upload failed.'} Your response remains saved on this device.`,
+      );
     };
     window.addEventListener('pw_quiz_response_sync_error', onResponseSyncError);
-    return () => window.removeEventListener('pw_quiz_response_sync_error', onResponseSyncError);
+    return () =>
+      window.removeEventListener(
+        'pw_quiz_response_sync_error',
+        onResponseSyncError,
+      );
   }, []);
 
   const [showIntro, setShowIntro] = useState(true);
@@ -503,6 +548,8 @@ function Taker() {
   const [reportedStatus, setReportedStatus] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionFailed, setSubmissionFailed] = useState(false);
+  const [isPreparingResponseFile, setIsPreparingResponseFile] = useState(false);
+  const pendingResponseFileReadsRef = useRef(new Set<string>());
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const uploadPickerOpenRef = React.useRef(false);
 
@@ -533,6 +580,7 @@ function Taker() {
 
   // Custom states for reporting quizzes
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showMobileAccessory, setShowMobileAccessory] = useState(false);
   const [reportCategory, setReportCategory] = useState('Spam');
 
   const createAttemptSnapshot = useCallback(
@@ -577,7 +625,9 @@ function Taker() {
         } else if (activeQuestion.type !== 'upload') {
           currentAnswer = selectedOption;
         }
-        const hasAnswer =
+        const hasAnswer = activeQuestion.type === 'rating' ?
+          Number(currentAnswer) >= 1
+        :
           Array.isArray(currentAnswer) ? currentAnswer.length > 0
           : currentAnswer && typeof currentAnswer === 'object' ? true
           : String(currentAnswer ?? '').trim().length > 0;
@@ -637,7 +687,9 @@ function Taker() {
       try {
         await HybridStorage.saveQuizAttemptDraft(quiz.id, snapshot);
       } catch {
-        toast.error('This device could not cache the assessment progress. Keep this tab open and retry.');
+        toast.error(
+          'This device could not cache the assessment progress. Keep this tab open and retry.',
+        );
         return false;
       }
       if (!navigator.onLine) {
@@ -645,9 +697,12 @@ function Taker() {
         return false;
       }
 
-      const hasPendingResponseMedia = Object.values(snapshot.answers || {}).some((answer: any) => {
+      const hasPendingResponseMedia = Object.values(
+        snapshot.answers || {},
+      ).some((answer: any) => {
         if (typeof answer?.fileUrl !== 'string') return false;
-        const source = unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl;
+        const source =
+          unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl;
         return source.startsWith('data:');
       });
 
@@ -659,11 +714,15 @@ function Taker() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              action: 'start', quizId: quiz.id, attemptId: snapshot.attemptId,
-              attemptToken: snapshot.attemptToken, questionOrder: snapshot.questionOrder,
+              action: 'start',
+              quizId: quiz.id,
+              attemptId: snapshot.attemptId,
+              attemptToken: snapshot.attemptToken,
+              questionOrder: snapshot.questionOrder,
               deviceKey: snapshot.deviceKey,
               privateQuizAccessToken: getPrivateQuizAccessToken(quiz.id),
-              userData: snapshot.userData, currentQuestionIndex: snapshot.currentQuestionIndex,
+              userData: snapshot.userData,
+              currentQuestionIndex: snapshot.currentQuestionIndex,
               allowBackwardNavigation: quiz.canGoBack !== false,
             }),
             keepalive,
@@ -674,7 +733,10 @@ function Taker() {
           preparedSnapshot = {
             ...snapshot,
             remoteStarted: true,
-            serverStartedAt: startResult.startedAt || snapshot.serverStartedAt || snapshot.startedAt,
+            serverStartedAt:
+              startResult.startedAt ||
+              snapshot.serverStartedAt ||
+              snapshot.startedAt,
           };
           activeAttemptRef.current = preparedSnapshot;
           await HybridStorage.saveQuizAttemptDraft(quiz.id, preparedSnapshot);
@@ -849,8 +911,7 @@ function Taker() {
         let moderationPaused = false;
         if (isLocalPreview && typeof window !== 'undefined') {
           try {
-            const raw =
-              localStorage.getItem('pw_quiz_template_v1');
+            const raw = localStorage.getItem('pw_quiz_template_v1');
             const stored = raw ? (JSON.parse(raw) as Quiz | null) : null;
             if (stored?.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
               data = stored;
@@ -879,27 +940,46 @@ function Taker() {
                 cache: 'no-store',
                 headers: token ? { 'X-Quiz-Access-Token': token } : undefined,
               });
-              const payload = response.ok || response.status === 423 ? await response.json() : null;
+              const payload =
+                response.ok || response.status === 423 ?
+                  await response.json()
+                : null;
 
-              if (response.status === 423 && payload?.code === 'PRIVATE_ACCESS_REQUIRED') {
+              if (
+                response.status === 423 &&
+                payload?.code === 'PRIVATE_ACCESS_REQUIRED'
+              ) {
                 data = payload.quiz || null;
               } else if (response.status === 423) {
                 moderationPaused = true;
                 setIsQuizUnderReview(true);
-              } else if(response.ok) {
+              } else if (response.ok) {
                 data = payload?.quiz || null;
               } else {
-                data = await HybridStorage.getQuiz(routeParamId, undefined, quizSetter) || null;
-                
+                data =
+                  (await HybridStorage.getQuiz(
+                    routeParamId,
+                    undefined,
+                    quizSetter,
+                  )) || null;
               }
-            } catch (e){
-              data = await HybridStorage.getQuiz(routeParamId, undefined, quizSetter) || null;
+            } catch (e) {
+              data =
+                (await HybridStorage.getQuiz(
+                  routeParamId,
+                  undefined,
+                  quizSetter,
+                )) || null;
               console.error(e);
             }
           }
         }
         if (!data && routeParamId && !moderationPaused) {
-          data = await HybridStorage.getQuiz(routeParamId, undefined, quizSetter);
+          data = await HybridStorage.getQuiz(
+            routeParamId,
+            undefined,
+            quizSetter,
+          );
         }
         let target = data as Quiz | null;
         if (target) {
@@ -948,27 +1028,43 @@ function Taker() {
           if (!isLocalPreview && target.isPrivate) {
             setPrivateAccessGranted(Boolean(target.accessGranted));
             if (!target.accessGranted) {
-            try {
-              const accessResponse = await fetch(`/api/quizzes/${encodeURIComponent(target.id)}/access`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-                },
-                body: JSON.stringify({ key: '', accessToken: getPrivateQuizAccessToken(target.id) }),
-                cache: 'no-store', credentials: 'omit',
-              });
-              if (accessResponse.ok) {
-                const access = await accessResponse.json();
-                if (access.accessToken) {
-                  sessionStorage.setItem(`pw_private_quiz_access_v1_${target.id}`, access.accessToken);
-                  if (routeParamId) sessionStorage.setItem(`pw_private_quiz_access_v1_${routeParamId}`, access.accessToken);
+              try {
+                const accessResponse = await fetch(
+                  `/api/quizzes/${encodeURIComponent(target.id)}/access`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(session?.access_token ?
+                        { Authorization: `Bearer ${session.access_token}` }
+                      : {}),
+                    },
+                    body: JSON.stringify({
+                      key: '',
+                      accessToken: getPrivateQuizAccessToken(target.id),
+                    }),
+                    cache: 'no-store',
+                    credentials: 'omit',
+                  },
+                );
+                if (accessResponse.ok) {
+                  const access = await accessResponse.json();
+                  if (access.accessToken) {
+                    sessionStorage.setItem(
+                      `pw_private_quiz_access_v1_${target.id}`,
+                      access.accessToken,
+                    );
+                    if (routeParamId)
+                      sessionStorage.setItem(
+                        `pw_private_quiz_access_v1_${routeParamId}`,
+                        access.accessToken,
+                      );
+                  }
+                  window.location.reload();
                 }
-                window.location.reload();
+              } catch {
+                // The key form remains available if the allowlist check cannot run.
               }
-            } catch {
-              // The key form remains available if the allowlist check cannot run.
-            }
             }
           } else {
             setPrivateAccessGranted(true);
@@ -1162,7 +1258,9 @@ function Taker() {
                   attemptId: restoredDraft.attemptId,
                   attemptToken: restoredDraft.attemptToken,
                   deviceKey: restoredDraft.deviceKey,
-                  privateQuizAccessToken: getPrivateQuizAccessToken(finalQuiz.id),
+                  privateQuizAccessToken: getPrivateQuizAccessToken(
+                    finalQuiz.id,
+                  ),
                 }),
               })
                 .then(async (response) => {
@@ -1202,7 +1300,8 @@ function Taker() {
         return;
       }
       const totalQuestionTimers = activeQuestions.reduce(
-        (sum, question) => sum + (question.type === 'upload' ? 0 : question.timer || 0),
+        (sum, question) =>
+          sum + (question.type === 'upload' ? 0 : question.timer || 0),
         0,
       );
       const timerValue =
@@ -1236,7 +1335,13 @@ function Taker() {
 
   useEffect(() => {
     const activeQ = activeQuestions[currentQuestion];
-    if (started && activeQ && activeQ.type !== 'upload' && activeQ.timer && !isFinished) {
+    if (
+      started &&
+      activeQ &&
+      activeQ.type !== 'upload' &&
+      activeQ.timer &&
+      !isFinished
+    ) {
       if (restoredQuestionTimerRef.current)
         restoredQuestionTimerRef.current = false;
       else setQuestionTimeLeft(activeQ.timer);
@@ -1249,11 +1354,16 @@ function Taker() {
     const autoSubmit = isAutoSubmit === true;
 
     const currentQId = q?.id || '';
+    const savedForCurrent = userAnswers.find(
+      (answer) => answer.questionId === currentQId,
+    );
     let currentSelectedOption =
       quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
+    if (q?.type === 'range' || q?.type === 'rating') {
+      currentSelectedOption = savedForCurrent?.answer ?? scrollAnswers[currentQId] ?? currentSelectedOption;
+    }
 
     if (!autoSubmit) {
-      const savedForCurrent = userAnswers.find((answer) => answer.questionId === currentQId);
       if (q?.type === 'checkbox') {
         const activeBoxAnswers =
           quiz?.quizScroll ? scrollAnswers[currentQId] || [] : selectedOptions;
@@ -1262,20 +1372,38 @@ function Taker() {
         }
       }
       if (q?.type === 'input') {
-        const inputValue = quiz?.quizScroll ? scrollAnswers[currentQId] : content;
-        if (!String(inputValue ?? '').trim()) return toast.error('Please enter an answer before continuing.');
+        const inputValue =
+          quiz?.quizScroll ? scrollAnswers[currentQId] : content;
+        if (!String(inputValue ?? '').trim())
+          return toast.error('Please enter an answer before continuing.');
       }
       if (q?.type === 'upload' && !savedForCurrent?.fileUrl) {
-        return toast.error('Please upload the required file before continuing.');
+        return toast.error(
+          'Please upload the required file before continuing.',
+        );
       }
-      if (q?.type === 'rating' && (!Number.isFinite(Number(currentSelectedOption)) || Number(currentSelectedOption) < 1)) {
+      if (
+        q?.type === 'rating' &&
+        (!Number.isFinite(Number(currentSelectedOption)) ||
+          Number(currentSelectedOption) < 1)
+      ) {
         return toast.error('Please choose a rating before continuing.');
       }
-      if (q?.type === 'range' && (currentSelectedOption === undefined || currentSelectedOption === null || currentSelectedOption === '')) {
+      if (
+        q?.type === 'range' &&
+        (currentSelectedOption === undefined ||
+          currentSelectedOption === null ||
+          currentSelectedOption === '')
+      ) {
         return toast.error('Please set a value before continuing.');
       }
-      if (q && ['multiple_choice', 'true_false', 'dropdown'].includes(q.type) &&
-        (currentSelectedOption === undefined || currentSelectedOption === null || currentSelectedOption === '')) {
+      if (
+        q &&
+        ['multiple_choice', 'true_false', 'dropdown'].includes(q.type) &&
+        (currentSelectedOption === undefined ||
+          currentSelectedOption === null ||
+          currentSelectedOption === '')
+      ) {
         return toast.error('Please select an answer before continuing.');
       }
     }
@@ -1345,7 +1473,9 @@ function Taker() {
         const existingUpload = userAnswers.find((a) => a.questionId === q.id);
         if (!existingUpload) {
           if (quiz?.quizLayout === 'scroll_show') {
-            return toast.error('Please upload the required file before continuing.');
+            return toast.error(
+              'Please upload the required file before continuing.',
+            );
           }
           // No file — record a skip and proceed
           const updatedWithSkip = [
@@ -1572,7 +1702,13 @@ function Taker() {
     if (!question) return false;
 
     const decodedCorrect = decodeStoredCorrectAnswer(secureAnswer);
-    if (decodedCorrect === null || decodedCorrect === undefined || decodedCorrect === '' || (Array.isArray(decodedCorrect) && decodedCorrect.length === 0)) return undefined;
+    if (
+      decodedCorrect === null ||
+      decodedCorrect === undefined ||
+      decodedCorrect === '' ||
+      (Array.isArray(decodedCorrect) && decodedCorrect.length === 0)
+    )
+      return undefined;
 
     if (question.type === 'checkbox') {
       const correctIds =
@@ -1630,15 +1766,19 @@ function Taker() {
 
   const finalizeQuiz = async (finalAnswers: any[]) => {
     if (finalizingRef.current) return;
+    if (pendingResponseFileReadsRef.current.size > 0) {
+      toast.error('Wait for the selected file to finish preparing before submitting.');
+      return;
+    }
+    if (!isLocalPreview && !navigator.onLine) {
+      setSubmissionFailed(true);
+      toast.error('You are offline. Check your internet connection and try submitting again.');
+      return;
+    }
     finalizingRef.current = true;
     setSubmissionFailed(false);
     setIsSubmitting(true);
-    quizHaptic([35, 45, 130]);
-    playQuizCompletionTone();
-
-    if (quiz?.endScreen?.enableConfetti) {
-      triggerConfetti(quiz.endScreen.confettiType || 'standard');
-    }
+    let submissionSucceeded = false;
 
     if (quiz) {
       try {
@@ -1668,19 +1808,15 @@ function Taker() {
         if (!isLocalPreview) {
           const attempt = activeAttemptRef.current;
           if (attempt?.attemptId && attempt?.attemptToken) {
-            try {
-              const finalSnapshot =
-                await HybridStorage.prepareQuizAttemptSnapshot(quiz.id, {
-                  ...createAttemptSnapshot(finalAnswers),
-                  status: 'in_progress',
-                });
-              await syncAttemptSnapshot(finalSnapshot);
-              const persistedAnswers = activeAttemptRef.current?.answers;
-              if (persistedAnswers && typeof persistedAnswers === 'object')
-                answersToSubmit = Object.values(persistedAnswers);
-            } catch {
-              // saveResponse will retain the full file answers locally and retry their upload later.
-            }
+            const finalSnapshot = await HybridStorage.prepareQuizAttemptSnapshot(quiz.id, {
+              ...createAttemptSnapshot(finalAnswers),
+              status: 'in_progress',
+            });
+            const attemptSaved = await syncAttemptSnapshot(finalSnapshot);
+            if (!attemptSaved) throw new Error('Your answers or uploaded files could not be saved to the server. Please retry while online.');
+            const persistedAnswers = activeAttemptRef.current?.answers;
+            if (persistedAnswers && typeof persistedAnswers === 'object')
+              answersToSubmit = Object.values(persistedAnswers);
           }
           const responseSaved = await HybridStorage.saveResponse(quiz.id, {
             userData: sanitizedUserData,
@@ -1696,21 +1832,12 @@ function Taker() {
             submissionId: attempt?.attemptId,
             attemptId: attempt?.attemptId,
             attemptToken: attempt?.attemptToken,
-          });
-          if (!responseSaved) {
-            setSubmissionFailed(true);
-            toast.error(
-              'Your answers could not be stored. Please copy them before leaving this page.',
-            );
-          } else {
-            if (!isLocalPreview && !quiz.allowRetry) {
-              try { localStorage.setItem(`completed_quiz_${quiz.id}`, 'true'); } catch { /* Server attempt enforcement remains authoritative. */ }
-            }
-            if (
-            typeof responseSaved === 'object' &&
-            'queued' in responseSaved &&
-            responseSaved.queued
-            ) toast.warning('Your answers are saved on this device and will sync when you are back online.');
+          }, { requireRemote: true });
+          if (!responseSaved || typeof responseSaved !== 'object' || responseSaved.success !== true || 'queued' in responseSaved)
+            throw new Error('The server did not confirm saving your assessment. Please retry submission.');
+          submissionSucceeded = true;
+          if (!quiz.allowRetry) {
+            try { localStorage.setItem(`completed_quiz_${quiz.id}`, 'true'); } catch {}
           }
           if (
             responseSaved &&
@@ -1740,58 +1867,26 @@ function Taker() {
             assessmentType: quiz.type,
             categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
           };
-          try {
-            const rawStored = localStorage.getItem('pw_template_v1_responses');
-            const storedList = rawStored ? JSON.parse(rawStored) : [];
-            const updatedList = [
-              templateResp,
-              ...(Array.isArray(storedList) ? storedList : []),
-            ];
-            localStorage.setItem(
-              'pw_template_v1_responses',
-              JSON.stringify(updatedList),
-            );
-
-            // Also persist into the seed template responses in local storage
-            const seedKey = 'pw_quiz_template_v1';
-            const rawSeed =
-              localStorage.getItem(seedKey) ||
-              localStorage.getItem('pw_quiz_template_v1');
-            if (rawSeed) {
-              const parsedSeed = JSON.parse(rawSeed);
-              parsedSeed.responses = [
-                templateResp,
-                ...(Array.isArray(parsedSeed.responses) ?
-                  parsedSeed.responses
-                : []),
-              ];
-              localStorage.setItem(seedKey, JSON.stringify(parsedSeed));
-              localStorage.setItem(
-                'pw_quiz_template_v1',
-                JSON.stringify(parsedSeed),
-              );
-            }
-          } catch (err) {
-            console.warn(
-              '[PublicQuizTaker] Local template response save error:',
-              err,
-            );
-          }
+          await HybridStorage.saveTemplatePreviewResponse(quiz.id, templateResp);
           toast.success(
             'Preview assessment completed! Response saved locally for test review.',
           );
+          submissionSucceeded = true;
         }
       } catch (e) {
         console.error('Failed to save response:', e);
         setSubmissionFailed(true);
-        toast.error(
-          'Your answers could not be synchronized yet. Keep this page open or reconnect to retry.',
-        );
+        toast.error(e instanceof Error ? e.message : 'Your answers could not be saved. Please retry.');
       }
     }
     setIsSubmitting(false);
-    setIsFinished(true);
     finalizingRef.current = false;
+    if (submissionSucceeded) {
+      quizHaptic([35, 45, 130]);
+      playQuizCompletionTone();
+      if (quiz?.endScreen?.enableConfetti) triggerConfetti(quiz.endScreen.confettiType || 'standard');
+      setIsFinished(true);
+    }
   };
 
   // Strict category branching isolation & 3x loop-protected routing engine
@@ -1799,15 +1894,15 @@ function Taker() {
     latestAnswers?: any[],
     chosenOptionVal?: string | null,
   ) => {
-    if (!(quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form')) quizHaptic(14);
+    if (!(quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form'))
+      quizHaptic(14);
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
     const q = activeQuestions[currentQuestion];
     let nextIdx = currentQuestion + 1;
     const isScrollLayout = !!(
-      quiz?.quizLayout === 'scroll' ||
-      quiz?.surveyType === 'form'
+      quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form'
     );
 
     if (q && !isScrollLayout) {
@@ -1816,8 +1911,12 @@ function Taker() {
 
       // 1. Input Question Branching
       if (q.type === 'input') {
-        const savedInput = answersToSave.find((answer) => answer.questionId === q.id)?.answer;
-        const userText = String(formatDetailVars(savedInput ?? content ?? '', false, true)).trim();
+        const savedInput = answersToSave.find(
+          (answer) => answer.questionId === q.id,
+        )?.answer;
+        const userText = String(
+          formatDetailVars(savedInput ?? content ?? '', false, true),
+        ).trim();
         if (q.inputBranchRules && q.inputBranchRules.length > 0) {
           const matchedRule = q.inputBranchRules.find((rule) => {
             if (!rule.keyword) return false;
@@ -1848,8 +1947,10 @@ function Taker() {
         }
       } else if (q.type !== 'checkbox') {
         // 2. Choice-level Branching
-        const currentChoice = chosenOptionVal !== undefined ? chosenOptionVal :
-          (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOption);
+        const currentChoice =
+          chosenOptionVal !== undefined ? chosenOptionVal
+          : quiz?.quizScroll ? scrollAnswers[q.id]
+          : selectedOption;
 
         if (currentChoice !== null && currentChoice !== undefined) {
           const currentOpts = shuffledOptions[q.id] || q.options || [];
@@ -2090,9 +2191,15 @@ function Taker() {
         <Card
           id={`question-${quest.id}`}
           key={quest.id}
-          ref={(isScrollLayout ? index === currentQuestion : index === 0) ? firstQuestionRef : undefined}
+          ref={
+            (
+              isScrollLayout ? index === currentQuestion : index === 0
+            ) ?
+              firstQuestionRef
+            : undefined
+          }
           className={cn(
-            'p-0 bg-transparent sm:p-6 ring-0 flex flex-col w-full max-w-[600px] rounded-[0px] mb-8 transition-all duration-300 space-y-0 self-center',
+            'quiz-taker-font p-0 bg-transparent sm:p-6 ring-0 flex flex-col w-full max-w-[600px] rounded-[0px] mb-8 transition-all duration-300 space-y-0 self-center',
             !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
             !isScrollLayout &&
               'sm:bkblur sm:glass sm:rounded-3xl sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl sm:ring-1 ',
@@ -2110,7 +2217,7 @@ function Taker() {
           <div className='flex items-start gap-3 mb-4'>
             {isScrollLayout ?
               <div className='flex items-baseline gap-2'>
-                <span className='text-pw-primary font-black text-xl select-none shrink-0'>
+                <span className='text-pw-primary font-black text-xl select-none shrink-0 quiz-taker-font '>
                   {(() => {
                     const targetCat = quest.category?.trim() || '';
                     const inStack = activeQuestions.filter(
@@ -2251,7 +2358,7 @@ function Taker() {
                     const answer = {
                       questionId: quest.id,
                       answer: next,
-                      correct: false,
+                      correct: true,
                     };
                     return existing < 0 ?
                         [...previous, answer]
@@ -2261,7 +2368,7 @@ function Taker() {
                   });
                 };
                 return (
-                  <div className='rounded-2xl border border-white/10 bg-white/[0.035] p-5'>
+                  <div className='rounded-2xl border border-white/10 bg-white/[0.035] p-5 bkblur'>
                     <div className='mb-4 flex items-center justify-between'>
                       <span className='text-xs text-white/55'>{min}</span>
                       <span className='rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-lg font-bold tabular-nums text-cyan-200'>
@@ -2280,6 +2387,7 @@ function Taker() {
                           Math.min(max, Math.max(min, value))
                         : min
                       }
+                      onBlur={(event) => saveValue(Number(event.currentTarget.value))}
                       onChange={(event) =>
                         saveValue(Number(event.target.value))
                       }
@@ -2353,12 +2461,20 @@ function Taker() {
                     ℹ {formatDetailVars(quest.uploadInstruction)}
                   </p>
                 )}
-                <p className='text-[10px] text-pw-muted px-1'>Expected file type: {describeAcceptedFiles(quest.allowedTypes || 'image/*,.pdf,.doc,.docx,.txt,.zip,.json,video/*,audio/*')}</p>
+                <p className='text-[10px] text-pw-muted px-1 pt-1.5'>
+                  Expected file type:{' '}
+                  {describeAcceptedFiles(
+                    quest.allowedTypes ||
+                      'image/*,.pdf,.doc,.docx,.txt,.zip,.json,video/*,audio/*',
+                  )}
+                </p>
 
                 <div className='flex flex-col gap-1'>
                   <input
                     type='file'
-                    onClick={() => { uploadPickerOpenRef.current = true; }}
+                    onClick={() => {
+                      uploadPickerOpenRef.current = true;
+                    }}
                     accept={
                       quest?.allowedTypes ||
                       'image/*,.pdf,.doc,.docx,.txt,.zip,.json,/application/json,video/*,audio/*,'
@@ -2369,8 +2485,9 @@ function Taker() {
                       if (!file) return;
 
                       // Enforce max size limit (MB)
-                      const maxMb = quiz?.fromPremium
-                        ? Math.min(Number(quest.maxFileSize) || 5, 50)
+                      const maxMb =
+                        quiz?.fromPremium ?
+                          Math.min(Number(quest.maxFileSize) || 5, 50)
                         : 5;
                       const sizeInMb = file.size / (1024 * 1024);
 
@@ -2381,11 +2498,20 @@ function Taker() {
                         return;
                       }
 
+                      pendingResponseFileReadsRef.current.add(quest.id);
+                      setIsPreparingResponseFile(true);
                       void (async () => {
                         try {
-                          const optimizedFile = await optimizeImageForStorage(file);
+                          const optimizedFile =
+                            await optimizeImageForStorage(file);
                           const reader = new FileReader();
-                          reader.onerror = () => toast.error('Could not read this file. Please try another one.');
+                          reader.onerror = () => {
+                            pendingResponseFileReadsRef.current.delete(quest.id);
+                            setIsPreparingResponseFile(pendingResponseFileReadsRef.current.size > 0);
+                            toast.error(
+                              'Could not read this file. Please try another one.',
+                            );
+                          };
                           reader.onload = () => {
                             const rawBase64 = reader.result as string;
                             const packedUrl = packPingWorldMediaUrl(rawBase64);
@@ -2418,12 +2544,21 @@ function Taker() {
                               updated = [...userAnswers, uploadRecord];
                             }
                             setUserAnswers(updated);
-                            const savedKb = Math.max(1, Math.round(optimizedFile.size / 1024));
+                            const savedKb = Math.max(
+                              1,
+                              Math.round(optimizedFile.size / 1024),
+                            );
                             toast.success(`Attached: ${file.name}`);
+                            pendingResponseFileReadsRef.current.delete(quest.id);
+                            setIsPreparingResponseFile(pendingResponseFileReadsRef.current.size > 0);
                           };
                           reader.readAsDataURL(optimizedFile);
                         } catch {
-                          toast.error('Could not prepare this file for upload.');
+                          pendingResponseFileReadsRef.current.delete(quest.id);
+                          setIsPreparingResponseFile(pendingResponseFileReadsRef.current.size > 0);
+                          toast.error(
+                            'Could not prepare this file for upload.',
+                          );
                         }
                       })();
                     }}
@@ -2703,7 +2838,7 @@ function Taker() {
           </div>
         </Card>
 
-        <div className='my-2 divider sm:hidden'/>
+        <div className='my-2 divider sm:hidden' />
       </motion.div>
     );
   };
@@ -2748,8 +2883,12 @@ function Taker() {
       <div className='flex min-h-[90vh] flex-col items-center justify-center gap-3 p-6 text-center'>
         <AlertTriangle className='h-12 w-12 text-pw-warning' />
         <h2 className='text-2xl font-bold'>Assessment paused for review</h2>
-        <p className='max-w-md text-sm text-pw-muted'>This assessment is temporarily unavailable while reports are reviewed.</p>
-        <Link href='/tools'><Button className='btn-primary'>Go to tools</Button></Link>
+        <p className='max-w-md text-sm text-pw-muted'>
+          This assessment is temporarily unavailable while reports are reviewed.
+        </p>
+        <Link href='/tools'>
+          <Button className='btn-primary'>Go to tools</Button>
+        </Link>
       </div>
     );
   }
@@ -2796,41 +2935,69 @@ function Taker() {
 
   if (hasAlreadyCompleted && quiz && !quiz.allowRetry && !isLocalPreview) {
     return (
-      <div className='quiz-taker-font flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0A0C1B] p-6 text-center text-white'>
+      <div className='flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0A0C1B] p-6 text-center text-white'>
         <ShieldCheck className='h-12 w-12 text-pw-primary' />
-        <h1 className='text-2xl font-bold'>This assessment was already completed on this device.</h1>
-        <p className='max-w-md text-sm text-white/75'>This assessment allows one submission per device. Contact its owner if you need access.</p>
-        <Link href='/tools'><Button className='btn-primary'>Close assessment</Button></Link>
+        <h1 className='text-2xl font-bold'>
+          This assessment was already completed on this device.
+        </h1>
+        <p className='max-w-md text-sm text-white/75 quiz-taker-font'>
+          This assessment allows one submission per device. Contact its owner if
+          you need access.
+        </p>
+        <Link href='/tools'>
+          <Button className='btn-primary'>Close assessment</Button>
+        </Link>
       </div>
     );
   }
 
   if (quiz?.isPrivate && !privateAccessGranted) {
-    const verifyPrivateAccess = async (event: React.FormEvent<HTMLFormElement>) => {
+    const verifyPrivateAccess = async (
+      event: React.FormEvent<HTMLFormElement>,
+    ) => {
       event.preventDefault();
       if (isCheckingPrivateAccess) return;
       setIsCheckingPrivateAccess(true);
       try {
         const { data: sessionData } = await supabase.auth.getSession();
-        const response = await fetch(`/api/quizzes/${encodeURIComponent(quiz.id)}/access`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {}),
+        const response = await fetch(
+          `/api/quizzes/${encodeURIComponent(quiz.id)}/access`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(sessionData.session?.access_token ?
+                { Authorization: `Bearer ${sessionData.session.access_token}` }
+              : {}),
+            },
+            body: JSON.stringify({ key: privateAccessKey }),
+            cache: 'no-store',
+            credentials: 'omit',
           },
-          body: JSON.stringify({ key: privateAccessKey }),
-          cache: 'no-store', credentials: 'omit',
-        });
+        );
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Access could not be verified.');
-        if (!result.accessToken) throw new Error('Could not start a secure assessment session.');
-        sessionStorage.setItem(`pw_private_quiz_access_v1_${quiz.id}`, result.accessToken);
-        if (routeParamId) sessionStorage.setItem(`pw_private_quiz_access_v1_${routeParamId}`, result.accessToken);
+        if (!response.ok)
+          throw new Error(result.error || 'Access could not be verified.');
+        if (!result.accessToken)
+          throw new Error('Could not start a secure assessment session.');
+        sessionStorage.setItem(
+          `pw_private_quiz_access_v1_${quiz.id}`,
+          result.accessToken,
+        );
+        if (routeParamId)
+          sessionStorage.setItem(
+            `pw_private_quiz_access_v1_${routeParamId}`,
+            result.accessToken,
+          );
         setPrivateAccessKey('');
         quizHaptic(30);
         window.location.reload();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Access could not be verified.');
+        toast.error(
+          error instanceof Error ?
+            error.message
+          : 'Access could not be verified.',
+        );
       } finally {
         setIsCheckingPrivateAccess(false);
       }
@@ -2838,11 +3005,36 @@ function Taker() {
     return (
       <div className='flex min-h-screen items-center justify-center bg-[#0A0C1B] p-4 text-white'>
         <Card className='w-full max-w-md space-y-5 border-white/10 bg-pw-surface/90 p-6 shadow-2xl backdrop-blur-xl'>
-          <div className='flex items-center gap-3'><Lock className='text-pw-primary' /><div><h1 className='text-xl font-bold'>Private assessment</h1><p className='text-sm text-pw-muted'>Enter the access key to continue. Approved participants can continue without a key after signing in.</p></div></div>
-          <form className='space-y-3' onSubmit={verifyPrivateAccess}>
-            <Input autoComplete='off' value={privateAccessKey} onChange={(event) => setPrivateAccessKey(event.target.value)} placeholder='Assessment access key' aria-label='Assessment access key' />
-            <Button className='btn-primary w-full' type='submit' disabled={isCheckingPrivateAccess || !privateAccessKey.trim()}>
-              {isCheckingPrivateAccess ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Checking access…</> : 'Continue'}
+          <div className='flex items-center gap-3'>
+            <Lock className='text-pw-primary' />
+            <div>
+              <h1 className='text-xl font-bold'>Private assessment</h1>
+              <p className='text-sm text-pw-muted'>
+                Enter the access key to continue. Approved participants can
+                continue without a key after signing in.
+              </p>
+            </div>
+          </div>
+          <form
+            className='space-y-3'
+            onSubmit={verifyPrivateAccess}>
+            <Input
+              autoComplete='off'
+              value={privateAccessKey}
+              onChange={(event) => setPrivateAccessKey(event.target.value)}
+              placeholder='Assessment access key'
+              aria-label='Assessment access key'
+            />
+            <Button
+              className='btn-primary w-full'
+              type='submit'
+              disabled={isCheckingPrivateAccess || !privateAccessKey.trim()}>
+              {isCheckingPrivateAccess ?
+                <>
+                  <LoaderCircle className='mr-2 h-4 w-4 animate-spin' />
+                  Checking access…
+                </>
+              : 'Continue'}
             </Button>
           </form>
         </Card>
@@ -2863,7 +3055,7 @@ function Taker() {
     return (
       <div
         key='completion-view'
-        className='quiz-taker-font relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6 overflow-x-hidden'>
+        className='quiz-taker-font relative h-[100dvh] w-full bg-[#0A0C1B] text-white flex items-center justify-center p-5 overflow-hidden'>
         {quiz?.fromPremium && (
           <>
             {quiz?.branding?.shadeColor && (
@@ -2890,62 +3082,64 @@ function Taker() {
             )}
           </>
         )}
+
         <div
           className={cn(
-            'max-w-md w-full space-y-2 relative z-10 text-center',
+            'max-w-md w-full space-y-1 relative z-10 text-center max-h-screen overflow-hidden',
             quiz?.endScreen?.textAlign === 'center' && 'text-center',
             quiz?.endScreen?.textAlign === 'left' && 'text-left',
             quiz?.endScreen?.textAlign === 'right' && 'text-right',
           )}>
-          <div
-            className={cn(
-              'w-20 h-20 rounded-full flex items-center justify-center border mb-3',
-              quiz?.endScreen?.textAlign === 'left' ? 'ml-0 mr-auto' : quiz?.endScreen?.textAlign === 'right' ? 'ml-auto mr-0' : 'mx-auto',
-              quiz?.endScreen?.completionIcon === 'diamond' &&
-                'bg-pw-success/10 border-pw-success/20',
-              quiz?.endScreen?.completionIcon === 'badge' &&
-                'bg-pw-primary/10 border-pw-primary/20',
-              quiz?.endScreen?.completionIcon === 'trophy' &&
-                'bg-pw-warning/10 border-pw-warning/20',
-
-              quiz?.endScreen?.textAlign === 'center' && 'items-center',
-              quiz?.endScreen?.textAlign === 'left' && 'items-start',
-              quiz?.endScreen?.textAlign === 'right' && 'items-end',
-            )}>
-            {quiz?.endScreen?.completionIcon === 'diamond' ?
-              <Diamond className='h-12 w-12 text-pw-success' />
-            : quiz?.endScreen?.completionIcon === 'badge' ?
-              <Badge className='h-12 w-12 text-pw-primary' />
-            : quiz?.endScreen?.completionIcon === 'trophy' ?
-              <Trophy className='h-12 w-12 text-pw-warning' />
-            : <CheckCircle className='h-12 w-12 text-pw-success' />}
-          </div>
-          <h1
-            className='text-lg font-extrabold font-display whitespace-pre-wrap'
-            dangerouslySetInnerHTML={{ __html: endTitle }}
-          />
-          <div className='relative'>
-            <p
+          <div className='flex flex-col item-center sticky top-0 z-50 space-y-2 bg-[#0A0C1B]/80 bkblur w-full h-fit p-2 pt-3'>
+            <div
               className={cn(
-                'text-white/90 text-sm mb-1 whitespace-pre-wrap transition-all',
-                !isEndMsgExpanded && endMsg.length > 80 ?
-                  'line-clamp-3 max-h-24 overflow-hidden'
-                : 'max-h-96 overflow-y-auto pr-1',
-              )}
-              dangerouslySetInnerHTML={{ __html: endMsg }}
+                'w-20 h-20 rounded-full flex items-center justify-center border mb-3',
+                quiz?.endScreen?.textAlign === 'left' ? 'ml-0 mr-auto'
+                : quiz?.endScreen?.textAlign === 'right' ? 'ml-auto mr-0'
+                : 'mx-auto',
+                quiz?.endScreen?.completionIcon === 'diamond' &&
+                  'bg-pw-success/10 border-pw-success/20',
+                quiz?.endScreen?.completionIcon === 'badge' &&
+                  'bg-pw-primary/10 border-pw-primary/20',
+                quiz?.endScreen?.completionIcon === 'trophy' &&
+                  'bg-pw-warning/10 border-pw-warning/20',
+              )}>
+              {quiz?.endScreen?.completionIcon === 'diamond' ?
+                <Diamond className='h-12 w-12 text-pw-success' />
+              : quiz?.endScreen?.completionIcon === 'badge' ?
+                <Badge className='h-12 w-12 text-pw-primary' />
+              : quiz?.endScreen?.completionIcon === 'trophy' ?
+                <Trophy className='h-12 w-12 text-pw-warning' />
+              : <CheckCircle className='h-12 w-12 text-pw-success' />}
+            </div>
+            <h1
+              className='text-lg font-extrabold font-display whitespace-pre-wrap'
+              dangerouslySetInnerHTML={{ __html: endTitle }}
             />
-            {endMsg.length > 80 && (
-              <button
-                type='button'
-                onClick={() => setIsEndMsgExpanded(!isEndMsgExpanded)}
-                className='text-pw-cyan hover:underline text-[11px] font-semibold mt-1 inline-flex items-center gap-1 focus:outline-none'>
-                {isEndMsgExpanded ? 'Read less' : 'Read more...'}
-              </button>
-            )}
+            <div className='relative'>
+              <p
+                className={cn(
+                  'text-white/90 text-sm mb-1 whitespace-pre-wrap transition-all',
+                  !isEndMsgExpanded && endMsg.length > 80 ?
+                    'line-clamp-3 max-h-24 overflow-hidden'
+                  : 'max-h-96 overflow-y-auto pr-1',
+                )}
+                dangerouslySetInnerHTML={{ __html: endMsg }}
+              />
+              {endMsg.length > 80 && (
+                <button
+                  type='button'
+                  onClick={() => setIsEndMsgExpanded(!isEndMsgExpanded)}
+                  className='text-pw-cyan hover:underline text-[11px] font-semibold mt-1 inline-flex items-center gap-1 focus:outline-none'>
+                  {isEndMsgExpanded ? 'Read less' : 'Read more...'}
+                </button>
+              )}
+            </div>
+
+            <div className='divider my-4 sm:hidden' />
           </div>
 
-          <div className='divider my-4 sm:hidden' />
-
+          <div className='block space-y-2 w-full h-[60dvh] overflow-y-auto no-scrollbar'>
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
             <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:backdrop-blur-lg sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
               <div className='text-center'>
@@ -2960,61 +3154,62 @@ function Taker() {
               {/* Independent Questions Score Breakdown */}
               {quiz?.category?.inPerformance &&
                 Object.keys(categoryScores).length > 0 && (
-                <>
-              {(() => {
-                const independentQs = activeQuestions.filter(
-                  (quest) => !quest.category || quest.category.trim() === '',
-                );
-                if (independentQs.length === 0) return null;
-                const independentAns = userAnswers.filter((a) =>
-                  independentQs.some((q) => q.id === a.questionId),
-                );
-                const indCorrect = independentAns.filter(
-                  (a) => a.correct,
-                ).length;
+                  <>
+                    {(() => {
+                      const independentQs = activeQuestions.filter(
+                        (quest) =>
+                          !quest.category || quest.category.trim() === '',
+                      );
+                      if (independentQs.length === 0) return null;
+                      const independentAns = userAnswers.filter((a) =>
+                        independentQs.some((q) => q.id === a.questionId),
+                      );
+                      const indCorrect = independentAns.filter(
+                        (a) => a.correct,
+                      ).length;
 
-                return (
-                  <div className='border-t border-white/5 pt-3 space-y-1.5'>
-                    <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
-                      <span className='font-bold text-white'>
-                        Other Questions ({independentQs.length})
+                      return (
+                        <div className='border-t border-white/5 pt-3 space-y-1.5'>
+                          <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
+                            <span className='font-bold text-white'>
+                              Other Questions ({independentQs.length})
+                            </span>
+                            <span className='font-mono text-pw-cyan font-bold'>
+                              {indCorrect} / {independentQs.length}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Group / Category Questions Score Breakdown */}
+
+                    <div className='border-t border-white/5 pt-3 space-y-2'>
+                      <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
+                        Category Scores
                       </span>
-                      <span className='font-mono text-pw-cyan font-bold'>
-                        {indCorrect} / {independentQs.length}
-                      </span>
+
+                      {Object.entries(categoryScores).map(
+                        ([cat, stats], idx) => (
+                          <div
+                            key={cat + idx}
+                            className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
+                            <span className='font-bold text-white'>
+                              📁 {capFirst(cat)} ({stats.total})
+                            </span>
+                            <span className='font-mono text-pw-primary font-bold'>
+                              {stats.correct} / {stats.total}
+                            </span>
+                          </div>
+                        ),
+                      )}
                     </div>
-                  </div>
-                );
-              })()}
-
-              {/* Group / Category Questions Score Breakdown */}
-              
-                  <div className='border-t border-white/5 pt-3 space-y-2'>
-                    <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
-                      Category Scores
-                    </span>
-
-                    {Object.entries(categoryScores).map(([cat, stats], idx) => (
-                      <div
-                        key={cat + idx}
-                        className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl'>
-                        <span className='font-bold text-white'>
-                          📁 {capFirst(cat)} ({stats.total})
-                        </span>
-                        <span className='font-mono text-pw-primary font-bold'>
-                          {stats.correct} / {stats.total}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
                   </>
                 )}
             </Card>
           )}
 
-          {quiz?.type === 'quiz' &&
-            <div className='divider my-4 sm:hidden' />
-          }
+          {quiz?.type === 'quiz' && <div className='divider my-4 sm:hidden' />}
 
           {/* Per-question explanation review */}
           {quiz?.type === 'quiz' &&
@@ -3026,7 +3221,7 @@ function Taker() {
                 (q.options as any[])?.some((o: any) => o.explanation),
             ) &&
             userAnswers.length > 0 && (
-              <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left max-h-[300px] overflow-y-auto'>
+              <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left max-h-[300px] overflow-y-auto no-scrollbar'>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block'>
                   Question Review & Explanations
                 </span>
@@ -3075,7 +3270,7 @@ function Taker() {
                     <div
                       key={q.id}
                       className={cn(
-                        'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5',
+                        'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5 bkblur',
                         ans?.correct ?
                           'bg-pw-success/5 border-pw-success/20'
                         : 'bg-pw-danger/5 border-pw-danger/20',
@@ -3287,8 +3482,16 @@ function Taker() {
 
           <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full mt-4 items-center justify-center'>
             {submissionFailed && (
-              <Button onClick={() => void finalizeQuiz(userAnswers)} disabled={isSubmitting} className='btn-primary h-11 rounded-xl font-bold'>
-                {isSubmitting ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Saving...</> : 'Retry saving response'}
+              <Button
+                onClick={() => void finalizeQuiz(userAnswers)}
+                disabled={isSubmitting}
+                className='btn-primary h-11 rounded-xl font-bold'>
+                {isSubmitting ?
+                  <>
+                    <LoaderCircle className='mr-2 h-4 w-4 animate-spin' />
+                    Saving...
+                  </>
+                : 'Retry saving response'}
               </Button>
             )}
             {quiz?.allowRetry && (
@@ -3296,19 +3499,22 @@ function Taker() {
                 onClick={() => {
                   window.location.reload();
                 }}
-                className='btn-primary h-11 rounded-xl font-bold'>
+                className='btn-primary h-10 rounded-xl font-bold'>
                 Retry {capFirst(quiz?.type || 'Assessment')}
               </Button>
             )}
             <Link href={isLoggedIn ? '/quiz' : '/tools'}>
-              <Button className='btn-primary h-11 rounded-xl font-bold'>
+              <Button className='gradient-dark w-[80%] max-w-[200px] px-3 items-center text-center flex h-11 rounded-xl font-bold'>
                 Close Quiz
               </Button>
             </Link>
+            </div>
           </div>
 
           {/* PingWorld compliance disclaimer footer on completion screen */}
-          <div className='pt-6 border-t border-white/5 mt-6 text-[10px] text-pw-muted leading-tight max-w-sm mx-auto text-center'>
+          <div className='text-[10px] text-pw-muted leading-tight max-w-sm mx-auto text-center font-body'>
+          <div className='divider my-4'/>
+
             <p>
               {(
                 quiz?.fromPremium &&
@@ -3338,7 +3544,7 @@ function Taker() {
       key='taker-wrapper'
       onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
       className={cn(
-        'quiz-taker-font relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
+        'relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
         quiz?.enforceSecurity && 'select-none',
       )}>
       {/* Sleek Glowing Background Objects */}
@@ -3579,7 +3785,7 @@ function Taker() {
                               setUserData({ ...userData, [detail.title]: s })
                             }
                             className={cn(
-                              'flex-1 h-12 rounded-2xl transition-all',
+                              'flex-1 h-11 rounded-2xl transition-all',
                               userData[detail.title] === s ?
                                 'bg-pw-primary text-white border-pw-primary shadow-lg shadow-pw-primary/30'
                               : 'bg-black/20 hover:bg-black/40',
@@ -3631,15 +3837,27 @@ function Taker() {
                       <>
                         <input
                           type={'date'}
+                          max={(() => {
+                            const latest = new Date();
+                            latest.setFullYear(latest.getFullYear() - Math.max(0, Number(detail.minAge) || 0));
+                            return new Date(latest.getTime() - latest.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+                          })()}
                           className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
                           placeholder={`Enter ${detail.title}...`}
                           value={userData[detail.title] || ''}
-                          onChange={(e) =>
-                            setUserData({
-                              ...userData,
-                              [detail.title]: e.target.value,
-                            })
-                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+                            if (value > today) {
+                              toast.error('Date of birth cannot be in the future.');
+                              return;
+                            }
+                            if (value && detail.minAge && Number(getDobGetter(value, 'age')) < detail.minAge) {
+                              toast.error(`You must be at least ${detail.minAge} years old.`);
+                              return;
+                            }
+                            setUserData({ ...userData, [detail.title]: value });
+                          }}
                         />
                         {userData[detail.title] && (
                           <p className='text-xs py-1 pl-1 text-pw-primary font-medium'>
@@ -3854,7 +4072,7 @@ function Taker() {
         <div
           key='assessment-view'
           className={cn(
-            'container relative z-10 p-0 mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-10 max-w-7xl flex flex-col',
+            'container relative z-10 p-0 mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-10 max-w-7xl flex flex-col max-h-screen overflow-y-auto',
             quizTheme === 'dark' ? 'text-white' : 'text-black',
           )}>
           {!isOnline && (
@@ -4041,7 +4259,13 @@ function Taker() {
               <div className='flex flex-col items-center w-full gap-0'>
                 {activeQuestions
                   .map((quest, idx) => ({ quest, idx }))
-                  .filter(({ quest, idx }) => idx === currentQuestion || userAnswers.some((answer) => answer.questionId === quest.id))
+                  .filter(
+                    ({ quest, idx }) =>
+                      idx === currentQuestion ||
+                      userAnswers.some(
+                        (answer) => answer.questionId === quest.id,
+                      ),
+                  )
                   .map(({ quest, idx }) => renderQuestionCard(quest, idx))}
                 <div ref={bottomRef} />
 
@@ -4056,9 +4280,14 @@ function Taker() {
                   )}
                   <Button
                     onClick={() => handleNext()}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isPreparingResponseFile}
                     className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
-                    {isSubmitting ? <><LoaderCircle className='h-4 w-4 animate-spin' /> Saving...</> : currentQuestion + 1 === activeQuestions.length ?
+                    {isSubmitting ?
+                      <>
+                        <LoaderCircle className='h-4 w-4 animate-spin' />{' '}
+                        Saving...
+                      </>
+                    : currentQuestion + 1 === activeQuestions.length ?
                       quiz?.nextButtonText ||
                       `Finish ${quiz?.type || 'Assessment'}`
                     : quiz?.nextButtonText || 'Next'}
@@ -4077,24 +4306,46 @@ function Taker() {
                   <Button
                     onClick={() => {
                       const missing = activeQuestions.find((question) => {
-                        const saved = userAnswers.find((answer) => answer.questionId === question.id);
-                        const value = scrollAnswers[question.id] ?? saved?.answer;
+                        const saved = userAnswers.find(
+                          (answer) => answer.questionId === question.id,
+                        );
+                        const value =
+                          scrollAnswers[question.id] ?? saved?.answer;
                         if (question.type === 'upload') return !saved?.fileUrl;
-                        if (question.type === 'checkbox') return !Array.isArray(value) || value.length === 0;
-                        if (question.type === 'input') return !String(value ?? '').trim();
-                        return value === null || value === undefined || value === '';
+                        if (question.type === 'checkbox')
+                          return !Array.isArray(value) || value.length === 0;
+                        if (question.type === 'input')
+                          return !String(value ?? '').trim();
+                        if (question.type === 'rating')
+                          return !Number.isFinite(Number(value)) || Number(value) < 1;
+                        return (
+                          value === null || value === undefined || value === ''
+                        );
                       });
                       if (missing) {
-                        toast.error(`Please answer “${missing.text}” before finishing.`);
-                        document.getElementById(`question-${missing.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        toast.error(
+                          `Please answer “${missing.text}” before finishing.`,
+                        );
+                        document
+                          .getElementById(`question-${missing.id}`)
+                          ?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                          });
                         return;
                       }
                       void finalizeQuiz(userAnswers);
                     }}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isPreparingResponseFile}
                     className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none'>
-                    {isSubmitting ? <><LoaderCircle className='h-4 w-4 animate-spin' /> Saving...</> : quiz?.nextButtonText ||
-                      `FINISH ${quiz?.type || 'Assessment'}`}
+                    {isSubmitting ?
+                      <>
+                        <LoaderCircle className='h-4 w-4 animate-spin' />{' '}
+                        Saving...
+                      </>
+                    : quiz?.nextButtonText ||
+                      `FINISH ${quiz?.type || 'Assessment'}`
+                    }
                     {!isSubmitting && <CheckCircle2 className='h-5 w-5' />}
                   </Button>
                 </div>
@@ -4136,6 +4387,11 @@ function Taker() {
                       </div>
 
                       <div className='w-full flex flex-col items-center gap-1'>
+                        {q?.accessory && q.accessory !== 'none' && (
+                          <Button type='button' onClick={() => setShowMobileAccessory(true)} className='lg:hidden w-full mb-2 rounded-xl border border-pw-primary/25 bg-pw-primary/10 text-pw-primary'>
+                            Open {q.accessory.replaceAll('_', ' ')} tool
+                          </Button>
+                        )}
                         {renderQuestionCard(q!, currentQuestion)}
 
                         <div className='flex justify-between w-full gap-4 flex-wrap mt-8'>
@@ -4161,14 +4417,21 @@ function Taker() {
 
                               <Button
                                 onClick={handleNext}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || isPreparingResponseFile}
                                 className='btn-primary h-10 px-8 rounded-2xl font-black gap-2 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
-                                {isSubmitting ? <><LoaderCircle className='h-4 w-4 animate-spin' /> Saving...</> : (
+                                {isSubmitting ?
+                                  <>
+                                    <LoaderCircle className='h-4 w-4 animate-spin' />{' '}
+                                    Saving...
+                                  </>
+                                : (
                                   currentQuestion + 1 === activeQuestions.length
                                 ) ?
                                   quiz?.nextButtonText || 'FINISH'
                                 : quiz?.nextButtonText || 'NEXT'}
-                                {!isSubmitting && <ChevronRight className='h-4 w-4' />}
+                                {!isSubmitting && (
+                                  <ChevronRight className='h-4 w-4' />
+                                )}
                               </Button>
                             </div>
                           </AnimatePresence>
@@ -4179,7 +4442,7 @@ function Taker() {
                 </div>
 
                 {/* Assistant Sidebar */}
-                <div className='lg:col-span-4 space-y-6'>
+                <div className='hidden lg:block lg:col-span-4 space-y-6'>
                   {q?.accessory && q.accessory !== 'none' && (
                     <motion.div
                       initial={{ opacity: 0, y: 30 }}
@@ -4209,6 +4472,22 @@ function Taker() {
                     </motion.div>
                   )}
                 </div>
+
+                {showMobileAccessory && q?.accessory && q.accessory !== 'none' && (
+                  <div className='fixed inset-0 z-[95] flex flex-col bg-slate-950/95 text-pw-text backdrop-blur-2xl lg:hidden' role='dialog' aria-modal='true' aria-label={`${q.accessory} tool`}>
+                    <header className='flex min-h-14 items-center justify-between gap-3 border-b border-white/10 px-4 py-3'>
+                      <h2 className='truncate font-bold capitalize'>{q.accessory.replaceAll('_', ' ')}</h2>
+                      <Button type='button' onClick={() => setShowMobileAccessory(false)} className='rounded-xl border border-white/10 bg-white/5 px-4'>Close</Button>
+                    </header>
+                    <div className='min-h-0 flex-1 overflow-auto p-3 sm:p-5'>
+                      {q.accessory === 'calculator' && <Calculator />}
+                      {q.accessory === 'note' && <NoteSheet note={q.accessoryNote || ''} />}
+                      {q.accessory === 'periodic_table' && <PeriodicTable />}
+                      {q.accessory === 'formula_sheet' && <FormulaSheet config={q.accessoryConfig} customFormulas={q.accessoryNote} />}
+                      {q.accessory === 'glossary' && <Glossary />}
+                    </div>
+                  </div>
+                )}
               </div>
             }
           </AnimatePresence>
@@ -4293,15 +4572,26 @@ function Taker() {
                       if (!quiz?.id) return;
                       setIsSubmittingReport(true);
                       try {
-                        const response = await fetch(`/api/quizzes/${encodeURIComponent(quiz.id)}/report`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ category: reportCategory, reason: reportReason }),
-                        });
+                        const response = await fetch(
+                          `/api/quizzes/${encodeURIComponent(quiz.id)}/report`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              category: reportCategory,
+                              reason: reportReason,
+                            }),
+                          },
+                        );
                         const result = await response.json().catch(() => ({}));
-                        if (!response.ok) throw new Error(result.error || 'Could not submit report.');
+                        if (!response.ok)
+                          throw new Error(
+                            result.error || 'Could not submit report.',
+                          );
                         setReportedStatus(true);
-                        toast.success(result.message || 'Assessment report received.');
+                        toast.success(
+                          result.message || 'Assessment report received.',
+                        );
                         setTimeout(() => {
                           setShowReportModal(false);
                           setReportedStatus(false);
@@ -4309,13 +4599,22 @@ function Taker() {
                           setReportCategory('');
                         }, 2500);
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : 'Could not submit report.');
+                        toast.error(
+                          error instanceof Error ?
+                            error.message
+                          : 'Could not submit report.',
+                        );
                       } finally {
                         setIsSubmittingReport(false);
                       }
                     }}
                     className='h-10 text-xs flex-1 bg-pw-danger hover:bg-pw-danger/80 text-white font-bold'>
-                    {isSubmittingReport ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Sending…</> : 'Submit Report'}
+                    {isSubmittingReport ?
+                      <>
+                        <LoaderCircle className='mr-2 h-4 w-4 animate-spin' />
+                        Sending…
+                      </>
+                    : 'Submit Report'}
                   </Button>
                 </div>
               </div>

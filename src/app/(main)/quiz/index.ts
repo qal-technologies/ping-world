@@ -76,9 +76,12 @@ export interface Details {
   options?: string[];
   maxLength?: number;
   minLength?: number;
+  minAge?: number;
 }
 
 export interface QuizTakerResponse {
+  id?: string;
+  status?: 'in_progress' | 'submitted' | 'expired';
   userData: Record<string, string>;
   answers: any[];
   score: number;

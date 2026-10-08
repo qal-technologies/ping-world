@@ -16,8 +16,8 @@ export default function NotificationPresence() {
       const { data: { session } } = await supabase.auth.getSession();
       if (stopped || !session?.access_token) return;
       await fetch('/api/notifications/presence', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, credentials: 'omit',
-        body: JSON.stringify({ active: true }), keepalive: true,
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
+        body: JSON.stringify({ active: true, accessToken: session.access_token }), keepalive: true,
       }).catch(() => undefined);
     };
     void report();

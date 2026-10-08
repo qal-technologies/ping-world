@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
+import { getRequestUserFromToken, readJsonWithinLimit } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 
@@ -9,10 +9,11 @@ export async function POST(request: NextRequest) {
   if (isRateLimited(getClientIp(request), 'api:notification-presence', 120, 60_000).limited) {
     return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
   }
-  const user = await getRequestUser(request);
-  if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
   try {
-    const body = await readJsonWithinLimit(request, 1024) as { active?: unknown };
+    const body = await readJsonWithinLimit(request, 8 * 1024) as { active?: unknown; accessToken?: unknown };
+    const token = typeof body.accessToken === 'string' ? body.accessToken : '';
+    const user = await getRequestUserFromToken(token);
+    if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     if (body.active !== true) return NextResponse.json({ success: true });
     const admin = getSupabaseAdmin();
     const { error } = await admin.from('notification_presence').upsert({

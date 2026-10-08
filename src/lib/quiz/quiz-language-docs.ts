@@ -119,9 +119,9 @@ export const QUIZ_SYNTAX_DOCS = {
         },
         {
           name: 'Keyword Match Operator',
-          syntax: '@eval:{token MATCH "keyword" @show:(text)}',
-          description: 'Checks if the target answer includes the specified substring or keyword.',
-          example: '@eval:{@q1 MATCH "Python" @show:("Python Developer") : @show:("Generalist")}',
+          syntax: '@eval:{token MATCH "keyword" @show:(text) [: @show:(otherwise)]}',
+          description: 'Checks if the target answer includes the specified substring or keyword. The fallback is optional; with no fallback, a non-match outputs an empty string.',
+          example: '@eval:{@q1 MATCH "Python" @show:("Python Developer")}',
           result: 'Python Developer (if answer contains Python)',
         },
         {

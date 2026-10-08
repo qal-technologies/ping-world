@@ -37,6 +37,42 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Server-enforced username change cooldown. The API calls this function with
+-- service-role access after authenticating the caller's Supabase session.
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username_updated_at TIMESTAMPTZ;
+UPDATE public.profiles SET username_updated_at = updated_at WHERE username IS NOT NULL AND username_updated_at IS NULL;
+CREATE OR REPLACE FUNCTION public.enforce_profile_username_cooldown()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  IF OLD.username IS DISTINCT FROM NEW.username THEN
+    IF COALESCE(OLD.username_updated_at, OLD.updated_at) + interval '60 days' > now() THEN
+      RAISE EXCEPTION 'COOLDOWN';
+    END IF;
+    NEW.username_updated_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS profile_username_cooldown ON public.profiles;
+CREATE TRIGGER profile_username_cooldown BEFORE UPDATE OF username ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_profile_username_cooldown();
+CREATE OR REPLACE FUNCTION public.change_profile_username(user_uuid UUID, username_text TEXT)
+RETURNS TIMESTAMPTZ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE next_allowed TIMESTAMPTZ; changed_at TIMESTAMPTZ := now();
+BEGIN
+  IF username_text !~ '^[a-z0-9_]{5,20}$' THEN RAISE EXCEPTION 'INVALID_USERNAME'; END IF;
+  PERFORM 1 FROM public.profiles WHERE id = user_uuid FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROFILE_NOT_FOUND'; END IF;
+  SELECT COALESCE(username_updated_at, updated_at) + interval '60 days'
+    INTO next_allowed FROM public.profiles WHERE id = user_uuid;
+  IF next_allowed IS NOT NULL AND changed_at < next_allowed THEN RAISE EXCEPTION 'COOLDOWN'; END IF;
+  UPDATE public.profiles SET username = username_text, username_updated_at = changed_at, updated_at = changed_at WHERE id = user_uuid;
+  RETURN changed_at + interval '60 days';
+END;
+$$;
+REVOKE ALL ON FUNCTION public.change_profile_username(UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.change_profile_username(UUID, TEXT) TO service_role;
+
 -- Per-device Web Push subscriptions. Endpoints and encryption keys are private.
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -98,6 +134,17 @@ GRANT ALL ON TABLE public.notification_presence TO service_role;
 ALTER TABLE public.notification_batches ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.notification_batches FROM anon, authenticated;
 GRANT ALL ON TABLE public.notification_batches TO service_role;
+-- Authenticated clients may receive only their own notification rows over
+-- Realtime. They still cannot insert, update, or delete notification batches.
+GRANT SELECT ON TABLE public.notification_batches TO authenticated;
+DROP POLICY IF EXISTS notification_batches_read_own ON public.notification_batches;
+CREATE POLICY notification_batches_read_own ON public.notification_batches
+  FOR SELECT TO authenticated USING (recipient_id = auth.uid());
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.notification_batches;
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN RAISE NOTICE 'Supabase Realtime publication is unavailable; API polling remains enabled.';
+END $$;
 
 CREATE OR REPLACE FUNCTION public.queue_assessment_response_notification(recipient_uuid UUID, quiz_uuid UUID)
 RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -240,9 +287,8 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
 -- batches explicitly when deleting a resource.
 ALTER TABLE public.notification_batches DROP CONSTRAINT IF EXISTS notification_batches_resource_id_fkey;
 
--- Only an actively subscribed Pro account may persist a private assessment.
--- The trigger uses server-managed auth app metadata, never client-editable
--- user metadata. Non-Pro writes are safely normalized to public.
+-- Only an actively subscribed Pro account may persist private settings or a
+-- custom quiz URL/branding. The trigger uses server-managed app metadata.
 CREATE OR REPLACE FUNCTION public.enforce_pro_assessment_privacy()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -258,12 +304,6 @@ BEGIN
   IF jsonb_typeof(NEW.settings) <> 'object' OR NEW.settings IS NULL THEN
     NEW.settings := '{}'::jsonb;
   END IF;
-
-  IF NEW.settings->>'isPrivate' IS DISTINCT FROM 'true' THEN
-    NEW.settings := NEW.settings - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames';
-    RETURN NEW;
-  END IF;
-
   SELECT raw_app_meta_data INTO owner_metadata FROM auth.users WHERE id = NEW.user_id;
   expiry_text := owner_metadata->>'tier_expires_at';
   IF owner_metadata->>'tier' = 'pro' AND expiry_text IS NOT NULL THEN
@@ -276,8 +316,18 @@ BEGIN
   END IF;
 
   IF NOT pro_is_active THEN
-    NEW.settings := (NEW.settings - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames')
+    NEW.custom_id := NULL;
+    NEW.settings := (NEW.settings - 'branding' - 'customUrl' - 'custom_id' - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames')
       || jsonb_build_object('isPrivate', false);
+    RETURN NEW;
+  END IF;
+
+  IF NEW.custom_id IS NOT NULL AND NEW.custom_id !~ '^[a-z0-9_-]{1,12}$' THEN
+    RAISE EXCEPTION 'A Pro custom quiz URL must be 1 to 12 lowercase letters, numbers, hyphens, or underscores';
+  END IF;
+
+  IF NEW.settings->>'isPrivate' IS DISTINCT FROM 'true' THEN
+    NEW.settings := NEW.settings - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames';
     RETURN NEW;
   END IF;
 
@@ -290,7 +340,7 @@ END;
 $$;
 DROP TRIGGER IF EXISTS enforce_pro_assessment_privacy ON public.quizzes;
 CREATE TRIGGER enforce_pro_assessment_privacy
-  BEFORE INSERT OR UPDATE OF settings, user_id ON public.quizzes
+  BEFORE INSERT OR UPDATE OF settings, user_id, custom_id ON public.quizzes
   FOR EACH ROW EXECUTE FUNCTION public.enforce_pro_assessment_privacy();
 REVOKE ALL ON FUNCTION public.enforce_pro_assessment_privacy() FROM PUBLIC, anon, authenticated;
 
@@ -350,6 +400,66 @@ ALTER TABLE public.quiz_attempts ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_status ON public.quiz_attempts(quiz_id, status, updated_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_device_once
   ON public.quiz_attempts(quiz_id, device_key_hash) WHERE device_key_hash IS NOT NULL;
+
+-- Save a completed response and close its authenticated attempt atomically.
+-- The API passes only a hash of the attempt token; raw tokens never enter SQL.
+CREATE OR REPLACE FUNCTION public.submit_quiz_attempt_response(
+  response_uuid UUID,
+  quiz_uuid UUID,
+  response_score INTEGER,
+  response_total INTEGER,
+  response_user_data JSONB,
+  response_answers JSONB,
+  attempt_uuid UUID,
+  attempt_token_hash TEXT
+)
+RETURNS TABLE (response_id UUID)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  locked_attempt public.quiz_attempts%ROWTYPE;
+BEGIN
+  IF response_uuid IS DISTINCT FROM attempt_uuid THEN
+    RAISE EXCEPTION 'RESPONSE_ATTEMPT_ID_MISMATCH';
+  END IF;
+
+  SELECT * INTO locked_attempt
+  FROM public.quiz_attempts
+  WHERE id = attempt_uuid
+    AND quiz_id = quiz_uuid
+    AND attempt_token_hash = submit_quiz_attempt_response.attempt_token_hash
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'ATTEMPT_AUTHORIZATION_FAILED';
+  END IF;
+
+  IF locked_attempt.status = 'submitted' THEN
+    RETURN QUERY SELECT existing.id FROM public.quiz_responses AS existing
+    WHERE existing.id = response_uuid AND existing.quiz_id = quiz_uuid;
+    RETURN;
+  END IF;
+  IF locked_attempt.status <> 'in_progress' THEN
+    RAISE EXCEPTION 'ATTEMPT_NOT_ACTIVE';
+  END IF;
+
+  INSERT INTO public.quiz_responses (id, quiz_id, score, total_questions, user_data, answers)
+  VALUES (response_uuid, quiz_uuid, response_score, response_total, response_user_data, response_answers);
+
+  UPDATE public.quiz_attempts
+  SET status = 'submitted', updated_at = now()
+  WHERE id = attempt_uuid AND status = 'in_progress';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'ATTEMPT_CLOSE_FAILED';
+  END IF;
+
+  RETURN QUERY SELECT response_uuid;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.submit_quiz_attempt_response(UUID, UUID, INTEGER, INTEGER, JSONB, JSONB, UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_quiz_attempt_response(UUID, UUID, INTEGER, INTEGER, JSONB, JSONB, UUID, TEXT) TO service_role;
 
 -- Reports are write/read restricted to the server admin client. Five distinct
 -- reporters place an assessment into review; the public quiz API then pauses it.

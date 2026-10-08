@@ -28,6 +28,43 @@ export default function SecurityTab({ email }: SecurityTabProps) {
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
 
   const [available, setAvailable] = useState('');
+  const [usernameEligibleAt, setUsernameEligibleAt] = useState<string | null>(null);
+  const [usernameCooldownLabel, setUsernameCooldownLabel] = useState('');
+  const [usernameGateReady, setUsernameGateReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadGate = async () => {
+      if (!user?.id) { setUsernameGateReady(true); return; }
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Sign in again to check username eligibility.');
+        const result = await fetch('/api/auth/change-username', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+        const payload = await result.json();
+        if (!result.ok || typeof payload.eligibleAt !== 'string') throw new Error(payload.error || 'Could not check username change eligibility.');
+        if (!cancelled) setUsernameEligibleAt(payload.eligibleAt);
+        if (!cancelled) setUsernameGateReady(true);
+      } catch (error) {
+        if (!cancelled) setAvailable(error instanceof Error ? error.message : 'Could not check username eligibility.');
+      }
+    };
+    void loadGate();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const updateLabel = () => {
+      if (!usernameEligibleAt) { setUsernameCooldownLabel(''); return; }
+      const remaining = Date.parse(usernameEligibleAt) - Date.now();
+      if (remaining <= 0) { setUsernameCooldownLabel('Username change is available.'); return; }
+      const days = Math.floor(remaining / 86_400_000);
+      const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
+      setUsernameCooldownLabel(`You can change your username in ${days}d ${hours}h.`);
+    };
+    updateLabel();
+    const timer = window.setInterval(updateLabel, 60_000);
+    return () => window.clearInterval(timer);
+  }, [usernameEligibleAt]);
 
   useEffect(() => {
     const candidate = newUsername.trim().toLowerCase();
@@ -77,32 +114,24 @@ export default function SecurityTab({ email }: SecurityTabProps) {
       toast.error('Choose a username different from the previous one.');
       return;
     }
+    if (!usernameGateReady || (usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))) {
+      toast.error(usernameGateReady ? usernameCooldownLabel : 'Checking username change eligibility.');
+      return;
+    }
 
     setIsUpdatingUsername(true);
     try {
-      const response = await fetch(`/api/auth/username-availability?username=${encodeURIComponent(candidate)}`, { cache: 'no-store' });
-      const result = await response.json();
-      if (!response.ok || typeof result.available !== 'boolean') throw new Error(result.error || 'Could not verify username.');
-      if (!result.available) throw new Error('Username is already taken.');
-
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          username: candidate,
-        },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sign in again to change your username.');
+      const response = await fetch('/api/auth/change-username', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ username: candidate }), cache: 'no-store',
       });
-
-      if (error) throw error;
-
-      if (user?.id) {
-        const { error: profileError } = await supabase.from('profiles')
-          .update({ username: candidate }).eq('id', user.id);
-        if (profileError) {
-          await supabase.auth.updateUser({ data: { username } });
-          throw profileError;
-        }
-      }
+      const result = await response.json();
+      if (!response.ok || result.success !== true) throw new Error(result.error || 'Could not update username.');
 
       setNewUsername('');
+      setUsernameEligibleAt(result.eligibleAt || new Date(Date.now() + 60 * 86_400_000).toISOString());
       await refresh();
       toast.success('Account username updated successfully!');
     } catch (err: any) {
@@ -210,6 +239,7 @@ export default function SecurityTab({ email }: SecurityTabProps) {
               onChange={(e) =>
                 setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20))
               }
+              disabled={!usernameGateReady || Boolean(usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))}
               minLength={5}
               maxLength={20}
               placeholder='JohnDoe'
@@ -221,6 +251,7 @@ export default function SecurityTab({ email }: SecurityTabProps) {
               Only letters, numbers & underscores (5 - 20 chars)
             </p>
           )}
+          {usernameCooldownLabel && <p className='text-[11px] text-pw-warning'>{usernameCooldownLabel}</p>}
 
           {available.trim() && (
             <div
@@ -236,7 +267,7 @@ export default function SecurityTab({ email }: SecurityTabProps) {
 
           <Button
             type='submit'
-            disabled={isUpdatingUsername}
+            disabled={isUpdatingUsername || !usernameGateReady || Boolean(usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))}
             className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
             <Shield className='h-3.5 w-3.5' />{' '}
             {isUpdatingUsername ? 'changing...' : 'Change Username'}
