@@ -12,7 +12,6 @@ import {
   Brain,
   Clock,
   AlertTriangle,
-  Layers,
   FileText,
   BookOpen,
   Star,
@@ -142,67 +141,62 @@ const NoteSheet = ({ note }: { note: string }) => {
   );
 };
 
-const PeriodicTable = () => {
-  const elements = [
-    { s: 'H', n: 'Hydrogen', cat: 'nonmetal', c: '#4ADE80' },
-    { s: 'He', n: 'Helium', cat: 'noble', c: '#60A5FA' },
-    { s: 'Li', n: 'Lithium', cat: 'alkali', c: '#F87171' },
-    { s: 'Be', n: 'Beryllium', cat: 'alkaline', c: '#FB923C' },
-    { s: 'B', n: 'Boron', cat: 'metalloid', c: '#FACC15' },
-    { s: 'C', n: 'Carbon', cat: 'nonmetal', c: '#4ADE80' },
-    { s: 'N', n: 'Nitrogen', cat: 'nonmetal', c: '#4ADE80' },
-    { s: 'O', n: 'Oxygen', cat: 'nonmetal', c: '#4ADE80' },
-    { s: 'F', n: 'Fluorine', cat: 'halogen', c: '#A78BFA' },
-    { s: 'Ne', n: 'Neon', cat: 'noble', c: '#60A5FA' },
-    { s: 'Na', n: 'Sodium', cat: 'alkali', c: '#F87171' },
-    { s: 'Mg', n: 'Magnesium', cat: 'alkaline', c: '#FB923C' },
-    { s: 'Al', n: 'Aluminium', cat: 'metal', c: '#94A3B8' },
-    { s: 'Si', n: 'Silicon', cat: 'metalloid', c: '#FACC15' },
-    { s: 'P', n: 'Phosphorus', cat: 'nonmetal', c: '#4ADE80' },
-    { s: 'S', n: 'Sulfur', cat: 'nonmetal', c: '#4ADE80' },
-    { s: 'Cl', n: 'Chlorine', cat: 'halogen', c: '#A78BFA' },
-    { s: 'Ar', n: 'Argon', cat: 'noble', c: '#60A5FA' },
-  ];
+const PERIODIC_ELEMENTS = `Hydrogen|H,Helium|He,Lithium|Li,Beryllium|Be,Boron|B,Carbon|C,Nitrogen|N,Oxygen|O,Fluorine|F,Neon|Ne,Sodium|Na,Magnesium|Mg,Aluminium|Al,Silicon|Si,Phosphorus|P,Sulfur|S,Chlorine|Cl,Argon|Ar,Potassium|K,Calcium|Ca,Scandium|Sc,Titanium|Ti,Vanadium|V,Chromium|Cr,Manganese|Mn,Iron|Fe,Cobalt|Co,Nickel|Ni,Copper|Cu,Zinc|Zn,Gallium|Ga,Germanium|Ge,Arsenic|As,Selenium|Se,Bromine|Br,Krypton|Kr,Rubidium|Rb,Strontium|Sr,Yttrium|Y,Zirconium|Zr,Niobium|Nb,Molybdenum|Mo,Technetium|Tc,Ruthenium|Ru,Rhodium|Rh,Palladium|Pd,Silver|Ag,Cadmium|Cd,Indium|In,Tin|Sn,Antimony|Sb,Tellurium|Te,Iodine|I,Xenon|Xe,Caesium|Cs,Barium|Ba,Lanthanum|La,Cerium|Ce,Praseodymium|Pr,Neodymium|Nd,Promethium|Pm,Samarium|Sm,Europium|Eu,Gadolinium|Gd,Terbium|Tb,Dysprosium|Dy,Holmium|Ho,Erbium|Er,Thulium|Tm,Ytterbium|Yb,Lutetium|Lu,Hafnium|Hf,Tantalum|Ta,Tungsten|W,Rhenium|Re,Osmium|Os,Iridium|Ir,Platinum|Pt,Gold|Au,Mercury|Hg,Thallium|Tl,Lead|Pb,Bismuth|Bi,Polonium|Po,Astatine|At,Radon|Rn,Francium|Fr,Radium|Ra,Actinium|Ac,Thorium|Th,Protactinium|Pa,Uranium|U,Neptunium|Np,Plutonium|Pu,Americium|Am,Curium|Cm,Berkelium|Bk,Californium|Cf,Einsteinium|Es,Fermium|Fm,Mendelevium|Md,Nobelium|No,Lawrencium|Lr,Rutherfordium|Rf,Dubnium|Db,Seaborgium|Sg,Bohrium|Bh,Hassium|Hs,Meitnerium|Mt,Darmstadtium|Ds,Roentgenium|Rg,Copernicium|Cn,Nihonium|Nh,Flerovium|Fl,Moscovium|Mc,Livermorium|Lv,Tennessine|Ts,Oganesson|Og`.split(',').map((entry, index) => {
+  const [name, symbol] = entry.split('|');
+  const atomicNumber = index + 1;
+  let period = 1;
+  let group = 1;
+  if (atomicNumber === 2) { period = 1; group = 18; }
+  else if (atomicNumber >= 3 && atomicNumber <= 4) { period = 2; group = atomicNumber - 2; }
+  else if (atomicNumber >= 5 && atomicNumber <= 10) { period = 2; group = atomicNumber + 8; }
+  else if (atomicNumber >= 11 && atomicNumber <= 12) { period = 3; group = atomicNumber - 10; }
+  else if (atomicNumber >= 13 && atomicNumber <= 18) { period = 3; group = atomicNumber; }
+  else if (atomicNumber >= 19 && atomicNumber <= 36) { period = 4; group = atomicNumber - 18; }
+  else if (atomicNumber >= 37 && atomicNumber <= 54) { period = 5; group = atomicNumber - 36; }
+  else if (atomicNumber >= 55 && atomicNumber <= 56) { period = 6; group = atomicNumber - 54; }
+  else if (atomicNumber >= 57 && atomicNumber <= 71) { period = 8; group = atomicNumber - 54; }
+  else if (atomicNumber >= 72 && atomicNumber <= 86) { period = 6; group = atomicNumber - 68; }
+  else if (atomicNumber >= 87 && atomicNumber <= 88) { period = 7; group = atomicNumber - 86; }
+  else if (atomicNumber >= 89 && atomicNumber <= 103) { period = 9; group = atomicNumber - 86; }
+  else if (atomicNumber >= 104) { period = 7; group = atomicNumber - 100; }
+  const category = [2, 10, 18, 36, 54, 86, 118].includes(atomicNumber) ? 'Noble gas'
+    : [3, 11, 19, 37, 55, 87].includes(atomicNumber) ? 'Alkali metal'
+    : [4, 12, 20, 38, 56, 88].includes(atomicNumber) ? 'Alkaline earth'
+    : [9, 17, 35, 53, 85, 117].includes(atomicNumber) ? 'Halogen'
+    : [1, 6, 7, 8, 15, 16, 34].includes(atomicNumber) ? 'Nonmetal'
+    : atomicNumber >= 57 && atomicNumber <= 71 ? 'Lanthanide'
+    : atomicNumber >= 89 && atomicNumber <= 103 ? 'Actinide'
+    : (atomicNumber >= 21 && atomicNumber <= 30) || (atomicNumber >= 39 && atomicNumber <= 48) || (atomicNumber >= 72 && atomicNumber <= 80) || (atomicNumber >= 104 && atomicNumber <= 112) ? 'Transition metal'
+    : [5, 14, 32, 33, 51, 52].includes(atomicNumber) ? 'Metalloid' : 'Post-transition metal';
+  return { atomicNumber, name, symbol, period, group, category };
+});
 
+const PeriodicTable = () => {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(PERIODIC_ELEMENTS[5]);
+  const filtered = query.trim() ? PERIODIC_ELEMENTS.filter((element) => `${element.atomicNumber} ${element.symbol} ${element.name} ${element.category}`.toLowerCase().includes(query.trim().toLowerCase())) : PERIODIC_ELEMENTS;
+  const matches = new Set(filtered.map((element) => element.atomicNumber));
+  const colors: Record<string, string> = {
+    'Noble gas': 'text-sky-300 border-sky-400/30 bg-sky-400/10',
+    'Alkali metal': 'text-rose-300 border-rose-400/30 bg-rose-400/10',
+    'Alkaline earth': 'text-orange-300 border-orange-400/30 bg-orange-400/10',
+    Halogen: 'text-violet-300 border-violet-400/30 bg-violet-400/10',
+    Nonmetal: 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10',
+    Lanthanide: 'text-pink-300 border-pink-400/30 bg-pink-400/10',
+    Actinide: 'text-fuchsia-300 border-fuchsia-400/30 bg-fuchsia-400/10',
+    'Transition metal': 'text-cyan-300 border-cyan-400/30 bg-cyan-400/10',
+    Metalloid: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
+    'Post-transition metal': 'text-slate-300 border-slate-400/30 bg-slate-400/10',
+  };
   return (
-    <Card className='p-4 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
-      <div className='flex items-center gap-2 mb-4 text-pw-cyan'>
-        <Layers size={18} />
-        <h3 className='font-bold uppercase tracking-widest text-xs'>
-          Periodic Table
-        </h3>
+    <Card className='m-2 w-full max-w-6xl border-white/10 bg-pw-surface p-3 shadow-2xl bkblur sm:p-5'>
+      <div className='mb-4 flex flex-wrap items-center justify-between gap-3'><div className='flex items-center gap-2 text-pw-cyan'><Atom size={20} /><h3 className='text-xs font-bold uppercase tracking-widest'>Periodic Table · 118 Elements</h3></div>
+        <div className='relative w-full max-w-xs'><Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pw-muted' /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Find name, symbol, or number' aria-label='Search periodic table' className='pl-9 bg-black/20' /></div>
       </div>
-      <div className='grid grid-cols-6 gap-1'>
-        {elements.map((el, i) => (
-          <div
-            key={el.s + i}
-            title={`${el.n} (${el.cat})`}
-            className='aspect-square flex flex-col items-center justify-center rounded border border-white/5 bg-white/5 hover:bg-white/10 transition-colors cursor-help p-1'>
-            <span
-              className='font-bold text-[10px]'
-              style={{ color: el.c }}>
-              {el.s}
-            </span>
-            <span className='text-[6px] opacity-50 truncate w-full text-center'>
-              {el.n}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className='mt-4 flex flex-wrap gap-2'>
-        <div className='flex items-center gap-1'>
-          <div className='w-2 h-2 rounded bg-[#4ADE80]'></div>
-          <span className='text-[8px] text-pw-muted uppercase'>Nonmetal</span>
-        </div>
-        <div className='flex items-center gap-1'>
-          <div className='w-2 h-2 rounded bg-[#60A5FA]'></div>
-          <span className='text-[8px] text-pw-muted uppercase'>Noble</span>
-        </div>
-        <div className='flex items-center gap-1'>
-          <div className='w-2 h-2 rounded bg-[#F87171]'></div>
-          <span className='text-[8px] text-pw-muted uppercase'>Alkali</span>
-        </div>
-      </div>
+      <div className='overflow-x-auto pb-3 custom-scrollbar'><div className='grid min-w-[760px] grid-cols-[repeat(18,minmax(34px,1fr))] gap-1' style={{ gridAutoRows: 'minmax(42px,auto)' }}>
+        {PERIODIC_ELEMENTS.map((element) => <button key={element.atomicNumber} type='button' onClick={() => setSelected(element)} title={`${element.name} · ${element.category}`} aria-label={`${element.name}, atomic number ${element.atomicNumber}`} className={cn('flex min-w-0 flex-col items-center justify-center rounded-md border p-0.5 text-center transition hover:z-10 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-pw-primary', colors[element.category], !matches.has(element.atomicNumber) && 'opacity-20')} style={{ gridColumn: element.group, gridRow: element.period }}><span className='w-full text-left text-[8px] leading-none opacity-65'>{element.atomicNumber}</span><strong className='text-xs leading-tight'>{element.symbol}</strong><span className='hidden w-full truncate text-[7px] opacity-70 xl:block'>{element.name}</span></button>)}
+      </div></div>
+      <div className='mt-3 flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-black/15 p-3'><div className='min-w-24 text-2xl font-black text-pw-cyan'>{selected.symbol}</div><div className='min-w-0 flex-1'><p className='text-sm font-bold'>{selected.name} <span className='font-normal text-pw-muted'>#{selected.atomicNumber}</span></p><p className='text-xs text-pw-muted'>{selected.category} · Period {selected.period > 7 ? (selected.period === 8 ? '6 (lanthanide)' : '7 (actinide)') : selected.period} · Group {selected.group}</p></div><p className='w-full text-[10px] text-pw-muted sm:w-auto'>Select an element for details · Search dims non-matching elements</p></div>
     </Card>
   );
 };
@@ -211,7 +205,7 @@ const FormulaSheet = ({
   config,
   customFormulas,
 }: {
-  config?: any;
+  config?: { categories?: string[] };
   customFormulas?: string;
 }) => {
   const allFormulas = [
@@ -289,9 +283,9 @@ const FormulaSheet = ({
                   <span className='text-[10px] text-pw-text opacity-70 group-hover:opacity-100 transition-opacity'>
                     {item.n}
                   </span>
-                  <span className='font-mono text-[10px] text-pw-primary bg-pw-primary/5 px-2 py-0.5 rounded'>
-                    {item.f}
-                  </span>
+                  <button type='button' title={`Copy ${item.n}`} onClick={() => { void navigator.clipboard?.writeText(item.f).then(() => toast.success('Formula copied.')).catch(() => toast.error('Could not copy formula.')); }} className='flex items-center gap-1 rounded bg-pw-primary/5 px-2 py-1 font-mono text-[10px] text-pw-primary hover:bg-pw-primary/15'>
+                    {item.f}<Copy className='h-3 w-3' />
+                  </button>
                 </div>
               ))}
             </div>
@@ -334,97 +328,135 @@ const Glossary = ({ terms = '' }: { terms?: string }) => {
   );
 };
 
-// --- Calculator Component ---
+type CalculatorAngleMode = 'DEG' | 'RAD';
+
+function evaluateCalculatorExpression(expression: string, angleMode: CalculatorAngleMode): number {
+  if (!expression.trim() || expression.length > 160) throw new Error('Enter an expression under 160 characters.');
+  const tokens: string[] = [];
+  const scanner = /\s*(?:(\d+(?:\.\d*)?|\.\d+)|([a-zA-Z]+)|([()+\-*/%^!,]))/gy;
+  let scanIndex = 0;
+  while (scanIndex < expression.length) {
+    scanner.lastIndex = scanIndex;
+    const match = scanner.exec(expression);
+    if (!match) throw new Error('Unsupported character in expression.');
+    tokens.push(match[1] || match[2]?.toLowerCase() || match[3]);
+    scanIndex = scanner.lastIndex;
+  }
+  let cursor = 0;
+  const peek = () => tokens[cursor];
+  const take = () => tokens[cursor++];
+  const expect = (value: string) => { if (take() !== value) throw new Error(`Expected “${value}”.`); };
+  const toRadians = (value: number) => angleMode === 'DEG' ? value * Math.PI / 180 : value;
+  const fromRadians = (value: number) => angleMode === 'DEG' ? value * 180 / Math.PI : value;
+  const functions: Record<string, (args: number[]) => number> = {
+    sin: ([x]) => Math.sin(toRadians(x)), cos: ([x]) => Math.cos(toRadians(x)), tan: ([x]) => Math.tan(toRadians(x)),
+    asin: ([x]) => fromRadians(Math.asin(x)), acos: ([x]) => fromRadians(Math.acos(x)), atan: ([x]) => fromRadians(Math.atan(x)),
+    sqrt: ([x]) => Math.sqrt(x), cbrt: ([x]) => Math.cbrt(x), abs: ([x]) => Math.abs(x), ln: ([x]) => Math.log(x),
+    log: ([x]) => Math.log10(x), exp: ([x]) => Math.exp(x), floor: ([x]) => Math.floor(x), ceil: ([x]) => Math.ceil(x),
+    round: ([x, digits = 0]) => { const scale = 10 ** Math.max(-10, Math.min(10, digits)); return Math.round(x * scale) / scale; },
+    min: (args) => Math.min(...args), max: (args) => Math.max(...args), pow: ([x, y]) => x ** y,
+  };
+  const parseExpression = (): number => {
+    let value = parseTerm();
+    while (peek() === '+' || peek() === '-') { const operator = take(); const next = parseTerm(); value = operator === '+' ? value + next : value - next; }
+    return value;
+  };
+  const parseTerm = (): number => {
+    let value = parseUnary();
+    while (peek() === '*' || peek() === '/' || peek() === '%') {
+      const operator = take(); const next = parseUnary();
+      if ((operator === '/' || operator === '%') && next === 0) throw new Error('Cannot divide by zero.');
+      value = operator === '*' ? value * next : operator === '/' ? value / next : value % next;
+    }
+    return value;
+  };
+  const parseUnary = (): number => {
+    if (peek() === '+') { take(); return parseUnary(); }
+    if (peek() === '-') { take(); return -parseUnary(); }
+    return parsePower();
+  };
+  const parsePower = (): number => {
+    const base = parsePostfix();
+    if (peek() === '^') { take(); return base ** parseUnary(); }
+    return base;
+  };
+  const parsePostfix = (): number => {
+    let value = parsePrimary();
+    while (peek() === '!') {
+      take();
+      if (!Number.isInteger(value) || value < 0 || value > 170) throw new Error('Factorial needs a whole number from 0 to 170.');
+      let product = 1;
+      for (let number = 2; number <= value; number++) product *= number;
+      value = product;
+    }
+    return value;
+  };
+  const parsePrimary = (): number => {
+    const token = take();
+    if (token === '(') { const value = parseExpression(); expect(')'); return value; }
+    if (token && /^\d+(?:\.\d*)?$|^\.\d+$/.test(token)) return Number(token);
+    if (!token || !/^[a-z]+$/.test(token)) throw new Error('Check the expression syntax.');
+    if (token === 'pi') return Math.PI;
+    if (token === 'e') return Math.E;
+    if (!(token in functions) || peek() !== '(') throw new Error(`Unknown function or constant “${token}”.`);
+    take();
+    const args: number[] = [];
+    if (peek() !== ')') { args.push(parseExpression()); while (peek() === ',') { take(); args.push(parseExpression()); } }
+    expect(')');
+    if ((token === 'min' || token === 'max') ? args.length < 1 : (token === 'pow' ? args.length !== 2 : token === 'round' ? args.length < 1 || args.length > 2 : args.length !== 1)) throw new Error(`Wrong number of values for ${token}().`);
+    return functions[token](args);
+  };
+  const value = parseExpression();
+  if (cursor !== tokens.length) throw new Error('Check the expression syntax.');
+  if (!Number.isFinite(value)) throw new Error('The result is outside the supported range.');
+  return value;
+}
+
+const CALCULATOR_KEYS = ['sin(', 'cos(', 'tan(', 'asin(', 'acos(', 'atan(', 'sqrt(', 'cbrt(', 'log(', 'ln(', 'abs(', 'min(', 'max(', 'pow(', 'π', 'e', 'x²', '^', '!', '(', ')', 'C', 'DEL', '÷', '×', '7', '8', '9', '−', '4', '5', '6', '+', '1', '2', '3', '%', '0', '.', 'Ans', '='];
+
 const Calculator = () => {
   const [val, setVal] = useState('');
   const [result, setResult] = useState<string | null>(null);
-
-  const calculate = (expression: string) => {
+  const [error, setError] = useState('');
+  const [angleMode, setAngleMode] = useState<CalculatorAngleMode>('DEG');
+  const calculate = useCallback((expression: string) => {
     try {
-      const clean = expression.replace(/[^-+*/.0-9]/g, '');
-      const fn = new Function(`return ${clean}`);
-      const res = fn();
-      setResult(res.toString());
-    } catch {
-      setResult('Error');
+      const number = evaluateCalculatorExpression(expression.replaceAll('×', '*').replaceAll('÷', '/').replaceAll('−', '-').replaceAll('π', 'pi'), angleMode);
+      const formatted = Number(number.toPrecision(12)).toString();
+      setResult(formatted); setError('');
+      return formatted;
+    } catch (cause) {
+      setResult(null); setError(cause instanceof Error ? cause.message : 'Invalid expression.');
+      return null;
     }
+  }, [angleMode]);
+  const press = (key: string) => {
+    if (key === 'C') { setVal(''); setResult(null); setError(''); return; }
+    if (key === 'DEL') { setVal((current) => current.slice(0, -1)); setResult(null); setError(''); return; }
+    if (key === '=') { calculate(val); return; }
+    if (key === 'Ans') { setVal((current) => `${current}${result || ''}`); setResult(null); return; }
+    if (key === 'x²') { setVal((current) => `${current}^2`); setResult(null); return; }
+    const insertion = key === '×' || key === '÷' || key === '−' ? key : key;
+    if (result && (/^\d$/.test(key) || key === '.' || key === 'π')) setVal(insertion);
+    else setVal((current) => `${current}${insertion}`);
+    setResult(null); setError('');
   };
-
   return (
-    <Card className='p-4 bg-pw bkblur border-white/10 shadow-2xl w-72 m-2 ring-1 ring-white/10'>
-      <div className='bg-black/40 p-4 rounded-xl mb-4 text-right font-mono border border-white/5'>
-        <div className='text-xs text-pw-muted h-4 overflow-hidden truncate'>
-          {val || '0'}
-        </div>
-        <div className='text-2xl font-bold text-pw-primary drop-shadow-[0_0_8px_rgba(var(--pw-primary-rgb),0.3)]'>
-          {result || val || '0'}
-        </div>
+    <Card className='m-2 w-full max-w-md rounded-2xl border-white/10 bg-pw-surface p-4 shadow-2xl ring-1 ring-white/10 bkblur sm:p-5'>
+      <div className='mb-3 flex items-center justify-between'><h3 className='text-xs font-bold uppercase tracking-widest text-pw-primary'>Scientific Calculator</h3><Button type='button' variant='outline' size='sm' onClick={() => setAngleMode((mode) => mode === 'DEG' ? 'RAD' : 'DEG')} className='h-8 min-w-14 text-[10px]' aria-label={`Angle mode ${angleMode}; click to change`}>{angleMode}</Button></div>
+      <div className='mb-3 rounded-xl border border-white/10 bg-black/40 p-3 text-right font-mono'>
+        <Input value={val} onChange={(event) => { setVal(event.target.value); setResult(null); setError(''); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); calculate(val); } if (event.key === 'Escape') press('C'); }} aria-label='Calculator expression' placeholder='Try sin(30) + sqrt(16)' className='h-7 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0' />
+        <div className='mt-2 min-h-8 break-all text-2xl font-bold text-pw-primary' aria-live='polite'>{result ?? (val || '0')}</div>
+        <p className='min-h-4 text-left text-[10px] text-pw-danger' role='status'>{error}</p>
       </div>
-      <div className='grid grid-cols-4 gap-1.5'>
-        {[
-          'C',
-          'del',
-          '/',
-          '*',
-          '7',
-          '8',
-          '9',
-          '-',
-          '4',
-          '5',
-          '6',
-          '+',
-          '1',
-          '2',
-          '3',
-          '.',
-          '0',
-          '=',
-          '(',
-          ')',
-        ].map((btn) => {
-          const isOp = ['/', '*', '-', '+', '='].includes(btn);
-          const isClr = ['C', 'del'].includes(btn);
-
-          return (
-            <Button
-              key={btn}
-              variant={
-                isOp ? 'secondary'
-                : isClr ?
-                  'destructive'
-                : 'outline'
-              }
-              size='sm'
-              className={cn(
-                'h-10 text-xs font-bold transition-all active:scale-90 rounded-lg',
-                btn === '=' &&
-                  'col-span-1 bg-pw-primary text-white hover:bg-pw-primary/80',
-                isOp &&
-                  !isClr &&
-                  btn !== '=' &&
-                  'bg-pw-primary/10 text-pw-primary border-pw-primary/20',
-              )}
-              onClick={() => {
-                if (btn === 'C') {
-                  setVal('');
-                  setResult(null);
-                } else if (btn === 'del') {
-                  setVal((v) => v.slice(0, -1));
-                  setResult(null);
-                } else if (btn === '=') calculate(val);
-                else {
-                  if (result) {
-                    setVal(result + btn);
-                    setResult(null);
-                  } else setVal((v) => v + btn);
-                }
-              }}>
-              {btn}
-            </Button>
-          );
+      <div className='grid grid-cols-5 gap-1.5'>
+        {CALCULATOR_KEYS.map((key) => {
+          const isClear = key === 'C' || key === 'DEL';
+          const isOperator = ['^', '!', '%', '+', '−', '×', '÷', '='].includes(key);
+          return <Button key={key} type='button' variant={key === '=' ? 'default' : isClear ? 'destructive' : isOperator ? 'secondary' : 'outline'} onClick={() => press(key)} className={cn('h-10 min-w-0 rounded-lg px-1 font-mono text-[10px] font-bold transition active:scale-95 sm:text-xs', key.endsWith('(') && 'text-pw-cyan', isOperator && key !== '=' && 'border-pw-primary/20 bg-pw-primary/10 text-pw-primary', key === '=' && 'bg-pw-primary text-white')} aria-label={key === 'DEL' ? 'Delete last character' : key === '=' ? 'Calculate' : key}>{key}</Button>;
         })}
       </div>
+      <p className='mt-3 text-[10px] text-pw-muted'>Supports arithmetic, powers, factorials, constants, and scientific functions. Trigonometry uses {angleMode.toLowerCase()}.</p>
     </Card>
   );
 };
