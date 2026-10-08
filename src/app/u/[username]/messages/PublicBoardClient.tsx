@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import {
   MessageSquare,
@@ -199,10 +200,13 @@ export default function PublicBoardClient({ profile, username }: Props) {
                   <div className='flex items-center gap-3'>
                     {msg.sender_country && (
                       <span className='flex items-center gap-1.5 text-pw-primary border border-pw-primary/10 bg-pw-primary/5 rounded px-2 py-1 font-bold uppercase'>
-                        <img
+                        <Image
                           src={`https://flagcdn.com/w20/${msg.sender_country.toLowerCase()}.png`}
                           alt={msg.sender_country}
+                          width={16}
+                          height={12}
                           className="w-4 h-3 object-cover rounded-sm border border-white/10 shrink-0"
+                          unoptimized
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).style.display = 'none';
                           }}

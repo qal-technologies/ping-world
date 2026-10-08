@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { readJsonWithinLimit } from '@/lib/api-auth';
+import { verifyQuizAccessToken } from '@/lib/quiz/private-access-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,9 +41,12 @@ export async function POST(request: NextRequest) {
 
     const admin = getSupabaseAdmin();
     const { data: quiz, error: quizError } = await admin.from('quizzes')
-      .select('id,questions,settings,expires_at,"canGoBack"').eq('id', quizId).maybeSingle();
+      .select('id,questions,settings,expires_at,"canGoBack",allowRetry').eq('id', quizId).maybeSingle();
     if (quizError || !quiz || (quiz.expires_at && new Date(quiz.expires_at).getTime() < Date.now())) {
       return NextResponse.json({ error: 'Assessment not found or expired.' }, { status: 404 });
+    }
+    if (quiz.settings?.moderationStatus === 'under_review') {
+      return NextResponse.json({ error: 'This assessment is paused while it is reviewed.' }, { status: 423 });
     }
 
     const action = body.action === 'start' ? 'start' : 'save';
@@ -91,6 +95,22 @@ export async function POST(request: NextRequest) {
           remainingSeconds,
         }, { headers: { 'Cache-Control': 'no-store' } });
       }
+      const settings = quiz.settings && typeof quiz.settings === 'object' ? quiz.settings : {};
+      if (settings.isPrivate && !verifyQuizAccessToken(typeof body.privateQuizAccessToken === 'string' ? body.privateQuizAccessToken : '', quizId)) {
+        return NextResponse.json({ error: 'Private assessment access is required.' }, { status: 403 });
+      }
+      const allowRetry = Boolean(settings.allowRetry ?? quiz.allowRetry);
+      const rawDeviceKey = typeof body.deviceKey === 'string' ? body.deviceKey : '';
+      if (!allowRetry && rawDeviceKey.length < 48) {
+        return NextResponse.json({ error: 'Browser storage is required for this one-attempt assessment.' }, { status: 400 });
+      }
+      const deviceKeyHash = !allowRetry ? hashToken(rawDeviceKey) : null;
+      if (deviceKeyHash) {
+        const { data: previousAttempt, error: deviceCheckError } = await admin.from('quiz_attempts')
+          .select('id').eq('quiz_id', quizId).eq('device_key_hash', deviceKeyHash).limit(1).maybeSingle();
+        if (deviceCheckError) throw deviceCheckError;
+        if (previousAttempt) return NextResponse.json({ error: 'This device has already used its attempt.' }, { status: 409 });
+      }
       const suppliedToken = typeof body.attemptToken === 'string' ? body.attemptToken : '';
       if (suppliedToken && suppliedToken.length < 48) return NextResponse.json({ error: 'Invalid attempt token.' }, { status: 400 });
       const attemptToken = suppliedToken || randomBytes(32).toString('base64url');
@@ -109,9 +129,13 @@ export async function POST(request: NextRequest) {
       const initialUserData = body.userData && typeof body.userData === 'object' && !Array.isArray(body.userData) ? body.userData : {};
       const { error } = await admin.from('quiz_attempts').insert({
         id: attemptId, quiz_id: quizId, attempt_token_hash: hashToken(attemptToken),
+        device_key_hash: deviceKeyHash,
         started_at: startedAt, updated_at: startedAt, status: 'in_progress',
         answers: initialAnswers, question_order: questionOrder, user_data: initialUserData, current_question_index: initialIndex,
       });
+      if (error?.code === '23505' && deviceKeyHash) {
+        return NextResponse.json({ error: 'This device has already used its attempt.' }, { status: 409 });
+      }
       if (error) throw error;
       return NextResponse.json({ attemptId, attemptToken, startedAt, answers: initialAnswers, questionOrder, userData: initialUserData, currentQuestionIndex: initialIndex, remainingSeconds: remainingTime(quiz, startedAt) }, { headers: { 'Cache-Control': 'no-store' } });
     }

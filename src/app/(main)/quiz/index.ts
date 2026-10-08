@@ -152,4 +152,22 @@ export interface Quiz {
   prevButtonText?: string; // Pro: custom Previous button label
   allowPass?: boolean; // Allow takers to pass/skip questions without answering
   fromPremium?: boolean;
+  isTemplate?: boolean;
+  template?: boolean;
+  kind?: string;
+  isPrivate?: boolean;
+  privateKey?: string;
+  privateKeyHash?: string;
+  allowedParticipantUsernames?: string[];
+  accessGranted?: boolean;
+}
+
+
+export function quizHaptic(pattern: number | number[]) {
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator)
+      navigator.vibrate(pattern);
+  } catch {
+    /* Haptics are optional; continue without device support. */
+  }
 }

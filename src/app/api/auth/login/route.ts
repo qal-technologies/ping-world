@@ -69,7 +69,20 @@ export async function POST(request: NextRequest) {
       email,
       password,
     });
+    if (error?.code === 'email_not_confirmed') {
+      return NextResponse.json(
+        { error: 'Verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
     if (error || !data.session) return denied();
+    if (!data.user?.email_confirmed_at) {
+      await authClient.auth.signOut({ scope: 'local' });
+      return NextResponse.json(
+        { error: 'Verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
     return NextResponse.json(
       { session: data.session },
       { headers: { 'Cache-Control': 'no-store, private', Pragma: 'no-cache' } },

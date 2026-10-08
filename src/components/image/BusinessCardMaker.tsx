@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import Image from 'next/image';
 import {
   Download, Upload, Trash2, Type, Building2, Phone, Mail,
   Globe, Linkedin, Twitter, MapPin, Palette, RotateCcw,
@@ -293,7 +294,7 @@ function BusinessCardPreview({
                 {/* HUD Bracket Avatar */}
                 <div className='relative shrink-0'>
                   {logoDataUrl ? (
-                    <img src={logoDataUrl} alt='Logo' className='w-12 h-12 rounded-lg object-contain bg-black/40 border' style={{ borderColor: `${template.accent}66` }} />
+                    <Image src={logoDataUrl} alt='Logo' width={48} height={48} unoptimized className='w-12 h-12 rounded-lg object-contain bg-black/40 border' style={{ borderColor: `${template.accent}66` }} />
                   ) : (
                     <div className='w-12 h-12 rounded-lg bg-black/50 border flex items-center justify-center font-black text-lg' style={{ borderColor: `${template.accent}66`, color: template.accent }}>
                       {data.name ? data.name.charAt(0).toUpperCase() : 'X'}
@@ -358,7 +359,7 @@ function BusinessCardPreview({
                   {data.company || 'ENTERPRISE PARTNERS'}
                 </span>
                 {logoDataUrl && (
-                  <img src={logoDataUrl} alt='Logo' className='h-5 object-contain' />
+                  <Image src={logoDataUrl} alt='Logo' width={80} height={20} unoptimized className='h-5 w-20 object-contain' />
                 )}
               </div>
 
@@ -419,7 +420,7 @@ function BusinessCardPreview({
                     </span>
                   </div>
                   {logoDataUrl && (
-                    <img src={logoDataUrl} alt='Logo' className='h-6 w-6 rounded-full border border-amber-400/40 object-contain' />
+                    <Image src={logoDataUrl} alt='Logo' width={24} height={24} unoptimized className='h-6 w-6 rounded-full border border-amber-400/40 object-contain' />
                   )}
                 </div>
 
@@ -470,7 +471,7 @@ function BusinessCardPreview({
             <div className='w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-base shadow-md'
               style={{ background: template.accent }}>
               {logoDataUrl ? (
-                <img src={logoDataUrl} alt='Logo' className='w-full h-full rounded-xl object-contain' />
+                  <Image src={logoDataUrl} alt='Logo' width={220} height={220} unoptimized className='w-full h-full rounded-xl object-contain' />
               ) : (
                 data.name ? data.name.charAt(0).toUpperCase() : 'P'
               )}
@@ -558,7 +559,7 @@ function BusinessCardPreview({
                 <div className='flex items-center justify-between'>
                   <div className='flex items-center gap-2'>
                     {logoDataUrl ? (
-                      <img src={logoDataUrl} alt='Logo' className='w-8 h-8 rounded-lg object-contain bg-black/20 border border-white/20' />
+                      <Image src={logoDataUrl} alt='Logo' width={32} height={32} unoptimized className='w-8 h-8 rounded-lg object-contain bg-black/20 border border-white/20' />
                     ) : (
                       <div className='w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-xs font-black'
                         style={{ color: template.accent }}>
@@ -628,7 +629,7 @@ function BusinessCardPreview({
             <>
               <div className='shrink-0'>
                 {logoDataUrl ? (
-                  <img src={logoDataUrl} alt='Logo' className='w-14 h-14 rounded-xl object-contain bg-white/10' />
+                  <Image src={logoDataUrl} alt='Logo' width={56} height={56} unoptimized className='w-14 h-14 rounded-xl object-contain bg-white/10' />
                 ) : (
                   <div className='w-14 h-14 rounded-xl flex items-center justify-center text-xl font-black'
                     style={{ background: `${template.accent}22`, color: template.accent, border: `1.5px solid ${template.accent}55` }}>
@@ -967,7 +968,7 @@ export default function BusinessCardMaker() {
             <div className='flex items-center gap-3'>
               {logoDataUrl ? (
                 <div className='relative w-12 h-12 rounded-xl bg-white/10 border border-white/10 p-1 flex items-center justify-center shrink-0'>
-                  <img src={logoDataUrl} alt='Logo' className='max-w-full max-h-full object-contain' />
+                    <Image src={logoDataUrl} alt='Logo' width={220} height={100} unoptimized className='max-w-full max-h-full object-contain' />
                   <button
                     type='button'
                     onClick={() => setLogoDataUrl(null)}

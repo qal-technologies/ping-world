@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import Image from 'next/image';
 import {
   Upload,
   Sparkles,
@@ -331,9 +332,12 @@ export default function ProfileAvatarDesigner({
             {/* Avatar Base */}
             <div className='w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-900'>
               {avatarImage ? (
-                <img
+                <Image
                   src={avatarImage}
                   alt='Avatar'
+                  width={320}
+                  height={320}
+                  unoptimized
                   className='w-full h-full object-cover'
                 />
               ) : (

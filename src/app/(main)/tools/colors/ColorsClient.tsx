@@ -517,6 +517,8 @@ export default function ColorPalettePage() {
                   <img
                     src={imageSrc}
                     alt='Extract Source'
+                    width={640}
+                    height={360}
                     className='w-full h-full object-cover'
                   />
                   <button

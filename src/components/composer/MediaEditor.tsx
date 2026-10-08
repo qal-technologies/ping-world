@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useCallback, useMemo } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
@@ -274,9 +275,12 @@ export function MediaEditor() {
                   setSelectedId(selectedId === asset.id ? null : asset.id);
                 }}>
                 {asset.type === 'image' ?
-                  <img
+                  <Image
                     src={asset.previewUrl}
                     alt={asset.altText || 'upload'}
+                    width={640}
+                    height={360}
+                    unoptimized
                     className='w-full h-full object-cover'
                     style={{
                       filter: asset.filterStyle,

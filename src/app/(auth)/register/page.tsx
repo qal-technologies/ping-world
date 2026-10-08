@@ -120,6 +120,18 @@ export default function RegisterPage() {
 
       if (error) throw error;
 
+      // Send a separate welcome only when signup immediately returns a
+      // confirmed session. With email confirmation enabled, Supabase sends
+      // the registration email and no authenticated session exists yet.
+      if (data.session?.access_token && data.user?.email_confirmed_at) {
+        void fetch('/api/auth/welcome-email', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          credentials: 'omit',
+          keepalive: true,
+        }).catch(() => undefined);
+      }
+
       toast.success('Registration successful! Please check your email.');
       router.push('/login');
     } catch (err: any) {

@@ -328,9 +328,13 @@ async function setActiveStorageUser(userId?: string | null) {
 async function mergeIntoLocal(type: StorageItem['type'], remoteRows: any[], owner = activeStorageUserId) {
   const local = await readLocal(type, owner);
   const map = new Map<string, StorageItem>();
+  const remoteIds = new Set(remoteRows.map((row) => String(row.id)));
 
-  // Start with local
-  local.forEach((item) => map.set(item.id, item));
+  // Keep unsynced drafts. A previously synced item missing remotely was
+  // deleted on another device and must not be resurrected from this cache.
+  local.forEach((item) => {
+    if (!item.is_synced || remoteIds.has(item.id)) map.set(item.id, item);
+  });
 
   // Remote wins for synced items
   remoteRows.forEach((row) => {
@@ -502,6 +506,18 @@ async function buildSupabasePayload(
   if (type === 'quiz') {
     const remoteContent = await externalizeQuizMedia(content, userId);
     const settings = { ...remoteContent };
+    // Moderation state is server-owned and survives ordinary quiz edits. Never
+    // let a stale local draft accidentally unpause an assessment under review.
+    try {
+      const { data: existing } = await supabase.from('quizzes').select('settings').eq('id', baseId).eq('user_id', userId).maybeSingle();
+      if (existing?.settings?.moderationStatus === 'under_review') {
+        settings.moderationStatus = 'under_review';
+        settings.moderationPausedAt = existing.settings.moderationPausedAt;
+      }
+    } catch {
+      // If the moderation flag cannot be read, continue with the save; the
+      // normal owner RLS and server report route still control public access.
+    }
     [
       'id', 'user_id', 'userId', 'ownerId', 'title', 'description', 'type',
       'questions', 'responses', 'canGoBack', 'showScore', 'hasTimer',
@@ -625,28 +641,37 @@ async function syncFromRemote(
 
     const rows: any[] = [];
     let offset = 0;
+    let remoteReadComplete = false;
     while (true) {
       const orderColumn = type === 'message' || type === 'link' ? 'created_at' : 'updated_at';
       let query = supabase.from(tableName(type)).select('*')
         .order(orderColumn, { ascending: false })
         .range(offset, offset + 999);
       if (session) {
+        if (!session.user.email_confirmed_at) return;
         const userCol = type === 'link' ? 'creator_id' : type === 'message' ? 'recipient_id' : 'user_id';
         query = query.eq(userCol, session.user.id) as any;
       }
       const { data, error } = await query;
-      if (error || !data?.length) {
-        if (error) console.warn(`[HybridStorage] Could not load ${type}:`, error.message);
+      if (error) {
+        console.warn(`[HybridStorage] Could not load ${type}:`, error.message);
+        break;
+      }
+      if (!data?.length) {
+        remoteReadComplete = true;
         break;
       }
       rows.push(...data);
-      if (data.length < 1000) break;
+      if (data.length < 1000) {
+        remoteReadComplete = true;
+        break;
+      }
       offset += 1000;
     }
 
     if (activeStorageUserId !== cacheOwner) return;
 
-    if (rows.length > 0) {
+    if (remoteReadComplete) {
       const merged = await mergeIntoLocal(type, rows, cacheOwner);
       onUpdate?.(flattenItems(merged));
     }
@@ -755,6 +780,7 @@ async function insertQuizResponse(quizId: string, response: any) {
       body: JSON.stringify({
         action: draft.remoteStarted ? 'save' : 'start', quizId, attemptId: response.attemptId,
         attemptToken: response.attemptToken, answers: attemptAnswers, questionOrder: draft.questionOrder,
+        deviceKey: draft.deviceKey,
         userData: response.userData || draft.userData || {}, currentQuestionIndex: draft.currentQuestionIndex || 0,
       }),
     });
@@ -987,7 +1013,7 @@ export const HybridStorage = {
     await deleteCacheValue(key);
   },
 
-  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; isLocalOnly?: boolean }> {
+  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; totalCount?: number; isLocalOnly?: boolean, isCached?:boolean }> {
     let session = null;
     try {
       const { data } = await supabase.auth.getSession();
@@ -995,9 +1021,10 @@ export const HybridStorage = {
     } catch {}
 
     const responseCacheKey = `quiz_responses:${encodeURIComponent(activeStorageUserId)}:${encodeURIComponent(quizId)}:${Math.max(0, Math.floor(offset))}`;
+    const readCachedPage = () => readCacheValue<{ responses: any[]; nextOffset: number | null; totalCount?: number }>(responseCacheKey);
 
     const loadLocalResponses = async () => {
-      const cachedPage = await readCacheValue<{ responses: any[]; nextOffset: number | null }>(responseCacheKey);
+      const cachedPage = await readCacheValue<{ responses: any[]; nextOffset: number | null; totalCount?: number }>(responseCacheKey);
       if (cachedPage && Array.isArray(cachedPage.responses)) {
         return { ...cachedPage, isLocalOnly: true, isCached: true };
       }
@@ -1026,11 +1053,15 @@ export const HybridStorage = {
         }
       } catch {}
 
-      return { responses: localResponses, nextOffset: null, isLocalOnly: true };
+      localResponses.sort((a, b) => new Date(b?.timestamp || 0).getTime() - new Date(a?.timestamp || 0).getTime());
+      return { responses: localResponses, nextOffset: null, totalCount: localResponses.length, isLocalOnly: true };
     };
 
-    if (!session?.access_token) {
-      return loadLocalResponses();
+    const cachedPage = await readCachedPage();
+    if (!session?.access_token || !isOnline()) {
+      return cachedPage && Array.isArray(cachedPage.responses)
+        ? { ...cachedPage, isLocalOnly: true, isCached: true }
+        : loadLocalResponses();
     }
 
     try {
@@ -1039,9 +1070,11 @@ export const HybridStorage = {
         cache: 'no-store',
       });
       if (!responseResult.ok) {
-        return loadLocalResponses();
+        return cachedPage && Array.isArray(cachedPage.responses)
+          ? { ...cachedPage, isLocalOnly: true, isCached: true }
+          : loadLocalResponses();
       }
-      const { responses: data = [], nextOffset = null } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null };
+      const { responses: data = [], nextOffset = null, totalCount } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null; totalCount?: number };
       const mapped = (data || []).map((row: any) => {
         const metadata = row.userData || {};
         const userData = { ...metadata };
@@ -1074,10 +1107,13 @@ export const HybridStorage = {
       await writeCacheValue(responseCacheKey, {
         responses: mapped,
         nextOffset,
+        totalCount,
       });
-      return { responses: mapped, nextOffset, isLocalOnly: false };
+      return { responses: mapped, nextOffset, totalCount, isLocalOnly: false };
     } catch {
-      return loadLocalResponses();
+      return cachedPage && Array.isArray(cachedPage.responses)
+        ? { ...cachedPage, isLocalOnly: true, isCached: true }
+        : loadLocalResponses();
     }
   },
 
@@ -1280,37 +1316,33 @@ export const HybridStorage = {
       } catch {}
     }
 
-    if (isOnline()) {
-      try {
-        const selectedColumns = columns || '*';
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-        const timeoutPromise = new Promise<{ data: null; error: any }>((res) =>
-          setTimeout(() => res({ data: null, error: new Error('timeout') }), 2500)
-        );
-
-        let queryPromise;
-        if (isUuid && !ownerUsername) {
-          queryPromise = supabase.from(tableName('quiz')).select(selectedColumns).eq('id', id).maybeSingle();
-        } else {
-          let customQuery = supabase.from(tableName('quiz')).select(selectedColumns).eq('custom_id', id);
-          if (ownerUsername) {
-            const { data: profile } = await supabase.from('profiles').select('id').eq('username', ownerUsername).maybeSingle();
-            if (profile?.id) {
-              customQuery = customQuery.eq('user_id', profile.id);
-            }
-          }
-          queryPromise = customQuery.maybeSingle();
+    if (exactQuiz && !isOnline()) return exactQuiz;
+    if (!isOnline()) return exactQuiz ?? null;
+    try {
+      const headers: Record<string, string> = {};
+      // Public quiz reads are intentionally unauthenticated; omitting the session
+      // avoids sending a large Supabase JWT in a request header.
+      const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}${ownerUsername ? `?owner=${encodeURIComponent(ownerUsername)}` : ''}`, {
+        headers, cache: 'no-store', signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return exactQuiz ?? null;
+      const payload = await response.json() as { quiz?: any };
+      if (!payload.quiz) return exactQuiz ?? null;
+      const remoteQuiz = normalizeQuizRow(payload.quiz) as Quiz;
+      if (!ownerUsername && remoteQuiz.id) {
+        const owner = activeStorageUserId;
+        const rows = await readLocal('quiz', owner);
+        if (activeStorageUserId === owner) {
+          await writeLocal('quiz', [...rows.filter((item) => item.id !== remoteQuiz.id), {
+            id: remoteQuiz.id, ownerId: owner, type: 'quiz', content: remoteQuiz,
+            updated_at: (remoteQuiz as any).updated_at || new Date().toISOString(), is_synced: true,
+          }], owner);
         }
-
-        const onlineQuiz: any = await Promise.race([queryPromise, timeoutPromise]);
-        if (!onlineQuiz.error && onlineQuiz.data) {
-          return {
-            ...normalizeQuizRow(onlineQuiz.data),
-          } as Quiz;
-        }
-      } catch {}
+      }
+      return remoteQuiz;
+    } catch {
+      return exactQuiz ?? null;
     }
-    return exactQuiz ?? null;
   },
 
   async saveResponse(quizId: string, response: any) {
@@ -1369,6 +1401,14 @@ export const HybridStorage = {
             const { db } = await import('@/lib/firebase');
             const { doc, deleteDoc } = await import('firebase/firestore');
             await deleteDoc(doc(db, 'tournaments', id));
+          } else if (type === 'quiz') {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) return;
+            const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (!response.ok) throw new Error('Cloud assessment delete failed.');
           } else {
             const {
               data: { session },

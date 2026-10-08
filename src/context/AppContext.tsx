@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
 import { resolveTier, type PremiumTier } from '@/lib/config/premium';
 import { HybridStorage } from '@/lib/storage-utils';
 import type { User } from '@supabase/supabase-js';
@@ -76,6 +75,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Set initial state
     const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    // Initial browser connectivity is an intentional state sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsOnline(online);
 
     window.addEventListener('online', handleOnline);
@@ -84,7 +85,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Cache check
@@ -104,23 +104,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data: { session: authSession } } = await supabase.auth.getSession();
       if (authSession?.user) {
         const authUser = authSession.user;
+        if (!authUser.email_confirmed_at) {
+          await supabase.auth.signOut({ scope: 'local' });
+          await HybridStorage.setUserId('guest');
+          setUser(null);
+          setUsername('');
+          setDp('');
+          setPremiumTier('free');
+          setPurchasedTools([]);
+          return;
+        }
         await HybridStorage.setUserId(authUser.id);
         setUser(authUser);
         const meta = authUser.user_metadata ?? {};
         setUsername(meta.username || 'user');
         setDp(meta.avatar_url || '');
-        const resolved = resolveTier(meta.tier);
-        setPremiumTier(resolved);
-
-        const tools = meta.purchased_tools || [];
+        // Billing tier is server-managed app metadata. User metadata is editable
+        // by the account holder and must not grant paid-only controls.
+        const accessMeta = authUser.app_metadata ?? {};
+        const resolved = resolveTier(accessMeta.tier);
+        const expiry = typeof accessMeta.tier_expires_at === 'string'
+          ? Date.parse(accessMeta.tier_expires_at)
+          : Number.NaN;
+        const tierIsActive = Number.isFinite(expiry) && expiry > Date.now();
+        setPremiumTier(tierIsActive ? resolved : 'free');
+        const tools = tierIsActive ? accessMeta.purchased_tools || [] : [];
         setPurchasedTools(Array.isArray(tools) ? tools : [tools]);
 
         try {
           const res = await fetch('/api/auth/firebase-token', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: authSession.access_token }),
+            headers: { Authorization: `Bearer ${authSession.access_token}` },
+            credentials: 'omit',
           });
+          if (!res.ok) throw new Error(`Firebase bridge returned ${res.status}.`);
           const data = await res.json();
           if (data.firebaseToken) {
             const { signInWithCustomToken } = await import('firebase/auth');
@@ -180,6 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [premiumTier, purchasedTools]);
 
   useEffect(() => {
+    // Session bootstrap must begin when the provider mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSession().then(() => {
       void HybridStorage.cleanupExpiredItems();
       void checkCache();

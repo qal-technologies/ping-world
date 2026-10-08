@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
@@ -25,7 +26,10 @@ export async function POST(
 
   try {
     const { id } = await context.params;
-    const body = (await readJsonWithinLimit(request, 64 * 1024)) as Record<string, any>;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return NextResponse.json({ error: 'Invalid assessment.' }, { status: 400 });
+    }
+    const body = (await readJsonWithinLimit(request, 64 * 1024)) as Record<string, unknown>;
     const category = typeof body.category === 'string' && VALID_CATEGORIES.includes(body.category)
       ? body.category
       : 'Other';
@@ -40,6 +44,8 @@ export async function POST(
 
     const user = await getRequestUser(request).catch(() => null);
     const admin = getSupabaseAdmin();
+    const { data: quiz, error: quizError } = await admin.from('quizzes').select('id,settings').eq('id', id).maybeSingle();
+    if (quizError || !quiz) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
 
     const reportId = crypto.randomUUID();
     const reportPayload = {
@@ -47,36 +53,39 @@ export async function POST(
       quiz_id: id,
       category,
       reason,
-      reporter_ip: ip,
+      reporter_key: user?.id || createHash('sha256').update(ip).digest('hex'),
       reporter_id: user?.id || null,
       created_at: new Date().toISOString(),
       status: 'pending',
     };
 
-    // Attempt insert into quiz_reports table
     const { error: dbError } = await admin.from('quiz_reports').insert(reportPayload);
+    if (dbError && dbError.code !== '23505') {
+      console.error('[api/report] Report persistence failed:', dbError.code || 'unknown');
+      return NextResponse.json({ error: 'Report storage is not configured. Apply the quiz_reports setup before accepting reports.' }, { status: 503 });
+    }
 
-    if (dbError) {
-      // If table does not exist or schema differs, log securely and queue to admin notification batches
-      console.warn('[api/report] quiz_reports table insert fallback:', dbError.message);
-      try {
-        await admin.from('notification_batches').insert({
-          resource_id: id,
-          recipient_id: user?.id || '00000000-0000-0000-0000-000000000000',
-          notification_type: 'assessment_response',
-          pending_count: 1,
-          total_count: 1,
-        }).throwOnError();
-      } catch {}
+    const { count, error: countError } = await admin.from('quiz_reports').select('id', { count: 'exact', head: true }).eq('quiz_id', id).eq('status', 'pending');
+    if (countError) throw countError;
+    const reviewPaused = (count || 0) >= 5;
+    if (reviewPaused && quiz.settings?.moderationStatus !== 'under_review') {
+      const settings = quiz.settings && typeof quiz.settings === 'object' ? quiz.settings : {};
+      const { error: pauseError } = await admin.from('quizzes').update({
+        settings: { ...settings, moderationStatus: 'under_review', moderationPausedAt: new Date().toISOString() },
+      }).eq('id', id);
+      if (pauseError) throw pauseError;
     }
 
     return NextResponse.json({
       success: true,
       reportId,
-      message: 'Assessment reported successfully. Our team will review this within 24 hours.',
+      reviewPaused,
+      message: reviewPaused
+        ? 'This assessment has been paused for review after multiple independent reports.'
+        : 'Report received. The assessment will be paused for review if it reaches the independent report threshold.',
     });
-  } catch (error: any) {
-    console.error('[api/report] Unexpected error submitting report:', error);
+  } catch (error: unknown) {
+    console.error('[api/report] Unexpected error submitting report:', error instanceof Error ? error.message : 'unknown');
     return NextResponse.json(
       { error: 'Unable to submit report. Please try again later.' },
       { status: 500 },

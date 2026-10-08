@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import Image from 'next/image';
 import {
   Upload, Download, Camera, Check, Circle, Square,
   Hexagon, RotateCw, ZoomIn, ZoomOut, Move,
@@ -179,9 +180,12 @@ export default function ProfilePicMaker() {
               )}
               style={{ background: bg === 'transparent' ? 'transparent' : bg }}>
               {avatar ? (
-                <img
+                <Image
                   src={avatar}
                   alt='Avatar'
+                  width={270}
+                  height={270}
+                  unoptimized
                   crossOrigin='anonymous'
                   className={cn(
                     'select-none pointer-events-none transition-transform duration-75',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle,
@@ -298,10 +299,13 @@ export default function MessageLandingPage() {
                             <span className='flex items-center gap-1.5 font-bold text-pw-primary border border-pw-primary/20 bg-pw-primary/10 rounded px-2 py-1'>
                               {msg.sender_country &&
                                 msg.sender_country !== 'Unknown' ? (
-                                  <img
+                                  <Image
                                     src={`https://flagcdn.com/w20/${msg.sender_country.toLowerCase()}.png`}
                                     alt={msg.sender_country}
+                                    width={16}
+                                    height={12}
                                     className="w-4 h-3 object-cover rounded-sm border border-white/10 shrink-0"
+                                    unoptimized
                                     onError={(e) => {
                                       (e.currentTarget as HTMLImageElement).style.display = 'none';
                                     }}

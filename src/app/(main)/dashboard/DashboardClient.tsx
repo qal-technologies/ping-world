@@ -25,6 +25,7 @@ import { useAppContext } from '@/context/AppContext';
 import { PREMIUM_TIERS } from '@/lib/config/premium';
 import { SITE } from '@/lib/config/site';
 import {useRouter} from 'next/navigation';
+import InAppNotificationCenter from '@/components/notifications/InAppNotificationCenter';
 
 export default function GeneralDashboard() {
   const {premiumTier, username, user} = useAppContext();
@@ -160,11 +161,10 @@ export default function GeneralDashboard() {
             <h3 className='text-xl font-bold flex items-center gap-2'>
               <BarChart3 className='h-5 w-5 text-pw-primary' /> Recent Activity
             </h3>
-            <Button
-              variant='link'
-              className='text-pw-primary text-xs'>
-              View All
-            </Button>
+            <div className='flex items-center gap-2'>
+              <InAppNotificationCenter />
+              <Button variant='link' onClick={() => router.push('/quiz')} className='text-pw-primary text-xs'>View all</Button>
+            </div>
           </div>
 
           <div className='space-y-4'>

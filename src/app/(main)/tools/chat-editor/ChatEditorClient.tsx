@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
@@ -368,7 +369,7 @@ export default function ChatEditorPage() {
                     />
                     {chatImageInput && (
                       <div className='relative w-20 h-20 rounded-xl overflow-hidden border border-white/10'>
-                        <img src={chatImageInput} className='w-full h-full object-cover' />
+                            <Image src={chatImageInput} alt='Selected chat image' width={640} height={360} unoptimized className='w-full h-full object-cover' />
                         <button
                           onClick={() => setChatImageInput(null)}
                           className='absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 text-pw-danger'
@@ -540,7 +541,7 @@ export default function ChatEditorPage() {
                         )}>
                         
                         {m.imageSrc ? (
-                          <img src={m.imageSrc} className='w-44 h-auto rounded-xl object-contain mb-1' />
+                          <Image src={m.imageSrc} alt='Chat attachment' width={176} height={132} unoptimized className='w-44 h-auto rounded-xl object-contain mb-1' />
                         ) : (
                           <p>{m.text}</p>
                         )}

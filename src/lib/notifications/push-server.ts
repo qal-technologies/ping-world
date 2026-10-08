@@ -115,3 +115,14 @@ export async function sendPushToUser(
   }));
   return { attempted: results.length, delivered: results.filter(Boolean).length };
 }
+
+export async function isNotificationRecipientActive(admin: SupabaseClient, userId: string): Promise<boolean> {
+  const { data, error } = await admin.from('notification_presence').select('active_until')
+    .eq('recipient_id', userId).gt('active_until', new Date().toISOString()).maybeSingle();
+  if (error) {
+    // A missing optional presence table must never block durable notification delivery.
+    console.warn('[push] Presence lookup failed; falling back to push delivery:', error.code || 'unknown');
+    return false;
+  }
+  return Boolean(data);
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download,
@@ -280,9 +281,12 @@ export function SavePreviewPanel() {
 
               {/* Preview image */}
               <div className='p-4'>
-                <img
+                <Image
                   src={previewBlob}
                   alt='Post preview'
+                  width={720}
+                  height={720}
+                  unoptimized
                   className='w-full rounded-xl border border-white/5'
                 />
               </div>

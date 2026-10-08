@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { readJsonWithinLimit } from '@/lib/api-auth';
 import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
+import { isNotificationRecipientActive, sendPushToUser } from '@/lib/notifications/push-server';
 
 function sameValue(left: unknown, right: unknown) {
   if (Array.isArray(left) && Array.isArray(right)) {
@@ -63,6 +64,9 @@ export async function POST(request: NextRequest) {
       }
       rawAnswers = Object.values(verifiedAttempt.answers || {}).slice(0, questions.length) as any[];
     }
+    if ((quiz.settings as Record<string, unknown> | null)?.isPrivate && !attempt) {
+      return NextResponse.json({ error: 'Private assessments require a verified attempt.' }, { status: 403 });
+    }
     const answers = rawAnswers.flatMap((raw: unknown) => {
       if (!raw || typeof raw !== 'object') return [];
       const candidate = raw as Record<string, unknown>;
@@ -71,12 +75,13 @@ export async function POST(request: NextRequest) {
       if (!question) return [];
       const answer = candidate.answer;
       let correctValue = decodeStoredCorrectAnswer(question.correctIndex);
-      let correct = false;
-      if (quiz.type === 'quiz' && question.type === 'input' && (correctValue === null || correctValue === '')) {
-        correct = true;
-      } else if (quiz.type === 'quiz' && question.type === 'upload') {
-        correct = Boolean((candidate as Record<string, any>).fileUrl || answer);
-      } else if (quiz.type === 'quiz' && correctValue !== null) {
+      const hasCorrectAnswer = correctValue !== null && correctValue !== undefined && correctValue !== '' && !(Array.isArray(correctValue) && correctValue.length === 0);
+      if (typeof correctValue === 'number' && Array.isArray(question.options)) {
+        const option = question.options[correctValue] as any;
+        correctValue = option && typeof option === 'object' ? option.id : option;
+      }
+      let correct: boolean | undefined;
+      if (quiz.type === 'quiz' && hasCorrectAnswer && question.type !== 'upload') {
         if (question.type === 'input') {
           const actual = String(answer ?? '').trim();
           const expected = String(correctValue ?? '').trim();
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
         : Array.isArray(answer) ? answer.filter((value) => typeof value === 'string').slice(0, 100).map((value) => value.slice(0, 2_000))
         : answer && typeof answer === 'object' ? Object.fromEntries(Object.entries(answer as Record<string, unknown>).slice(0, 30))
         : answer;
-      return [{ ...candidate, questionId, answer: cleanAnswer, correct }];
+      return [{ ...candidate, questionId, answer: cleanAnswer, ...(typeof correct === 'boolean' ? { correct } : {}) }];
     });
     const userDataInput = attempt?.user_data && typeof attempt.user_data === 'object'
       ? attempt.user_data
@@ -135,6 +140,39 @@ export async function POST(request: NextRequest) {
         recipient_uuid: quiz.user_id, quiz_uuid: quizId,
       });
       if (notificationError) console.warn('[api/quiz-responses] Response saved; notification batch enqueue failed:', notificationError.code || 'unknown');
+      else after(async () => {
+        // Deliver online push promptly while retaining the durable one-row batch
+        // and its claim/ack protocol for retries and offline recipients.
+        const { data: account } = await admin.auth.admin.getUserById(quiz.user_id);
+        if (account.user?.user_metadata?.notification_preferences?.assessmentResponses !== false) {
+          const { data: batch } = await admin.from('notification_batches').select('id').eq('recipient_id', quiz.user_id)
+            .eq('resource_id', quizId).eq('notification_type', 'assessment_response').maybeSingle();
+          if (batch?.id) {
+            const claimToken = crypto.randomUUID();
+            const { data: claimed } = await admin.rpc('claim_notification_batch', { batch_uuid: batch.id, claim_token: claimToken });
+            if (claimed?.length) {
+              const pending = Math.max(1, Number(claimed[0].pending_count) || 1);
+              try {
+                if (await isNotificationRecipientActive(admin, quiz.user_id)) {
+                  await admin.rpc('ack_notification_batch', { batch_uuid: batch.id, claim_token: claimToken, delivered_count: pending });
+                  return;
+                }
+                const { count } = await admin.from('quiz_responses').select('id', { count: 'exact', head: true }).eq('quiz_id', quizId);
+                const delivery = await sendPushToUser(admin, quiz.user_id, {
+                  title: 'Assessment responses',
+                  body: `${pending} new response${pending === 1 ? '' : 's'} for “${String(quiz.title || 'your assessment').slice(0, 100)}”. ${count || 0} total.`,
+                  url: '/quiz',
+                  tag: `assessment-response-${quizId}`,
+                });
+                if (delivery.delivered > 0) await admin.rpc('ack_notification_batch', { batch_uuid: batch.id, claim_token: claimToken, delivered_count: pending });
+                else await admin.rpc('release_notification_batch', { batch_uuid: batch.id, claim_token: claimToken });
+              } catch {
+                await admin.rpc('release_notification_batch', { batch_uuid: batch.id, claim_token: claimToken });
+              }
+            }
+          }
+        }
+      });
     }
     return NextResponse.json({ success: true, score, totalQuestions: questions.length, categoryScores: userData.categoryScores }, { status: 201 });
   } catch (error: unknown) {

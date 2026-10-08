@@ -13,21 +13,22 @@ import { useAppContext } from '@/context/AppContext';
 export default function LoginPage() {
   const [secure, setSecure] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
 
-
   const router = useRouter();
-  const {user, username, refresh} = useAppContext();
+  const { user, username, refresh } = useAppContext();
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
     const checkUser = async () => {
-      if(navigator.onLine) {
+      if (navigator.onLine) {
         await refresh();
-        if(user?.id && username) router.replace('/dashboard');
+        if (user?.id && username) router.replace('/dashboard');
         setPageLoading(false);
       } else {
         setPageLoading(false);
@@ -48,13 +49,27 @@ export default function LoginPage() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: formData.email, password: formData.password }),
+        body: JSON.stringify({
+          identifier: formData.email,
+          password: formData.password,
+        }),
       });
       const result = await response.json();
-      if (!response.ok || !result.session?.access_token || !result.session?.refresh_token) throw new Error(result.error || 'Could not sign in.');
-      const { error } = await supabase.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
+      if (response.status === 403 && result.code === 'EMAIL_NOT_VERIFIED') {
+        toast.error('Please verify your email address before signing in. Check your inbox for the confirmation link.');
+        return;
+      }
+      if (
+        !response.ok ||
+        !result.session?.access_token ||
+        !result.session?.refresh_token
+      )
+        throw new Error(result.error || 'Could not sign in.');
+      const { error } = await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
       if (error) throw error;
-      void fetch('/api/auth/welcome-email', { method: 'POST', keepalive: true, headers: { Authorization: `Bearer ${result.session.access_token}` } }).catch(() => {});
       await refresh();
 
       toast.success('Welcome back!');
@@ -64,6 +79,28 @@ export default function LoginPage() {
       else toast.error(err.message || 'Failed to login');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = formData.email.trim();
+    if (!email || !email.includes('@'))
+      return toast.error('Enter the email address for your account.');
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/settings?tab=security`,
+      });
+      if (error) throw error;
+      toast.success(
+        'If an account exists for that email, a password reset link is on its way.',
+      );
+      setResetMode(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Could not send a password reset link.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -118,18 +155,23 @@ export default function LoginPage() {
         </div>
 
         <form
-          onSubmit={handleLogin}
+          onSubmit={resetMode ? handlePasswordReset : handleLogin}
           className='form p-8 md:p-12 gap-2 md:gap-5 w-full md:col-span-2 grid bg-black/40 backdrop-blur-xl'>
           <div className='space-y-4'>
             <div className='form-group'>
               <label className='form-label mb-1.5'>
-                <Mail size={18} /> Email or Username
+                <Mail size={18} />{' '}
+                {resetMode ? 'Email address' : 'Email or Username'}
               </label>
               <input
                 className='form-input border-white/10 hover:border-pw-primary/30'
-                type='text'
-                placeholder='name@example.com or username'
-                autoComplete='username'
+                placeholder={
+                  resetMode ? 'name@example.com' : (
+                    'name@example.com or username'
+                  )
+                }
+                type={resetMode ? 'email' : 'text'}
+                autoComplete={resetMode ? 'email' : 'username'}
                 disabled={loading}
                 value={formData.email}
                 onChange={(e) =>
@@ -138,56 +180,80 @@ export default function LoginPage() {
               />
             </div>
 
-            <div className='form-group'>
-              <label className='form-label mb-1.5'>
-                <Key size={18} /> Password
-              </label>
-              <div className='flex gap-2 w-full'>
-                <input
-                  className='form-input border-white/10 hover:border-pw-primary/30'
-                  type={secure ? 'password' : 'text'}
-                  placeholder='••••••••'
-                  autoComplete='current-password'
-                  disabled={loading}
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                />
-                <div
-                  onClick={() => setSecure(!secure)}
-                  className={cn(
-                    'w-12 h-10 flex items-center justify-center rounded-xl cursor-pointer transition-all border border-white/10',
-                    secure ?
-                      'bg-white/5 hover:bg-white/10 text-pw-muted'
-                    : 'gradient-brand text-white',
-                  )}>
-                  {secure ?
-                    <Eye size={18} />
-                  : <EyeOff size={18} />}
+            {!resetMode && (
+              <div className='form-group'>
+                <label className='form-label mb-1.5'>
+                  <Key size={18} /> Password
+                </label>
+                <div className='flex gap-2 w-full'>
+                  <input
+                    className='form-input border-white/10 hover:border-pw-primary/30'
+                    type={secure ? 'password' : 'text'}
+                    placeholder='••••••••'
+                    autoComplete='current-password'
+                    disabled={loading}
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                  />
+                  <div
+                    onClick={() => setSecure(!secure)}
+                    className={cn(
+                      'w-12 h-10 flex items-center justify-center rounded-xl cursor-pointer transition-all border border-white/10',
+                      secure ?
+                        'bg-white/5 hover:bg-white/10 text-pw-muted'
+                      : 'gradient-brand text-white',
+                    )}>
+                    {secure ?
+                      <Eye size={18} />
+                    : <EyeOff size={18} />}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className='mt-4 space-y-6'>
             <Button
               type='submit'
-              disabled={loading || !formData.email || !formData.password}
+              disabled={
+                resetMode ?
+                  resetLoading || !formData.email
+                : loading || !formData.email || !formData.password
+              }
               className='btn-primary w-full h-12 text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-100 flex gap-2'>
-              {loading ? 'SIGNING IN...' : 'SIGN IN'}
-              {!loading && <ArrowRight size={18} />}
+              {resetMode ?
+                resetLoading ?
+                  'SENDING LINK...'
+                : 'SEND RESET LINK'
+              : loading ?
+                'SIGNING IN...'
+              : 'SIGN IN'}
+              {!(resetMode ? resetLoading : loading) && (
+                <ArrowRight size={18} />
+              )}
             </Button>
 
-            <div className='flex justify-center items-center gap-2 text-sm text-pw-muted'>
-              No account yet?{' '}
-              <Link
-                href='/register'
-                replace
-                className='text-pw-cyan font-bold hover:underline decoration-pw-cyan/30 underline-offset-4'>
-                Yes
-              </Link>
-            </div>
+            <button
+              type='button'
+              onClick={() => setResetMode((value) => !value)}
+              className='w-full text-sm text-pw-cyan hover:underline'
+              disabled={loading || resetLoading}>
+              {resetMode ? 'Back to sign in' : 'Forgot password?'}
+            </button>
+
+            {!resetMode && (
+              <div className='flex justify-center items-center gap-2 text-sm text-pw-muted'>
+                No account yet?{' '}
+                <Link
+                  href='/register'
+                  replace
+                  className='text-pw-cyan font-bold hover:underline decoration-pw-cyan/30 underline-offset-4'>
+                  Yes
+                </Link>
+              </div>
+            )}
           </div>
         </form>
       </div>

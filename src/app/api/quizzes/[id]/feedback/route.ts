@@ -131,6 +131,8 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
+  const user = await getRequestUser(request);
+  if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   const ip = getClientIp(request);
   if (isRateLimited(ip, 'api:quiz-feedback-get', 60, 60_000).limited) {
     return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 });
@@ -143,12 +145,12 @@ export async function GET(
   const search = searchParams.get('search')?.toLowerCase() || '';
   const sort = searchParams.get('sort') || 'newest'; // newest | highest | lowest | quality
 
-  const cacheKey = `${id}:${sentiment}:${minRating}:${filterType}:${search}:${sort}`;
+  const cacheKey = `${user.id}:${id}:${sentiment}:${minRating}:${filterType}:${search}:${sort}`;
   const cachedData = getCached(cacheKey);
   if (cachedData) {
     return NextResponse.json({ ...cachedData, cached: true }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        'Cache-Control': 'private, no-store',
         'X-Cache': 'HIT',
       },
     });
@@ -156,6 +158,9 @@ export async function GET(
 
   try {
     const admin = getSupabaseAdmin();
+    const { data: ownedQuiz, error: ownerError } = await admin.from('quizzes')
+      .select('id').eq('id', id).eq('user_id', user.id).maybeSingle();
+    if (ownerError || !ownedQuiz) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
     // 1. Check if quiz_feedback table exists
     const { data: dbFeedback, error: fbError } = await admin
       .from('quiz_feedback')
@@ -250,7 +255,7 @@ export async function GET(
 
     return NextResponse.json({ ...result, cached: false }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        'Cache-Control': 'private, no-store',
         'X-Cache': 'MISS',
       },
     });

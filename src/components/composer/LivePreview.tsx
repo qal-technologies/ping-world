@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import {
   Heart,
   MessageCircle,
@@ -110,7 +111,7 @@ function XPreview({
       <div className='flex items-start gap-3 mb-3'>
         <div className='h-10 w-10 rounded-full bg-gradient-to-br from-pw-primary to-pw-secondary shrink-0 overflow-hidden flex items-center justify-center font-bold text-white text-sm '>
           {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+            <Image src={avatarUrl} alt={displayName} width={40} height={40} unoptimized className='h-full w-full object-cover' />
           ) : (
             displayName[0].toUpperCase()
           )}
@@ -147,10 +148,13 @@ function XPreview({
           )}
         >
           {images.slice(0, 4).map((img, idx) => (
-            <img
+            <Image
               key={(img.id || `x-img-${idx}`) + '-x-image'}
               src={img.previewUrl}
               alt={img.altText || 'upload'}
+              width={640}
+              height={360}
+              unoptimized
               className='w-full h-full object-cover aspect-video'
               style={{
                 filter: img.filterStyle,
@@ -257,7 +261,7 @@ function InstagramPreview({
         <div className='h-8 w-8 rounded-full bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] p-0.5 shrink-0'>
           <div className='h-full w-full rounded-full bg-gray-200 overflow-hidden flex items-center justify-center font-bold text-black text-[10px]'>
             {avatarUrl ? (
-              <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+              <Image src={avatarUrl} alt={displayName} width={40} height={40} unoptimized className='h-full w-full object-cover' />
             ) : (
               displayName[0].toUpperCase()
             )}
@@ -277,9 +281,12 @@ function InstagramPreview({
         )}
       >
         {imageCount > 0 ? (
-          <img
+          <Image
             src={images[index]?.previewUrl}
             alt={images[index]?.altText || 'upload'}
+            width={640}
+            height={360}
+            unoptimized
             className='w-full h-full object-cover'
             style={{
               filter: images[index]?.filterStyle,
@@ -401,7 +408,7 @@ function FacebookPreview({
       <div className='flex items-center gap-3 p-3'>
         <div className='h-9 w-9 rounded-full bg-[#1877F2] flex items-center justify-center shrink-0 overflow-hidden font-bold text-white text-sm'>
           {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+            <Image src={avatarUrl} alt={displayName} width={40} height={40} unoptimized className='h-full w-full object-cover' />
           ) : (
             displayName[0].toUpperCase()
           )}
@@ -433,10 +440,13 @@ function FacebookPreview({
           )}
         >
           {images.map((img, idx) => (
-            <img
+            <Image
               key={(img.id || `fb-img-${idx}`) + '-facebook-image'}
               src={img.previewUrl}
               alt='Facebook post'
+              width={640}
+              height={360}
+              unoptimized
               className='w-full h-full object-cover max-h-48'
               style={{
                 filter: img.filterStyle,
@@ -526,7 +536,7 @@ function LinkedInPreview({
       <div className='flex items-start gap-3 p-4 pb-3'>
         <div className='h-12 w-12 rounded-full bg-gradient-to-br from-[#0A66C2] to-[#00A0DC] flex items-center justify-center shrink-0 overflow-hidden font-bold text-white text-base'>
           {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className='h-full w-full object-cover' />
+            <Image src={avatarUrl} alt={displayName} width={40} height={40} unoptimized className='h-full w-full object-cover' />
           ) : (
             displayName[0].toUpperCase()
           )}
@@ -558,10 +568,13 @@ function LinkedInPreview({
           )}
         >
           {images.map((img, idx) => (
-            <img
+            <Image
               key={(img.id || `li-img-${idx}`) + '-linkedin-image'}
               src={img.previewUrl}
               alt='LinkedIn post'
+              width={640}
+              height={360}
+              unoptimized
               className='w-full h-full object-cover max-h-56'
               style={{
                 filter: img.filterStyle,

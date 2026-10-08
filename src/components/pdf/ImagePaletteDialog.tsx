@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Image as ImageIcon, Upload, Trash2, Pencil, CheckCircle } from 'lucide-react';
+import NextImage from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -158,9 +159,12 @@ export default function ImagePaletteDialog({
                 key={item.id}
                 className='p-3 rounded-2xl bg-white/5 border border-white/5 space-y-2 flex flex-col justify-between'>
                 <div className='flex items-center gap-3'>
-                  <img
+                  <NextImage
                     src={item.src}
                     alt={item.name}
+                    width={56}
+                    height={56}
+                    unoptimized
                     className='w-14 h-14 object-contain rounded-lg bg-black/40 p-1 border border-white/10 shrink-0'
                   />
                   <div className='min-w-0 flex-1'>

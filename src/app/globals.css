@@ -196,6 +196,12 @@ body {
 }
 
 /* ─── Typography ────────────────────────────────────────────── */
+.quiz-taker-font,
+.quiz-taker-font .font-display,
+.quiz-taker-font .font-mono {
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+}
+
 h1,
 h2,
 h3,

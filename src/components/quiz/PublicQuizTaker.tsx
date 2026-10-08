@@ -30,6 +30,7 @@ import {
   Trophy,
   X,
   SkipForward,
+  LoaderCircle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { optimizeImageForStorage } from '@/lib/media-optimization';
 import { capFirst, cn } from '@/lib/utils';
 import React from 'react';
-import type { Question, Quiz, QuizOption } from '@/app/(main)/quiz';
+import { quizHaptic, type Question, type Quiz, type QuizOption } from '@/app/(main)/quiz';
 import { useParams } from 'next/navigation';
 import { usePageLayout } from '@/components/layout';
 import { useAppContext } from '@/context/AppContext';
@@ -71,6 +72,37 @@ import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
 import { useAppFileViewer } from '@/components/shared/AppFileViewer';
 import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
 import Image from 'next/image';
+
+function getAssessmentDeviceKey(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const keyName = 'pw_assessment_device_key_v1';
+    let key = localStorage.getItem(keyName);
+    if (!key) {
+      key = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem(keyName, key);
+    }
+    return key;
+  } catch {
+    return '';
+  }
+}
+
+function getPrivateQuizAccessToken(quizId: string): string {
+  try { return sessionStorage.getItem(`pw_private_quiz_access_v1_${quizId}`) || ''; } catch { return ''; }
+}
+
+function describeAcceptedFiles(accept = '') {
+  const value = accept.toLowerCase();
+  const labels = [
+    value.includes('image') || /\.(png|jpe?g|gif|webp|svg|avif)/.test(value) ? 'images' : '',
+    value.includes('video') || /\.(mp4|mov|webm|mkv)/.test(value) ? 'videos' : '',
+    value.includes('audio') || /\.(mp3|wav|m4a|ogg|aac)/.test(value) ? 'audio' : '',
+    /\.(pdf|docx?|txt|rtf|odt)/.test(value) || value.includes('pdf') ? 'documents' : '',
+    /\.(zip|7z|rar)/.test(value) ? 'archives' : '',
+  ].filter(Boolean);
+  return labels.length ? labels.join(', ') : accept || 'supported files';
+}
 
 const NoteSheet = ({ note }: { note: string }) => (
   <Card className='p-6 bg-pw-surface bkblur border-white/10 shadow-2xl m-2 max-w-sm'>
@@ -419,6 +451,12 @@ function Taker() {
     }
   }, [started, quiz?.quizScroll]);
 
+  useEffect(() => {
+    if (!started || !quiz?.quizScroll || quiz.quizLayout !== 'scroll_show') return;
+    const timer = window.setTimeout(() => firstQuestionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    return () => window.clearTimeout(timer);
+  }, [currentQuestion, started, quiz?.quizScroll, quiz?.quizLayout]);
+
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [hasAlreadyCompleted, setHasAlreadyCompleted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -427,6 +465,7 @@ function Taker() {
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
+    const handleWindowFocus = () => window.setTimeout(() => { uploadPickerOpenRef.current = false; }, 250);
     const handleOnline = () => {
       setIsOnline(true);
     };
@@ -436,9 +475,11 @@ function Taker() {
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleWindowFocus);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
 
@@ -460,6 +501,10 @@ function Taker() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState('');
   const [reportedStatus, setReportedStatus] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionFailed, setSubmissionFailed] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const uploadPickerOpenRef = React.useRef(false);
 
   const [scrollAnswers, setScrollAnswers] = useState<Record<string, any>>({});
   const [branchVisitCounts, setBranchVisitCounts] = useState<
@@ -474,6 +519,10 @@ function Taker() {
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [quizUnavailable, setQuizUnavailable] = useState(false);
+  const [isQuizUnderReview, setIsQuizUnderReview] = useState(false);
+  const [privateAccessGranted, setPrivateAccessGranted] = useState(false);
+  const [privateAccessKey, setPrivateAccessKey] = useState('');
+  const [isCheckingPrivateAccess, setIsCheckingPrivateAccess] = useState(false);
   const pendingUnloadCb = React.useRef<(() => void) | null>(null);
   const correctAnswersRef = React.useRef<Record<string, any>>({});
   const activeAttemptRef = React.useRef<Record<string, any> | null>(null);
@@ -550,6 +599,7 @@ function Taker() {
           Array.from(crypto.getRandomValues(new Uint8Array(48)), (byte) =>
             byte.toString(16).padStart(2, '0'),
           ).join(''),
+        deviceKey: previous.deviceKey || getAssessmentDeviceKey(),
         status: 'in_progress',
         startedAt: previous.startedAt || new Date().toISOString(),
         answers,
@@ -611,6 +661,8 @@ function Taker() {
             body: JSON.stringify({
               action: 'start', quizId: quiz.id, attemptId: snapshot.attemptId,
               attemptToken: snapshot.attemptToken, questionOrder: snapshot.questionOrder,
+              deviceKey: snapshot.deviceKey,
+              privateQuizAccessToken: getPrivateQuizAccessToken(quiz.id),
               userData: snapshot.userData, currentQuestionIndex: snapshot.currentQuestionIndex,
               allowBackwardNavigation: quiz.canGoBack !== false,
             }),
@@ -666,6 +718,8 @@ function Taker() {
             userData: preparedSnapshot.userData,
             currentQuestionIndex: preparedSnapshot.currentQuestionIndex,
             allowBackwardNavigation: quiz.canGoBack !== false,
+            deviceKey: preparedSnapshot.deviceKey,
+            privateQuizAccessToken: getPrivateQuizAccessToken(quiz.id),
           }),
           keepalive,
           signal: keepalive ? undefined : AbortSignal.timeout(5000),
@@ -697,6 +751,7 @@ function Taker() {
   const startAssessment = useCallback(
     (initialUserData: Record<string, string> = userData) => {
       if (!quiz || isLocalPreview) {
+        quizHaptic(18);
         playQuizStartTone();
         setStart(true);
         return;
@@ -712,6 +767,7 @@ function Taker() {
       }
       activeAttemptRef.current = snapshot;
       setStart(true);
+      quizHaptic(18);
       playQuizStartTone();
       void syncAttemptSnapshot(snapshot);
     },
@@ -790,6 +846,7 @@ function Taker() {
       setLoading(true);
       try {
         let data: Quiz | null = null;
+        let moderationPaused = false;
         if (isLocalPreview && typeof window !== 'undefined') {
           try {
             const raw =
@@ -817,23 +874,32 @@ function Taker() {
             if (params?.username && quizSetter)
               publicUrl.searchParams.set('owner', quizSetter);
             try {
-              const response = await fetch(publicUrl, { cache: 'no-store' });
-              const payload = response.ok ? await response.json() : null;
+              const token = getPrivateQuizAccessToken(routeParamId);
+              const response = await fetch(publicUrl, {
+                cache: 'no-store',
+                headers: token ? { 'X-Quiz-Access-Token': token } : undefined,
+              });
+              const payload = response.ok || response.status === 423 ? await response.json() : null;
 
-              if(response.ok) {
+              if (response.status === 423 && payload?.code === 'PRIVATE_ACCESS_REQUIRED') {
+                data = payload.quiz || null;
+              } else if (response.status === 423) {
+                moderationPaused = true;
+                setIsQuizUnderReview(true);
+              } else if(response.ok) {
                 data = payload?.quiz || null;
               } else {
-                data = await HybridStorage.getQuiz(routeParamId) || null;
+                data = await HybridStorage.getQuiz(routeParamId, undefined, quizSetter) || null;
                 
               }
             } catch (e){
-              data = null;
+              data = await HybridStorage.getQuiz(routeParamId, undefined, quizSetter) || null;
               console.error(e);
             }
           }
         }
-        if (!data && routeParamId) {
-          data = await HybridStorage.getQuiz(routeParamId);
+        if (!data && routeParamId && !moderationPaused) {
+          data = await HybridStorage.getQuiz(routeParamId, undefined, quizSetter);
         }
         let target = data as Quiz | null;
         if (target) {
@@ -877,6 +943,35 @@ function Taker() {
             session = data?.session;
           } catch (err) {
             console.warn('Supabase auth check failed', err);
+          }
+
+          if (!isLocalPreview && target.isPrivate) {
+            setPrivateAccessGranted(Boolean(target.accessGranted));
+            if (!target.accessGranted) {
+            try {
+              const accessResponse = await fetch(`/api/quizzes/${encodeURIComponent(target.id)}/access`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+                },
+                body: JSON.stringify({ key: '', accessToken: getPrivateQuizAccessToken(target.id) }),
+                cache: 'no-store', credentials: 'omit',
+              });
+              if (accessResponse.ok) {
+                const access = await accessResponse.json();
+                if (access.accessToken) {
+                  sessionStorage.setItem(`pw_private_quiz_access_v1_${target.id}`, access.accessToken);
+                  if (routeParamId) sessionStorage.setItem(`pw_private_quiz_access_v1_${routeParamId}`, access.accessToken);
+                }
+                window.location.reload();
+              }
+            } catch {
+              // The key form remains available if the allowlist check cannot run.
+            }
+            }
+          } else {
+            setPrivateAccessGranted(true);
           }
 
           if (!isLocalPreview && !target.askDetails && !session) {
@@ -1066,6 +1161,8 @@ function Taker() {
                   quizId: finalQuiz.id,
                   attemptId: restoredDraft.attemptId,
                   attemptToken: restoredDraft.attemptToken,
+                  deviceKey: restoredDraft.deviceKey,
+                  privateQuizAccessToken: getPrivateQuizAccessToken(finalQuiz.id),
                 }),
               })
                 .then(async (response) => {
@@ -1105,7 +1202,7 @@ function Taker() {
         return;
       }
       const totalQuestionTimers = activeQuestions.reduce(
-        (sum, q) => sum + (q.timer || 0),
+        (sum, question) => sum + (question.type === 'upload' ? 0 : question.timer || 0),
         0,
       );
       const timerValue =
@@ -1139,7 +1236,7 @@ function Taker() {
 
   useEffect(() => {
     const activeQ = activeQuestions[currentQuestion];
-    if (started && activeQ && activeQ.timer && !isFinished) {
+    if (started && activeQ && activeQ.type !== 'upload' && activeQ.timer && !isFinished) {
       if (restoredQuestionTimerRef.current)
         restoredQuestionTimerRef.current = false;
       else setQuestionTimeLeft(activeQ.timer);
@@ -1156,6 +1253,7 @@ function Taker() {
       quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
 
     if (!autoSubmit) {
+      const savedForCurrent = userAnswers.find((answer) => answer.questionId === currentQId);
       if (q?.type === 'checkbox') {
         const activeBoxAnswers =
           quiz?.quizScroll ? scrollAnswers[currentQId] || [] : selectedOptions;
@@ -1163,21 +1261,26 @@ function Taker() {
           return toast.error('Please select at least one answer');
         }
       }
-      if (q?.type === 'range' && currentSelectedOption === null) {
-        currentSelectedOption = (q.min || 0).toString();
+      if (q?.type === 'input') {
+        const inputValue = quiz?.quizScroll ? scrollAnswers[currentQId] : content;
+        if (!String(inputValue ?? '').trim()) return toast.error('Please enter an answer before continuing.');
       }
-
-      if (
-        currentSelectedOption === null &&
-        q?.type !== 'input' &&
-        q?.type !== 'upload' &&
-        q?.type !== 'checkbox'
-      ) {
-        return toast.error('Please select an answer');
+      if (q?.type === 'upload' && !savedForCurrent?.fileUrl) {
+        return toast.error('Please upload the required file before continuing.');
+      }
+      if (q?.type === 'rating' && (!Number.isFinite(Number(currentSelectedOption)) || Number(currentSelectedOption) < 1)) {
+        return toast.error('Please choose a rating before continuing.');
+      }
+      if (q?.type === 'range' && (currentSelectedOption === undefined || currentSelectedOption === null || currentSelectedOption === '')) {
+        return toast.error('Please set a value before continuing.');
+      }
+      if (q && ['multiple_choice', 'true_false', 'dropdown'].includes(q.type) &&
+        (currentSelectedOption === undefined || currentSelectedOption === null || currentSelectedOption === '')) {
+        return toast.error('Please select an answer before continuing.');
       }
     }
 
-    let correct = false;
+    let correct: boolean | undefined = false;
     if (quiz?.type === 'quiz' && q) {
       // Upload type: answer was already stored directly in userAnswers on file pick
       if (q.type === 'upload') {
@@ -1241,6 +1344,9 @@ function Taker() {
       if (q.type === 'upload') {
         const existingUpload = userAnswers.find((a) => a.questionId === q.id);
         if (!existingUpload) {
+          if (quiz?.quizLayout === 'scroll_show') {
+            return toast.error('Please upload the required file before continuing.');
+          }
           // No file — record a skip and proceed
           const updatedWithSkip = [
             ...userAnswers,
@@ -1304,15 +1410,18 @@ function Taker() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
+        if (uploadPickerOpenRef.current) return;
         const nextAttempts = cheatAttempts + 1;
         setCheatAttempts(nextAttempts);
 
         if (nextAttempts >= 2) {
+          quizHaptic([120, 60, 180]);
           toast.error(
             `Multiple security violations detected. Auto-submitting ${capFirst(quiz?.type || 'Assessment')}`,
           );
           finalizeQuiz(userAnswers);
         } else {
+          quizHaptic([80, 45, 80]);
           toast.warning(
             `Security Violation (${nextAttempts}/2): Tab switching is strictly prohibited!`,
             { duration: 5000 },
@@ -1463,6 +1572,7 @@ function Taker() {
     if (!question) return false;
 
     const decodedCorrect = decodeStoredCorrectAnswer(secureAnswer);
+    if (decodedCorrect === null || decodedCorrect === undefined || decodedCorrect === '' || (Array.isArray(decodedCorrect) && decodedCorrect.length === 0)) return undefined;
 
     if (question.type === 'checkbox') {
       const correctIds =
@@ -1475,7 +1585,6 @@ function Taker() {
     } else if (question.type === 'input') {
       const userAns = String(answer || '').trim();
 
-      if (!decodedCorrect && decodedCorrect !== 0) return true;
       const targetAns = String(
         resolvePipedText(
           JSON.stringify(decodedCorrect),
@@ -1522,7 +1631,9 @@ function Taker() {
   const finalizeQuiz = async (finalAnswers: any[]) => {
     if (finalizingRef.current) return;
     finalizingRef.current = true;
-    setIsFinished(true);
+    setSubmissionFailed(false);
+    setIsSubmitting(true);
+    quizHaptic([35, 45, 130]);
     playQuizCompletionTone();
 
     if (quiz?.endScreen?.enableConfetti) {
@@ -1530,13 +1641,6 @@ function Taker() {
     }
 
     if (quiz) {
-      if (!isLocalPreview && !quiz.allowRetry) {
-        try {
-          localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
-        } catch {
-          // The response can still be submitted when browser storage is full.
-        }
-      }
       try {
         let answersToSubmit = finalAnswers;
         const finalScore =
@@ -1593,19 +1697,23 @@ function Taker() {
             attemptId: attempt?.attemptId,
             attemptToken: attempt?.attemptToken,
           });
-          if (!responseSaved)
+          if (!responseSaved) {
+            setSubmissionFailed(true);
             toast.error(
               'Your answers could not be stored. Please copy them before leaving this page.',
             );
-          else if (
+          } else {
+            if (!isLocalPreview && !quiz.allowRetry) {
+              try { localStorage.setItem(`completed_quiz_${quiz.id}`, 'true'); } catch { /* Server attempt enforcement remains authoritative. */ }
+            }
+            if (
             typeof responseSaved === 'object' &&
             'queued' in responseSaved &&
             responseSaved.queued
-          )
-            toast.warning(
-              'Your answers are saved on this device and will sync when you are back online.',
-            );
-          else if (
+            ) toast.warning('Your answers are saved on this device and will sync when you are back online.');
+          }
+          if (
+            responseSaved &&
             typeof responseSaved === 'object' &&
             'score' in responseSaved &&
             typeof responseSaved.score === 'number'
@@ -1675,11 +1783,15 @@ function Taker() {
         }
       } catch (e) {
         console.error('Failed to save response:', e);
+        setSubmissionFailed(true);
         toast.error(
           'Your answers could not be synchronized yet. Keep this page open or reconnect to retry.',
         );
       }
     }
+    setIsSubmitting(false);
+    setIsFinished(true);
+    finalizingRef.current = false;
   };
 
   // Strict category branching isolation & 3x loop-protected routing engine
@@ -1687,13 +1799,13 @@ function Taker() {
     latestAnswers?: any[],
     chosenOptionVal?: string | null,
   ) => {
+    if (!(quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form')) quizHaptic(14);
     setShowFeedback(false);
     const answersToSave = latestAnswers || userAnswers;
 
     const q = activeQuestions[currentQuestion];
     let nextIdx = currentQuestion + 1;
     const isScrollLayout = !!(
-      quiz?.quizScroll ||
       quiz?.quizLayout === 'scroll' ||
       quiz?.surveyType === 'form'
     );
@@ -1704,9 +1816,8 @@ function Taker() {
 
       // 1. Input Question Branching
       if (q.type === 'input') {
-        const userText = String(
-          formatDetailVars(content || '', false, true),
-        ).trim();
+        const savedInput = answersToSave.find((answer) => answer.questionId === q.id)?.answer;
+        const userText = String(formatDetailVars(savedInput ?? content ?? '', false, true)).trim();
         if (q.inputBranchRules && q.inputBranchRules.length > 0) {
           const matchedRule = q.inputBranchRules.find((rule) => {
             if (!rule.keyword) return false;
@@ -1737,8 +1848,8 @@ function Taker() {
         }
       } else if (q.type !== 'checkbox') {
         // 2. Choice-level Branching
-        const currentChoice =
-          chosenOptionVal !== undefined ? chosenOptionVal : selectedOption;
+        const currentChoice = chosenOptionVal !== undefined ? chosenOptionVal :
+          (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOption);
 
         if (currentChoice !== null && currentChoice !== undefined) {
           const currentOpts = shuffledOptions[q.id] || q.options || [];
@@ -1977,10 +2088,11 @@ function Taker() {
         className='w-full p-0'
         key={quest.text + index + 'question-card'}>
         <Card
+          id={`question-${quest.id}`}
           key={quest.id}
-          ref={index === 0 ? firstQuestionRef : undefined}
+          ref={(isScrollLayout ? index === currentQuestion : index === 0) ? firstQuestionRef : undefined}
           className={cn(
-            'p-0  bg-transparent sm:p-6 ring-0 flex flex-col w-full max-w-[600px] rounded-[0px] mb-8 transition-all duration-300 space-y-0 self-center',
+            'p-0 bg-transparent sm:p-6 ring-0 flex flex-col w-full max-w-[600px] rounded-[0px] mb-8 transition-all duration-300 space-y-0 self-center',
             !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
             !isScrollLayout &&
               'sm:bkblur sm:glass sm:rounded-3xl sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl sm:ring-1 ',
@@ -2235,21 +2347,24 @@ function Taker() {
                 );
               })()
             : quest.type === 'upload' ?
-              <div className='space-y-2 p-2 bg-white/5 border border-dashed border-white/20 rounded-3xl text-left'>
+              <div className='space-y-2 p-2 bg-white/5 border border-dashed bkblur border-white/20 rounded-3xl text-left'>
                 {quest.uploadInstruction && (
                   <p className='text-xs text-pw-cyan font-semibold mb-2 bg-pw-cyan/5 p-1.5 rounded-2xl border border-pw-cyan/10'>
                     ℹ {formatDetailVars(quest.uploadInstruction)}
                   </p>
                 )}
+                <p className='text-[10px] text-pw-muted px-1'>Expected file type: {describeAcceptedFiles(quest.allowedTypes || 'image/*,.pdf,.doc,.docx,.txt,.zip,.json,video/*,audio/*')}</p>
 
                 <div className='flex flex-col gap-1'>
                   <input
                     type='file'
+                    onClick={() => { uploadPickerOpenRef.current = true; }}
                     accept={
                       quest?.allowedTypes ||
                       'image/*,.pdf,.doc,.docx,.txt,.zip,.json,/application/json,video/*,audio/*,'
                     }
                     onChange={(e) => {
+                      uploadPickerOpenRef.current = false;
                       const file = e.target.files?.[0];
                       if (!file) return;
 
@@ -2304,9 +2419,7 @@ function Taker() {
                             }
                             setUserAnswers(updated);
                             const savedKb = Math.max(1, Math.round(optimizedFile.size / 1024));
-                            toast.success(optimizedFile.size < file.size
-                              ? `Optimized to ${savedKb} KB and attached.`
-                              : `Attached: ${file.name}`);
+                            toast.success(`Attached: ${file.name}`);
                           };
                           reader.readAsDataURL(optimizedFile);
                         } catch {
@@ -2589,6 +2702,8 @@ function Taker() {
               )}
           </div>
         </Card>
+
+        <div className='my-2 divider sm:hidden'/>
       </motion.div>
     );
   };
@@ -2625,6 +2740,17 @@ function Taker() {
           Please connect to the internet to load this assessment.
         </p>
       </motion.div>
+    );
+  }
+
+  if (isQuizUnderReview) {
+    return (
+      <div className='flex min-h-[90vh] flex-col items-center justify-center gap-3 p-6 text-center'>
+        <AlertTriangle className='h-12 w-12 text-pw-warning' />
+        <h2 className='text-2xl font-bold'>Assessment paused for review</h2>
+        <p className='max-w-md text-sm text-pw-muted'>This assessment is temporarily unavailable while reports are reviewed.</p>
+        <Link href='/tools'><Button className='btn-primary'>Go to tools</Button></Link>
+      </div>
     );
   }
 
@@ -2668,6 +2794,62 @@ function Taker() {
     );
   }
 
+  if (hasAlreadyCompleted && quiz && !quiz.allowRetry && !isLocalPreview) {
+    return (
+      <div className='quiz-taker-font flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0A0C1B] p-6 text-center text-white'>
+        <ShieldCheck className='h-12 w-12 text-pw-primary' />
+        <h1 className='text-2xl font-bold'>This assessment was already completed on this device.</h1>
+        <p className='max-w-md text-sm text-white/75'>This assessment allows one submission per device. Contact its owner if you need access.</p>
+        <Link href='/tools'><Button className='btn-primary'>Close assessment</Button></Link>
+      </div>
+    );
+  }
+
+  if (quiz?.isPrivate && !privateAccessGranted) {
+    const verifyPrivateAccess = async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (isCheckingPrivateAccess) return;
+      setIsCheckingPrivateAccess(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const response = await fetch(`/api/quizzes/${encodeURIComponent(quiz.id)}/access`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ key: privateAccessKey }),
+          cache: 'no-store', credentials: 'omit',
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Access could not be verified.');
+        if (!result.accessToken) throw new Error('Could not start a secure assessment session.');
+        sessionStorage.setItem(`pw_private_quiz_access_v1_${quiz.id}`, result.accessToken);
+        if (routeParamId) sessionStorage.setItem(`pw_private_quiz_access_v1_${routeParamId}`, result.accessToken);
+        setPrivateAccessKey('');
+        quizHaptic(30);
+        window.location.reload();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Access could not be verified.');
+      } finally {
+        setIsCheckingPrivateAccess(false);
+      }
+    };
+    return (
+      <div className='flex min-h-screen items-center justify-center bg-[#0A0C1B] p-4 text-white'>
+        <Card className='w-full max-w-md space-y-5 border-white/10 bg-pw-surface/90 p-6 shadow-2xl backdrop-blur-xl'>
+          <div className='flex items-center gap-3'><Lock className='text-pw-primary' /><div><h1 className='text-xl font-bold'>Private assessment</h1><p className='text-sm text-pw-muted'>Enter the access key to continue. Approved participants can continue without a key after signing in.</p></div></div>
+          <form className='space-y-3' onSubmit={verifyPrivateAccess}>
+            <Input autoComplete='off' value={privateAccessKey} onChange={(event) => setPrivateAccessKey(event.target.value)} placeholder='Assessment access key' aria-label='Assessment access key' />
+            <Button className='btn-primary w-full' type='submit' disabled={isCheckingPrivateAccess || !privateAccessKey.trim()}>
+              {isCheckingPrivateAccess ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Checking access…</> : 'Continue'}
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
   if (isFinished) {
     const totalQuestions = activeQuestions.length;
     const endTitle = formatDetailVars(
@@ -2681,8 +2863,7 @@ function Taker() {
     return (
       <div
         key='completion-view'
-        className='relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6 overflow-x-hidden'>
-        {/* Persistent Branding Background & Shade */}
+        className='quiz-taker-font relative min-h-screen bg-[#0A0C1B] text-white flex items-center justify-center p-6 overflow-x-hidden'>
         {quiz?.fromPremium && (
           <>
             {quiz?.branding?.shadeColor && (
@@ -2718,7 +2899,8 @@ function Taker() {
           )}>
           <div
             className={cn(
-              'w-20 h-20 rounded-full flex items-center justify-center mx-auto border mb-3',
+              'w-20 h-20 rounded-full flex items-center justify-center border mb-3',
+              quiz?.endScreen?.textAlign === 'left' ? 'ml-0 mr-auto' : quiz?.endScreen?.textAlign === 'right' ? 'ml-auto mr-0' : 'mx-auto',
               quiz?.endScreen?.completionIcon === 'diamond' &&
                 'bg-pw-success/10 border-pw-success/20',
               quiz?.endScreen?.completionIcon === 'badge' &&
@@ -2745,7 +2927,7 @@ function Taker() {
           <div className='relative'>
             <p
               className={cn(
-                'text-pw-muted text-sm mb-1 whitespace-pre-wrap transition-all',
+                'text-white/90 text-sm mb-1 whitespace-pre-wrap transition-all',
                 !isEndMsgExpanded && endMsg.length > 80 ?
                   'line-clamp-3 max-h-24 overflow-hidden'
                 : 'max-h-96 overflow-y-auto pr-1',
@@ -2765,7 +2947,7 @@ function Taker() {
           <div className='divider my-4 sm:hidden' />
 
           {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-            <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
+            <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:backdrop-blur-lg sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
               <div className='text-center'>
                 <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
                   TOTAL OVERALL SCORE
@@ -2831,7 +3013,6 @@ function Taker() {
           )}
 
           {quiz?.type === 'quiz' &&
-
             <div className='divider my-4 sm:hidden' />
           }
 
@@ -3017,7 +3198,7 @@ function Taker() {
                                     mimeType: ans.fileType,
                                   })
                                 }
-                                className='text-[10px] text-pw-cyan hover:underline'>
+                                className='text-[10px] text-pw-cyan hover:underline truncate'>
                                 Preview {fileName}
                               </button>
                             </div>
@@ -3105,12 +3286,17 @@ function Taker() {
             )}
 
           <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full mt-4 items-center justify-center'>
+            {submissionFailed && (
+              <Button onClick={() => void finalizeQuiz(userAnswers)} disabled={isSubmitting} className='btn-primary h-11 rounded-xl font-bold'>
+                {isSubmitting ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Saving...</> : 'Retry saving response'}
+              </Button>
+            )}
             {quiz?.allowRetry && (
               <Button
                 onClick={() => {
                   window.location.reload();
                 }}
-                className='btn-primary h-11 rounded-xl font-bold hidden'>
+                className='btn-primary h-11 rounded-xl font-bold'>
                 Retry {capFirst(quiz?.type || 'Assessment')}
               </Button>
             )}
@@ -3152,7 +3338,7 @@ function Taker() {
       key='taker-wrapper'
       onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
       className={cn(
-        'relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
+        'quiz-taker-font relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
         quiz?.enforceSecurity && 'select-none',
       )}>
       {/* Sleek Glowing Background Objects */}
@@ -3327,7 +3513,7 @@ function Taker() {
 
               <div className='divider' />
 
-              <div className='space-y-6 text-left text-sm leading-relaxed'>
+              <div className='space-y-6 text-left text-xs sm:text-sm leading-relaxed'>
                 <div className='flex gap-4 p-2 px-4 lg:p-4 bg-white/5 rounded-2xl border border-white/5 items-center'>
                   <EyeOff className='h-6 w-6 text-pw-primary shrink-0' />
                   <p>
@@ -3718,7 +3904,7 @@ function Taker() {
             )}
 
             {/* Header Row */}
-            <div className='flex flex-wrap items-center justify-between gap-4 bg-secondary/2 p-2 rounded-4xl border border-white/4 bkblur sticky top-1 w-full max-w-7xl self-center'>
+            <div className='sticky top-0 z-30 flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 rounded-4xl border border-white/10 bg-pw-surface/90 p-2 shadow-xl backdrop-blur-2xl self-center'>
               <div className='flex items-center gap-4 pl-3'>
                 <h1 className='text-lg md:text-xl font-bold font-display tracking-tight leading-none'>
                   <span
@@ -3854,11 +4040,9 @@ function Taker() {
             ) ?
               <div className='flex flex-col items-center w-full gap-0'>
                 {activeQuestions
-                  .slice(
-                    0,
-                    Math.min(currentQuestion + 1, userAnswers.length + 1),
-                  )
-                  .map((quest, idx) => renderQuestionCard(quest, idx))}
+                  .map((quest, idx) => ({ quest, idx }))
+                  .filter(({ quest, idx }) => idx === currentQuestion || userAnswers.some((answer) => answer.questionId === quest.id))
+                  .map(({ quest, idx }) => renderQuestionCard(quest, idx))}
                 <div ref={bottomRef} />
 
                 <div className='flex items-center gap-3 mt-4'>
@@ -3867,17 +4051,18 @@ function Taker() {
                       onClick={handlePass}
                       variant='outline'
                       className='h-11 px-6 rounded-xl font-bold gap-1.5 border-white/10 hover:border-pw-warning/40 text-pw-warning/80 hover:text-pw-warning hover:bg-pw-warning/10 transition-all'>
-                      Pass Question <SkipForward className='h-4 w-4' />
+                      Skip <SkipForward className='h-4 w-4' />
                     </Button>
                   )}
                   <Button
                     onClick={() => handleNext()}
+                    disabled={isSubmitting}
                     className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
-                    {currentQuestion + 1 === activeQuestions.length ?
+                    {isSubmitting ? <><LoaderCircle className='h-4 w-4 animate-spin' /> Saving...</> : currentQuestion + 1 === activeQuestions.length ?
                       quiz?.nextButtonText ||
                       `Finish ${quiz?.type || 'Assessment'}`
-                    : quiz?.nextButtonText || 'Next Question'}
-                    <ChevronRight className='h-4 w-4' />
+                    : quiz?.nextButtonText || 'Next'}
+                    {!isSubmitting && <ChevronRight className='h-4 w-4' />}
                   </Button>
                 </div>
               </div>
@@ -3890,12 +4075,27 @@ function Taker() {
 
                 <div className='flex items-center gap-3 mt-4'>
                   <Button
-                    onClick={() => finalizeQuiz(userAnswers)}
-                    disabled={userAnswers.length < activeQuestions.length}
+                    onClick={() => {
+                      const missing = activeQuestions.find((question) => {
+                        const saved = userAnswers.find((answer) => answer.questionId === question.id);
+                        const value = scrollAnswers[question.id] ?? saved?.answer;
+                        if (question.type === 'upload') return !saved?.fileUrl;
+                        if (question.type === 'checkbox') return !Array.isArray(value) || value.length === 0;
+                        if (question.type === 'input') return !String(value ?? '').trim();
+                        return value === null || value === undefined || value === '';
+                      });
+                      if (missing) {
+                        toast.error(`Please answer “${missing.text}” before finishing.`);
+                        document.getElementById(`question-${missing.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                      }
+                      void finalizeQuiz(userAnswers);
+                    }}
+                    disabled={isSubmitting}
                     className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none'>
-                    {quiz?.nextButtonText ||
+                    {isSubmitting ? <><LoaderCircle className='h-4 w-4 animate-spin' /> Saving...</> : quiz?.nextButtonText ||
                       `FINISH ${quiz?.type || 'Assessment'}`}
-                    <CheckCircle2 className='h-5 w-5' />
+                    {!isSubmitting && <CheckCircle2 className='h-5 w-5' />}
                   </Button>
                 </div>
               </div>
@@ -3955,19 +4155,20 @@ function Taker() {
                                   onClick={handlePass}
                                   variant='outline'
                                   className='h-10 px-5 text-xs rounded-2xl gap-1.5 font-bold border-white/10 hover:border-pw-warning/40 text-pw-warning/80 hover:text-pw-warning hover:bg-pw-warning/10 transition-all'>
-                                  Pass <SkipForward className='h-3.5 w-3.5' />
+                                  Skip <SkipForward className='h-3.5 w-3.5' />
                                 </Button>
                               )}
 
                               <Button
                                 onClick={handleNext}
+                                disabled={isSubmitting}
                                 className='btn-primary h-10 px-8 rounded-2xl font-black gap-2 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
-                                {(
+                                {isSubmitting ? <><LoaderCircle className='h-4 w-4 animate-spin' /> Saving...</> : (
                                   currentQuestion + 1 === activeQuestions.length
                                 ) ?
                                   quiz?.nextButtonText || 'FINISH'
                                 : quiz?.nextButtonText || 'NEXT'}
-                                <ChevronRight className='h-4 w-4' />
+                                {!isSubmitting && <ChevronRight className='h-4 w-4' />}
                               </Button>
                             </div>
                           </AnimatePresence>
@@ -4083,22 +4284,38 @@ function Taker() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => {
+                    disabled={isSubmittingReport}
+                    onClick={async () => {
                       if (!reportReason.trim()) {
                         toast.error('Please enter a reason');
                         return;
                       }
-                      setReportedStatus(true);
-                      toast.success('Assessment reported successfully!');
-                      setTimeout(() => {
-                        setShowReportModal(false);
-                        setReportedStatus(false);
-                        setReportReason('');
-                        setReportCategory('');
-                      }, 2500);
+                      if (!quiz?.id) return;
+                      setIsSubmittingReport(true);
+                      try {
+                        const response = await fetch(`/api/quizzes/${encodeURIComponent(quiz.id)}/report`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ category: reportCategory, reason: reportReason }),
+                        });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(result.error || 'Could not submit report.');
+                        setReportedStatus(true);
+                        toast.success(result.message || 'Assessment report received.');
+                        setTimeout(() => {
+                          setShowReportModal(false);
+                          setReportedStatus(false);
+                          setReportReason('');
+                          setReportCategory('');
+                        }, 2500);
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : 'Could not submit report.');
+                      } finally {
+                        setIsSubmittingReport(false);
+                      }
                     }}
                     className='h-10 text-xs flex-1 bg-pw-danger hover:bg-pw-danger/80 text-white font-bold'>
-                    Submit Report
+                    {isSubmittingReport ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Sending…</> : 'Submit Report'}
                   </Button>
                 </div>
               </div>

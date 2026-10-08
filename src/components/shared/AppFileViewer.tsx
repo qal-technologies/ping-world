@@ -312,7 +312,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                 <ChevronLeft size={19} />
               </button>
 
-              <div className='min-w-0 flex-1 ml-8'>
+              <div className='min-w-15 flex-1 ml-8'>
                 <p className='truncate text-sm font-semibold'>
                   {file.name || 'File preview'}
                 </p>

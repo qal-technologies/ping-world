@@ -4,8 +4,9 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
 
-function correctFor(question: Record<string, any>, answer: any) {
+function correctFor(question: Record<string, any>, answer: any): boolean | undefined {
   let expected = decodeStoredCorrectAnswer(question.correctIndex);
+  if (expected === null || expected === undefined || expected === '' || (Array.isArray(expected) && expected.length === 0) || question.type === 'upload') return undefined;
   if (typeof expected === 'number' && Array.isArray(question.options)) {
     const option = question.options[expected];
     expected = option && typeof option === 'object' ? option.id : option;
@@ -38,13 +39,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (quizError || !quiz) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
     if (quiz.user_id !== user.id) return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
 
-    const [{ data: rows, error }, { data: attempts, error: attemptError }] = await Promise.all([
+    const [{ data: rows, error }, { data: attempts, error: attemptError }, { count: totalCount, error: countError }, { count: attemptCount, error: attemptCountError }] = await Promise.all([
       admin.from('quiz_responses').select('id,timestamp,score,total_questions,user_data,answers')
         .eq('quiz_id', id).order('timestamp', { ascending: false }).range(0, windowEnd - 1),
       admin.from('quiz_attempts').select('id,started_at,updated_at,status,answers,user_data,current_question_index,question_order')
         .eq('quiz_id', id).eq('status', 'in_progress').order('updated_at', { ascending: false }).range(0, windowEnd - 1),
+      admin.from('quiz_responses').select('id', { count: 'exact', head: true }).eq('quiz_id', id),
+      admin.from('quiz_attempts').select('id', { count: 'exact', head: true }).eq('quiz_id', id).eq('status', 'in_progress'),
     ]);
-    if (error || attemptError) throw error || attemptError;
+    if (error || attemptError || countError || attemptCountError) throw error || attemptError || countError || attemptCountError;
 
     const responses: any[] = (rows || []).map((row: any) => ({
         id: row.id, timestamp: row.timestamp, score: row.score || 0,
@@ -59,7 +62,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const question = questionMap.get(questionId);
         if (!question) return null;
         const answer = value && typeof value === 'object' && 'answer' in value ? value.answer : value;
-        const result = { ...(value && typeof value === 'object' ? value : {}), questionId, answer, ...(quiz.type === 'quiz' ? { correct: question.type === 'upload' ? Boolean((value as any)?.fileUrl || answer) : correctFor(question, answer) } : {}) };
+        const correct = quiz.type === 'quiz' ? correctFor(question, answer) : undefined;
+        const result = { ...(value && typeof value === 'object' ? value : {}), questionId, answer, ...(typeof correct === 'boolean' ? { correct } : {}) };
         if (typeof result.fileUrl === 'string' && !result.fileUrl.startsWith('http') && !result.fileUrl.startsWith('data:')) {
           const { data: signed } = await admin.storage.from('quiz-response-media').createSignedUrl(result.fileUrl, 3600);
           if (signed?.signedUrl) result.fileUrl = signed.signedUrl;
@@ -94,7 +98,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       })),
     })));
     const nextOffset = hasMore ? offset + limit : null;
-    return NextResponse.json({ responses: signedPage, nextOffset }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ responses: signedPage, nextOffset, totalCount: (totalCount || 0) + (attemptCount || 0) }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[api/quiz-responses/list] Load failed:', error instanceof Error ? error.message : 'unknown');
     return NextResponse.json({ error: 'Could not load assessment responses.' }, { status: 503 });

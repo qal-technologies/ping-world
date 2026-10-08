@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import NextImage from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Image as ImageIcon,
@@ -807,9 +808,12 @@ export default function ImageToolkitPage() {
                   <div
                     ref={stageRef}
                     className='relative max-w-full w-full h-full max-h-full flex items-center justify-center'>
-                    <img
+                    <NextImage
                       ref={imgRef}
                       src={image}
+                      width={1280}
+                      height={900}
+                      unoptimized
                       onLoad={handleImageLoad}
                       onDoubleClick={() => {
                         if (!focusedAdjustment) return;
@@ -1465,9 +1469,12 @@ export default function ImageToolkitPage() {
                                   'border-pw-primary bg-pw-primary/5',
                               )}>
                               <div className='w-28 h-full aspect-video rounded-xl overflow-hidden relative'>
-                                <img
+                                <NextImage
                                   src={image}
                                   alt={f.name}
+                                  width={640}
+                                  height={360}
+                                  unoptimized
                                   className={cn(
                                     'w-full h-full object-cover',
                                     f.className,

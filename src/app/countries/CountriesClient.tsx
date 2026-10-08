@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import {
   countriesDb,
@@ -58,9 +59,11 @@ function CountryCard({ c }: { c: Country }) {
       <div className='absolute -top-10 -right-10 w-25 h-25 bg-pw-cyan/20 rounded-full blur-3xl' />
 
       <div className='flex items-start gap-3 mb-3'>
-        <img
+        <Image
           src={`https://flagcdn.com/w40/${c.code.toLowerCase()}.png`}
           alt={`${c.name} Flag`}
+          width={28}
+          height={20}
           className='w-7 h-5 object-cover rounded-sm border border-white/10 shrink-0 mt-0.5 shadow-sm'
           onError={(e) => {
             // If image fails, hide image element

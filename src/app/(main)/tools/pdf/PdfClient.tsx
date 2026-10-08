@@ -3895,7 +3895,8 @@ export default function PdfToolStudioPage() {
               id='pdf-merge-file-input'
               type='file'
               multiple
-              accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
+              // accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
+              accept='*'
               className='hidden'
               onChange={(e) => {
                 const files = e.target.files;
