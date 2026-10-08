@@ -1,6 +1,6 @@
 # AI Model Curation and Architecture Mapping
 
-This document describes how PingWorld Composer maps specific social media composition features to various free/free-tier LLMs and AI services to achieve high-quality output while keeping deployment and running costs at zero.
+This document describe how PingWorld Composer maps specific social media composition features to various free/free-tier LLMs and AI services to achieve high-quality output while keeping deployment and running costs at zero.
 
 ---
 
