@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import Image from 'next/image';
 import {
   Upload,
   Sparkles,
@@ -12,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-// import Image as Img from 'next/image';
 
 export interface ObjectMockItem {
   id: string;
@@ -332,12 +330,11 @@ export default function ProfileAvatarDesigner({
             {/* Avatar Base */}
             <div className='w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-900'>
               {avatarImage ? (
-                <Image
+                <img
                   src={avatarImage}
                   alt='Avatar'
                   width={320}
                   height={320}
-                  unoptimized
                   className='w-full h-full object-cover'
                 />
               ) : (
