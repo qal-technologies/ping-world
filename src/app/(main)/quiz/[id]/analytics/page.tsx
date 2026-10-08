@@ -326,11 +326,10 @@ export default function FullscreenQuizAnalytics() {
             <HelpCircle size={16} /> Per-Question Accuracy Breakdown
           </h3>
 
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-            {quiz?.questions?.map((q: any, i: number) => {
-            const qStat = (stats.questionStats as Record<string, any>)[String(q.id)] || { total: 0, correct: 0, incorrect: 0 };
+          {quiz?.questions?.map((q: any, i: number) => {
+              const qStat = stats.questionStats[q.id] || { total: 0, correct: 0, incorrect: 0 };
               const acc = qStat.total > 0 ? Math.round((qStat.correct / qStat.total) * 100) : 0;
-             return (
+              return (
                 <Card key={q.id || i} className='p-4 bg-pw-surface/60 bkblur border-white/10 space-y-2'>
                   <div className='flex justify-between items-start gap-2'>
                     <span className='text-xs font-bold text-pw-muted uppercase'>Question {i + 1}</span>
