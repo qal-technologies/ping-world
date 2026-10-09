@@ -803,50 +803,26 @@ select cron.schedule(
 
 The app database schema also creates the service-role-only idempotency ledger for welcome and paid subscription emails. Configure the Stripe webhook endpoint at `/api/stripe/webhook` with `STRIPE_WEBHOOK_SECRET`; subscription confirmation is sent only after Stripe reports the paid/active checkout and the verified account is updated server-side.
 
-# Prompt:
 
-## First of all go through the codebase, understand it porperly down to the codes and statemenrs themselves.
-
-1. Look for errors that may cause crash, stale or unfunctional ui or function.
-2. Look for best pratices and better logic implementation.
-3. All supposed functions, features and implemenrations should be done.
-   Note that at the point all tools, ai, api, and libs used are to be free and reduce cost for now.
-   For the quiz section:
-4. Work on feedback and analysis, make the imageanswers previewed immediately and when clicked it shows in fllscreen. HAndle analysis for quiz and survey in relation to data these two different types would be getting or expecting. it should be stremed properly, wrapped, not congested and may probaly have it's own modal or page if opened.
-5. Create an app-wide auto file opener for both audios, images, videos, pdfs and even docs and make it handle user responses easily and also add to implement to the pdf sections too. Tje opener must render data full screen, cutting out any distractions and have all functions of a player and a file viewer, with things like zoom, page count, title, and other file and player featuers in it. it should be routed/imported to sections that needs it and data sent to it should be properly trimmed and handled too.
-6. Handle linking all settings to the frontend properly without missing or errors and may the types match and be appropriate.
-7. Hanlde realtime scoring, option correct explationation and answe displaying, option to explain for each option (why it is right or wrong - so disable the feature to add an explation to an option if it the correct option and an explanation has been added to the question already and also gate this option feature and other featues relative to the assessment type too)
-8. Handle mentioning in options, input keyworks, brnach rules and everywhere, and ability to add a option branching logic (for mc) to accept an input of a text just to help to be able to pipe in a category or group name and if the eval or pipe fails, default ot the normal flow or end c=group.
-9. Look into tightening the taker flow logic and streamlineing it better, i feel it is too populated and may be prone to errors or implementation errors.
-10. Make the quiz language or programmatic evaluation more profound and strong and easy to use.
-11. Allow an eddit in question texts to be able to add basic, bold, tailic, underline and other basic stlyings
-12. Handle piping in feeback too, and handle a better exporting logic and pattern that works.
-13. Adding groups in the setter with input doesnt work and seems like th edropdownmenu omponent is having an event glitch or hindrance that makes adding texts to inputs no work at all. loook into it.
-14. Make all questions and category in the sidebar actually match the index in the quiz.questions array properly, to avoid seeing them good in sidebar but while using index in the taker everything crashes. Make all questions to be added or removed be in sync with the actual index they are added or removed, and a group map is a range of index where a griuo starts and ends and any question in that group should obey this map to be able to keep question in index sync regardless of when or where the question was added to the array. and the moving and ranking of the questions up and down should reflect this index sync too.
-15. Check all types of each questions, option, quiz and implentn all types that are not implentntted and if any unnecessary or duplicate type is seen, remove it.
-16. Categorize all types into relations as i did with timer, branding and categories, this helps in pointing to data easily eithout having to think the type name. and make sure to reflect and change all occurances too
-17. Pro users should be able to create a custom assessment id relative to their username and the taker should be able to detect it (username/quiz-id) and it treats the username and id very well
-18. Do a very good sweep, audit and handling on the hybrid storage, to be more efficeitn, has more storage and handles data fast and relative to the user's id (apart from rpc or public data like quiz and others).
-19. On the seed template, detect ot and save every edit on it to be only local, to avoid people actually making changes to the global data or saving in the db.
-
-### Pdf section:
-
-1. Handle a better file and data conversion as now it is crap and handles everything badly (use lib if possible)
-2. Images gets squashed when exported handle it ot be better and actually use the better object fit for it, to display the images properly.
-3. Handle the book editing and implemetmntation better and add the globval opener as th ereader.
-4. Handle the book creation sction to be top notch and be th etalk of the town that would attract people to come use it to create their books.
-5. Make book lists more simpleir and make everything better
-6. Check what anad what actual authors and publishers need for their books and add them to the editor itself.
-7. If possible make the input for the book texts themselves displays all the styles directly and images without having a previewer seperatly.
-8. Hnadle images here too not to shrink and exporting to file types to be hdnaled properly.
-9. Look into this editor well and make sure to be the best.
-
-### In the composer section:
-
-Look into it you see the idea there right? just make it better without brekaing any thing
-
-### In the image section:
-
-More editing features, more profile and styling features and make ht ebusiness card actually lit.
-
-### add more tools that you feel like people would actually want to use and build them till completion and then add them to /tools and create docs for them.
+Make the premium clearing a cron functino instead, that runs every day. this is becuase relying clientside updating, would still keep the assessment as premium in the taker when people accesses it, even when the setter is no longer a premium user.
+Focus on the accessory now, make the calculator more modern and handle more mathematical operations. make the periodic taker, glossart, note and all that woek like a good accessory and useful to user actually.
+check for other quiz related changes or fixes, both on the api, ui and logic.
+again, is there a listener or something that checks every users subscroption to make sure their tier is downgraded immediately the expiry reaches?
+like something that triggers from when payemnt is made, maybe a cron function. that always checks user tier for every 24 hours.
+look into these too:
+1. Sending response on the takeer takes forever and when it resolves it return error saying the assessment not being confirmed by server and keep users stuck without completion. Find what hinders the save and upload and fix it.
+2. Make the calcualtion (total questions) be relative to the branching and general questions and not definite or rigid. if users selected a branch with more questions use the addition of that branching questions with other attemoted questions and use as a jsudgement for total and percentage.
+3. Max the taker question section height to screen and then make the overflow scroll so the sticky header can work.
+4. If no correct index is provided for a question do not mark it as incorrect, only correct indexed questions should undergo correctness check. since if the setter has no correct option, let it be a pass and correct.
+5. NUmbering for scroll all should be accordingly, and not distinct with the index in the category or group it is in, meaning all categories (male, female, developer) would be indexed in accordance and no more 1. question (male) but 4.(or place in general index) question male.
+6. A new rule in scroll show is this, branching must be implemented (update the setting select text to reflect that), also new update is each branching is still a answer-and-add-next-question-to-scroll system but now, if a branching occurs, remove initial questions and start tthe new branch refresh on the ui and keep adding the new branch to scroll till a new branch occurs or submission. Meaning if theres a 5 uncat questions and the 5th one calls a branch, remove the 5 questions  card from the ui scroll and start adding the new questions card from the current branch if the currenct branch links another branch remove the current branch question cards and start adding the new one. Make sure to keep track of current branch, their supposed questins, wjhere branches occur and how to clear old cards for new ones. no errors please.
+7. Correct options feedback and display should disable the other options but not automatically next until the user clicks next themselves. this is to give them time to read and understand the explanations before nexting themselves. make next function check if it's to display a feedback or to actually next to the next question.
+8. If no correct option index do not display the correct options in review or feedback, because it'll return null and cause a ui issue as null string would be ther. Both on completion review and on setter feedack page.
+9. Whenever a template feedback is tried to be opned, do not do any api calls as it relies on local storage, so do not stress the api with load or database with unnecessary calls.
+10. Use the activeQuestion calculation i told you or a more efficient one to calculate for percentage, total, soring and realtime score too.
+11. If quiz builder is active, disable footer and navbar, so it'll be full focus, and if builder is active and a backhandle is logged (user is trying to go back), preventdefault and close builder, because it being fullscreen may ive the impression of a new page and would make users want to use the back button.
+12. Mark a question as incorrect only when a correct index exists.
+13. Allow individual option explanation and for better usage, make that when the add explanation (new feature, remove the input in the dropdown), toggle is clicked it adds a text area at the bottom of that patiular option and if focus is blurrfed by clicking on another question/option or the add button (add by the side of the textarea and add wrap so smaller screens push the button below textarea) is clicked the explanation is saved ad the textarea removed, if no question correct ecplanation is et, use the correct index explanation as the correct explanationof the question.
+14. Look into all the branching logic once more, for both scrolllayouts and one flow. Make sure all are doing well.
+15. Again look into that quiz saving and response.
+16. Add a prop to the file opneder so it can be used as a file editor for images or videos, so when can edit is true, it can crop images or flip or rotate them, this is necessary in the taker uploading screen, so they can edit images just before it is saved. add video editing later, but now we focus on images, alright?
