@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
+import { FLEXIBLE_FEATURES, PREMIUM_TIERS } from '@/lib/config/premium';
+
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
