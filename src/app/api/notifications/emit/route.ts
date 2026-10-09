@@ -27,8 +27,14 @@ export async function POST(request: NextRequest) {
     const type = typeof body.type === 'string' ? body.type : '';
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     const message = typeof body.body === 'string' ? body.body.trim() : '';
-    if (!/^[0-9a-f-]{36}$/i.test(resourceId) || !/^[a-z][a-z0-9_]{1,63}$/.test(type) || !title || title.length > 160 || message.length > 1000) {
+    if (!/^[a-z][a-z0-9_]{1,63}$/.test(type) || !title || title.length > 160 || message.length > 1000 || (resourceId && !/^[0-9a-f-]{36}$/i.test(resourceId))) {
       return NextResponse.json({ error: 'Invalid notification.' }, { status: 400 });
+    }
+    const directOnly = body.direct === true || !resourceId;
+    if (directOnly) {
+      const id = crypto.randomUUID();
+      const payload = { id, resourceId: '', type, title, body: message, totalCount: 1, unreadCount: 1, action: null };
+      return NextResponse.json({ success: true, id, totalCount: 1, unreadCount: 1, payload }, { headers: { 'Cache-Control': 'no-store' } });
     }
     const action = body.action && typeof body.action === 'object' ? body.action as Record<string, unknown> : null;
     const label = typeof action?.label === 'string' ? action.label.slice(0, 40) : undefined;

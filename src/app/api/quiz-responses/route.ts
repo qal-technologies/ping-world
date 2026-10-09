@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Assessment time has expired.' }, { status: 410 });
         }
       }
-      rawAnswers = Object.values(verifiedAttempt.answers || {}).slice(0, questions.length) as any[];
+      rawAnswers = Object.values(verifiedAttempt.answers || {}) as any[];
     }
     if ((quiz.settings as Record<string, unknown> | null)?.isPrivate && !attempt) {
       return NextResponse.json({ error: 'Private assessments require a verified attempt.' }, { status: 403 });
@@ -81,6 +81,8 @@ export async function POST(request: NextRequest) {
         correctValue = option && typeof option === 'object' ? option.id : option;
       }
       let correct: boolean | undefined;
+      let pointsEarned = 0;
+      let pointsPossible = 0;
       if (quiz.type === 'quiz' && hasCorrectAnswer && question.type !== 'upload') {
         if (question.type === 'input') {
           const actual = String(answer ?? '').trim();
@@ -88,7 +90,27 @@ export async function POST(request: NextRequest) {
           correct = question.caseSensitive ? actual === expected : actual.toLowerCase() === expected.toLowerCase();
         } else {
           correct = sameValue(answer, correctValue);
+          const options = Array.isArray(question.options) ? question.options : [];
+          const correctIds = (Array.isArray(correctValue) ? correctValue : [correctValue]).map(String);
+          const weightFor = (id: unknown) => {
+            const index = options.findIndex((option: any, optionIndex: number) => String(option?.id ?? optionIndex) === String(id) || String(optionIndex) === String(id));
+            const weight = Number((options[index] as any)?.scoreWeight);
+            return Number.isFinite(weight) && weight >= 0 ? Math.round(weight) : 1;
+          };
+          pointsPossible = correctIds.reduce((sum, id) => sum + weightFor(id), 0);
+          if (question.type === 'checkbox') {
+            const selectedIds = Array.isArray(answer) ? answer : [];
+            pointsEarned = selectedIds.reduce((sum: number, id: unknown) => correctIds.includes(String(id)) ? sum + weightFor(id) : sum, 0);
+          } else {
+            pointsEarned = correct ? weightFor(correctValue) : 0;
+          }
         }
+      } else if (quiz.type === 'quiz' && hasCorrectAnswer && question.type === 'upload') {
+        // Image/text upload correctness may be evaluated by an optional service
+        // later. Until then, an unconfigured upload key is not a false mark.
+        correct = true;
+        pointsPossible = 1;
+        pointsEarned = 1;
       }
       const cleanAnswer = typeof answer === 'string' ? answer.slice(0, 20_000)
         : Array.isArray(answer) ? answer.filter((value) => typeof value === 'string').slice(0, 100).map((value) => value.slice(0, 2_000))
@@ -99,7 +121,7 @@ export async function POST(request: NextRequest) {
       // questions that intentionally have no answer key).
       const safeCandidate = { ...candidate };
       delete safeCandidate.correct;
-      return [{ ...safeCandidate, questionId, answer: cleanAnswer, ...(typeof correct === 'boolean' ? { correct } : {}) }];
+      return [{ ...safeCandidate, questionId, answer: cleanAnswer, ...(typeof correct === 'boolean' ? { correct, pointsEarned, pointsPossible } : {}) }];
     });
     const orderedQuestionIds = Array.isArray(attempt?.question_order)
       ? attempt.question_order.map(String)
@@ -139,6 +161,7 @@ export async function POST(request: NextRequest) {
     }
     const categoryTotals = new Map<string, { correct: number; total: number }>();
     for (const answer of answers) {
+      if (typeof answer.correct !== 'boolean') continue;
       const question = questionMap.get(answer.questionId);
       const category = String(question?.category || 'General').slice(0, 100);
       const totals = categoryTotals.get(category) || { correct: 0, total: 0 };
@@ -148,13 +171,14 @@ export async function POST(request: NextRequest) {
     }
     userData.categoryScores = Object.fromEntries(categoryTotals);
     userData.answeredQuestions = answers.length;
-    const score = quiz.type === 'quiz' ? answers.filter((answer) => answer.correct).length : 0;
+    userData.scorePossible = quiz.type === 'quiz' ? answers.reduce((sum, answer: any) => sum + Math.max(0, answer.pointsPossible !== undefined ? Number(answer.pointsPossible) || 0 : (typeof answer.correct === 'boolean' ? 1 : 0)), 0) : 0;
+    const score = quiz.type === 'quiz' ? answers.reduce((sum, answer: any) => sum + Math.max(0, answer.pointsEarned !== undefined ? Number(answer.pointsEarned) || 0 : (answer.correct ? 1 : 0)), 0) : 0;
     const row = {
       // Attempts own their response ID. Never let the client select an
       // unrelated ID to bypass idempotency or response/attempt linkage.
       id: attempt ? attempt.id : typeof submitted.submissionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submitted.submissionId) ? submitted.submissionId : crypto.randomUUID(),
       quiz_id: quizId, timestamp: new Date().toISOString(), score,
-      total_questions: questions.length, user_data: userData, answers,
+      total_questions: answers.length, user_data: userData, answers,
     };
     if (attempt) {
       // Store the result and close the attempt in one database transaction. This
@@ -164,7 +188,7 @@ export async function POST(request: NextRequest) {
         response_uuid: row.id,
         quiz_uuid: quizId,
         response_score: score,
-        response_total: questions.length,
+        response_total: answers.length,
         response_user_data: userData,
         response_answers: answers,
         attempt_uuid: attempt.id,
@@ -227,7 +251,7 @@ export async function POST(request: NextRequest) {
         }
       });
     }
-    return NextResponse.json({ success: true, responseId: row.id, score, totalQuestions: questions.length, categoryScores: userData.categoryScores }, { status: 201 });
+    return NextResponse.json({ success: true, responseId: row.id, score, totalQuestions: answers.length, categoryScores: userData.categoryScores }, { status: 201 });
   } catch (error: unknown) {
     if (error instanceof Error && error.message === 'PAYLOAD_TOO_LARGE') {
       return NextResponse.json({ error: 'Submission is too large.' }, { status: 413 });

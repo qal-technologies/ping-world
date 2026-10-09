@@ -42,6 +42,8 @@ export interface AppFileDescriptor {
   mimeType?: string;
   kind?: AppFileKind;
   size?: number;
+  canEdit?: boolean;
+  onEditSave?: (file: File) => void | Promise<void>;
 }
 
 interface AppFileViewerContextValue {
@@ -112,6 +114,12 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageCrop, setImageCrop] = useState({ x: 0, y: 0, width: 100, height: 100 });
+  const [flipX, setFlipX] = useState(false);
+  const [flipY, setFlipY] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState(true);
+  const [cropHistory, setCropHistory] = useState<Array<typeof imageCrop>>([]);
+  const cropDragRef = useRef<{ x: number; y: number; rect: DOMRect } | null>(null);
   const closeFile = useCallback(
     () =>
       setFile((current) => {
@@ -142,9 +150,60 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
     setDuration(0);
     setMuted(false);
     setImageFailed(false);
+    setImageCrop({ x: 0, y: 0, width: 100, height: 100 });
+    setFlipX(false);
+    setFlipY(false);
+    setMediaLoading(true);
+    setCropHistory([]);
     setHideBar(false);
   }, []);
   const kind = useMemo(() => (file ? classifyFile(file) : 'unknown'), [file]);
+  useEffect(() => {
+    if (!file) return;
+    setMediaLoading(true);
+  }, [file?.src]);
+  useEffect(() => {
+    if (!file || kind === 'unknown') return;
+    const timer = window.setTimeout(() => setMediaLoading(false), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [file, kind]);
+  const updateCropFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = cropDragRef.current;
+    if (!drag) return;
+    const x = Math.min(100, Math.max(0, ((event.clientX - drag.rect.left) / drag.rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((event.clientY - drag.rect.top) / drag.rect.height) * 100));
+    const startX = Math.min(100, Math.max(0, ((drag.x - drag.rect.left) / drag.rect.width) * 100));
+    const startY = Math.min(100, Math.max(0, ((drag.y - drag.rect.top) / drag.rect.height) * 100));
+    const next = { x: Math.min(startX, x), y: Math.min(startY, y), width: Math.max(5, Math.abs(x - startX)), height: Math.max(5, Math.abs(y - startY)) };
+    setCropHistory((history) => history.length ? history : [imageCrop]);
+    setImageCrop({ ...next, width: Math.min(next.width, 100 - next.x), height: Math.min(next.height, 100 - next.y) });
+  };
+  const saveImageEdit = useCallback(async () => {
+    if (!file?.canEdit || !file.onEditSave || kind !== 'image') return;
+    try {
+      const response = await fetch(file.src);
+      if (!response.ok) throw new Error('Could not read this image for editing.');
+      const bitmap = await createImageBitmap(await response.blob());
+      const sx = Math.round(bitmap.width * imageCrop.x / 100);
+      const sy = Math.round(bitmap.height * imageCrop.y / 100);
+      const sw = Math.max(1, Math.round(bitmap.width * imageCrop.width / 100));
+      const sh = Math.max(1, Math.round(bitmap.height * imageCrop.height / 100));
+      const canvas = document.createElement('canvas');
+      canvas.width = rotated ? sh : sw; canvas.height = rotated ? sw : sh;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Image editing is unavailable in this browser.');
+      context.translate(canvas.width / 2, canvas.height / 2);
+      context.rotate(rotated ? Math.PI / 2 : 0);
+      context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+      context.drawImage(bitmap, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
+      bitmap.close();
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not export the edited image.')), file.mimeType || 'image/png'));
+      await file.onEditSave(new File([blob], file.name || 'edited-image.png', { type: blob.type }));
+      closeFile();
+    } catch (error) {
+      console.error('[AppFileViewer] Image edit failed:', error);
+    }
+  }, [closeFile, file, flipX, flipY, imageCrop, kind, rotated]);
 
   const downloadFile = useCallback(async () => {
     if (!file || downloadBusy) return;
@@ -152,6 +211,14 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
     const filename = (file.name || `pingwrld-file.${kind === 'image' ? 'jpg' : kind === 'pdf' ? 'pdf' : 'bin'}`)
       .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 180);
     try {
+      if ((file.size || 0) > 32 * 1024 * 1024) {
+        const direct = document.createElement('a');
+        const target = new URL(file.src, window.location.href);
+        if (/supabase\.co$/i.test(target.hostname)) target.searchParams.set('download', filename);
+        direct.href = target.toString(); direct.download = filename; direct.rel = 'noopener'; direct.target = '_blank';
+        document.body.append(direct); direct.click(); direct.remove();
+        return;
+      }
       // `download` is ignored for many cross-origin Supabase URLs. Fetch to a
       // local blob URL so the browser performs an actual named download.
       const response = await fetch(file.src, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
@@ -210,22 +277,6 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
           setFile((current) => current?.src === file.src ? { ...current, mimeType } : current);
         }
       }).catch(() => { /* type inference is optional; keep the download fallback */ });
-    }
-    if (classifyFile(file) === 'pdf') {
-      void (async () => {
-        try {
-          const response = await fetch(file.src);
-          if (!response.ok) return;
-          const bytes = await response.arrayBuffer();
-          const { PDFDocument } = await import('pdf-lib');
-          const document = await PDFDocument.load(bytes, {
-            ignoreEncryption: true,
-          });
-          if (!cancelled) setPdfPageCount(document.getPageCount());
-        } catch {
-          if (!cancelled) setPdfPageCount(null);
-        }
-      })();
     }
     if (
       classifyFile(file) === 'document' &&
@@ -320,17 +371,21 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
             );
             text = sheets.join('\n\n');
           }
-          if (!cancelled)
+          if (!cancelled) {
             setDocumentText(
               text || 'No text content was found in this document.',
             );
+            setMediaLoading(false);
+          }
         } catch (error) {
-          if (!cancelled)
+          if (!cancelled) {
             setDocumentText(
               error instanceof Error ?
                 error.message
               : 'Document preview is unavailable.',
             );
+            setMediaLoading(false);
+          }
         }
       })();
     }
@@ -426,6 +481,15 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   <RotateCcw size={17} />
                 </button>
               )}
+              {kind === 'image' && file.canEdit && (
+                <>
+                  <button type='button' onClick={() => { const previous = cropHistory.at(-1); if (previous) setImageCrop(previous); setCropHistory((history) => history.slice(0, -1)); }} disabled={!cropHistory.length} className='rounded-lg p-2 hover:bg-white/10 disabled:opacity-40' title='Undo crop'>Undo</button>
+                  <button type='button' onClick={() => setFlipX((value) => !value)} className='rounded-lg p-2 hover:bg-white/10' title='Flip horizontal'>⇋</button>
+                  <button type='button' onClick={() => setFlipY((value) => !value)} className='rounded-lg p-2 hover:bg-white/10' title='Flip vertical'>⇅</button>
+                  <button type='button' onClick={() => setImageCrop({ x: 0, y: 0, width: 100, height: 100 })} className='rounded-lg p-2 hover:bg-white/10' title='Reset crop'>Reset crop</button>
+                  <button type='button' onClick={() => void saveImageEdit()} className='rounded-lg bg-cyan-400 px-3 py-1.5 text-xs font-bold text-black'>Save edit</button>
+                </>
+              )}
               <button type='button' onClick={() => void downloadFile()} disabled={downloadBusy}
                 aria-label={downloadBusy ? 'Downloading file' : 'Download file'}
                 className='rounded-lg p-2 hover:bg-white/10 disabled:opacity-50'>
@@ -441,11 +505,20 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
               </div>
             </header>
             <main className='flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.07),transparent_55%)] p-2 sm:p-5 relative'>
+              {mediaLoading && <div className={cn('absolute z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/85', kind === 'video' ? 'inset-x-0 top-1/2 mx-auto aspect-video w-full max-w-6xl -translate-y-1/2' : kind === 'image' ? 'inset-0' : 'inset-0')}><span className='text-3xl'>{kind === 'image' ? '▧' : kind === 'video' ? '▶' : kind === 'audio' ? '♫' : kind === 'pdf' ? '▤' : kind === 'document' ? '▣' : '…'}</span><div className='h-7 w-7 animate-spin rounded-full border-2 border-cyan-300/25 border-t-cyan-300' /><span className='text-xs text-white/65'>Loading {kind}…</span></div>}
               {kind === 'image' && !imageFailed && (
-                <Image unoptimized width={1600} height={1200} src={file.src} alt={file.name || 'Preview'}
-                  onError={() => setImageFailed(true)}
-                  className='max-h-full max-w-full object-contain transition-transform duration-150'
-                  style={{ width: 'auto', height: 'auto', transform: `scale(${zoom}) rotate(${rotated ? 90 : 0}deg)` }} />
+                <div className='relative inline-flex max-h-full max-w-full' onPointerDown={file.canEdit ? (event) => { if ((event.target as HTMLElement).closest('input,button')) return; event.currentTarget.setPointerCapture(event.pointerId); cropDragRef.current = { x: event.clientX, y: event.clientY, rect: event.currentTarget.getBoundingClientRect() }; setCropHistory((history) => [...history, imageCrop]); } : undefined} onPointerMove={file.canEdit ? updateCropFromPointer : undefined} onPointerUp={() => { cropDragRef.current = null; }}>
+                  <Image unoptimized width={1600} height={1200} src={file.src} alt={file.name || 'Preview'} onLoad={() => setMediaLoading(false)}
+                    onError={() => setImageFailed(true)}
+                    className='max-h-[calc(100vh-10rem)] max-w-[calc(100vw-2rem)] object-contain transition-transform duration-150'
+                    style={{ width: 'auto', height: 'auto', clipPath: `inset(${imageCrop.y}% ${100 - imageCrop.x - imageCrop.width}% ${100 - imageCrop.y - imageCrop.height}% ${imageCrop.x}%)`, transform: `scale(${zoom}) rotate(${rotated ? 90 : 0}deg) scaleX(${flipX ? -1 : 1}) scaleY(${flipY ? -1 : 1})` }} />
+                  {file.canEdit && <div className='absolute inset-0 pointer-events-none touch-none'><div className='absolute border-2 border-cyan-300 shadow-[0_0_0_9999px_rgba(0,0,0,.35)]' style={{ left: `${imageCrop.x}%`, top: `${imageCrop.y}%`, width: `${imageCrop.width}%`, height: `${imageCrop.height}%` }} /></div>}
+                </div>
+              )}
+              {kind === 'image' && file.canEdit && (
+                <div className='absolute bottom-3 left-3 right-3 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-slate-950/90 p-3 text-xs sm:grid-cols-4'>
+                  {(['x', 'y', 'width', 'height'] as const).map((key) => <label key={key} className='flex items-center gap-2 capitalize'>{key}<input aria-label={`Crop ${key}`} type='range' min={key === 'width' || key === 'height' ? 10 : 0} max={100} value={imageCrop[key]} onChange={(event) => setImageCrop((current) => ({ ...current, [key]: Number(event.target.value), ...(key === 'x' ? { width: Math.min(current.width, 100 - Number(event.target.value)) } : {}), ...(key === 'y' ? { height: Math.min(current.height, 100 - Number(event.target.value)) } : {}) }))} className='w-full accent-cyan-300' /></label>)}
+                  </div>
               )}
               {kind === 'image' && imageFailed && <div className='max-w-lg rounded-2xl border border-white/10 bg-white/5 p-6 text-center'><h2 className='mb-2 font-semibold'>Image preview unavailable</h2><p className='mb-4 text-sm text-white/65'>The image URL may have expired or the object is not accessible. Try downloading it or reopen the file.</p><button type='button' onClick={() => void downloadFile()} className='rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black'>Download image</button></div>}
               {(kind === 'audio' || kind === 'video') && (
@@ -533,6 +606,8 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                       src={file.src}
                       playsInline
                       preload='metadata'
+                      onLoadStart={() => setMediaLoading(true)}
+                      onCanPlay={() => setMediaLoading(false)}
                       onClick={() => {
                         if (mediaRef.current?.paused) {
                           mediaRef.current?.play();
@@ -543,7 +618,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                         setCurrentTime(event.currentTarget.currentTime)
                       }
                       onLoadedMetadata={(event) =>
-                        setDuration(event.currentTarget.duration || 0)
+                        (setDuration(event.currentTarget.duration || 0), setMediaLoading(false))
                       }
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
@@ -687,6 +762,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   title={file.name || 'PDF document'}
                   src={file.src}
                   className='h-full w-full bg-white'
+                  onLoad={() => setMediaLoading(false)}
                   style={{
                     transform: `scale(${zoom})`,
                     transformOrigin: 'center center',
@@ -705,8 +781,9 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
                   /\.(txt|csv|md)(?:[?#]|$)/i.test(file.name || file.src)
                 ) ?
                   <iframe
-                    title={file.name || 'Text document'}
-                    src={file.src}
+                  title={file.name || 'Text document'}
+                  src={file.src}
+                  onLoad={() => setMediaLoading(false)}
                     sandbox=''
                     className='h-full w-full bg-white'
                   />

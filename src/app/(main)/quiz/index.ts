@@ -16,6 +16,9 @@ export interface QuizOption {
   uploadType?: 'image' | 'video' | 'audio';
   skipTo?: string; // ID of the next question to jump to
   skipToCat?: string; // Category name to jump to (jumps to first question in category)
+  branchCondition?: string; // Conditional expression evaluated with taker details and prior answers
+  elseSkipTo?: string;
+  elseSkipToCat?: string;
   explanation?: string; // Option-level explanation shown in feedback
   hidden?: boolean; // Hidden from taker view (setter-only)
   scoreWeight?: number; // Checkbox: custom score weight for this option

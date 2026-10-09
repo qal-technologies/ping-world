@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export type AppNotification = {
-  resourceId: string;
+  resourceId?: string;
   type: string;
   title: string;
   body?: string;
@@ -30,7 +30,7 @@ export function useInAppNotification() {
       throw new Error(typeof result.error === 'string' ? result.error : 'Could not create notification.');
     }
     if (result.disabled === true) return null;
-    if (typeof result.id !== 'string') throw new Error('Notification endpoint returned no batch ID.');
+    if (typeof result.id !== 'string') throw new Error('Notification endpoint returned no ID.');
     window.dispatchEvent(new CustomEvent('pw_in_app_notification', {
       detail: { id: result.id, ...notification, totalCount: result.totalCount, unreadCount: result.unreadCount },
     }));

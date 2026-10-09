@@ -186,6 +186,7 @@ export async function GET(
       );
       const totals = new Map<string, { correct: number; total: number }>();
       for (const answer of answers as any[]) {
+        if (typeof answer.correct !== 'boolean') continue;
         const question: any = questionMap.get(answer.questionId);
         const category = String(question?.category || 'General');
         const value = totals.get(category) || { correct: 0, total: 0 };
@@ -200,9 +201,9 @@ export async function GET(
         status: 'in_progress',
         score:
           quiz.type === 'quiz' ?
-            answers.filter((answer: any) => answer.correct).length
+            answers.reduce((sum: number, answer: any) => sum + (answer.pointsEarned !== undefined ? Math.max(0, Number(answer.pointsEarned) || 0) : (answer.correct ? 1 : 0)), 0)
           : 0,
-        totalQuestions: questionMap.size,
+        totalQuestions: answers.length,
         answeredQuestions: answers.length,
         userData: attempt.user_data || {},
         answers,

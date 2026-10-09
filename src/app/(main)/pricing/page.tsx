@@ -150,6 +150,7 @@ export default function PricingPage() {
     'monthly',
   );
   const [isSimulating, setIsSimulating] = useState(false);
+  const [autoRenew, setAutoRenew] = useState(true);
 
   const [selectedFlexibleToolId, setSelectedFlexibleToolId] =
     useState<string>('');
@@ -307,14 +308,15 @@ export default function PricingPage() {
         body: JSON.stringify({
           tier: selectedTierId,
           billingCycle,
+          autoRenew,
           selectedFlexibleToolId:
             selectedTierId === 'flexible' ? selectedFlexibleToolId : undefined,
           price: targetPrice,
         }),
       });
 
-      const sessionData = await res.json();
-      if (!res.ok) throw new Error(sessionData.error || 'Could not start checkout.');
+      const sessionData = await res.json().catch(() => null);
+      if (!res.ok || !sessionData) throw new Error(sessionData?.error || `Could not start checkout (HTTP ${res.status}).`);
 
       if (sessionData.url) {
         toast.dismiss();
@@ -333,10 +335,10 @@ export default function PricingPage() {
       const sandboxResponse = await fetch('/api/checkout/sandbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-        body: JSON.stringify({ tier: selectedTierId, selectedFlexibleToolId: selectedTierId === 'flexible' ? selectedFlexibleToolId : 'all' }),
+        body: JSON.stringify({ tier: selectedTierId, billingCycle, autoRenew, selectedFlexibleToolId: selectedTierId === 'flexible' ? selectedFlexibleToolId : undefined }),
       });
-      const sandboxResult = await sandboxResponse.json();
-      if (!sandboxResponse.ok || sandboxResult.success !== true) throw new Error(sandboxResult.error || 'Sandbox upgrade is unavailable.');
+      const sandboxResult = await sandboxResponse.json().catch(() => null);
+      if (!sandboxResponse.ok || sandboxResult?.success !== true) throw new Error(sandboxResult?.error || `Sandbox upgrade failed (HTTP ${sandboxResponse.status}).`);
 
       // Force instant refresh of the global app context auth state
       await refresh();
@@ -620,14 +622,14 @@ export default function PricingPage() {
                   {tierId === 'flexible' && isCurrent && (
                     <div className='pt-3 border-t border-white/5 space-y-2.5'>
                       {/* Purchased Tools List */}
-                      {(user?.user_metadata?.purchased_tools || []).length >
+                      {(user?.app_metadata?.purchased_tools || []).length >
                         0 && (
                         <div className='space-y-1'>
                           <span className='text-[10px] font-bold uppercase tracking-wider text-pw-success block'>
                             Purchased Tools:
                           </span>
                           <div className='flex flex-wrap gap-1'>
-                            {(user?.user_metadata?.purchased_tools || []).map(
+                            {(user?.app_metadata?.purchased_tools || []).map(
                               (tId: string) => {
                                 const feat = FLEXIBLE_FEATURES.find(
                                   (f) => f.id === tId,
@@ -660,7 +662,7 @@ export default function PricingPage() {
                             {FLEXIBLE_FEATURES.filter(
                               (feat: any) =>
                                 !(
-                                  user?.user_metadata?.purchased_tools || []
+                                  user?.app_metadata?.purchased_tools || []
                                 ).includes(feat.id),
                             ).map((feat: any) => (
                               <option
@@ -673,7 +675,7 @@ export default function PricingPage() {
                             {FLEXIBLE_FEATURES.filter(
                               (feat: any) =>
                                 !(
-                                  user?.user_metadata?.purchased_tools || []
+                                  user?.app_metadata?.purchased_tools || []
                                 ).includes(feat.id),
                             ).length === 0 && (
                               <option
@@ -694,7 +696,7 @@ export default function PricingPage() {
                               FLEXIBLE_FEATURES.filter(
                                 (feat: any) =>
                                   !(
-                                    user?.user_metadata?.purchased_tools || []
+                                    user?.app_metadata?.purchased_tools || []
                                   ).includes(feat.id),
                               ).length === 0
                             }
@@ -705,7 +707,7 @@ export default function PricingPage() {
                                   FLEXIBLE_FEATURES.filter(
                                     (feat: any) =>
                                       !(
-                                        user?.user_metadata?.purchased_tools ||
+                                        user?.app_metadata?.purchased_tools ||
                                         []
                                       ).includes(feat.id),
                                   ).length === 0
@@ -981,7 +983,7 @@ export default function PricingPage() {
                     <option value=''>Select Tool</option>
                     {FLEXIBLE_FEATURES.filter(
                       (feat: any) =>
-                        !(user?.user_metadata?.purchased_tools || []).includes(
+                        !(user?.app_metadata?.purchased_tools || []).includes(
                           feat.id,
                         ),
                     ).map((feat: any) => (
@@ -994,7 +996,7 @@ export default function PricingPage() {
                     ))}
                     {FLEXIBLE_FEATURES.filter(
                       (feat: any) =>
-                        !(user?.user_metadata?.purchased_tools || []).includes(
+                        !(user?.app_metadata?.purchased_tools || []).includes(
                           feat.id,
                         ),
                     ).length === 0 && (
@@ -1018,6 +1020,16 @@ export default function PricingPage() {
                   {selectedTier.description}
                 </p>
               )}
+
+              <label className='flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3'>
+                <input type='checkbox' checked={autoRenew} onChange={(event) => setAutoRenew(event.target.checked)} className='mt-0.5 h-4 w-4 accent-pw-primary' />
+                <span className='min-w-0'>
+                  <span className='block text-xs font-bold text-pw-text'>Automatically renew this plan</span>
+                  <span className='mt-0.5 block text-[10px] leading-relaxed text-pw-muted'>
+                    {autoRenew ? 'Your subscription will renew at the end of each billing period until you cancel.' : 'Your access will end after the period you pay for. Stripe will not renew the subscription.'}
+                  </span>
+                </span>
+              </label>
 
               {/* Checkout Controls */}
               <DialogFooter className='pt-4 flex flex-col sm:flex-row gap-2'>

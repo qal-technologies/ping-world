@@ -113,16 +113,16 @@ export const QUIZ_SYNTAX_DOCS = {
           name: 'Conditional Ternary with @show',
           syntax: '@eval:{condition @show:(trueText) : @show:(falseText)}',
           description:
-            'Evaluates condition using =, !=, or MATCH. Outputs trueText if condition is met, otherwise falseText.',
+            'Evaluates conditions using =, !=, MATCH (case-sensitive exact), match (case-insensitive exact), HAS (case-insensitive inclusion), and numeric comparisons.',
           example: '@eval:{@Gender = "male" @show:("Gentleman") : @show:("Lady")}',
           result: 'Lady (if Gender is female)',
         },
         {
-          name: 'Keyword Match Operator',
-          syntax: '@eval:{token MATCH "keyword" @show:(text) [: @show:(otherwise)]}',
-          description: 'Checks if the target answer includes the specified substring or keyword. The fallback is optional; with no fallback, a non-match outputs an empty string.',
-          example: '@eval:{@q1 MATCH "Python" @show:("Python Developer")}',
-          result: 'Python Developer (if answer contains Python)',
+          name: 'Exact and Inclusion Operators',
+          syntax: '@eval:{token MATCH "Exact"} · @eval:{token match "exact"} · @eval:{token HAS "part"}',
+          description: 'MATCH checks case-sensitive exact equality; match checks case-insensitive exact equality; HAS checks whether the value contains the text (case-insensitive).',
+          example: '@eval:{@q1 HAS "Python" @show:("Python Developer") : @show:("Other")}',
+          result: 'Python Developer (if the answer contains Python)',
         },
         {
           name: 'Fallback Default (OR / ||)',

@@ -1193,8 +1193,8 @@ const QuizBuilder = ({
                       editedQuiz.surveyType === 'form' ?
                         'Form type is locked to Scroll All, all other layouts are disabled.'
                       : editedQuiz.quizScroll ?
-                        'Branching is only available in Single Show (Progressive) mode.'
-                      : 'Select how questions are rendered visually: Single Show (page-by-page), Scroll All (continuous), or Scroll Show (add next on-response).'
+                        'Branching is available in Single Show (Progressive) and Scroll Show (branch replaces the visible question sequence).'
+                      : 'Select Single Show, Scroll All, or Scroll Show. Scroll Show supports branching and replaces prior cards when a branch is selected.'
 
                     }
                     className='mt-2'>
@@ -1237,14 +1237,13 @@ const QuizBuilder = ({
                         <option
                           value='scroll_show'
                           className='bg-[#0A0C1B]'>
-                          Scroll Show - On Response (Branching Disabled)
+                          Scroll Show - On Response (Branching Enabled)
                         </option>
                       </select>
                       {editedQuiz.quizScroll &&
                         editedQuiz.surveyType !== 'form' && (
                           <p className='text-[10px] text-pw-muted ml-1'>
-                            💡 Switch to Single Show to enable logical branching
-                            on questions and options.
+                            💡 Scroll Show replaces the visible sequence when a branch is selected; Scroll All remains continuous.
                           </p>
                         )}
                     </div>
@@ -3312,9 +3311,7 @@ const QuizBuilder = ({
 
                         {/* Question-level routing dropdown */}
                         {(
-                          editedQuiz.quizScroll ||
                           editedQuiz.quizLayout === 'scroll' ||
-                          editedQuiz.quizLayout === 'scroll_show' ||
                           editedQuiz.surveyType === 'form'
                         ) ?
                           <div className='relative group'>
@@ -3818,6 +3815,8 @@ const QuizBuilder = ({
                               placeholder='Explain why this is correct...'
                               className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
                             />
+                            <p className='text-[9px] text-pw-muted'>If left blank, the correct option’s explanation is used as the question explanation.</p>
+                            <p className='text-[9px] text-pw-muted'>If left blank, the correct option’s explanation is used as the question explanation.</p>
                           </div>
                         </div>
                       </div>
@@ -4249,11 +4248,11 @@ const QuizBuilder = ({
                                           className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1'
                                           onClick={(e) => e.stopPropagation()}>
                                           <span className='text-[9px] font-bold text-pw-muted uppercase block'>
-                                            Option Feedback Note
+                                            Option Explanation
                                           </span>
-                                          <Input
-                                            type='text'
-                                            placeholder='Explanation when selected...'
+                                          <textarea
+                                            rows={3}
+                                            placeholder='Explanation shown for this option...'
                                             value={opt.explanation || ''}
                                             onKeyDown={(e) =>
                                               e.stopPropagation()
@@ -4310,9 +4309,9 @@ const QuizBuilder = ({
                                                   options: newOpts,
                                                 });
                                               }}
-                                              className='h-6 text-[10px] bg-white/5 border-white/10'
-                                            />
-                                          </div>
+                                            className='w-full min-h-16 resize-y rounded-lg bg-white/5 border border-white/10 p-2 text-[10px]'
+                                          />
+                                        </div>
                                         )}
 
                                         <DropdownMenuSeparator className='bg-white/5' />
@@ -4441,9 +4440,7 @@ const QuizBuilder = ({
 
                                     {/* Branching Logic for Option */}
                                     {(
-                                      editedQuiz.quizScroll ||
                                       editedQuiz.quizLayout === 'scroll' ||
-                                      editedQuiz.quizLayout === 'scroll_show' ||
                                       editedQuiz.surveyType === 'form'
                                     ) ?
                                       <div className='relative group'>
@@ -4659,6 +4656,35 @@ const QuizBuilder = ({
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                     }
+                                    {editedQuiz.quizLayout !== 'scroll' && editedQuiz.surveyType !== 'form' && (
+                                      <div className='mt-1 w-full space-y-1.5'>
+                                        <Input
+                                          aria-label={`Branch condition for option ${idx + 1}`}
+                                          value={opt.branchCondition || ''}
+                                          placeholder='Optional condition: @q1 HAS "term"'
+                                          onChange={(event) => {
+                                            const options = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                            options[idx] = { ...options[idx], branchCondition: event.target.value || undefined };
+                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options });
+                                          }}
+                                          className='h-7 text-[9px] bg-white/5 border-white/10'
+                                        />
+                                        {opt.branchCondition && (
+                                          <Input
+                                            aria-label={`Else route for option ${idx + 1}`}
+                                            value={opt.elseSkipToCat ? `group:${opt.elseSkipToCat}` : opt.elseSkipTo || ''}
+                                            placeholder='Else route: question ID, group:Name, or end'
+                                            onChange={(event) => {
+                                              const value = event.target.value.trim();
+                                              const options = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
+                                              options[idx] = { ...options[idx], elseSkipTo: value.startsWith('group:') || value === 'end' ? undefined : value || undefined, elseSkipToCat: value.startsWith('group:') ? value.slice(6) : undefined };
+                                              updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options });
+                                            }}
+                                            className='h-7 text-[9px] bg-white/5 border-white/10'
+                                          />
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -4793,6 +4819,11 @@ export default function QuizPage() {
 
   const openFeedback = async (sourceQuiz: Quiz) => {
     const quiz = normalizeQuizRecord(sourceQuiz);
+    if (quiz.isTemplate || quiz.template === true || quiz.kind === 'template' || quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+      setViewingResponses({ ...quiz, responses: Array.isArray(quiz.responses) ? quiz.responses : [] });
+      setIsLoadingFeedback(false);
+      return;
+    }
     setIsLoadingFeedback(true);
     setViewingResponses({ ...quiz, responses: [] });
     const cachedCount = responseCounts[quiz.id];
@@ -4865,6 +4896,18 @@ export default function QuizPage() {
     // openFeedback uses the latest response counters and auth state when invoked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, quizzes]);
+
+  useEffect(() => {
+    if (!isCreating) return;
+    const historyMarker = `pw-quiz-builder-${Date.now()}`;
+    window.history.pushState({ ...(window.history.state || {}), quizBuilder: historyMarker }, '');
+    const onPopState = () => {
+      setIsCreating(false);
+      window.history.pushState({ ...(window.history.state || {}), quizBuilder: historyMarker }, '');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isCreating]);
 
   useEffect(() => {
     const onSyncError = (event: Event) => {
@@ -5032,16 +5075,23 @@ export default function QuizPage() {
       return;
     }
 
+    const responses = quiz.responses || [];
+    void showConfirm('Images, videos, and other media are not embedded in feedback exports. Media URLs are retained where available, and participants can download the files separately.', { confirmText: 'Export without media', type: 'warning' }).then((confirmed) => {
+      if (confirmed) downloadExport();
+    });
+
+    const downloadExport = () => {
+
     let content = '';
     let mimeType = '';
     if (format === 'csv') {
-      content = exportResponsesToCSV(quiz, quiz.responses);
+      content = exportResponsesToCSV(quiz, responses);
       mimeType = 'text/csv;charset=utf-8;';
     } else if (format === 'json') {
-      content = exportResponsesToJSON(quiz, quiz.responses);
+      content = exportResponsesToJSON(quiz, responses);
       mimeType = 'application/json;charset=utf-8;';
     } else {
-      content = exportResponsesToText(quiz, quiz.responses);
+      content = exportResponsesToText(quiz, responses);
       mimeType = 'text/plain;charset=utf-8;';
     }
 
@@ -5061,6 +5111,7 @@ export default function QuizPage() {
         toast.success(`Responses exported to ${format.toUpperCase()}!`);
       },
     );
+    };
   };
 
   const clearResponses = async (quizId: string) => {

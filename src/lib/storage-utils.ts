@@ -1042,7 +1042,9 @@ async function insertQuizResponse(quizId: string, response: any) {
   const persistedResponse = response.attemptId
     ? (await HybridStorage.getAttemptResponseDraft(quizId, response.attemptId)) || response
     : response;
-  const answers = await externalizeResponseMedia(quizId, persistedResponse);
+  const answers = persistedResponse.responseMediaExternalized
+    ? (persistedResponse.answers || [])
+    : await externalizeResponseMedia(quizId, persistedResponse);
   if (response.attemptId && response.attemptToken) {
     const draft = await HybridStorage.getQuizAttemptDraft(quizId);
     if (!draft || draft.attemptId !== response.attemptId || !Array.isArray(draft.questionOrder)) return false;
@@ -1057,7 +1059,10 @@ async function insertQuizResponse(quizId: string, response: any) {
       }),
     });
     // A previously submitted attempt is safe to retry through the idempotent response endpoint.
-    if (!attemptSync.ok && attemptSync.status !== 409) return false;
+    if (!attemptSync.ok && attemptSync.status !== 409) {
+      const failure = await attemptSync.json().catch(() => null);
+      throw new Error(failure?.error || `Could not synchronize answers (HTTP ${attemptSync.status}).`);
+    }
     draft.answers = attemptAnswers;
     draft.remoteStarted = true;
     await HybridStorage.saveQuizAttemptDraft(quizId, draft);
@@ -1080,8 +1085,9 @@ async function insertQuizResponse(quizId: string, response: any) {
       },
     } }),
   });
-  if (!result.ok) return false;
-  return await result.json() as { success: true; score: number; totalQuestions: number; categoryScores?: Record<string, { correct: number; total: number }> };
+  const payload = await result.json().catch(() => null);
+  if (!result.ok) throw new Error(payload?.error || `The server could not save this response (HTTP ${result.status}).`);
+  return payload as { success: true; score: number; totalQuestions: number; categoryScores?: Record<string, { correct: number; total: number }> };
 }
 
 async function externalizeResponseMedia(quizId: string, response: any) {

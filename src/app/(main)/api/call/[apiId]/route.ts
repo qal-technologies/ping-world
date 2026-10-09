@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DevEngineRegistry } from '@/lib/dev-engines';
-import { PREMIUM_TIERS, PremiumTier, resolveTier } from '@/lib/config/premium';
+import { PremiumTier } from '@/lib/config/premium';
 import { isRateLimited, getClientIp } from '@/lib/rate-limiter';
 import { sanitizeInput } from '@/lib/general/sanitize';
 import { AiQuotaSyncer } from '@/lib/general/ai-quota-syncer';
@@ -8,18 +8,8 @@ import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
 
 export const runtime = 'edge';
 
-function getCanonicalFeatureId(id: string): string {
-  const mapping: Record<string, string> = {
-    'pdf-tools': 'pdf-studio',
-    'pdf-doc': 'pdf-studio',
-    'quiz': 'quizzable',
-    'message': 'anonlink',
-    'anon-link': 'anonlink',
-  };
-  return mapping[id] || id;
-}
-
 const blockedMethodNames = new Set(['constructor', '__proto__', 'prototype', 'toString', 'valueOf']);
+const privateOrRiskyEngines = new Set(['secure-state', 'session-engine', 'recaller']);
 function isCallableEngineMethod(engine: Record<string, any>, method: string) {
   if (blockedMethodNames.has(method)) return false;
   const prototype = Object.getPrototypeOf(engine);
@@ -47,15 +37,9 @@ export async function POST(
       );
     }
 
+    if (privateOrRiskyEngines.has(apiId)) return NextResponse.json({ success: false, error: 'This stateful API is not exposed through the public developer endpoint.' }, { status: 403 });
     let userTier: PremiumTier = 'free';
-    let purchasedTools: string[] = [];
     const user = await getRequestUser(request);
-    if (user) {
-      const meta = user.user_metadata || {};
-      userTier = resolveTier(meta.tier);
-      const tools = meta.purchased_tools || [];
-      purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
-    }
 
     const parsed = await readJsonWithinLimit(request, 64 * 1024);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -67,22 +51,6 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Invalid API method.' }, { status: 400 });
     }
 
-    // Enforce Flexible Plan Tool Isolation
-    if (userTier === 'flexible') {
-      const canonId = getCanonicalFeatureId(apiId);
-      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(canonId);
-      if (!isAllowed) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Your flexible subscription plan does not entitle you to the '${apiId}' tool. Please purchase this tool individually to unlock access.`,
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    
     const isAiCall = apiId === 'tone-correction' || apiId === 'autocorrect' || method === 'translate' || method === 'suggest';
     if (isAiCall) {
       const quota = AiQuotaSyncer.checkQuota(userTier);
@@ -99,8 +67,7 @@ export async function POST(
     }
 
     // Enforce dynamic server-side rate limits based on premium.ts tier settings
-    const tierConfig = PREMIUM_TIERS[userTier];
-    const rpmLimit = tierConfig.aiRequestsPerMinute || 2; // rate limit value from PREMIUM_TIERS
+    const rpmLimit = isAiCall ? 20 : 120;
 
     const clientIp = getClientIp(request);
     const rateCheck = isRateLimited(clientIp, `api_call_${apiId}`, rpmLimit, 60 * 1000);
@@ -191,32 +158,10 @@ export async function GET(
       );
     }
 
+    if (privateOrRiskyEngines.has(apiId)) return NextResponse.json({ success: false, error: 'This stateful API is not exposed through the public developer endpoint.' }, { status: 403 });
     let userTier: PremiumTier = 'free';
-    let purchasedTools: string[] = [];
     const user = await getRequestUser(request);
-    if (user) {
-      const meta = user.user_metadata || {};
-      userTier = resolveTier(meta.tier);
-      const tools = meta.purchased_tools || [];
-      purchasedTools = (Array.isArray(tools) ? tools : [tools]).map(getCanonicalFeatureId);
-    }
-
-    if (userTier === 'flexible') {
-      const canonId = getCanonicalFeatureId(apiId);
-      const isAllowed = purchasedTools.includes('all') || purchasedTools.includes(canonId);
-      if (!isAllowed) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Your flexible subscription plan does not entitle you to the '${apiId}' tool. Please purchase this tool individually to unlock access.`,
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    const tierConfig = PREMIUM_TIERS[userTier];
-    const rpmLimit = tierConfig.aiRequestsPerMinute || 2;
+    const rpmLimit = apiId === 'tone-correction' || apiId === 'autocorrect' ? 20 : 120;
 
     const clientIp = getClientIp(request);
     const rateCheck = isRateLimited(clientIp, `api_call_get_${apiId}`, rpmLimit, 60 * 1000);

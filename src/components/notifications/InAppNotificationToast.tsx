@@ -100,6 +100,19 @@ export default function InAppNotificationToast() {
     const onDirectNotification = (event: Event) => {
       const item = (event as CustomEvent<Item>).detail;
       if (!item || typeof item.id !== 'string' || typeof item.title !== 'string') return;
+      if (!item.resourceId) {
+        const directId = `pw-direct-notification-${item.id}`;
+        toast.custom((toastId) => (
+          <motion.div initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -18, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+            className='w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-pw-primary/25 bg-pw-surface/80 p-4 text-pw-text shadow-2xl backdrop-blur-2xl'>
+            <div className='flex items-start gap-3'><div className='grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pw-primary/15 text-pw-primary'><BellRing className='h-5 w-5' /></div>
+              <div className='min-w-0 flex-1'><p className='mb-1 text-[9px] font-black uppercase tracking-[.2em] text-pw-primary'>Pingwrld · Alert</p><p className='font-semibold'>{item.title}</p>{item.body && <p className='mt-1 text-sm text-pw-muted'>{item.body}</p>}
+                <div className='mt-3 flex justify-end'><button aria-label='Dismiss alert' onClick={() => toast.dismiss(toastId)} className='rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold'>Dismiss</button></div>
+              </div></div>
+          </motion.div>
+        ), { id: directId, duration: 9000, position: position.current });
+        return;
+      }
       const previous = seen.current?.get(item.id) || 0;
       const total = Number(item.totalCount) || previous + 1;
       if (total <= previous) return;

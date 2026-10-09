@@ -9,7 +9,8 @@
  *  - Logic evaluation expressions:
  *      @eval:{@FullName || "User"}
  *      @eval:{@Gender = 'male' @show:("man") : @show:("female")}
- *      @eval:{@q1 MATCH "JS" @show:("Passed") : @show:("Failed")}
+ *      @eval:{@q1 HAS "JS" @show:("Contains JS") : @show:("No JS")}
+ *      @eval:{@Role MATCH "Admin" @show:("Exact, case-sensitive match")}
  */
 
 export interface PipingContext {
@@ -457,7 +458,8 @@ export function resolveStandardTokens(text: string, context: PipingContext): str
   // 2. Score & Stats: @score, @total, @percentage
   const score = context.score ?? 0;
   const total = context.totalQuestions ?? (context.questions?.length || 0);
-  const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+  const scorePossible = Number((context as any).scorePossible) || total;
+  const pct = scorePossible > 0 ? Math.round((score / scorePossible) * 100) : 0;
 
   result = result.replace(/@score\b/gi, String(score));
   result = result.replace(/@total\b/gi, String(total));
@@ -525,15 +527,18 @@ export function resolveStandardTokens(text: string, context: PipingContext): str
 
 
 /**
- * Evaluates binary expressions with operators: =, !=, MATCH
+ * Evaluates binary expressions with operators: =, !=, MATCH, match, HAS
  */
 function evaluateCondition(condStr: string, context: PipingContext): boolean {
-  // Operator: MATCH
-  if (/\bMATCH\b/i.test(condStr)) {
-    const parts = condStr.split(/\bMATCH\b/i);
-    const left = stripQuotes(evaluateOperand(parts[0].trim(), context)).toLowerCase();
-    const right = stripQuotes(evaluateOperand(parts[1].trim(), context)).toLowerCase();
-    return left.includes(right);
+  const matchOperator = condStr.match(/\b(HAS|MATCH|match)\b/);
+  if (matchOperator) {
+    const [leftRaw, rightRaw] = condStr.split(matchOperator[0]);
+    if (rightRaw === undefined) return false;
+    const left = stripQuotes(evaluateOperand(leftRaw.trim(), context));
+    const right = stripQuotes(evaluateOperand(rightRaw.trim(), context));
+    if (matchOperator[0] === 'MATCH') return left === right;
+    if (matchOperator[0] === 'match') return left.toLowerCase() === right.toLowerCase();
+    return left.toLowerCase().includes(right.toLowerCase());
   }
 
   // Operator: != or !==
@@ -588,6 +593,11 @@ function evaluateCondition(condStr: string, context: PipingContext): boolean {
   // Fallback truthiness
   const evaluatedStr = stripQuotes(evaluateOperand(condStr, context)).trim();
   return Boolean(evaluatedStr && evaluatedStr.toLowerCase() !== 'false' && evaluatedStr !== '0');
+}
+
+export function evaluateQuizCondition(expression: string, context: PipingContext): boolean {
+  try { return evaluateCondition(expression, context); }
+  catch { return false; }
 }
 
 function formatAnswerValue(answer: any, question?: any): string {

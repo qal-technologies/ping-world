@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       const { data: account, error: accountError } = await admin.auth.admin.getUserById(userId);
       if (accountError || !account.user) return NextResponse.json({ error: 'Subscription account is unavailable.' }, { status: 503 });
       const { error } = await admin.auth.admin.updateUserById(userId, {
-        app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: tier === 'free' ? expiresAt : null, purchased_tools: tools },
+        app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: tier === 'free' ? expiresAt : null, purchased_tools: tools, stripe_subscription_id: subscription.id, stripe_customer_id: String(subscription.customer || ''), auto_renew: !subscription.cancel_at_period_end },
       });
       if (error) return NextResponse.json({ error: 'Could not update subscription status.' }, { status: 503 });
       await admin.from('profiles').upsert({ id: userId, tier, updated_at: new Date().toISOString() });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
     const userId = String(session.metadata?.user_id || session.client_reference_id || '');
     const tier = String(session.metadata?.tier || '');
-    const selectedTool = String(session.metadata?.selectedFlexibleToolId || 'all');
+    const selectedTool = String(session.metadata?.selectedFlexibleToolId || '');
     if (!/^[0-9a-f-]{36}$/i.test(userId) || !['flexible', 'standard', 'pro'].includes(tier) || typeof session.subscription !== 'string') {
       return NextResponse.json({ error: 'Invalid checkout metadata.' }, { status: 400 });
     }
@@ -94,9 +94,22 @@ export async function POST(request: NextRequest) {
     const { data: account, error: userError } = await admin.auth.admin.getUserById(userId);
     if (userError || !account.user?.email || !account.user.email_confirmed_at) return NextResponse.json({ error: 'Subscription account is unavailable.' }, { status: 503 });
     const expiresAt = new Date(subscription.current_period_end * 1000).toISOString();
+    if (String(session.metadata?.autoRenew) === 'false' && !subscription.cancel_at_period_end) {
+      const cancelResponse = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(session.subscription)}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ cancel_at_period_end: 'true' }).toString(), signal: AbortSignal.timeout(8_000),
+      });
+      const cancelUpdate = await cancelResponse.json().catch(() => null);
+      if (!cancelResponse.ok || !cancelUpdate) return NextResponse.json({ error: 'Could not apply the selected non-renewing plan.' }, { status: 503 });
+      Object.assign(subscription, cancelUpdate);
+    }
+    const actualInterval = String(subscription.items?.data?.[0]?.price?.recurring?.interval || '');
+    const requestedCycle = String(session.metadata?.billingCycle || '');
+    if ((requestedCycle === 'monthly' && actualInterval !== 'month') || (requestedCycle === 'yearly' && actualInterval !== 'year')) {
+      return NextResponse.json({ error: 'The purchased billing interval did not match the selected plan.' }, { status: 400 });
+    }
     const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
-      app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: null, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'], stripe_customer_id: String(session.customer || ''), stripe_subscription_id: session.subscription },
-      user_metadata: { ...account.user.user_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: null, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'] },
+      app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: null, purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'], stripe_customer_id: String(session.customer || ''), stripe_subscription_id: session.subscription, auto_renew: !subscription.cancel_at_period_end },
     });
     if (updateError) return NextResponse.json({ error: 'Could not apply subscription.' }, { status: 503 });
 

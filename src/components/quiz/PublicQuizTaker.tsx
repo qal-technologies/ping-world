@@ -64,6 +64,7 @@ import { useAppModal } from '../ui/AppModalProvider';
 
 import {
   resolvePipedText,
+  evaluateQuizCondition,
   packPingWorldMediaUrl,
   unpackPingWorldMediaUrl,
   formatDobToWords,
@@ -915,12 +916,16 @@ function Taker() {
 
   useEffect(() => {
     if (quiz?.quizScroll && started) {
-      setTimeout(() => {
-        firstQuestionRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
+      let secondFrame = 0;
+      const firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          firstQuestionRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' });
         });
-      }, 150);
+      });
+      return () => {
+        window.cancelAnimationFrame(firstFrame);
+        window.cancelAnimationFrame(secondFrame);
+      };
     }
   }, [started, quiz?.quizScroll]);
 
@@ -1002,6 +1007,9 @@ function Taker() {
   const [branchVisitCounts, setBranchVisitCounts] = useState<
     Record<string, number>
   >({});
+  const [scrollBranchQuestionIds, setScrollBranchQuestionIds] = useState<string[] | null>(null);
+  const [scrollBranchRootIndex, setScrollBranchRootIndex] = useState<number | null>(null);
+  const scrollShowBranchActive = useRef(false);
 
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
@@ -1044,10 +1052,18 @@ function Taker() {
           answer !== undefined &&
           (!Array.isArray(answer) || answer.length)
         ) {
+          const question = activeQuestions.find((item) => item.id === questionId);
           answers[questionId] = {
             ...(answers[questionId] || {}),
             questionId,
             answer,
+            ...(question ? { correct: (() => {
+              const key = decodeStoredCorrectAnswer(correctAnswersRef.current[questionId]);
+              if (key === null || key === undefined || key === '' || (Array.isArray(key) && key.length === 0)) return undefined;
+              return question.type === 'checkbox'
+                ? Array.isArray(answer) && answer.length === (Array.isArray(key) ? key.length : 1) && answer.every((value: unknown) => (Array.isArray(key) ? key : [key]).map(String).includes(String(value)))
+                : String(answer ?? '') === String(key);
+            })() } : {}),
           };
         }
       }
@@ -1797,6 +1813,11 @@ function Taker() {
   const handleNext = (isAutoSubmit: any = false) => {
     const autoSubmit = isAutoSubmit === true;
 
+    if (showFeedback && !autoSubmit) {
+      setShowFeedback(false);
+      return;
+    }
+
     const currentQId = q?.id || '';
     const savedForCurrent = userAnswers.find(
       (answer) => answer.questionId === currentQId,
@@ -1855,15 +1876,17 @@ function Taker() {
       }
     }
 
-    let correct: boolean | undefined = false;
+    let correct: boolean | undefined;
     if (quiz?.type === 'quiz' && q) {
       // Upload type: answer was already stored directly in userAnswers on file pick
       if (q.type === 'upload') {
         const existingUpload = userAnswers.find((a) => a.questionId === q.id);
         if (existingUpload) {
-          // Already recorded as correct — just count score and proceed
-          setScore(userAnswers.filter((a) => a.correct).length);
-          proceedToNext(userAnswers);
+          const uploadAnswer = { ...existingUpload, correct: computeIsCorrect(q.id, existingUpload.answer) };
+          const updatedAnswers = [...userAnswers.filter((a) => a.questionId !== q.id), uploadAnswer];
+          setUserAnswers(updatedAnswers);
+          setScore(updatedAnswers.filter((a) => a.correct === true).length);
+          proceedToNext(updatedAnswers);
           return;
         } else {
           return toast.error('Please upload the required file');
@@ -1906,11 +1929,8 @@ function Taker() {
       setUserAnswers(updatedAnswers);
       setScore(updatedAnswers.filter((a) => a.correct).length);
 
-      if (quiz?.type === 'quiz' && quiz?.correctOption && isLocalPreview) {
+      if (quiz?.type === 'quiz' && quiz?.correctOption && quiz?.correctOptionDes === 'in-question') {
         setShowFeedback(true);
-        setTimeout(() => {
-          proceedToNext(updatedAnswers);
-        }, 1500);
       } else {
         proceedToNext(updatedAnswers);
       }
@@ -2051,6 +2071,43 @@ function Taker() {
   const answeredCount = useMemo(() => {
     return new Set(userAnswers.map((a) => a.questionId)).size;
   }, [userAnswers]);
+  const weightedScore = useMemo(() => {
+    const questionsById = new Map(activeQuestions.map((question) => [question.id, question]));
+    let earned = 0;
+    let possible = 0;
+    for (const answer of userAnswers) {
+      const question = questionsById.get(answer.questionId);
+      if (!question) continue;
+      const decoded = decodeStoredCorrectAnswer(correctAnswersRef.current[question.id]);
+      if (decoded === null || decoded === undefined || decoded === '') continue;
+      const ids = (Array.isArray(decoded) ? decoded : [decoded]).map(String);
+      const weightFor = (id: unknown) => {
+        const option = (question.options || []).find((item: any, index: number) => String(item?.id ?? index) === String(id) || String(index) === String(id));
+        const value = Number(option?.scoreWeight);
+        return Number.isFinite(value) && value >= 0 ? Math.round(value) : 1;
+      };
+      if (question.type === 'input' || question.type === 'upload') {
+        possible += 1;
+        if (answer.correct === true) earned += 1;
+      } else if (question.type === 'checkbox') {
+        possible += ids.reduce((sum, id) => sum + weightFor(id), 0);
+        const selected = Array.isArray(answer.answer) ? answer.answer : [];
+        earned += selected.reduce((sum: number, id: unknown) => ids.includes(String(id)) ? sum + weightFor(id) : sum, 0);
+      } else {
+        possible += weightFor(decoded);
+        if (answer.correct === true) earned += weightFor(decoded);
+      }
+    }
+    return { earned, possible };
+  }, [activeQuestions, userAnswers]);
+  const detailContext = useCallback((answers: any[] = userAnswers) => ({
+    userData,
+    userAnswers: answers,
+    questions: activeQuestions,
+    score: weightedScore.earned,
+    scorePossible: weightedScore.possible,
+    totalQuestions: answers.length,
+  }), [userData, userAnswers, activeQuestions, weightedScore]);
 
   const computedCategoryScores = useMemo(() => {
     if (!quiz || userAnswers.length === 0) return {};
@@ -2175,8 +2232,8 @@ function Taker() {
             userData,
             userAnswers,
             questions: activeQuestions,
-            score,
-            totalQuestions: activeQuestions.length,
+            score: weightedScore.earned,
+            totalQuestions: userAnswers.length,
           },
           false,
           String(decodedCorrect),
@@ -2199,7 +2256,7 @@ function Taker() {
       questionId: q.id,
       answer: '(Passed)',
       passed: true,
-      correct: false,
+      correct: computeIsCorrect(q.id, undefined),
     };
     const updated = [
       ...userAnswers.filter((a) => a.questionId !== q.id),
@@ -2236,7 +2293,7 @@ function Taker() {
         let answersToSubmit = finalAnswers;
         const finalScore =
           quiz.type === 'quiz' ?
-            finalAnswers.filter((a) => a.correct).length
+            weightedScore.earned
           : 0;
 
         // Detect taker's accurate country & continent via geo-detector
@@ -2281,7 +2338,8 @@ function Taker() {
               score: finalScore,
               assessmentType: quiz.type,
               categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
-              totalQuestions: activeQuestions.length,
+              totalQuestions: finalAnswers.length,
+              scorePossible: weightedScore.possible,
               answeredQuestions: finalAnswers.length,
               country: clientGeo.country,
               continent: clientGeo.continent,
@@ -2325,7 +2383,7 @@ function Taker() {
             id: `template_resp_${Date.now()}`,
             timestamp: new Date().toISOString(),
             score: finalScore,
-            totalQuestions: activeQuestions.length,
+            totalQuestions: finalAnswers.length,
             answeredQuestions: finalAnswers.length,
             userData: sanitizedUserData,
             answers: answersToSubmit,
@@ -2377,11 +2435,12 @@ function Taker() {
 
     const q = activeQuestions[currentQuestion];
     let nextIdx = currentQuestion + 1;
-    const isScrollLayout = !!(
-      quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form'
-    );
+    const isScrollLayout = !!(quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
+    const isScrollShow = quiz?.quizLayout === 'scroll_show';
 
-    if (q && !isScrollLayout) {
+    let didBranch = false;
+    let skipQuestionFallback = false;
+    if (q && (!isScrollLayout || isScrollShow)) {
       let branchTarget: string | undefined = undefined;
       let branchCat: string | undefined = undefined;
 
@@ -2402,8 +2461,8 @@ function Taker() {
                 userData,
                 userAnswers: answersToSave,
                 questions: activeQuestions,
-                score,
-                totalQuestions: activeQuestions.length,
+                score: weightedScore.earned,
+                totalQuestions: answersToSave.length,
               },
               false,
               rule.keyword,
@@ -2421,7 +2480,7 @@ function Taker() {
             if ((q as any).elseSkipToCat) branchCat = (q as any).elseSkipToCat;
           }
         }
-      } else if (q.type !== 'checkbox') {
+      } else {
         // 2. Choice-level Branching
         const currentChoice =
           chosenOptionVal !== undefined ? chosenOptionVal
@@ -2445,14 +2504,27 @@ function Taker() {
           });
 
           if (foundOpt && typeof foundOpt === 'object') {
-            if (foundOpt.skipTo) branchTarget = foundOpt.skipTo;
-            if (foundOpt.skipToCat) branchCat = foundOpt.skipToCat;
+            const conditionPassed = !foundOpt.branchCondition || evaluateQuizCondition(foundOpt.branchCondition, {
+              userData,
+              userAnswers: answersToSave,
+              questions: activeQuestions,
+              score: weightedScore.earned,
+              totalQuestions: answersToSave.length,
+            });
+            if (foundOpt.branchCondition) skipQuestionFallback = true;
+            if (conditionPassed) {
+              if (foundOpt.skipTo) branchTarget = foundOpt.skipTo;
+              if (foundOpt.skipToCat) branchCat = foundOpt.skipToCat;
+            } else {
+              if (foundOpt.elseSkipTo) branchTarget = foundOpt.elseSkipTo;
+              if (foundOpt.elseSkipToCat) branchCat = foundOpt.elseSkipToCat;
+            }
           }
         }
       }
 
       // 3. Question-level fallback routing
-      if (!branchTarget && !branchCat) {
+      if (!branchTarget && !branchCat && !skipQuestionFallback) {
         if (q.skipTo) branchTarget = q.skipTo;
         if (q.skipToCat) branchCat = q.skipToCat;
       }
@@ -2463,8 +2535,8 @@ function Taker() {
         userData,
         userAnswers: answersToSave,
         questions: activeQuestions,
-        score,
-        totalQuestions: activeQuestions.length,
+        score: weightedScore.earned,
+        totalQuestions: answersToSave.length,
       };
       if (branchTarget && branchTarget !== 'end') {
         branchTarget =
@@ -2499,6 +2571,7 @@ function Taker() {
         finalizeQuiz(answersToSave);
         return;
       } else if (branchTarget) {
+        didBranch = true;
         const targetIdx = activeQuestions.findIndex(
           (quest) => quest.id === branchTarget,
         );
@@ -2517,6 +2590,7 @@ function Taker() {
           }
         }
       } else if (branchCat) {
+        didBranch = true;
         const cleanCat = branchCat.trim().toLowerCase();
         const targetIdx = activeQuestions.findIndex(
           (quest) =>
@@ -2581,6 +2655,20 @@ function Taker() {
       }
     }
 
+    if (q && isScrollShow) {
+      const nextQuestion = activeQuestions[nextIdx];
+      if (nextQuestion) {
+        if (didBranch) {
+          scrollShowBranchActive.current = true;
+          setScrollBranchRootIndex(nextIdx);
+          setScrollBranchQuestionIds([nextQuestion.id]);
+        } else {
+          const root = scrollBranchRootIndex ?? 0;
+          setScrollBranchQuestionIds(activeQuestions.slice(root, nextIdx + 1).map((question) => question.id));
+        }
+      }
+    }
+
     const nextQ = activeQuestions[nextIdx];
 
     if (!nextQ) {
@@ -2618,18 +2706,20 @@ function Taker() {
     rawText: string,
     _showPrev?: boolean,
     _hideBold?: boolean,
+    contextOverride?: Record<string, any>,
   ) => {
     if (!rawText) return rawText;
 
     // Resolve cross-question, category, taker mentions, date getters, and @eval logic directly
     const piped = resolvePipedText(
       rawText,
-      {
+      contextOverride || {
         userData,
         userAnswers,
         questions: activeQuestions,
-        score,
-        totalQuestions: activeQuestions.length,
+        score: weightedScore.earned,
+        totalQuestions: userAnswers.length,
+        scorePossible: weightedScore.possible,
       },
       false,
     );
@@ -2702,7 +2792,9 @@ function Taker() {
                     const posInStack = inStack.findIndex(
                       (item) => item.id === quest.id,
                     );
-                    return posInStack !== -1 ? posInStack + 1 : index + 1;
+                    return quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form'
+                      ? index + 1
+                      : Math.max(0, posInStack) + 1;
                   })()}
                   .
                 </span>
@@ -2740,17 +2832,8 @@ function Taker() {
                       const posInStack = inStack.findIndex(
                         (item) => item.id === quest.id,
                       );
-                      const stackPos =
-                        posInStack !== -1 ? posInStack + 1 : index + 1;
-                      const stackTotal =
-                        inStack.length || activeQuestions.length;
-                      return (
-                        quest.category ?
-                          stackTotal === 1 ?
-                            `Question ${stackPos} in ${quest.category}`
-                          : `Question ${stackPos} of ${stackTotal} in ${quest.category}`
-                        : `Question ${stackPos} of ${stackTotal}`
-                      );
+                      const stackTotal = inStack.length || activeQuestions.length;
+                      return `Question ${Math.max(0, posInStack) + 1} of ${stackTotal}${quest.category ? ` · ${quest.category}` : ''}`;
                     })()}
                   </span>
                   <h2
@@ -2834,7 +2917,7 @@ function Taker() {
                     const answer = {
                       questionId: quest.id,
                       answer: next,
-                      correct: true,
+                      correct: computeIsCorrect(quest.id, next),
                     };
                     return existing < 0 ?
                         [...previous, answer]
@@ -2889,7 +2972,7 @@ function Taker() {
                     const answer = {
                       questionId: quest.id,
                       answer: rating,
-                      correct: false,
+                      correct: computeIsCorrect(quest.id, rating),
                     };
                     return existing < 0 ?
                         [...previous, answer]
@@ -3016,7 +3099,7 @@ function Taker() {
                               fileName: file.name,
                               fileUrl: packedUrl,
                               fileType: optimizedFile.type || file.type,
-                              correct: quiz?.type === 'quiz',
+                              correct: undefined,
                             };
 
                             if (existingIdx > -1) {
@@ -3105,6 +3188,20 @@ function Taker() {
                                 src: attachedUrl,
                                 name: attached?.fileName || 'Uploaded answer',
                                 mimeType: attached?.fileType,
+                                canEdit: (attached?.fileType || '').startsWith('image/'),
+                                onEditSave: (editedFile) => new Promise<void>((resolve, reject) => {
+                                  const reader = new FileReader();
+                                  reader.onerror = () => reject(new Error('Could not read the edited image.'));
+                                  reader.onload = () => {
+                                    const packedUrl = packPingWorldMediaUrl(String(reader.result));
+                                    const updated = userAnswers.map((answer) => answer.questionId === quest.id ? { ...answer, fileName: editedFile.name, fileType: editedFile.type, fileUrl: packedUrl } : answer);
+                                    setUserAnswers(updated);
+                                    if (quiz?.quizScroll) setScrollAnswers((previous) => ({ ...previous, [quest.id]: packedUrl }));
+                                    else setContent(packedUrl);
+                                    resolve();
+                                  };
+                                  reader.readAsDataURL(editedFile);
+                                }),
                               })
                             }
                             className='block w-full cursor-zoom-in text-left'>
@@ -3165,11 +3262,12 @@ function Taker() {
                     const decodedCorrect = decodeStoredCorrectAnswer(
                       quest.correctIndex,
                     );
-                    const isCorrectOpt =
+                    const hasCorrectIndex = decodedCorrect !== null && decodedCorrect !== undefined && decodedCorrect !== '' && !(Array.isArray(decodedCorrect) && decodedCorrect.length === 0);
+                    const isCorrectOpt = hasCorrectIndex && (
                       Array.isArray(decodedCorrect) ?
                         decodedCorrect.includes(optId)
                       : String(decodedCorrect) === optId ||
-                        String(decodedCorrect) === String(oIdx);
+                        String(decodedCorrect) === String(oIdx));
 
                     if (isSelected) {
                       feedbackClasses =
@@ -3185,6 +3283,7 @@ function Taker() {
                   return (
                     <button
                       key={optId + oIdx}
+                      disabled={isFeedbackMode}
                       onClick={() => {
                         if (isFeedbackMode) return;
                         if (quiz?.quizScroll) {
@@ -3291,10 +3390,7 @@ function Taker() {
                       (o: any, oI: number) =>
                         (o.id || String(oI)) === activeSelected,
                     );
-                    const optExp =
-                      selOptObj?.explanation ?
-                        selOptObj?.explanation
-                      : 'No Explanation Available';
+                    const optExp = selOptObj?.explanation;
                     return optExp ?
                         <div className='p-2.5 rounded-xl bg-pw-cyan/10 border border-pw-cyan/20 text-pw-cyan/90 italic whitespace-pre-wrap flex items-start gap-2'>
                           <span className='font-bold not-italic shrink-0'>
@@ -3309,14 +3405,22 @@ function Taker() {
                       : null;
                   })()}
 
-                  {quest.correctExplanation && (
+                  {(quest.correctExplanation || (() => {
+                    const decoded = decodeStoredCorrectAnswer(quest.correctIndex);
+                    const correctIds = Array.isArray(decoded) ? decoded : [decoded];
+                    return currentOptions.find((option: any, index: number) => correctIds.some((id) => String(id) === String(option?.id || index) || String(id) === String(index)))?.explanation;
+                  })()) && (
                     <div className='p-2 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
                       <span className='font-bold not-italic shrink-0'>
                         💡 Explanation:
                       </span>
                       <span
                         dangerouslySetInnerHTML={{
-                          __html: formatDetailVars(quest.correctExplanation),
+                          __html: formatDetailVars(quest.correctExplanation || (() => {
+                            const decoded = decodeStoredCorrectAnswer(quest.correctIndex);
+                            const correctIds = Array.isArray(decoded) ? decoded : [decoded];
+                            return currentOptions.find((option: any, index: number) => correctIds.some((id) => String(id) === String(option?.id || index) || String(id) === String(index)))?.explanation || '';
+                          })()),
                         }}
                       />
                     </div>
@@ -3531,13 +3635,19 @@ function Taker() {
   }
 
   if (isFinished) {
-    const totalQuestions = activeQuestions.length;
+    const totalQuestions = userAnswers.length;
     const endTitle = formatDetailVars(
       quiz?.endScreen?.title || 'Assessment Completed!',
+      false,
+      false,
+      detailContext(),
     );
     const endMsg = formatDetailVars(
       quiz?.endScreen?.message.trim() ||
         'Thank you for completing this assessment, @name! You scored @score out of @total (@percentage).',
+      false,
+      false,
+      detailContext(),
     );
 
     return (
@@ -3777,21 +3887,22 @@ function Taker() {
                     const decodedIndex = decodeStoredCorrectAnswer(
                       q.correctIndex,
                     );
-                    const correctOpt = opts.find(
+                    const hasCorrectIndex = decodedIndex !== null && decodedIndex !== undefined && decodedIndex !== '' && !(Array.isArray(decodedIndex) && decodedIndex.length === 0);
+                    const correctOpt = hasCorrectIndex ? opts.find(
                       (o: any, oI: number) =>
                         o.id === decodedIndex ||
                         String(oI) === String(decodedIndex) ||
                         o.text === decodedIndex,
-                    );
+                    ) : undefined;
 
                     return (
                       <div
                         key={q.id}
                         className={cn(
                           'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5 bkblur',
-                          ans?.correct ?
+                          ans?.correct === true ?
                             'bg-pw-success/5 border-pw-success/20'
-                          : 'bg-pw-danger/5 border-pw-danger/20',
+                          : ans?.correct === false ? 'bg-pw-danger/5 border-pw-danger/20' : 'bg-white/5 border-white/10',
                         )}>
                         <div
                           className={cn(
@@ -3801,26 +3912,12 @@ function Taker() {
                           <span
                             className={cn(
                               'font-bold shrink-0',
-                              ans?.correct ? 'text-pw-success' : (
+                              ans?.correct === true ? 'text-pw-success' : ans?.correct === false ? (
                                 'text-pw-danger'
-                              ),
+                              ) : 'text-pw-muted',
                             )}>
-                            {ans?.correct ? '✓' : '✗'}{' '}
-                            {(() => {
-                              const targetCat = q.category?.trim() || '';
-                              const inStack = activeQuestions.filter(
-                                (item) =>
-                                  (item.category?.trim() || '') === targetCat,
-                              );
-                              const posInStack = inStack.findIndex(
-                                (item) => item.id === q.id,
-                              );
-                              const stackPos =
-                                posInStack !== -1 ? posInStack + 1 : qi + 1;
-                              return q.category ?
-                                  `Q${stackPos} (${q.category})`
-                                : `Q${stackPos} .`;
-                            })()}
+                            {ans?.correct === true ? '✓' : ans?.correct === false ? '✗' : '•'}{' '}
+                        {`Q${qi + 1}${q.category ? ` (${q.category})` : ''}`}
                           </span>
                           <span
                             className='text-white/80 whitespace-pre-wrap'
@@ -3925,8 +4022,8 @@ function Taker() {
                           })()}
 
                         {/* Show correct answer if taker got it wrong and correct answer was set */}
-                        {!ans?.correct &&
-                          decodedIndex &&
+                        {ans?.correct === false &&
+                          decodedIndex !== null && decodedIndex !== undefined && decodedIndex !== '' &&
                           correctOpt &&
                           (
                             correctOpt?.uploadUrl ||
@@ -3979,13 +4076,13 @@ function Taker() {
                             );
                           })()}
 
-                        {q.correctExplanation && (
+                        {(q.correctExplanation || (hasCorrectIndex ? correctOpt?.explanation : undefined)) && (
                           <p
                             className='pl-3 text-pw-cyan/90 mt-2 mb-1 whitespace-pre-wrap'
                             dangerouslySetInnerHTML={{
                               __html:
                                 'Question Tip: ' +
-                                formatDetailVars(q.correctExplanation),
+                                formatDetailVars(q.correctExplanation || correctOpt?.explanation || ''),
                             }}
                           />
                         )}
@@ -4767,8 +4864,8 @@ function Taker() {
                   {(quiz?.showScore || quiz?.showRealtimeScore) &&
                     quiz?.type === 'quiz' && (
                       <div className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md'>
-                        <Brain className='w-3.5 h-3.5' /> {score} /{' '}
-                        {activeQuestions.length}
+                        <Brain className='w-3.5 h-3.5' /> {weightedScore.earned} /{' '}
+                        {weightedScore.possible}
                       </div>
                     )}
                 </div>
@@ -4792,8 +4889,12 @@ function Taker() {
               quiz?.quizScroll &&
               (quiz?.quizLayout === 'scroll_show' || !quiz?.quizLayout)
             ) ?
-              <div className='flex flex-col items-center w-full gap-0'>
-                {activeQuestions
+              <div className='flex max-h-[calc(100dvh-7rem)] min-h-0 flex-col items-center w-full gap-0 overflow-y-auto overscroll-contain px-2 pb-4 custom-scrollbar'>
+                {(quiz?.quizLayout === 'scroll_show'
+                  ? activeQuestions.filter((question, idx) => scrollShowBranchActive.current
+                    ? Boolean(scrollBranchQuestionIds?.includes(question.id))
+                    : idx <= currentQuestion)
+                  : activeQuestions)
                   .map((quest, idx) => ({ quest, idx }))
                   .filter(
                     ({ quest, idx }) =>

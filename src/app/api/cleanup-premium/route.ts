@@ -5,7 +5,7 @@ import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-da
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-/** Runs twice daily. Auth app_metadata is authoritative; expired accounts are
+/** Runs daily. Auth app_metadata is authoritative; expired accounts are
  * downgraded first, then their Pro-only quiz settings and branding objects are
  * removed. Quiz/response content is preserved. */
 export async function GET(request: NextRequest) {
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = getSupabaseAdmin();
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
   const now = Date.now();
   let page = 1;
   let scanned = 0;
@@ -41,8 +42,39 @@ export async function GET(request: NextRequest) {
       for (let offset = 0; offset < expired.length; offset += 8) {
         const batch = expired.slice(offset, offset + 8);
         const results = await Promise.allSettled(batch.map(async (user) => {
-          const metadata = user.app_metadata || {};
-          const expiry = typeof metadata.tier_expires_at === 'string' ? metadata.tier_expires_at : String(metadata.tier_expired_at);
+          let currentUser = user;
+          let metadata = currentUser.app_metadata || {};
+          let expiry = typeof metadata.tier_expires_at === 'string' ? metadata.tier_expires_at : String(metadata.tier_expired_at);
+          const subscriptionId = typeof metadata.stripe_subscription_id === 'string' ? metadata.stripe_subscription_id : '';
+          if (subscriptionId && stripeKey) {
+            const stripeResponse = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+              headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(10_000), cache: 'no-store',
+            });
+            const stripeSubscription = await stripeResponse.json().catch(() => null);
+            if (!stripeResponse.ok || !stripeSubscription) throw new Error('Could not verify Stripe subscription before expiry cleanup.');
+            if (['active', 'trialing', 'past_due', 'unpaid', 'incomplete'].includes(String(stripeSubscription.status))) {
+              const stripeEnd = Number(stripeSubscription.current_period_end);
+              if (Number.isFinite(stripeEnd) && stripeEnd * 1000 > now) {
+                expiry = new Date(stripeEnd * 1000).toISOString();
+                const tier = ['flexible', 'standard', 'pro'].includes(String(metadata.tier)) ? String(metadata.tier) : 'free';
+                const selectedTool = String(stripeSubscription.metadata?.selectedFlexibleToolId || metadata.purchased_tools?.[0] || '');
+                const tools = tier === 'flexible' ? (FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ? [selectedTool] : []) : tier === 'free' ? [] : ['all'];
+                const { data: account, error: lookupError } = await admin.auth.admin.getUserById(user.id);
+                if (lookupError || !account.user) throw lookupError || new Error('Could not load subscription account.');
+                const refreshedMetadata = { ...metadata, tier, tier_expires_at: expiry, tier_expired_at: null, purchased_tools: tools, stripe_subscription_id: subscriptionId, auto_renew: !stripeSubscription.cancel_at_period_end };
+                const { error: refreshError } = await admin.auth.admin.updateUserById(user.id, { app_metadata: refreshedMetadata });
+                if (refreshError) throw refreshError;
+                await admin.from('profiles').upsert({ id: user.id, tier, updated_at: new Date().toISOString() });
+                await clearExpiredPremiumQuizData(admin, user.id).catch(() => undefined);
+                return user.id;
+              }
+              if (['active', 'trialing'].includes(String(stripeSubscription.status))) {
+                throw new Error('Stripe reports an active subscription but no valid future period end. Cleanup deferred.');
+              }
+            }
+          } else if (subscriptionId && !stripeKey) {
+            throw new Error('Stripe is not configured; refusing to clear a Stripe-backed entitlement.');
+          }
           if (String(metadata.tier || 'free') !== 'free') {
             const nextAppMetadata = { ...metadata, tier: 'free', purchased_tools: [], tier_expired_at: expiry };
             const { error: updateError } = await admin.auth.admin.updateUserById(user.id, {
