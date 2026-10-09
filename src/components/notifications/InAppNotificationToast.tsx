@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
 import { playInAppNotificationTone } from '@/lib/quiz/quiz-audio';
 
-type Item = { id: string; title: string; body: string; totalCount: number; unreadCount: number; action: { label: string; href: string } | null };
+type Item = { id: string; title: string; body: string; totalCount: number; unreadCount: number; action: { label: string; href: string } | null, resourceId:string; };
 
 export default function InAppNotificationToast() {
   const { isLoggedIn, user } = useAppContext();
