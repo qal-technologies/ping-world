@@ -33,6 +33,32 @@ export async function POST(request: NextRequest) {
   try {
     const event = JSON.parse(rawBody) as { type?: string; data?: { object?: Record<string, any> } };
     const admin = getSupabaseAdmin();
+    if (event.type === 'invoice.paid') {
+      const invoice = event.data?.object;
+      const subscriptionId = String(invoice?.subscription || invoice?.parent?.subscription_details?.subscription || '');
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!subscriptionId || !stripeKey) return NextResponse.json({ received: true });
+      const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+        headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(8_000), cache: 'no-store',
+      });
+      const subscription = await response.json().catch(() => null);
+      if (!response.ok || !subscription) return NextResponse.json({ error: 'Could not verify renewed subscription.' }, { status: 503 });
+      if (!['active', 'trialing'].includes(String(subscription.status)) || !Number.isFinite(Number(subscription.current_period_end))) return NextResponse.json({ received: true });
+      const userId = String(subscription.metadata?.user_id || '');
+      if (!/^[0-9a-f-]{36}$/i.test(userId)) return NextResponse.json({ received: true });
+      const tier = ['flexible', 'standard', 'pro'].includes(String(subscription.metadata?.tier)) ? String(subscription.metadata.tier) : 'free';
+      const selectedTool = String(subscription.metadata?.selectedFlexibleToolId || '');
+      const tools = tier === 'flexible' ? (FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ? [selectedTool] : []) : tier === 'free' ? [] : ['all'];
+      if (tier === 'flexible' && tools.length === 0) return NextResponse.json({ error: 'Renewed flexible plan has no valid tool.' }, { status: 400 });
+      const { data: account, error: accountError } = await admin.auth.admin.getUserById(userId);
+      if (accountError || !account.user) return NextResponse.json({ error: 'Subscription account is unavailable.' }, { status: 503 });
+      const expiresAt = new Date(Number(subscription.current_period_end) * 1000).toISOString();
+      const { error: updateError } = await admin.auth.admin.updateUserById(userId, { app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: null, purchased_tools: tools, stripe_subscription_id: subscriptionId, stripe_customer_id: String(subscription.customer || ''), auto_renew: !subscription.cancel_at_period_end } });
+      if (updateError) return NextResponse.json({ error: 'Could not apply renewed subscription.' }, { status: 503 });
+      const { error: profileError } = await admin.from('profiles').upsert({ id: userId, tier, updated_at: new Date().toISOString() });
+      if (profileError) return NextResponse.json({ error: 'Could not update renewed subscription profile.' }, { status: 503 });
+      return NextResponse.json({ received: true, renewed: true });
+    }
     if (event.type === 'customer.subscription.deleted' || event.type === 'customer.subscription.updated') {
       const subscription = event.data?.object;
       if (!subscription) return NextResponse.json({ error: 'Subscription event is incomplete.' }, { status: 400 });

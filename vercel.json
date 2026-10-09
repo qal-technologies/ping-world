@@ -11,6 +11,10 @@
     {
       "path": "/api/cleanup-premium",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/reconcile-subscriptions",
+      "schedule": "15 0 * * *"
     }
   ]
 }
