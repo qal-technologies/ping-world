@@ -33,6 +33,7 @@ import {
   Atom,
   Search,
   Copy,
+  ChevronUp,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -131,50 +132,117 @@ const NoteSheet = ({ note }: { note: string }) => {
     <Card className='w-full max-w-2xl rounded-2xl border-white/10 bg-pw-surface p-4 shadow-2xl bkblur sm:p-6'>
       <div className='mb-4 flex items-center gap-2 text-pw-primary'>
         <StickyNote size={20} />
-        <h3 className='text-xs font-bold uppercase tracking-widest'>Reference Notes</h3>
+        <h3 className='text-xs font-bold uppercase tracking-widest'>
+          Reference Notes
+        </h3>
       </div>
-      {note.trim() ? <div className='mb-4 max-h-[35vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/15 p-4 text-sm leading-relaxed text-pw-text'>{note}</div> : <p className='mb-4 rounded-xl border border-white/10 bg-black/15 p-4 text-sm text-pw-muted'>No reference note was provided for this question.</p>}
-      <label className='mb-2 block text-xs font-semibold text-pw-muted' htmlFor='quiz-personal-notes'>Your scratch notes (only kept while this question is open)</label>
-      <textarea id='quiz-personal-notes' value={personalNote} onChange={(event) => setPersonalNote(event.target.value)} maxLength={5000} placeholder='Write working notes here…' className='min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-3 text-sm text-pw-text outline-none focus:border-pw-primary/60' />
-      <p className='mt-1 text-right text-[10px] text-pw-muted'>{personalNote.length}/5000</p>
+      {note.trim() ?
+        <div className='mb-4 max-h-[35vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/15 p-4 text-sm leading-relaxed text-pw-text'>
+          {note}
+        </div>
+      : <p className='mb-4 rounded-xl border border-white/10 bg-black/15 p-4 text-sm text-pw-muted'>
+          No reference note was provided for this question.
+        </p>
+      }
+      <label
+        className='mb-2 block text-xs font-semibold text-pw-muted'
+        htmlFor='quiz-personal-notes'>
+        Your scratch notes (only kept while this question is open)
+      </label>
+      <textarea
+        id='quiz-personal-notes'
+        value={personalNote}
+        onChange={(event) => setPersonalNote(event.target.value)}
+        maxLength={5000}
+        placeholder='Write working notes here…'
+        className='min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-3 text-sm text-pw-text outline-none focus:border-pw-primary/60'
+      />
+      <p className='mt-1 text-right text-[10px] text-pw-muted'>
+        {personalNote.length}/5000
+      </p>
     </Card>
   );
 };
 
-const PERIODIC_ELEMENTS = `Hydrogen|H,Helium|He,Lithium|Li,Beryllium|Be,Boron|B,Carbon|C,Nitrogen|N,Oxygen|O,Fluorine|F,Neon|Ne,Sodium|Na,Magnesium|Mg,Aluminium|Al,Silicon|Si,Phosphorus|P,Sulfur|S,Chlorine|Cl,Argon|Ar,Potassium|K,Calcium|Ca,Scandium|Sc,Titanium|Ti,Vanadium|V,Chromium|Cr,Manganese|Mn,Iron|Fe,Cobalt|Co,Nickel|Ni,Copper|Cu,Zinc|Zn,Gallium|Ga,Germanium|Ge,Arsenic|As,Selenium|Se,Bromine|Br,Krypton|Kr,Rubidium|Rb,Strontium|Sr,Yttrium|Y,Zirconium|Zr,Niobium|Nb,Molybdenum|Mo,Technetium|Tc,Ruthenium|Ru,Rhodium|Rh,Palladium|Pd,Silver|Ag,Cadmium|Cd,Indium|In,Tin|Sn,Antimony|Sb,Tellurium|Te,Iodine|I,Xenon|Xe,Caesium|Cs,Barium|Ba,Lanthanum|La,Cerium|Ce,Praseodymium|Pr,Neodymium|Nd,Promethium|Pm,Samarium|Sm,Europium|Eu,Gadolinium|Gd,Terbium|Tb,Dysprosium|Dy,Holmium|Ho,Erbium|Er,Thulium|Tm,Ytterbium|Yb,Lutetium|Lu,Hafnium|Hf,Tantalum|Ta,Tungsten|W,Rhenium|Re,Osmium|Os,Iridium|Ir,Platinum|Pt,Gold|Au,Mercury|Hg,Thallium|Tl,Lead|Pb,Bismuth|Bi,Polonium|Po,Astatine|At,Radon|Rn,Francium|Fr,Radium|Ra,Actinium|Ac,Thorium|Th,Protactinium|Pa,Uranium|U,Neptunium|Np,Plutonium|Pu,Americium|Am,Curium|Cm,Berkelium|Bk,Californium|Cf,Einsteinium|Es,Fermium|Fm,Mendelevium|Md,Nobelium|No,Lawrencium|Lr,Rutherfordium|Rf,Dubnium|Db,Seaborgium|Sg,Bohrium|Bh,Hassium|Hs,Meitnerium|Mt,Darmstadtium|Ds,Roentgenium|Rg,Copernicium|Cn,Nihonium|Nh,Flerovium|Fl,Moscovium|Mc,Livermorium|Lv,Tennessine|Ts,Oganesson|Og`.split(',').map((entry, index) => {
-  const [name, symbol] = entry.split('|');
-  const atomicNumber = index + 1;
-  let period = 1;
-  let group = 1;
-  if (atomicNumber === 2) { period = 1; group = 18; }
-  else if (atomicNumber >= 3 && atomicNumber <= 4) { period = 2; group = atomicNumber - 2; }
-  else if (atomicNumber >= 5 && atomicNumber <= 10) { period = 2; group = atomicNumber + 8; }
-  else if (atomicNumber >= 11 && atomicNumber <= 12) { period = 3; group = atomicNumber - 10; }
-  else if (atomicNumber >= 13 && atomicNumber <= 18) { period = 3; group = atomicNumber; }
-  else if (atomicNumber >= 19 && atomicNumber <= 36) { period = 4; group = atomicNumber - 18; }
-  else if (atomicNumber >= 37 && atomicNumber <= 54) { period = 5; group = atomicNumber - 36; }
-  else if (atomicNumber >= 55 && atomicNumber <= 56) { period = 6; group = atomicNumber - 54; }
-  else if (atomicNumber >= 57 && atomicNumber <= 71) { period = 8; group = atomicNumber - 54; }
-  else if (atomicNumber >= 72 && atomicNumber <= 86) { period = 6; group = atomicNumber - 68; }
-  else if (atomicNumber >= 87 && atomicNumber <= 88) { period = 7; group = atomicNumber - 86; }
-  else if (atomicNumber >= 89 && atomicNumber <= 103) { period = 9; group = atomicNumber - 86; }
-  else if (atomicNumber >= 104) { period = 7; group = atomicNumber - 100; }
-  const category = [2, 10, 18, 36, 54, 86, 118].includes(atomicNumber) ? 'Noble gas'
-    : [3, 11, 19, 37, 55, 87].includes(atomicNumber) ? 'Alkali metal'
-    : [4, 12, 20, 38, 56, 88].includes(atomicNumber) ? 'Alkaline earth'
-    : [9, 17, 35, 53, 85, 117].includes(atomicNumber) ? 'Halogen'
-    : [1, 6, 7, 8, 15, 16, 34].includes(atomicNumber) ? 'Nonmetal'
-    : atomicNumber >= 57 && atomicNumber <= 71 ? 'Lanthanide'
-    : atomicNumber >= 89 && atomicNumber <= 103 ? 'Actinide'
-    : (atomicNumber >= 21 && atomicNumber <= 30) || (atomicNumber >= 39 && atomicNumber <= 48) || (atomicNumber >= 72 && atomicNumber <= 80) || (atomicNumber >= 104 && atomicNumber <= 112) ? 'Transition metal'
-    : [5, 14, 32, 33, 51, 52].includes(atomicNumber) ? 'Metalloid' : 'Post-transition metal';
-  return { atomicNumber, name, symbol, period, group, category };
-});
+const PERIODIC_ELEMENTS =
+  `Hydrogen|H,Helium|He,Lithium|Li,Beryllium|Be,Boron|B,Carbon|C,Nitrogen|N,Oxygen|O,Fluorine|F,Neon|Ne,Sodium|Na,Magnesium|Mg,Aluminium|Al,Silicon|Si,Phosphorus|P,Sulfur|S,Chlorine|Cl,Argon|Ar,Potassium|K,Calcium|Ca,Scandium|Sc,Titanium|Ti,Vanadium|V,Chromium|Cr,Manganese|Mn,Iron|Fe,Cobalt|Co,Nickel|Ni,Copper|Cu,Zinc|Zn,Gallium|Ga,Germanium|Ge,Arsenic|As,Selenium|Se,Bromine|Br,Krypton|Kr,Rubidium|Rb,Strontium|Sr,Yttrium|Y,Zirconium|Zr,Niobium|Nb,Molybdenum|Mo,Technetium|Tc,Ruthenium|Ru,Rhodium|Rh,Palladium|Pd,Silver|Ag,Cadmium|Cd,Indium|In,Tin|Sn,Antimony|Sb,Tellurium|Te,Iodine|I,Xenon|Xe,Caesium|Cs,Barium|Ba,Lanthanum|La,Cerium|Ce,Praseodymium|Pr,Neodymium|Nd,Promethium|Pm,Samarium|Sm,Europium|Eu,Gadolinium|Gd,Terbium|Tb,Dysprosium|Dy,Holmium|Ho,Erbium|Er,Thulium|Tm,Ytterbium|Yb,Lutetium|Lu,Hafnium|Hf,Tantalum|Ta,Tungsten|W,Rhenium|Re,Osmium|Os,Iridium|Ir,Platinum|Pt,Gold|Au,Mercury|Hg,Thallium|Tl,Lead|Pb,Bismuth|Bi,Polonium|Po,Astatine|At,Radon|Rn,Francium|Fr,Radium|Ra,Actinium|Ac,Thorium|Th,Protactinium|Pa,Uranium|U,Neptunium|Np,Plutonium|Pu,Americium|Am,Curium|Cm,Berkelium|Bk,Californium|Cf,Einsteinium|Es,Fermium|Fm,Mendelevium|Md,Nobelium|No,Lawrencium|Lr,Rutherfordium|Rf,Dubnium|Db,Seaborgium|Sg,Bohrium|Bh,Hassium|Hs,Meitnerium|Mt,Darmstadtium|Ds,Roentgenium|Rg,Copernicium|Cn,Nihonium|Nh,Flerovium|Fl,Moscovium|Mc,Livermorium|Lv,Tennessine|Ts,Oganesson|Og`
+    .split(',')
+    .map((entry, index) => {
+      const [name, symbol] = entry.split('|');
+      const atomicNumber = index + 1;
+      let period = 1;
+      let group = 1;
+      if (atomicNumber === 2) {
+        period = 1;
+        group = 18;
+      } else if (atomicNumber >= 3 && atomicNumber <= 4) {
+        period = 2;
+        group = atomicNumber - 2;
+      } else if (atomicNumber >= 5 && atomicNumber <= 10) {
+        period = 2;
+        group = atomicNumber + 8;
+      } else if (atomicNumber >= 11 && atomicNumber <= 12) {
+        period = 3;
+        group = atomicNumber - 10;
+      } else if (atomicNumber >= 13 && atomicNumber <= 18) {
+        period = 3;
+        group = atomicNumber;
+      } else if (atomicNumber >= 19 && atomicNumber <= 36) {
+        period = 4;
+        group = atomicNumber - 18;
+      } else if (atomicNumber >= 37 && atomicNumber <= 54) {
+        period = 5;
+        group = atomicNumber - 36;
+      } else if (atomicNumber >= 55 && atomicNumber <= 56) {
+        period = 6;
+        group = atomicNumber - 54;
+      } else if (atomicNumber >= 57 && atomicNumber <= 71) {
+        period = 8;
+        group = atomicNumber - 54;
+      } else if (atomicNumber >= 72 && atomicNumber <= 86) {
+        period = 6;
+        group = atomicNumber - 68;
+      } else if (atomicNumber >= 87 && atomicNumber <= 88) {
+        period = 7;
+        group = atomicNumber - 86;
+      } else if (atomicNumber >= 89 && atomicNumber <= 103) {
+        period = 9;
+        group = atomicNumber - 86;
+      } else if (atomicNumber >= 104) {
+        period = 7;
+        group = atomicNumber - 100;
+      }
+      const category =
+        [2, 10, 18, 36, 54, 86, 118].includes(atomicNumber) ? 'Noble gas'
+        : [3, 11, 19, 37, 55, 87].includes(atomicNumber) ? 'Alkali metal'
+        : [4, 12, 20, 38, 56, 88].includes(atomicNumber) ? 'Alkaline earth'
+        : [9, 17, 35, 53, 85, 117].includes(atomicNumber) ? 'Halogen'
+        : [1, 6, 7, 8, 15, 16, 34].includes(atomicNumber) ? 'Nonmetal'
+        : atomicNumber >= 57 && atomicNumber <= 71 ? 'Lanthanide'
+        : atomicNumber >= 89 && atomicNumber <= 103 ? 'Actinide'
+        : (
+          (atomicNumber >= 21 && atomicNumber <= 30) ||
+          (atomicNumber >= 39 && atomicNumber <= 48) ||
+          (atomicNumber >= 72 && atomicNumber <= 80) ||
+          (atomicNumber >= 104 && atomicNumber <= 112)
+        ) ?
+          'Transition metal'
+        : [5, 14, 32, 33, 51, 52].includes(atomicNumber) ? 'Metalloid'
+        : 'Post-transition metal';
+      return { atomicNumber, name, symbol, period, group, category };
+    });
 
 const PeriodicTable = () => {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(PERIODIC_ELEMENTS[5]);
-  const filtered = query.trim() ? PERIODIC_ELEMENTS.filter((element) => `${element.atomicNumber} ${element.symbol} ${element.name} ${element.category}`.toLowerCase().includes(query.trim().toLowerCase())) : PERIODIC_ELEMENTS;
+  const filtered =
+    query.trim() ?
+      PERIODIC_ELEMENTS.filter((element) =>
+        `${element.atomicNumber} ${element.symbol} ${element.name} ${element.category}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase()),
+      )
+    : PERIODIC_ELEMENTS;
   const matches = new Set(filtered.map((element) => element.atomicNumber));
   const colors: Record<string, string> = {
     'Noble gas': 'text-sky-300 border-sky-400/30 bg-sky-400/10',
@@ -186,17 +254,84 @@ const PeriodicTable = () => {
     Actinide: 'text-fuchsia-300 border-fuchsia-400/30 bg-fuchsia-400/10',
     'Transition metal': 'text-cyan-300 border-cyan-400/30 bg-cyan-400/10',
     Metalloid: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
-    'Post-transition metal': 'text-slate-300 border-slate-400/30 bg-slate-400/10',
+    'Post-transition metal':
+      'text-slate-300 border-slate-400/30 bg-slate-400/10',
   };
   return (
     <Card className='m-2 w-full max-w-6xl border-white/10 bg-pw-surface p-3 shadow-2xl bkblur sm:p-5'>
-      <div className='mb-4 flex flex-wrap items-center justify-between gap-3'><div className='flex items-center gap-2 text-pw-cyan'><Atom size={20} /><h3 className='text-xs font-bold uppercase tracking-widest'>Periodic Table · 118 Elements</h3></div>
-        <div className='relative w-full max-w-xs'><Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pw-muted' /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Find name, symbol, or number' aria-label='Search periodic table' className='pl-9 bg-black/20' /></div>
+      <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
+        <div className='flex items-center gap-2 text-pw-cyan'>
+          <Atom size={20} />
+          <h3 className='text-xs font-bold uppercase tracking-widest'>
+            Periodic Table · 118 Elements
+          </h3>
+        </div>
+        <div className='relative w-full max-w-xs'>
+          <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pw-muted' />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder='Find name, symbol, or number'
+            aria-label='Search periodic table'
+            className='pl-9 bg-black/20'
+          />
+        </div>
       </div>
-      <div className='overflow-x-auto pb-3 custom-scrollbar'><div className='grid min-w-[760px] grid-cols-[repeat(18,minmax(34px,1fr))] gap-1' style={{ gridAutoRows: 'minmax(42px,auto)' }}>
-        {PERIODIC_ELEMENTS.map((element) => <button key={element.atomicNumber} type='button' onClick={() => setSelected(element)} title={`${element.name} · ${element.category}`} aria-label={`${element.name}, atomic number ${element.atomicNumber}`} className={cn('flex min-w-0 flex-col items-center justify-center rounded-md border p-0.5 text-center transition hover:z-10 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-pw-primary', colors[element.category], !matches.has(element.atomicNumber) && 'opacity-20')} style={{ gridColumn: element.group, gridRow: element.period }}><span className='w-full text-left text-[8px] leading-none opacity-65'>{element.atomicNumber}</span><strong className='text-xs leading-tight'>{element.symbol}</strong><span className='hidden w-full truncate text-[7px] opacity-70 xl:block'>{element.name}</span></button>)}
-      </div></div>
-      <div className='mt-3 flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-black/15 p-3'><div className='min-w-24 text-2xl font-black text-pw-cyan'>{selected.symbol}</div><div className='min-w-0 flex-1'><p className='text-sm font-bold'>{selected.name} <span className='font-normal text-pw-muted'>#{selected.atomicNumber}</span></p><p className='text-xs text-pw-muted'>{selected.category} · Period {selected.period > 7 ? (selected.period === 8 ? '6 (lanthanide)' : '7 (actinide)') : selected.period} · Group {selected.group}</p></div><p className='w-full text-[10px] text-pw-muted sm:w-auto'>Select an element for details · Search dims non-matching elements</p></div>
+      <div className='overflow-x-auto pb-3 custom-scrollbar'>
+        <div
+          className='grid min-w-[760px] grid-cols-[repeat(18,minmax(34px,1fr))] gap-1'
+          style={{ gridAutoRows: 'minmax(42px,auto)' }}>
+          {PERIODIC_ELEMENTS.map((element) => (
+            <button
+              key={element.atomicNumber}
+              type='button'
+              onClick={() => setSelected(element)}
+              title={`${element.name} · ${element.category}`}
+              aria-label={`${element.name}, atomic number ${element.atomicNumber}`}
+              className={cn(
+                'flex min-w-0 flex-col items-center justify-center rounded-md border p-0.5 text-center transition hover:z-10 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-pw-primary',
+                colors[element.category],
+                !matches.has(element.atomicNumber) && 'opacity-20',
+              )}
+              style={{ gridColumn: element.group, gridRow: element.period }}>
+              <span className='w-full text-left text-[8px] leading-none opacity-65'>
+                {element.atomicNumber}
+              </span>
+              <strong className='text-xs leading-tight'>
+                {element.symbol}
+              </strong>
+              <span className='hidden w-full truncate text-[7px] opacity-70 xl:block'>
+                {element.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className='mt-3 flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-black/15 p-3'>
+        <div className='min-w-24 text-2xl font-black text-pw-cyan'>
+          {selected.symbol}
+        </div>
+        <div className='min-w-0 flex-1'>
+          <p className='text-sm font-bold'>
+            {selected.name}{' '}
+            <span className='font-normal text-pw-muted'>
+              #{selected.atomicNumber}
+            </span>
+          </p>
+          <p className='text-xs text-pw-muted'>
+            {selected.category} · Period{' '}
+            {selected.period > 7 ?
+              selected.period === 8 ?
+                '6 (lanthanide)'
+              : '7 (actinide)'
+            : selected.period}{' '}
+            · Group {selected.group}
+          </p>
+        </div>
+        <p className='w-full text-[10px] text-pw-muted sm:w-auto'>
+          Select an element for details · Search dims non-matching elements
+        </p>
+      </div>
     </Card>
   );
 };
@@ -283,8 +418,18 @@ const FormulaSheet = ({
                   <span className='text-[10px] text-pw-text opacity-70 group-hover:opacity-100 transition-opacity'>
                     {item.n}
                   </span>
-                  <button type='button' title={`Copy ${item.n}`} onClick={() => { void navigator.clipboard?.writeText(item.f).then(() => toast.success('Formula copied.')).catch(() => toast.error('Could not copy formula.')); }} className='flex items-center gap-1 rounded bg-pw-primary/5 px-2 py-1 font-mono text-[10px] text-pw-primary hover:bg-pw-primary/15'>
-                    {item.f}<Copy className='h-3 w-3' />
+                  <button
+                    type='button'
+                    title={`Copy ${item.n}`}
+                    onClick={() => {
+                      void navigator.clipboard
+                        ?.writeText(item.f)
+                        .then(() => toast.success('Formula copied.'))
+                        .catch(() => toast.error('Could not copy formula.'));
+                    }}
+                    className='flex items-center gap-1 rounded bg-pw-primary/5 px-2 py-1 font-mono text-[10px] text-pw-primary hover:bg-pw-primary/15'>
+                    {item.f}
+                    <Copy className='h-3 w-3' />
                   </button>
                 </div>
               ))}
@@ -303,35 +448,93 @@ const FormulaSheet = ({
 
 const Glossary = ({ terms = '' }: { terms?: string }) => {
   const [filter, setFilter] = useState('');
-  const entries = terms.split(/\r?\n/).map((line) => {
-    const separator = line.search(/\s[=:—-]\s/);
-    return separator < 0 ? null : { word: line.slice(0, separator).trim(), definition: line.slice(separator + 3).trim() };
-  }).filter((entry): entry is { word: string; definition: string } => Boolean(entry?.word && entry.definition));
+  const entries = terms
+    .split(/\r?\n/)
+    .map((line) => {
+      const separator = line.search(/\s[=:—-]\s/);
+      return separator < 0 ? null : (
+          {
+            word: line.slice(0, separator).trim(),
+            definition: line.slice(separator + 3).trim(),
+          }
+        );
+    })
+    .filter((entry): entry is { word: string; definition: string } =>
+      Boolean(entry?.word && entry.definition),
+    );
   const builtIns = [
-    { word: 'Hypothesis', definition: 'A proposed explanation that can be tested through evidence.' },
-    { word: 'Variable', definition: 'A factor that can change or be changed in an investigation.' },
+    {
+      word: 'Hypothesis',
+      definition: 'A proposed explanation that can be tested through evidence.',
+    },
+    {
+      word: 'Variable',
+      definition: 'A factor that can change or be changed in an investigation.',
+    },
     { word: 'Velocity', definition: 'Speed in a specified direction.' },
-    { word: 'Inference', definition: 'A conclusion drawn from observations and evidence.' },
-    { word: 'Evidence', definition: 'Information used to support or challenge a claim.' },
+    {
+      word: 'Inference',
+      definition: 'A conclusion drawn from observations and evidence.',
+    },
+    {
+      word: 'Evidence',
+      definition: 'Information used to support or challenge a claim.',
+    },
   ];
-  const visible = (entries.length ? entries : builtIns).filter((entry) => `${entry.word} ${entry.definition}`.toLowerCase().includes(filter.trim().toLowerCase()));
+  const visible = (entries.length ? entries : builtIns).filter((entry) =>
+    `${entry.word} ${entry.definition}`
+      .toLowerCase()
+      .includes(filter.trim().toLowerCase()),
+  );
   return (
     <Card className='m-2 w-full max-w-2xl border-white/10 bg-pw-surface p-4 shadow-2xl bkblur sm:p-6'>
-      <div className='mb-4 flex items-center gap-2 text-pw-success'><BookOpen size={20} /><h3 className='text-xs font-bold uppercase tracking-widest'>Glossary</h3></div>
-      <Input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder='Search terms…' aria-label='Search glossary' className='mb-4 bg-black/20' />
-      <div className='max-h-[65vh] space-y-3 overflow-y-auto pr-2 custom-scrollbar'>
-        {visible.map((entry) => <article key={entry.word} className='rounded-xl border border-white/5 bg-white/[.03] p-3'><h4 className='mb-1 font-bold text-pw-success'>{entry.word}</h4><p className='text-sm leading-relaxed text-pw-muted'>{entry.definition}</p></article>)}
-        {!visible.length && <p className='py-8 text-center text-sm text-pw-muted'>No matching terms.</p>}
+      <div className='mb-4 flex items-center gap-2 text-pw-success'>
+        <BookOpen size={20} />
+        <h3 className='text-xs font-bold uppercase tracking-widest'>
+          Glossary
+        </h3>
       </div>
-      {terms.trim() && <p className='mt-3 text-[10px] text-pw-muted'>Custom terms supplied for this assessment.</p>}
+      <Input
+        value={filter}
+        onChange={(event) => setFilter(event.target.value)}
+        placeholder='Search terms…'
+        aria-label='Search glossary'
+        className='mb-4 bg-black/20'
+      />
+      <div className='max-h-[65vh] space-y-3 overflow-y-auto pr-2 custom-scrollbar'>
+        {visible.map((entry) => (
+          <article
+            key={entry.word}
+            className='rounded-xl border border-white/5 bg-white/[.03] p-3'>
+            <h4 className='mb-1 font-bold text-pw-success'>{entry.word}</h4>
+            <p className='text-sm leading-relaxed text-pw-muted'>
+              {entry.definition}
+            </p>
+          </article>
+        ))}
+        {!visible.length && (
+          <p className='py-8 text-center text-sm text-pw-muted'>
+            No matching terms.
+          </p>
+        )}
+      </div>
+      {terms.trim() && (
+        <p className='mt-3 text-[10px] text-pw-muted'>
+          Custom terms supplied for this assessment.
+        </p>
+      )}
     </Card>
   );
 };
 
 type CalculatorAngleMode = 'DEG' | 'RAD';
 
-function evaluateCalculatorExpression(expression: string, angleMode: CalculatorAngleMode): number {
-  if (!expression.trim() || expression.length > 160) throw new Error('Enter an expression under 160 characters.');
+function evaluateCalculatorExpression(
+  expression: string,
+  angleMode: CalculatorAngleMode,
+): number {
+  if (!expression.trim() || expression.length > 160)
+    throw new Error('Enter an expression under 160 characters.');
   const tokens: string[] = [];
   const scanner = /\s*(?:(\d+(?:\.\d*)?|\.\d+)|([a-zA-Z]+)|([()+\-*/%^!,]))/gy;
   let scanIndex = 0;
@@ -345,46 +548,84 @@ function evaluateCalculatorExpression(expression: string, angleMode: CalculatorA
   let cursor = 0;
   const peek = () => tokens[cursor];
   const take = () => tokens[cursor++];
-  const expect = (value: string) => { if (take() !== value) throw new Error(`Expected “${value}”.`); };
-  const toRadians = (value: number) => angleMode === 'DEG' ? value * Math.PI / 180 : value;
-  const fromRadians = (value: number) => angleMode === 'DEG' ? value * 180 / Math.PI : value;
+  const expect = (value: string) => {
+    if (take() !== value) throw new Error(`Expected “${value}”.`);
+  };
+  const toRadians = (value: number) =>
+    angleMode === 'DEG' ? (value * Math.PI) / 180 : value;
+  const fromRadians = (value: number) =>
+    angleMode === 'DEG' ? (value * 180) / Math.PI : value;
   const functions: Record<string, (args: number[]) => number> = {
-    sin: ([x]) => Math.sin(toRadians(x)), cos: ([x]) => Math.cos(toRadians(x)), tan: ([x]) => Math.tan(toRadians(x)),
-    asin: ([x]) => fromRadians(Math.asin(x)), acos: ([x]) => fromRadians(Math.acos(x)), atan: ([x]) => fromRadians(Math.atan(x)),
-    sqrt: ([x]) => Math.sqrt(x), cbrt: ([x]) => Math.cbrt(x), abs: ([x]) => Math.abs(x), ln: ([x]) => Math.log(x),
-    log: ([x]) => Math.log10(x), exp: ([x]) => Math.exp(x), floor: ([x]) => Math.floor(x), ceil: ([x]) => Math.ceil(x),
-    round: ([x, digits = 0]) => { const scale = 10 ** Math.max(-10, Math.min(10, digits)); return Math.round(x * scale) / scale; },
-    min: (args) => Math.min(...args), max: (args) => Math.max(...args), pow: ([x, y]) => x ** y,
+    sin: ([x]) => Math.sin(toRadians(x)),
+    cos: ([x]) => Math.cos(toRadians(x)),
+    tan: ([x]) => Math.tan(toRadians(x)),
+    asin: ([x]) => fromRadians(Math.asin(x)),
+    acos: ([x]) => fromRadians(Math.acos(x)),
+    atan: ([x]) => fromRadians(Math.atan(x)),
+    sqrt: ([x]) => Math.sqrt(x),
+    cbrt: ([x]) => Math.cbrt(x),
+    abs: ([x]) => Math.abs(x),
+    ln: ([x]) => Math.log(x),
+    log: ([x]) => Math.log10(x),
+    exp: ([x]) => Math.exp(x),
+    floor: ([x]) => Math.floor(x),
+    ceil: ([x]) => Math.ceil(x),
+    round: ([x, digits = 0]) => {
+      const scale = 10 ** Math.max(-10, Math.min(10, digits));
+      return Math.round(x * scale) / scale;
+    },
+    min: (args) => Math.min(...args),
+    max: (args) => Math.max(...args),
+    pow: ([x, y]) => x ** y,
   };
   const parseExpression = (): number => {
     let value = parseTerm();
-    while (peek() === '+' || peek() === '-') { const operator = take(); const next = parseTerm(); value = operator === '+' ? value + next : value - next; }
+    while (peek() === '+' || peek() === '-') {
+      const operator = take();
+      const next = parseTerm();
+      value = operator === '+' ? value + next : value - next;
+    }
     return value;
   };
   const parseTerm = (): number => {
     let value = parseUnary();
     while (peek() === '*' || peek() === '/' || peek() === '%') {
-      const operator = take(); const next = parseUnary();
-      if ((operator === '/' || operator === '%') && next === 0) throw new Error('Cannot divide by zero.');
-      value = operator === '*' ? value * next : operator === '/' ? value / next : value % next;
+      const operator = take();
+      const next = parseUnary();
+      if ((operator === '/' || operator === '%') && next === 0)
+        throw new Error('Cannot divide by zero.');
+      value =
+        operator === '*' ? value * next
+        : operator === '/' ? value / next
+        : value % next;
     }
     return value;
   };
   const parseUnary = (): number => {
-    if (peek() === '+') { take(); return parseUnary(); }
-    if (peek() === '-') { take(); return -parseUnary(); }
+    if (peek() === '+') {
+      take();
+      return parseUnary();
+    }
+    if (peek() === '-') {
+      take();
+      return -parseUnary();
+    }
     return parsePower();
   };
   const parsePower = (): number => {
     const base = parsePostfix();
-    if (peek() === '^') { take(); return base ** parseUnary(); }
+    if (peek() === '^') {
+      take();
+      return base ** parseUnary();
+    }
     return base;
   };
   const parsePostfix = (): number => {
     let value = parsePrimary();
     while (peek() === '!') {
       take();
-      if (!Number.isInteger(value) || value < 0 || value > 170) throw new Error('Factorial needs a whole number from 0 to 170.');
+      if (!Number.isInteger(value) || value < 0 || value > 170)
+        throw new Error('Factorial needs a whole number from 0 to 170.');
       let product = 1;
       for (let number = 2; number <= value; number++) product *= number;
       value = product;
@@ -393,70 +634,242 @@ function evaluateCalculatorExpression(expression: string, angleMode: CalculatorA
   };
   const parsePrimary = (): number => {
     const token = take();
-    if (token === '(') { const value = parseExpression(); expect(')'); return value; }
+    if (token === '(') {
+      const value = parseExpression();
+      expect(')');
+      return value;
+    }
     if (token && /^\d+(?:\.\d*)?$|^\.\d+$/.test(token)) return Number(token);
-    if (!token || !/^[a-z]+$/.test(token)) throw new Error('Check the expression syntax.');
+    if (!token || !/^[a-z]+$/.test(token))
+      throw new Error('Check the expression syntax.');
     if (token === 'pi') return Math.PI;
     if (token === 'e') return Math.E;
-    if (!(token in functions) || peek() !== '(') throw new Error(`Unknown function or constant “${token}”.`);
+    if (!(token in functions) || peek() !== '(')
+      throw new Error(`Unknown function or constant “${token}”.`);
     take();
     const args: number[] = [];
-    if (peek() !== ')') { args.push(parseExpression()); while (peek() === ',') { take(); args.push(parseExpression()); } }
+    if (peek() !== ')') {
+      args.push(parseExpression());
+      while (peek() === ',') {
+        take();
+        args.push(parseExpression());
+      }
+    }
     expect(')');
-    if ((token === 'min' || token === 'max') ? args.length < 1 : (token === 'pow' ? args.length !== 2 : token === 'round' ? args.length < 1 || args.length > 2 : args.length !== 1)) throw new Error(`Wrong number of values for ${token}().`);
+    if (
+      token === 'min' || token === 'max' ? args.length < 1
+      : token === 'pow' ? args.length !== 2
+      : token === 'round' ? args.length < 1 || args.length > 2
+      : args.length !== 1
+    )
+      throw new Error(`Wrong number of values for ${token}().`);
     return functions[token](args);
   };
   const value = parseExpression();
   if (cursor !== tokens.length) throw new Error('Check the expression syntax.');
-  if (!Number.isFinite(value)) throw new Error('The result is outside the supported range.');
+  if (!Number.isFinite(value))
+    throw new Error('The result is outside the supported range.');
   return value;
 }
 
-const CALCULATOR_KEYS = ['sin(', 'cos(', 'tan(', 'asin(', 'acos(', 'atan(', 'sqrt(', 'cbrt(', 'log(', 'ln(', 'abs(', 'min(', 'max(', 'pow(', 'π', 'e', 'x²', '^', '!', '(', ')', 'C', 'DEL', '÷', '×', '7', '8', '9', '−', '4', '5', '6', '+', '1', '2', '3', '%', '0', '.', 'Ans', '='];
+const CALCULATOR_KEYS = [
+  'sin(',
+  'cos(',
+  'tan(',
+  'asin(',
+  'acos(',
+  'atan(',
+  'sqrt(',
+  'cbrt(',
+  'log(',
+  'ln(',
+  'abs(',
+  'min(',
+  'max(',
+  'pow(',
+  'π',
+  'e',
+  'x²',
+  '^',
+  '!',
+  '(',
+  ')',
+  'C',
+  'DEL',
+  '÷',
+  '×',
+  '7',
+  '8',
+  '9',
+  '−',
+  '4',
+  '5',
+  '6',
+  '+',
+  '1',
+  '2',
+  '3',
+  '%',
+  '0',
+  '.',
+  'Ans',
+  '=',
+];
 
 const Calculator = () => {
   const [val, setVal] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [angleMode, setAngleMode] = useState<CalculatorAngleMode>('DEG');
-  const calculate = useCallback((expression: string) => {
-    try {
-      const number = evaluateCalculatorExpression(expression.replaceAll('×', '*').replaceAll('÷', '/').replaceAll('−', '-').replaceAll('π', 'pi'), angleMode);
-      const formatted = Number(number.toPrecision(12)).toString();
-      setResult(formatted); setError('');
-      return formatted;
-    } catch (cause) {
-      setResult(null); setError(cause instanceof Error ? cause.message : 'Invalid expression.');
-      return null;
-    }
-  }, [angleMode]);
+  const calculate = useCallback(
+    (expression: string) => {
+      try {
+        const number = evaluateCalculatorExpression(
+          expression
+            .replaceAll('×', '*')
+            .replaceAll('÷', '/')
+            .replaceAll('−', '-')
+            .replaceAll('π', 'pi'),
+          angleMode,
+        );
+        const formatted = Number(number.toPrecision(12)).toString();
+        setResult(formatted);
+        setError('');
+        return formatted;
+      } catch (cause) {
+        setResult(null);
+        setError(
+          cause instanceof Error ? cause.message : 'Invalid expression.',
+        );
+        return null;
+      }
+    },
+    [angleMode],
+  );
   const press = (key: string) => {
-    if (key === 'C') { setVal(''); setResult(null); setError(''); return; }
-    if (key === 'DEL') { setVal((current) => current.slice(0, -1)); setResult(null); setError(''); return; }
-    if (key === '=') { calculate(val); return; }
-    if (key === 'Ans') { setVal((current) => `${current}${result || ''}`); setResult(null); return; }
-    if (key === 'x²') { setVal((current) => `${current}^2`); setResult(null); return; }
+    if (key === 'C') {
+      setVal('');
+      setResult(null);
+      setError('');
+      return;
+    }
+    if (key === 'DEL') {
+      setVal((current) => current.slice(0, -1));
+      setResult(null);
+      setError('');
+      return;
+    }
+    if (key === '=') {
+      calculate(val);
+      return;
+    }
+    if (key === 'Ans') {
+      setVal((current) => `${current}${result || ''}`);
+      setResult(null);
+      return;
+    }
+    if (key === 'x²') {
+      setVal((current) => `${current}^2`);
+      setResult(null);
+      return;
+    }
     const insertion = key === '×' || key === '÷' || key === '−' ? key : key;
-    if (result && (/^\d$/.test(key) || key === '.' || key === 'π')) setVal(insertion);
+    if (result && (/^\d$/.test(key) || key === '.' || key === 'π'))
+      setVal(insertion);
     else setVal((current) => `${current}${insertion}`);
-    setResult(null); setError('');
+    setResult(null);
+    setError('');
   };
   return (
     <Card className='m-2 w-full max-w-md rounded-2xl border-white/10 bg-pw-surface p-4 shadow-2xl ring-1 ring-white/10 bkblur sm:p-5'>
-      <div className='mb-3 flex items-center justify-between'><h3 className='text-xs font-bold uppercase tracking-widest text-pw-primary'>Scientific Calculator</h3><Button type='button' variant='outline' size='sm' onClick={() => setAngleMode((mode) => mode === 'DEG' ? 'RAD' : 'DEG')} className='h-8 min-w-14 text-[10px]' aria-label={`Angle mode ${angleMode}; click to change`}>{angleMode}</Button></div>
+      <div className='mb-3 flex items-center justify-between'>
+        <h3 className='text-xs font-bold uppercase tracking-widest text-pw-primary'>
+          Scientific Calculator
+        </h3>
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          onClick={() =>
+            setAngleMode((mode) => (mode === 'DEG' ? 'RAD' : 'DEG'))
+          }
+          className='h-8 min-w-14 text-[10px]'
+          aria-label={`Angle mode ${angleMode}; click to change`}>
+          {angleMode}
+        </Button>
+      </div>
       <div className='mb-3 rounded-xl border border-white/10 bg-black/40 p-3 text-right font-mono'>
-        <Input value={val} onChange={(event) => { setVal(event.target.value); setResult(null); setError(''); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); calculate(val); } if (event.key === 'Escape') press('C'); }} aria-label='Calculator expression' placeholder='Try sin(30) + sqrt(16)' className='h-7 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0' />
-        <div className='mt-2 min-h-8 break-all text-2xl font-bold text-pw-primary' aria-live='polite'>{result ?? (val || '0')}</div>
-        <p className='min-h-4 text-left text-[10px] text-pw-danger' role='status'>{error}</p>
+        <Input
+          value={val}
+          onChange={(event) => {
+            setVal(event.target.value);
+            setResult(null);
+            setError('');
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              calculate(val);
+            }
+            if (event.key === 'Escape') press('C');
+          }}
+          aria-label='Calculator expression'
+          placeholder='Try sin(30) + sqrt(16)'
+          className='h-7 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0'
+        />
+        <div
+          className='mt-2 min-h-8 break-all text-2xl font-bold text-pw-primary'
+          aria-live='polite'>
+          {result ?? (val || '0')}
+        </div>
+        <p
+          className='min-h-4 text-left text-[10px] text-pw-danger'
+          role='status'>
+          {error}
+        </p>
       </div>
       <div className='grid grid-cols-5 gap-1.5'>
         {CALCULATOR_KEYS.map((key) => {
           const isClear = key === 'C' || key === 'DEL';
-          const isOperator = ['^', '!', '%', '+', '−', '×', '÷', '='].includes(key);
-          return <Button key={key} type='button' variant={key === '=' ? 'default' : isClear ? 'destructive' : isOperator ? 'secondary' : 'outline'} onClick={() => press(key)} className={cn('h-10 min-w-0 rounded-lg px-1 font-mono text-[10px] font-bold transition active:scale-95 sm:text-xs', key.endsWith('(') && 'text-pw-cyan', isOperator && key !== '=' && 'border-pw-primary/20 bg-pw-primary/10 text-pw-primary', key === '=' && 'bg-pw-primary text-white')} aria-label={key === 'DEL' ? 'Delete last character' : key === '=' ? 'Calculate' : key}>{key}</Button>;
+          const isOperator = ['^', '!', '%', '+', '−', '×', '÷', '='].includes(
+            key,
+          );
+          return (
+            <Button
+              key={key}
+              type='button'
+              variant={
+                key === '=' ? 'default'
+                : isClear ?
+                  'destructive'
+                : isOperator ?
+                  'secondary'
+                : 'outline'
+              }
+              onClick={() => press(key)}
+              className={cn(
+                'h-10 min-w-0 rounded-lg px-1 font-mono text-[10px] font-bold transition active:scale-95 sm:text-xs',
+                key.endsWith('(') && 'text-pw-cyan',
+                isOperator &&
+                  key !== '=' &&
+                  'border-pw-primary/20 bg-pw-primary/10 text-pw-primary',
+                key === '=' && 'bg-pw-primary text-white',
+              )}
+              aria-label={
+                key === 'DEL' ? 'Delete last character'
+                : key === '=' ?
+                  'Calculate'
+                : key
+              }>
+              {key}
+            </Button>
+          );
         })}
       </div>
-      <p className='mt-3 text-[10px] text-pw-muted'>Supports arithmetic, powers, factorials, constants, and scientific functions. Trigonometry uses {angleMode.toLowerCase()}.</p>
+      <p className='mt-3 text-[10px] text-pw-muted'>
+        Supports arithmetic, powers, factorials, constants, and scientific
+        functions. Trigonometry uses {angleMode.toLowerCase()}.
+      </p>
     </Card>
   );
 };
@@ -657,10 +1070,9 @@ function Taker() {
         } else if (activeQuestion.type !== 'upload') {
           currentAnswer = selectedOption;
         }
-        const hasAnswer = activeQuestion.type === 'rating' ?
-          Number(currentAnswer) >= 1
-        :
-          Array.isArray(currentAnswer) ? currentAnswer.length > 0
+        const hasAnswer =
+          activeQuestion.type === 'rating' ? Number(currentAnswer) >= 1
+          : Array.isArray(currentAnswer) ? currentAnswer.length > 0
           : currentAnswer && typeof currentAnswer === 'object' ? true
           : String(currentAnswer ?? '').trim().length > 0;
         if (hasAnswer) {
@@ -1392,7 +1804,10 @@ function Taker() {
     let currentSelectedOption =
       quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
     if (q?.type === 'range' || q?.type === 'rating') {
-      currentSelectedOption = savedForCurrent?.answer ?? scrollAnswers[currentQId] ?? currentSelectedOption;
+      currentSelectedOption =
+        savedForCurrent?.answer ??
+        scrollAnswers[currentQId] ??
+        currentSelectedOption;
     }
 
     if (!autoSubmit) {
@@ -1799,12 +2214,16 @@ function Taker() {
   const finalizeQuiz = async (finalAnswers: any[]) => {
     if (finalizingRef.current) return;
     if (pendingResponseFileReadsRef.current.size > 0) {
-      toast.error('Wait for the selected file to finish preparing before submitting.');
+      toast.error(
+        'Wait for the selected file to finish preparing before submitting.',
+      );
       return;
     }
     if (!isLocalPreview && !navigator.onLine) {
       setSubmissionFailed(true);
-      toast.error('You are offline. Check your internet connection and try submitting again.');
+      toast.error(
+        'You are offline. Check your internet connection and try submitting again.',
+      );
       return;
     }
     finalizingRef.current = true;
@@ -1840,36 +2259,53 @@ function Taker() {
         if (!isLocalPreview) {
           const attempt = activeAttemptRef.current;
           if (attempt?.attemptId && attempt?.attemptToken) {
-            const finalSnapshot = await HybridStorage.prepareQuizAttemptSnapshot(quiz.id, {
-              ...createAttemptSnapshot(finalAnswers),
-              status: 'in_progress',
-            });
+            const finalSnapshot =
+              await HybridStorage.prepareQuizAttemptSnapshot(quiz.id, {
+                ...createAttemptSnapshot(finalAnswers),
+                status: 'in_progress',
+              });
             const attemptSaved = await syncAttemptSnapshot(finalSnapshot);
-            if (!attemptSaved) throw new Error('Your answers or uploaded files could not be saved to the server. Please retry while online.');
+            if (!attemptSaved)
+              throw new Error(
+                'Your answers or uploaded files could not be saved to the server. Please retry while online.',
+              );
             const persistedAnswers = activeAttemptRef.current?.answers;
             if (persistedAnswers && typeof persistedAnswers === 'object')
               answersToSubmit = Object.values(persistedAnswers);
           }
-          const responseSaved = await HybridStorage.saveResponse(quiz.id, {
-            userData: sanitizedUserData,
-            answers: answersToSubmit,
-            score: finalScore,
-            assessmentType: quiz.type,
-            categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
-            totalQuestions: activeQuestions.length,
-            answeredQuestions: finalAnswers.length,
-            country: clientGeo.country,
-            continent: clientGeo.continent,
-            timezone: clientGeo.timezone,
-            submissionId: attempt?.attemptId,
-            attemptId: attempt?.attemptId,
-            attemptToken: attempt?.attemptToken,
-          }, { requireRemote: true });
-          if (!responseSaved || typeof responseSaved !== 'object' || responseSaved.success !== true || 'queued' in responseSaved)
-            throw new Error('The server did not confirm saving your assessment. Please retry submission.');
+          const responseSaved = await HybridStorage.saveResponse(
+            quiz.id,
+            {
+              userData: sanitizedUserData,
+              answers: answersToSubmit,
+              score: finalScore,
+              assessmentType: quiz.type,
+              categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
+              totalQuestions: activeQuestions.length,
+              answeredQuestions: finalAnswers.length,
+              country: clientGeo.country,
+              continent: clientGeo.continent,
+              timezone: clientGeo.timezone,
+              submissionId: attempt?.attemptId,
+              attemptId: attempt?.attemptId,
+              attemptToken: attempt?.attemptToken,
+            },
+            { requireRemote: true },
+          );
+          if (
+            !responseSaved ||
+            typeof responseSaved !== 'object' ||
+            responseSaved.success !== true ||
+            'queued' in responseSaved
+          )
+            throw new Error(
+              'The server did not confirm saving your assessment. Please retry submission.',
+            );
           submissionSucceeded = true;
           if (!quiz.allowRetry) {
-            try { localStorage.setItem(`completed_quiz_${quiz.id}`, 'true'); } catch {}
+            try {
+              localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+            } catch {}
           }
           if (
             responseSaved &&
@@ -1899,7 +2335,10 @@ function Taker() {
             assessmentType: quiz.type,
             categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
           };
-          await HybridStorage.saveTemplatePreviewResponse(quiz.id, templateResp);
+          await HybridStorage.saveTemplatePreviewResponse(
+            quiz.id,
+            templateResp,
+          );
           toast.success(
             'Preview assessment completed! Response saved locally for test review.',
           );
@@ -1908,7 +2347,11 @@ function Taker() {
       } catch (e) {
         console.error('Failed to save response:', e);
         setSubmissionFailed(true);
-        toast.error(e instanceof Error ? e.message : 'Your answers could not be saved. Please retry.');
+        toast.error(
+          e instanceof Error ?
+            e.message
+          : 'Your answers could not be saved. Please retry.',
+        );
       }
     }
     setIsSubmitting(false);
@@ -1916,7 +2359,8 @@ function Taker() {
     if (submissionSucceeded) {
       quizHaptic([35, 45, 130]);
       playQuizCompletionTone();
-      if (quiz?.endScreen?.enableConfetti) triggerConfetti(quiz.endScreen.confettiType || 'standard');
+      if (quiz?.endScreen?.enableConfetti)
+        triggerConfetti(quiz.endScreen?.confettiType || 'standard');
       setIsFinished(true);
     }
   };
@@ -2419,7 +2863,9 @@ function Taker() {
                           Math.min(max, Math.max(min, value))
                         : min
                       }
-                      onBlur={(event) => saveValue(Number(event.currentTarget.value))}
+                      onBlur={(event) =>
+                        saveValue(Number(event.currentTarget.value))
+                      }
                       onChange={(event) =>
                         saveValue(Number(event.target.value))
                       }
@@ -2538,8 +2984,12 @@ function Taker() {
                             await optimizeImageForStorage(file);
                           const reader = new FileReader();
                           reader.onerror = () => {
-                            pendingResponseFileReadsRef.current.delete(quest.id);
-                            setIsPreparingResponseFile(pendingResponseFileReadsRef.current.size > 0);
+                            pendingResponseFileReadsRef.current.delete(
+                              quest.id,
+                            );
+                            setIsPreparingResponseFile(
+                              pendingResponseFileReadsRef.current.size > 0,
+                            );
                             toast.error(
                               'Could not read this file. Please try another one.',
                             );
@@ -2581,13 +3031,19 @@ function Taker() {
                               Math.round(optimizedFile.size / 1024),
                             );
                             toast.success(`Attached: ${file.name}`);
-                            pendingResponseFileReadsRef.current.delete(quest.id);
-                            setIsPreparingResponseFile(pendingResponseFileReadsRef.current.size > 0);
+                            pendingResponseFileReadsRef.current.delete(
+                              quest.id,
+                            );
+                            setIsPreparingResponseFile(
+                              pendingResponseFileReadsRef.current.size > 0,
+                            );
                           };
                           reader.readAsDataURL(optimizedFile);
                         } catch {
                           pendingResponseFileReadsRef.current.delete(quest.id);
-                          setIsPreparingResponseFile(pendingResponseFileReadsRef.current.size > 0);
+                          setIsPreparingResponseFile(
+                            pendingResponseFileReadsRef.current.size > 0,
+                          );
                           toast.error(
                             'Could not prepare this file for upload.',
                           );
@@ -3122,7 +3578,7 @@ function Taker() {
             quiz?.endScreen?.textAlign === 'left' && 'text-left',
             quiz?.endScreen?.textAlign === 'right' && 'text-right',
           )}>
-          <div className='flex flex-col item-center sticky top-0 z-50 space-y-2 bg-[#0A0C1B]/80 bkblur w-full h-fit p-2 pt-3'>
+          <div className='flex flex-col item-center sticky top-1 z-50 space-y-2 bg-[#0A0C1B]/80 bkblur w-full h-fit p-2 pt-5'>
             <div
               className={cn(
                 'w-20 h-20 rounded-full flex items-center justify-center border mb-3',
@@ -3168,244 +3624,291 @@ function Taker() {
               )}
             </div>
 
-            <div className='divider my-4 sm:hidden' />
+            <div className='divider mt-3 sm:hidden' />
           </div>
 
-          <div className='block space-y-2 w-full h-[60dvh] overflow-y-auto no-scrollbar'>
-          {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-            <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:backdrop-blur-lg sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
-              <div className='text-center'>
-                <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
-                  TOTAL OVERALL SCORE
-                </span>
-                <span className='text-3xl font-bold font-mono text-pw-primary'>
-                  {score} / {totalQuestions}
-                </span>
-              </div>
+          <div className='block space-y-2 w-full h-fit max-h-[48dvh] overflow-y-auto no-scrollbar relative'>
+            {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
+              <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:backdrop-blur-lg sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
+                <div
+                  className='text-center'
+                  id='total-score'>
+                  <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block mb-1'>
+                    TOTAL OVERALL SCORE
+                  </span>
+                  <span className='text-3xl font-bold font-mono text-pw-primary'>
+                    {score} / {totalQuestions}
+                  </span>
+                </div>
 
-              {/* Independent Questions Score Breakdown */}
-              {quiz?.category?.inPerformance &&
-                Object.keys(categoryScores).length > 0 && (
-                  <>
-                    {(() => {
-                      const independentQs = activeQuestions.filter(
-                        (quest) =>
-                          !quest.category || quest.category.trim() === '',
-                      );
-                      if (independentQs.length === 0) return null;
-                      const independentAns = userAnswers.filter((a) =>
-                        independentQs.some((q) => q.id === a.questionId),
-                      );
-                      const indCorrect = independentAns.filter(
-                        (a) => a.correct,
-                      ).length;
+                {/* Independent Questions Score Breakdown */}
+                {quiz?.category?.inPerformance &&
+                  Object.keys(categoryScores).length > 0 && (
+                    <>
+                      {(() => {
+                        const independentQs = activeQuestions.filter(
+                          (quest) =>
+                            !quest.category || quest.category.trim() === '',
+                        );
+                        if (independentQs.length === 0) return null;
+                        const independentAns = userAnswers.filter((a) =>
+                          independentQs.some((q) => q.id === a.questionId),
+                        );
+                        const indCorrect = independentAns.filter(
+                          (a) => a.correct,
+                        ).length;
 
-                      return (
-                        <div className='border-t border-white/5 pt-3 space-y-1.5'>
-                          <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
-                            <span className='font-bold text-white'>
-                              Other Questions ({independentQs.length})
-                            </span>
-                            <span className='font-mono text-pw-cyan font-bold'>
-                              {indCorrect} / {independentQs.length}
-                            </span>
+                        return (
+                          <div className='border-t border-white/5 pt-3 space-y-1.5'>
+                            <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
+                              <span className='font-bold text-white'>
+                                Other Questions ({independentQs.length})
+                              </span>
+                              <span className='font-mono text-pw-cyan font-bold'>
+                                {indCorrect} / {independentQs.length}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
 
-                    {/* Group / Category Questions Score Breakdown */}
+                      {/* Group / Category Questions Score Breakdown */}
 
-                    <div className='border-t border-white/5 pt-3 space-y-2'>
-                      <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
-                        Category Scores
-                      </span>
-
-                      {Object.entries(categoryScores).map(
-                        ([cat, stats], idx) => (
-                          <div
-                            key={cat + idx}
-                            className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
-                            <span className='font-bold text-white'>
-                              📁 {capFirst(cat)} ({stats.total})
-                            </span>
-                            <span className='font-mono text-pw-primary font-bold'>
-                              {stats.correct} / {stats.total}
-                            </span>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  </>
-                )}
-            </Card>
-          )}
-
-          {quiz?.type === 'quiz' && <div className='divider my-4 sm:hidden' />}
-
-          {/* Per-question explanation review */}
-          {quiz?.type === 'quiz' &&
-            quiz?.correctOption &&
-            quiz?.correctOptionDes === 'in-result' &&
-            activeQuestions.some(
-              (q) =>
-                q.correctExplanation ||
-                (q.options as any[])?.some((o: any) => o.explanation),
-            ) &&
-            userAnswers.length > 0 && (
-              <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left max-h-[300px] overflow-y-auto no-scrollbar'>
-                <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block'>
-                  Question Review & Explanations
-                </span>
-                {activeQuestions.map((q, qi) => {
-                  const ans = userAnswers.find((a) => a.questionId === q.id);
-                  const opts = (q.options as any[]) || [];
-                  const userAnswerText =
-                    ans ?
-                      Array.isArray(ans.answer) ?
-                        ans.answer
-                          .map(
-                            (id: string) =>
-                              opts.find((o: any) => o.id === id)?.text || id,
-                          )
-                          .join(', ')
-                      : opts.find((o: any) => o.id === ans.answer)?.text ||
-                        String(ans.answer)
-                    : '(No answer)';
-                  const selOpt =
-                    !Array.isArray(ans?.answer) ?
-                      opts.find((o: any) => o.id === ans?.answer)
-                    : null;
-
-                  // Option image for selected answer
-                  const rawSelOptImg =
-                    selOpt?.uploadUrl ||
-                    (typeof selOpt?.imageUrl === 'string' ?
-                      selOpt.imageUrl
-                    : selOpt?.imageUrl?.url);
-                  const selOptImgUrl =
-                    rawSelOptImg ?
-                      unpackPingWorldMediaUrl(rawSelOptImg).url
-                    : undefined;
-
-                  // Question image if present
-                  const rawQImg =
-                    (q as any)?.uploadUrl ||
-                    (typeof (q as any)?.imageUrl === 'string' ?
-                      (q as any).imageUrl
-                    : (q as any)?.imageUrl?.url) ||
-                    (q as any)?.image;
-                  const qImgUrl =
-                    rawQImg ? unpackPingWorldMediaUrl(rawQImg).url : undefined;
-
-                  return (
-                    <div
-                      key={q.id}
-                      className={cn(
-                        'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5 bkblur',
-                        ans?.correct ?
-                          'bg-pw-success/5 border-pw-success/20'
-                        : 'bg-pw-danger/5 border-pw-danger/20',
-                      )}>
-                      <div className='flex items-start gap-2'>
-                        <span
-                          className={cn(
-                            'font-bold shrink-0',
-                            ans?.correct ? 'text-pw-success' : 'text-pw-danger',
-                          )}>
-                          {ans?.correct ? '✓' : '✗'}{' '}
-                          {(() => {
-                            const targetCat = q.category?.trim() || '';
-                            const inStack = activeQuestions.filter(
-                              (item) =>
-                                (item.category?.trim() || '') === targetCat,
-                            );
-                            const posInStack = inStack.findIndex(
-                              (item) => item.id === q.id,
-                            );
-                            const stackPos =
-                              posInStack !== -1 ? posInStack + 1 : qi + 1;
-                            return q.category ?
-                                `Q${stackPos} (${q.category})`
-                              : `Q${stackPos}`;
-                          })()}
-                          .
+                      <div className='border-t border-white/5 pt-3 space-y-2'>
+                        <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
+                          Category Scores
                         </span>
-                        <span
-                          className='text-white/80 whitespace-pre-wrap'
-                          dangerouslySetInnerHTML={{
-                            __html: formatDetailVars(q.text),
-                          }}
-                        />
+
+                        {Object.entries(categoryScores).map(
+                          ([cat, stats], idx) => (
+                            <div
+                              key={cat + idx}
+                              className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
+                              <span className='font-bold text-white'>
+                                📁 {capFirst(cat)} ({stats.total})
+                              </span>
+                              <span className='font-mono text-pw-primary font-bold'>
+                                {stats.correct} / {stats.total}
+                              </span>
+                            </div>
+                          ),
+                        )}
                       </div>
+                    </>
+                  )}
+              </Card>
+            )}
 
-                      {/* Question image attachment if present */}
-                      {qImgUrl && (
-                        <div className='pl-5 my-1'>
-                          <Image
-                            src={qImgUrl}
-                            alt='Question media'
-                            onClick={() =>
-                              openFile({
-                                src: qImgUrl,
-                                name: `Question attachment - Q${qi + 1}`,
-                              })
-                            }
-                            className='max-h-24 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
-                          />
-                        </div>
-                      )}
+            {quiz?.correctOptionDes === 'in-result' &&
+              activeQuestions.some(
+                (q) =>
+                  q.correctExplanation ||
+                  (q.options as any[])?.some((o: any) => o.explanation),
+              ) && userAnswers.length > 2 && !document.getElementById('total-score')?.checkVisibility() && (
+              <Button className={'absolute bottom-1 right-1 w-11 h-11 p-1 flex items-center rounded-full shadow-md shadow-pw-primary/40 bg-pw-surface/80 bkblur hover:shadow-lg'} onClick={() => {
+                document.getElementById('total-score')?.scrollIntoView();
+              }}>
+                <ChevronUp className='w-4 h-4 text-white'/>
+              </Button>
+              )}
+            
+            {quiz?.type === 'quiz' && (
+              <div className='divider my-4 sm:hidden' />
+            )}
 
-                      <p className='text-pw-muted pl-5 whitespace-pre-wrap'>
-                        Your answer:{' '}
-                        <span
-                          className='font-bold text-white'
-                          dangerouslySetInnerHTML={{
-                            __html: formatDetailVars(userAnswerText),
-                          }}
-                        />
-                      </p>
+            {/* Per-question explanation review */}
+            {quiz?.type === 'quiz' &&
+              quiz?.correctOption &&
+              quiz?.correctOptionDes === 'in-result' &&
+              activeQuestions.some(
+                (q) =>
+                  q.correctExplanation ||
+                  (q.options as any[])?.some((o: any) => o.explanation),
+              ) &&
+              userAnswers.length > 0 && (
+                <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left h-fit'>
+                  <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block'>
+                    Question Review & Explanations
+                  </span>
+                  {activeQuestions.map((q, qi) => {
+                    const ans = userAnswers.find((a) => a.questionId === q.id);
+                    const opts = (q.options as any[]) || [];
+                    const userAnswerText =
+                      ans ?
+                        Array.isArray(ans.answer) ?
+                          ans.answer
+                            .map(
+                              (id: string) =>
+                                opts.find((o: any) => o.id === id)?.text || id,
+                            )
+                            .join(', ')
+                        : opts.find((o: any) => o.id === ans.answer)?.text ||
+                          String(ans.answer)
+                      : '(No answer)';
+                    const selOpt =
+                      !Array.isArray(ans?.answer) ?
+                        opts.find((o: any) => o.id === ans?.answer)
+                      : null;
 
-                      {/* Selected option image display */}
-                      {selOptImgUrl && (
-                        <div className='pl-5 my-1 flex items-center gap-2'>
-                          <span className='text-[10px] text-pw-muted'>
-                            Selected Image:
+                    // Option image for selected answer
+                    const rawSelOptImg =
+                      selOpt?.uploadUrl ||
+                      (typeof selOpt?.imageUrl === 'string' ?
+                        selOpt.imageUrl
+                      : selOpt?.imageUrl?.url);
+                    const selOptImgUrl =
+                      rawSelOptImg ?
+                        unpackPingWorldMediaUrl(rawSelOptImg).url
+                      : undefined;
+
+                    // Question image if present
+                    const rawQImg =
+                      (q as any)?.uploadUrl ||
+                      (typeof (q as any)?.imageUrl === 'string' ?
+                        (q as any).imageUrl
+                      : (q as any)?.imageUrl?.url) ||
+                      (q as any)?.image;
+                    const qImgUrl =
+                      rawQImg ?
+                        unpackPingWorldMediaUrl(rawQImg).url
+                      : undefined;
+
+                    // DecodedCorrectIndex:
+                    const decodedIndex = decodeStoredCorrectAnswer(
+                      q.correctIndex,
+                    );
+                    const correctOpt = opts.find(
+                      (o: any, oI: number) =>
+                        o.id === decodedIndex ||
+                        String(oI) === String(decodedIndex) ||
+                        o.text === decodedIndex,
+                    );
+
+                    return (
+                      <div
+                        key={q.id}
+                        className={cn(
+                          'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5 bkblur',
+                          ans?.correct ?
+                            'bg-pw-success/5 border-pw-success/20'
+                          : 'bg-pw-danger/5 border-pw-danger/20',
+                        )}>
+                        <div
+                          className={cn(
+                            'flex items-start gap-2',
+                            q.category?.trim() && 'flex-col',
+                          )}>
+                          <span
+                            className={cn(
+                              'font-bold shrink-0',
+                              ans?.correct ? 'text-pw-success' : (
+                                'text-pw-danger'
+                              ),
+                            )}>
+                            {ans?.correct ? '✓' : '✗'}{' '}
+                            {(() => {
+                              const targetCat = q.category?.trim() || '';
+                              const inStack = activeQuestions.filter(
+                                (item) =>
+                                  (item.category?.trim() || '') === targetCat,
+                              );
+                              const posInStack = inStack.findIndex(
+                                (item) => item.id === q.id,
+                              );
+                              const stackPos =
+                                posInStack !== -1 ? posInStack + 1 : qi + 1;
+                              return q.category ?
+                                  `Q${stackPos} (${q.category})`
+                                : `Q${stackPos} .`;
+                            })()}
                           </span>
-                          <Image
-                            src={selOptImgUrl}
-                            alt='Selected option attachment'
-                            onClick={() =>
-                              openFile({
-                                src: selOptImgUrl,
-                                name: `Selected option image - Q${qi + 1}`,
-                              })
-                            }
-                            className='h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                          <span
+                            className='text-white/80 whitespace-pre-wrap'
+                            dangerouslySetInnerHTML={{
+                              __html: formatDetailVars(q.text),
+                            }}
                           />
                         </div>
-                      )}
 
-                      {/* Uploaded answer attachment preview */}
-                      {ans?.fileUrl &&
-                        (() => {
-                          const unpacked =
-                            unpackPingWorldMediaUrl(ans.fileUrl).url ||
-                            ans.fileUrl;
-                          const fileName =
-                            ans.fileName || `Uploaded answer - Q${qi + 1}`;
-                          const isImage =
-                            ans.fileType?.startsWith('image/') ||
-                            String(unpacked).startsWith('data:image/') ||
-                            /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
-                              fileName,
-                            );
-                          return (
-                            <div className='pl-5 my-1 flex items-center gap-2'>
-                              {isImage && (
-                                <Image
-                                  src={unpacked}
-                                  alt={fileName}
+                        {/* Question image attachment if present */}
+                        {qImgUrl && (
+                          <div className='pl-3 my-1'>
+                            <Image
+                              src={qImgUrl}
+                              alt='Question media'
+                              onClick={() =>
+                                openFile({
+                                  src: qImgUrl,
+                                  name: `Question attachment - Q${qi + 1}`,
+                                })
+                              }
+                              className='max-h-24 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
+                            />
+                          </div>
+                        )}
+
+                        <p className='text-pw-muted pl-4 whitespace-pre-wrap'>
+                          Your answer:{' '}
+                          <span
+                            className='font-bold text-white'
+                            dangerouslySetInnerHTML={{
+                              __html: formatDetailVars(userAnswerText),
+                            }}
+                          />
+                        </p>
+
+                        {/* Selected option image display */}
+                        {selOptImgUrl && (
+                          <div className='pl-3 my-1 flex items-center gap-2'>
+                            <span className='text-[10px] text-pw-muted'>
+                              Selected Image:
+                            </span>
+                            <Image
+                              src={selOptImgUrl}
+                              alt='Selected option attachment'
+                              onClick={() =>
+                                openFile({
+                                  src: selOptImgUrl,
+                                  name: `Selected option image - Q${qi + 1}`,
+                                })
+                              }
+                              className='h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                            />
+                          </div>
+                        )}
+
+                        {/* Uploaded answer attachment preview */}
+                        {ans?.fileUrl &&
+                          (() => {
+                            const unpacked =
+                              unpackPingWorldMediaUrl(ans.fileUrl).url ||
+                              ans.fileUrl;
+                            const fileName =
+                              ans.fileName || `Uploaded answer - Q${qi + 1}`;
+                            const isImage =
+                              ans.fileType?.startsWith('image/') ||
+                              String(unpacked).startsWith('data:image/') ||
+                              /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
+                                fileName,
+                              );
+                            return (
+                              <div className='pl-3 my-1 flex items-center gap-2'>
+                                {isImage && (
+                                  <Image
+                                    src={unpacked}
+                                    alt={fileName}
+                                    onClick={() =>
+                                      openFile({
+                                        src: unpacked,
+                                        name: fileName,
+                                        mimeType: ans.fileType,
+                                      })
+                                    }
+                                    className='max-h-28 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                  />
+                                )}
+                                <button
+                                  type='button'
                                   onClick={() =>
                                     openFile({
                                       src: unpacked,
@@ -3413,139 +3916,119 @@ function Taker() {
                                       mimeType: ans.fileType,
                                     })
                                   }
-                                  className='max-h-28 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
-                                />
-                              )}
-                              <button
-                                type='button'
-                                onClick={() =>
-                                  openFile({
-                                    src: unpacked,
-                                    name: fileName,
-                                    mimeType: ans.fileType,
-                                  })
-                                }
-                                className='text-[10px] text-pw-cyan hover:underline truncate'>
-                                Preview {fileName}
-                              </button>
-                            </div>
-                          );
-                        })()}
+                                  className='text-[10px] flex items-center gap-1 mb-1 text-pw-cyan hover:underline truncate'>
+                                  <CheckCircle2 className='w-5 h-5' />
+                                  Preview {fileName}
+                                </button>
+                              </div>
+                            );
+                          })()}
 
-                      {/* Show correct answer if taker got it wrong */}
-                      {!ans?.correct &&
-                        (() => {
-                          const decodedIndex = decodeStoredCorrectAnswer(
-                            q.correctIndex,
-                          );
-                          const correctOpt = opts.find(
-                            (o: any, oI: number) =>
-                              o.id === decodedIndex ||
-                              String(oI) === String(decodedIndex) ||
-                              o.text === decodedIndex,
-                          );
-                          const rawCorrectImg =
+                        {/* Show correct answer if taker got it wrong and correct answer was set */}
+                        {!ans?.correct &&
+                          decodedIndex &&
+                          correctOpt &&
+                          (
                             correctOpt?.uploadUrl ||
-                            (typeof correctOpt?.imageUrl === 'string' ?
-                              correctOpt?.imageUrl
-                            : correctOpt?.imageUrl?.url);
-                          const correctImgUrl =
-                            rawCorrectImg ?
-                              unpackPingWorldMediaUrl(rawCorrectImg).url
-                            : undefined;
-                          return (
-                            <div className='pl-5 text-xs text-pw-success/90 font-medium space-y-1 pt-0.5'>
-                              <p>
-                                Correct answer:{' '}
-                                <span
-                                  className='font-bold text-pw-success'
-                                  dangerouslySetInnerHTML={{
-                                    __html: formatDetailVars(
-                                      correctOpt?.text || String(decodedIndex),
-                                    ),
-                                  }}
-                                />
-                              </p>
-                              {correctImgUrl && (
-                                <div className='flex items-center gap-2 mt-1'>
-                                  <span className='text-[10px] text-pw-muted'>
-                                    Correct Image:
-                                  </span>
-                                  <Image
-                                    src={correctImgUrl}
-                                    alt='Correct option attachment'
-                                    onClick={() =>
-                                      openFile({
-                                        src: correctImgUrl,
-                                        kind: 'image',
-                                        name: `Correct Option Image - Q${qi + 1}`,
-                                      })
-                                    }
-                                    className='h-12 w-12 rounded-lg object-cover border border-pw-success/30 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                            correctOpt?.imageUrl ||
+                            correctOpt?.imageUrl?.url
+                          )(() => {
+                            const rawCorrectImg =
+                              correctOpt?.uploadUrl ||
+                              (typeof correctOpt?.imageUrl === 'string' ?
+                                correctOpt?.imageUrl
+                              : correctOpt?.imageUrl?.url);
+                            const correctImgUrl =
+                              rawCorrectImg ?
+                                unpackPingWorldMediaUrl(rawCorrectImg).url
+                              : undefined;
+                            return (
+                              <div className='pl-3 text-xs text-pw-success/90 font-medium space-y-1 pt-0.5'>
+                                <p>
+                                  Correct answer:{' '}
+                                  <span
+                                    className='font-bold text-pw-success'
+                                    dangerouslySetInnerHTML={{
+                                      __html: formatDetailVars(
+                                        correctOpt?.text ||
+                                          String(decodedIndex),
+                                      ),
+                                    }}
                                   />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                                </p>
+                                {correctImgUrl && (
+                                  <div className='flex items-center gap-2 mt-1'>
+                                    <span className='text-[10px] text-pw-muted'>
+                                      Correct Image:
+                                    </span>
+                                    <Image
+                                      src={correctImgUrl}
+                                      alt='Correct option attachment'
+                                      onClick={() =>
+                                        openFile({
+                                          src: correctImgUrl,
+                                          kind: 'image',
+                                          name: `Correct Option Image - Q${qi + 1}`,
+                                        })
+                                      }
+                                      className='h-12 w-12 rounded-lg object-cover border border-pw-success/30 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
-                      {selOpt?.explanation && (
-                        <p
-                          className='pl-5 text-pw-cyan/90 italic whitespace-pre-wrap'
-                          dangerouslySetInnerHTML={{
-                            __html: formatDetailVars(selOpt.explanation),
-                          }}
-                        />
-                      )}
-                      {q.correctExplanation && (
-                        <p
-                          className='pl-5 text-pw-primary/90 italic whitespace-pre-wrap'
-                          dangerouslySetInnerHTML={{
-                            __html:
-                              '💡 ' + formatDetailVars(q.correctExplanation),
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </Card>
-            )}
-
+                        {q.correctExplanation && (
+                          <p
+                            className='pl-3 text-pw-cyan/90 mt-2 mb-1 whitespace-pre-wrap'
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                'Question Tip: ' +
+                                formatDetailVars(q.correctExplanation),
+                            }}
+                          />
+                        )}
+                        {selOpt?.explanation &&
+                          q.correctExplanation !== selOpt.explanation && (
+                            <p
+                              className='pl-3 border-t border-pw-cyan/40 pt-2 text-pw-cyan/90 italic whitespace-pre-wrap'
+                              dangerouslySetInnerHTML={{
+                                __html:
+                                  'Option Tip: ' +
+                                  formatDetailVars(selOpt.explanation),
+                              }}
+                            />
+                          )}
+                      </div>
+                    );
+                  })}
+                </Card>
+              )}
+          </div>
           <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full mt-4 items-center justify-center'>
-            {submissionFailed && (
-              <Button
-                onClick={() => void finalizeQuiz(userAnswers)}
-                disabled={isSubmitting}
-                className='btn-primary h-11 rounded-xl font-bold'>
-                {isSubmitting ?
-                  <>
-                    <LoaderCircle className='mr-2 h-4 w-4 animate-spin' />
-                    Saving...
-                  </>
-                : 'Retry saving response'}
-              </Button>
-            )}
             {quiz?.allowRetry && (
               <Button
+                variant={'outline'}
                 onClick={() => {
                   window.location.reload();
                 }}
-                className='btn-primary h-10 rounded-xl font-bold'>
+                className='bg-transparent w-full max-w-[200px] px-4 h-9 border-pw-cyan border-2 flex items-center rounded-xl font-bold'>
                 Retry {capFirst(quiz?.type || 'Assessment')}
               </Button>
             )}
-            <Link href={isLoggedIn ? '/quiz' : '/tools'}>
-              <Button className='gradient-dark w-[80%] max-w-[200px] px-3 items-center text-center flex h-11 rounded-xl font-bold'>
+            <Link
+              href={isLoggedIn ? '/quiz' : '/tools'}
+              className='w-full'>
+              <Button className='gradient-dark w-full max-w-[300px] px-4 items-center text-center border-none flex h-10 rounded-xl font-bold'>
                 Close Quiz
               </Button>
             </Link>
-            </div>
           </div>
 
           {/* PingWorld compliance disclaimer footer on completion screen */}
           <div className='text-[10px] text-pw-muted leading-tight max-w-sm mx-auto text-center font-body'>
-          <div className='divider my-4'/>
+            <div className='divider my-4' />
 
             <p>
               {(
@@ -3871,21 +4354,42 @@ function Taker() {
                           type={'date'}
                           max={(() => {
                             const latest = new Date();
-                            latest.setFullYear(latest.getFullYear() - Math.max(0, Number(detail.minAge) || 0));
-                            return new Date(latest.getTime() - latest.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+                            latest.setFullYear(
+                              latest.getFullYear() -
+                                Math.max(0, Number(detail.minAge) || 0),
+                            );
+                            return new Date(
+                              latest.getTime() -
+                                latest.getTimezoneOffset() * 60_000,
+                            )
+                              .toISOString()
+                              .slice(0, 10);
                           })()}
                           className='w-full h-12 bg-black/20 border border-white/10 rounded-2xl px-5 text-sm focus:border-pw-primary outline-none transition-all focus:ring-1 focus:ring-pw-primary'
                           placeholder={`Enter ${detail.title}...`}
                           value={userData[detail.title] || ''}
                           onChange={(e) => {
                             const value = e.target.value;
-                            const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+                            const today = new Date(
+                              Date.now() -
+                                new Date().getTimezoneOffset() * 60_000,
+                            )
+                              .toISOString()
+                              .slice(0, 10);
                             if (value > today) {
-                              toast.error('Date of birth cannot be in the future.');
+                              toast.error(
+                                'Date of birth cannot be in the future.',
+                              );
                               return;
                             }
-                            if (value && detail.minAge && Number(getDobGetter(value, 'age')) < detail.minAge) {
-                              toast.error(`You must be at least ${detail.minAge} years old.`);
+                            if (
+                              value &&
+                              detail.minAge &&
+                              Number(getDobGetter(value, 'age')) < detail.minAge
+                            ) {
+                              toast.error(
+                                `You must be at least ${detail.minAge} years old.`,
+                              );
                               return;
                             }
                             setUserData({ ...userData, [detail.title]: value });
@@ -4349,7 +4853,9 @@ function Taker() {
                         if (question.type === 'input')
                           return !String(value ?? '').trim();
                         if (question.type === 'rating')
-                          return !Number.isFinite(Number(value)) || Number(value) < 1;
+                          return (
+                            !Number.isFinite(Number(value)) || Number(value) < 1
+                          );
                         return (
                           value === null || value === undefined || value === ''
                         );
@@ -4420,7 +4926,10 @@ function Taker() {
 
                       <div className='w-full flex flex-col items-center gap-1'>
                         {q?.accessory && q.accessory !== 'none' && (
-                          <Button type='button' onClick={() => setShowMobileAccessory(true)} className='lg:hidden w-full mb-2 rounded-xl border border-pw-primary/25 bg-pw-primary/10 text-pw-primary'>
+                          <Button
+                            type='button'
+                            onClick={() => setShowMobileAccessory(true)}
+                            className='lg:hidden w-full mb-2 rounded-xl border border-pw-primary/25 bg-pw-primary/10 text-pw-primary'>
                             Open {q.accessory.replaceAll('_', ' ')} tool
                           </Button>
                         )}
@@ -4449,7 +4958,9 @@ function Taker() {
 
                               <Button
                                 onClick={handleNext}
-                                disabled={isSubmitting || isPreparingResponseFile}
+                                disabled={
+                                  isSubmitting || isPreparingResponseFile
+                                }
                                 className='btn-primary h-10 px-8 rounded-2xl font-black gap-2 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
                                 {isSubmitting ?
                                   <>
@@ -4505,21 +5016,41 @@ function Taker() {
                   )}
                 </div>
 
-                {showMobileAccessory && q?.accessory && q.accessory !== 'none' && (
-                  <div className='fixed inset-0 z-[95] flex flex-col bg-slate-950/95 text-pw-text backdrop-blur-2xl lg:hidden' role='dialog' aria-modal='true' aria-label={`${q.accessory} tool`}>
-                    <header className='flex min-h-14 items-center justify-between gap-3 border-b border-white/10 px-4 py-3'>
-                      <h2 className='truncate font-bold capitalize'>{q.accessory.replaceAll('_', ' ')}</h2>
-                      <Button type='button' onClick={() => setShowMobileAccessory(false)} className='rounded-xl border border-white/10 bg-white/5 px-4'>Close</Button>
-                    </header>
-                    <div className='min-h-0 flex-1 overflow-auto p-3 sm:p-5'>
-                      {q.accessory === 'calculator' && <Calculator />}
-                      {q.accessory === 'note' && <NoteSheet note={q.accessoryNote || ''} />}
-                      {q.accessory === 'periodic_table' && <PeriodicTable />}
-                      {q.accessory === 'formula_sheet' && <FormulaSheet config={q.accessoryConfig} customFormulas={q.accessoryNote} />}
-                      {q.accessory === 'glossary' && <Glossary />}
+                {showMobileAccessory &&
+                  q?.accessory &&
+                  q.accessory !== 'none' && (
+                    <div
+                      className='fixed inset-0 z-[95] flex flex-col bg-slate-950/95 text-pw-text backdrop-blur-2xl lg:hidden'
+                      role='dialog'
+                      aria-modal='true'
+                      aria-label={`${q.accessory} tool`}>
+                      <header className='flex min-h-14 items-center justify-between gap-3 border-b border-white/10 px-4 py-3'>
+                        <h2 className='truncate font-bold capitalize'>
+                          {q.accessory.replaceAll('_', ' ')}
+                        </h2>
+                        <Button
+                          type='button'
+                          onClick={() => setShowMobileAccessory(false)}
+                          className='rounded-xl border border-white/10 bg-white/5 px-4'>
+                          Close
+                        </Button>
+                      </header>
+                      <div className='min-h-0 flex-1 overflow-auto p-3 sm:p-5'>
+                        {q.accessory === 'calculator' && <Calculator />}
+                        {q.accessory === 'note' && (
+                          <NoteSheet note={q.accessoryNote || ''} />
+                        )}
+                        {q.accessory === 'periodic_table' && <PeriodicTable />}
+                        {q.accessory === 'formula_sheet' && (
+                          <FormulaSheet
+                            config={q.accessoryConfig}
+                            customFormulas={q.accessoryNote}
+                          />
+                        )}
+                        {q.accessory === 'glossary' && <Glossary />}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             }
           </AnimatePresence>
