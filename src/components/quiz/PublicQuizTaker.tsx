@@ -1815,7 +1815,6 @@ function Taker() {
 
     if (showFeedback && !autoSubmit) {
       setShowFeedback(false);
-      return;
     }
 
     const currentQId = q?.id || '';
