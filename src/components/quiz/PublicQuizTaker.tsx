@@ -4713,8 +4713,8 @@ function Taker() {
           </div>
         </div>
         {showResponseShare && <div className='fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4' role='dialog' aria-modal='true' aria-labelledby='response-share-title' onMouseDown={(event) => { if (event.target === event.currentTarget) setShowResponseShare(false); }}>
-          <Card className='w-full max-w-md space-y-4 border-white/10 bg-[#111426] p-5 text-left shadow-2xl'>
-            <div className='flex items-start justify-between gap-4'>
+          <Card className='w-full max-w-md space-y-2 border-white/10 bg-[#111426] p-5 text-left shadow-2xl'>
+            <div className='flex items-start justify-between gap-4 mb-2'>
               <div><h2 id='response-share-title' className='text-lg font-bold text-white'>Share your response</h2><p className='mt-1 text-sm text-pw-muted'>Choose a private view link or download a PDF copy.</p></div>
               <Button type='button' variant='ghost' size='icon' aria-label='Close' onClick={() => setShowResponseShare(false)}><X className='h-4 w-4' /></Button>
             </div>
@@ -4726,8 +4726,8 @@ function Taker() {
                 toast.success('Response link copied.');
                 setShowResponseShare(false);
               } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create a response link.'); }
-            }}><Copy className='mr-2 h-4 w-4' />Copy response link</Button>
-            {!quiz?.responsesPublicId && <p className='text-xs text-pw-muted'>Response links are disabled by the assessment setter.</p>}
+            }}><Copy className='mr-2 h-4 w-4' />Copy link</Button>
+            {!quiz?.responsesPublicId && <p className='text-xs text-pw-muted mt-[-5px]'>Response links are disabled by the assessment setter.</p>}
             <Button type='button' variant='outline' className='w-full border-white/15 bg-white/5 text-white hover:bg-white/10' onClick={async () => {
               try {
                 const snapshot = finalSubmissionSnapshotRef.current;

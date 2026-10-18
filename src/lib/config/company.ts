@@ -11,7 +11,7 @@ export const COMPANY = {
   version: '1.0.0',
   launchDate: '2026-08-01',
 
-  domain: 'https://ping-world.site',
+  domain: 'https://ping-world.vercel.app',
   supportEmail: 'ping.world@gmail.com',
   contactEmail: 'ping.world@gmail.com',
 
@@ -29,7 +29,7 @@ export const COMPANY = {
 
   parent: {
     name: 'Basic Alley LLC',
-    url: 'https://basic-alley.com',
+    url: 'https://basic-alley.vercel.app',
     short: 'Basic Alley LLC',
   },
 

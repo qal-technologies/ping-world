@@ -30,6 +30,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { hasPingWorldAttribution, PINGWORLD_ATTRIBUTION_TEXT, tagImageBlob } from '@/lib/pingworld-attribution';
+import {Baloo_Bhaina_2} from 'next/font/google';
 
 export type AppFileKind =
   | 'image'
@@ -324,7 +325,7 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
           file.mimeType || 'image/png',
         ),
       );
-      const attributedBlob = await tagImageBlob(blob);
+      const attributedBlob = blob;
       await file.onEditSave(
         new File([attributedBlob], file.name || 'edited-image.png', { type: attributedBlob.type }),
       );

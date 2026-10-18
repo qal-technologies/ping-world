@@ -201,7 +201,8 @@ const QuizBuilder = ({
   const [showLanguageDocs, setShowLanguageDocs] = useState(false);
   const [showQuestionExplanation, setShowQuestionExplanation] = useState(false);
   const [questionExplanationDraft, setQuestionExplanationDraft] = useState('');
-  const [questionExplanationPlacement, setQuestionExplanationPlacement] = useState<'in-result' | 'in-question'>('in-result');
+  const [questionExplanationPlacement, setQuestionExplanationPlacement] =
+    useState<'in-result' | 'in-question'>('in-result');
 
   const quizUnlocked = isFeatureUnlocked('quiz');
 
@@ -3119,13 +3120,21 @@ const QuizBuilder = ({
                           onClick={(e) => {
                             e.stopPropagation();
                             const question = editedQuiz.questions[currentStep];
-                            setQuestionExplanationDraft(question.correctExplanation || '');
-                            setQuestionExplanationPlacement(editedQuiz.correctOptionDes || 'in-result');
+                            setQuestionExplanationDraft(
+                              question.correctExplanation || '',
+                            );
+                            setQuestionExplanationPlacement(
+                              editedQuiz.correctOptionDes || 'in-result',
+                            );
                             setShowQuestionExplanation(true);
                           }}
                           className='h-8 gap-1.5 px-2 text-xs'>
                           <MessageSquare className='h-3 w-3 text-pw-cyan' />
-                          {editedQuiz.questions[currentStep].correctExplanation ? 'Edit question explanation' : 'Add question explanation'}
+                          {(
+                            editedQuiz.questions[currentStep].correctExplanation
+                          ) ?
+                            'Edit question explanation'
+                          : 'Add question explanation'}
                         </DropdownMenuItem>
 
                         <DropdownMenuItem
@@ -3369,33 +3378,104 @@ const QuizBuilder = ({
                         />
                         <div className='flex items-center gap-2 py-2'>
                           {editedQuiz.questions[currentStep].imageUrl && (
-                            <button type='button' className='relative' onClick={() => openFile({ src: editedQuiz.questions[currentStep].imageUrl!, name: 'Question image', mimeType: 'image/webp', canDownload: false })}>
-                              <NextImage src={editedQuiz.questions[currentStep].imageUrl!} alt='Question image preview' width={88} height={64} unoptimized draggable={false} onContextMenu={(event) => event.preventDefault()} className='h-16 max-w-24 rounded-lg border border-white/10 object-contain select-none' />
-                              <span className='sr-only'>Open question image preview</span>
+                            <button
+                              type='button'
+                              className='relative'
+                              onClick={() =>
+                                openFile({
+                                  src: editedQuiz.questions[currentStep]
+                                    .imageUrl!,
+                                  name: 'Question image',
+                                  mimeType: 'image/webp',
+                                  canDownload: false,
+                                })
+                              }>
+                              <NextImage
+                                src={
+                                  editedQuiz.questions[currentStep].imageUrl!
+                                }
+                                alt='Question image preview'
+                                width={88}
+                                height={64}
+                                unoptimized
+                                draggable={false}
+                                onContextMenu={(event) =>
+                                  event.preventDefault()
+                                }
+                                className='h-16 max-w-24 rounded-lg border border-white/10 object-contain select-none'
+                              />
+                              <span className='sr-only'>
+                                Open question image preview
+                              </span>
                             </button>
                           )}
                           <label className='cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold text-pw-cyan hover:bg-white/10'>
-                            {editedQuiz.questions[currentStep].imageUrl ? 'Replace question image' : 'Add question image'}
-                            <input type='file' accept='image/*' className='sr-only' onChange={async (event) => {
-                              const file = event.target.files?.[0];
-                              event.target.value = '';
-                              if (!file) return;
-                              const maxBytes = premiumTier === 'free' ? 2 * 1024 * 1024 : premiumTier === 'pro' ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
-                              if (file.size > maxBytes) return toast.error(`Question images for your plan must be smaller than ${Math.round(maxBytes / 1024 / 1024)} MB.`);
-                              try {
-                                const optimized = await optimizeImageForStorage(file, 1800, 0.78);
-                                const imageUrl = await new Promise<string>((resolve, reject) => {
-                                  const reader = new FileReader();
-                                  reader.onerror = () => reject(new Error('Image could not be read.'));
-                                  reader.onload = () => resolve(String(reader.result));
-                                  reader.readAsDataURL(optimized);
-                                });
-                                updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], imageUrl });
-                                toast.success('Question image added.');
-                              } catch { toast.error('Question image could not be prepared.'); }
-                            }} />
+                            {editedQuiz.questions[currentStep].imageUrl ?
+                              'Replace question image'
+                            : 'Add question image'}
+                            <input
+                              type='file'
+                              accept='image/*'
+                              className='sr-only'
+                              onChange={async (event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = '';
+                                if (!file) return;
+                                const maxBytes =
+                                  premiumTier === 'free' ? 2 * 1024 * 1024
+                                  : premiumTier === 'pro' ? 15 * 1024 * 1024
+                                  : 5 * 1024 * 1024;
+                                if (file.size > maxBytes)
+                                  return toast.error(
+                                    `Question images for your plan must be smaller than ${Math.round(maxBytes / 1024 / 1024)} MB.`,
+                                  );
+                                try {
+                                  const optimized =
+                                    await optimizeImageForStorage(
+                                      file,
+                                      1800,
+                                      0.78,
+                                    );
+                                  const imageUrl = await new Promise<string>(
+                                    (resolve, reject) => {
+                                      const reader = new FileReader();
+                                      reader.onerror = () =>
+                                        reject(
+                                          new Error('Image could not be read.'),
+                                        );
+                                      reader.onload = () =>
+                                        resolve(String(reader.result));
+                                      reader.readAsDataURL(optimized);
+                                    },
+                                  );
+                                  updateQuestion(currentStep, {
+                                    ...editedQuiz.questions[currentStep],
+                                    imageUrl,
+                                  });
+                                  toast.success('Question image added.');
+                                } catch {
+                                  toast.error(
+                                    'Question image could not be prepared.',
+                                  );
+                                }
+                              }}
+                            />
                           </label>
-                          {editedQuiz.questions[currentStep].imageUrl && <Button type='button' size='sm' variant='ghost' onClick={() => updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], imageUrl: undefined })} className='h-8 text-[10px] text-pw-danger'>Remove</Button>}
+                          {editedQuiz.questions[currentStep].imageUrl && (
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='ghost'
+                              onClick={() =>
+                                updateQuestion(currentStep, {
+                                  ...editedQuiz.questions[currentStep],
+                                  imageUrl: undefined,
+                                })
+                              }
+                              className='h-8 text-[10px] text-pw-danger'>
+                              Remove
+                            </Button>
+                          )}
                         </div>
                         {/* Mention Helper Badge List */}
                         {editedQuiz.askDetails &&
@@ -4977,34 +5057,76 @@ const QuizBuilder = ({
         open={showLanguageDocs}
         onOpenChange={setShowLanguageDocs}
       />
-      <Dialog open={showQuestionExplanation} onOpenChange={setShowQuestionExplanation}>
+      <Dialog
+        open={showQuestionExplanation}
+        onOpenChange={setShowQuestionExplanation}>
         <DialogContent className='w-[96vw] max-w-xl max-h-[90dvh] overflow-y-auto border-white/10 bg-pw-surface text-pw-text sm:rounded-2xl'>
           <DialogHeader>
             <DialogTitle>Question explanation</DialogTitle>
-            <DialogDescription>Write guidance for this question and choose where takers see it.</DialogDescription>
+            <DialogDescription>
+              Write guidance for this question and choose where takers see it.
+            </DialogDescription>
           </DialogHeader>
           <div className='space-y-3'>
             <div className='rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs'>
-              <p className='font-semibold'>{editedQuiz.questions[currentStep]?.text || 'Untitled question'}</p>
-              <p className='mt-1 text-pw-muted'>Type: {editedQuiz.questions[currentStep]?.type?.replaceAll('_', ' ')}</p>
+              <p className='font-semibold'>
+                {editedQuiz.questions[currentStep]?.text || 'Untitled question'}
+              </p>
+              <p className='mt-1 text-pw-muted'>
+                Type:{' '}
+                {editedQuiz.questions[currentStep]?.type?.replaceAll('_', ' ')}
+              </p>
             </div>
-            <textarea autoFocus rows={7} value={questionExplanationDraft} onChange={(event) => setQuestionExplanationDraft(event.target.value)} placeholder='Explain the reasoning or provide learning context…' className='w-full resize-y rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-pw-primary' />
-            <label className='block text-xs font-semibold text-pw-muted'>Display correct explanation
-              <select value={questionExplanationPlacement} onChange={(event) => setQuestionExplanationPlacement(event.target.value as 'in-result' | 'in-question')} className='mt-1 block h-10 w-full rounded-xl border border-white/10 bg-pw-surface px-3 text-sm text-pw-text'>
-                <option value='in-result'>In results</option><option value='in-question'>In question</option>
+            <textarea
+              autoFocus
+              rows={7}
+              value={questionExplanationDraft}
+              onChange={(event) =>
+                setQuestionExplanationDraft(event.target.value)
+              }
+              placeholder='Explain the reasoning or provide learning context…'
+              className='w-full resize-y rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-pw-primary'
+            />
+            <label className='block text-xs font-semibold text-pw-muted'>
+              Display correct explanation
+              <select
+                value={questionExplanationPlacement}
+                onChange={(event) =>
+                  setQuestionExplanationPlacement(
+                    event.target.value as 'in-result' | 'in-question',
+                  )
+                }
+                className='mt-1 block h-10 w-full rounded-xl border border-white/10 bg-pw-surface px-3 text-sm text-pw-text'>
+                <option value='in-result'>In results</option>
+                <option value='in-question'>In question</option>
               </select>
             </label>
           </div>
           <DialogFooter>
-            <Button variant='ghost' onClick={() => setShowQuestionExplanation(false)}>Cancel</Button>
-            <Button onClick={() => {
-              const question = editedQuiz.questions[currentStep];
-              if (question) {
-                updateQuestion(currentStep, { ...question, correctExplanation: questionExplanationDraft.trim() || undefined });
-                setEditedQuiz((current) => ({ ...current, correctOption: true, correctOptionDes: questionExplanationPlacement }));
-              }
-              setShowQuestionExplanation(false);
-            }}>Save explanation</Button>
+            <Button
+              variant='ghost'
+              onClick={() => setShowQuestionExplanation(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const question = editedQuiz.questions[currentStep];
+                if (question) {
+                  updateQuestion(currentStep, {
+                    ...question,
+                    correctExplanation:
+                      questionExplanationDraft.trim() || undefined,
+                  });
+                  setEditedQuiz((current) => ({
+                    ...current,
+                    correctOption: true,
+                    correctOptionDes: questionExplanationPlacement,
+                  }));
+                }
+                setShowQuestionExplanation(false);
+              }}>
+              Save explanation
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5304,21 +5426,45 @@ export default function QuizPage() {
     if (!viewingResponses || responseListSharing) return;
     setResponseListSharing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Sign in again to manage response sharing.');
-      const result = await fetch(`/api/quizzes/${encodeURIComponent(viewingResponses.id)}/responses/public`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, credentials: 'omit', body: JSON.stringify({}),
-      });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token)
+        throw new Error('Sign in again to manage response sharing.');
+      const result = await fetch(
+        `/api/quizzes/${encodeURIComponent(viewingResponses.id)}/responses/public`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          credentials: 'omit',
+          body: JSON.stringify({}),
+        },
+      );
       const body = await result.json().catch(() => ({}));
-      if (!result.ok) throw new Error(body.error || 'Could not update response sharing.');
+      if (!result.ok)
+        throw new Error(body.error || 'Could not update response sharing.');
       if (body.enabled && body.publicId) {
         const url = `${window.location.origin}/quiz/responses/${body.publicId}`;
         await navigator.clipboard?.writeText(url).catch(() => {});
-        toast.success('Assessment responses are public and the link was copied.');
-      } else toast.success('Shared response page disabled. The previous link no longer works.');
+        toast.success(
+          'Assessment responses are public and the link was copied.',
+        );
+      } else
+        toast.success(
+          'Shared response page disabled. The previous link no longer works.',
+        );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not update response sharing.');
-    } finally { setResponseListSharing(false); }
+      toast.error(
+        error instanceof Error ?
+          error.message
+        : 'Could not update response sharing.',
+      );
+    } finally {
+      setResponseListSharing(false);
+    }
   };
 
   const safeDecodeBase64 = (str: any): any => {
@@ -5616,7 +5762,11 @@ export default function QuizPage() {
       const localData = await HybridStorage.getAll(
         'quiz',
         async (freshItems) => {
-          if(!freshItems || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+          if (
+            !freshItems ||
+            (typeof navigator !== 'undefined' && !navigator.onLine)
+          )
+            return;
           // 2. Called in background when remote data arrives — silently refresh
           const remoteItems = normalizeItems(freshItems).filter(
             (item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
@@ -5628,8 +5778,16 @@ export default function QuizPage() {
             let changed = current.length !== incoming.length;
             const merged = incoming.map((item) => {
               const previous = currentById.get(item.id);
-              if (!previous || JSON.stringify(previous) !== JSON.stringify(item)) changed = true;
-              return previous && JSON.stringify(previous) === JSON.stringify(item) ? previous : item;
+              if (
+                !previous ||
+                JSON.stringify(previous) !== JSON.stringify(item)
+              )
+                changed = true;
+              return (
+                  previous && JSON.stringify(previous) === JSON.stringify(item)
+                ) ?
+                  previous
+                : item;
             });
             return changed ? merged : current;
           });
@@ -6022,7 +6180,7 @@ export default function QuizPage() {
           quiz.expires_at = computeExpiry(premiumTier, 2).toISOString();
         }
 
-        handleSaveQuiz(quiz, true)
+        handleSaveQuiz(quiz, true);
       } catch (err: any) {
         toast.error(err?.message || 'Invalid .pwquiz / .json format.');
       }
@@ -6402,7 +6560,7 @@ export default function QuizPage() {
                   className='absolute inset-0 z-20 flex items-center justify-center bg-pw-surface/70 bkblur'
                   role='status'
                   aria-live='polite'>
-                  <div className='flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-transparent px-10 py-10 text-sm text-pw-muted'>
+                  <div className='flex flex-col items-center gap-3 px-10 py-10 text-sm text-pw-muted'>
                     <LoaderCircle className='h-7 w-7 animate-spin text-pw-primary' />
                     Loading responses and analytics...
                   </div>
@@ -6427,11 +6585,30 @@ export default function QuizPage() {
                   </p>
                 </div>
 
-                <div className='flex items-center justify-between gap-2 flex-wrap px-2'>
-                  {!viewingResponses.isTemplate && viewingResponses.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && (viewingResponses.responses || []).some((response: any) => response.status !== 'in_progress') && <Button variant='outline' size='sm' title='Toggle public visibility for all assessment responses' aria-label='Toggle assessment response visibility' disabled={responseListSharing} onClick={() => void toggleResponseListPublic()} className='h-9 gap-1.5 border-pw-primary/30 text-xs text-pw-primary'>
-                    {responseListSharing ? <LoaderCircle size={14} className='animate-spin' /> : <Share2 size={14} />}
-                    Share
-                  </Button>}
+                <div className='flex items-center gap-2 flex-wrap px-2'>
+                  {!viewingResponses.isTemplate &&
+                    viewingResponses.id !==
+                      DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id &&
+                    (viewingResponses.responses || []).some(
+                      (response: any) => response.status !== 'in_progress',
+                    ) && (
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        title='Toggle public visibility for all assessment responses'
+                        aria-label='Toggle assessment response visibility'
+                        disabled={responseListSharing}
+                        onClick={() => void toggleResponseListPublic()}
+                        className='h-9 gap-1.5 border-pw-primary/30 text-xs text-pw-primary'>
+                        {responseListSharing ?
+                          <LoaderCircle
+                            size={14}
+                            className='animate-spin'
+                          />
+                        : <Share2 size={14} />}
+                        Share
+                      </Button>
+                    )}
                   {viewingResponses.responses &&
                     viewingResponses.responses.length > 0 && (
                       <>
@@ -7086,8 +7263,8 @@ export default function QuizPage() {
                         <div>
                           <div className='mb-1 flex items-center gap-1.5'>
                             {resp.status === 'in_progress' ?
-                              <span className='inline-flex items-center gap-1 text-[9px] font-bold uppercase text-pw-warning'>
-                                <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-pw-warning' />
+                              <span className='inline-flex items-center gap-1 text-[9px] font-bold uppercase text-pw-warning animate-pulse '>
+                                <span className='h-1.5 w-1.5 rounded-full bg-pw-warning' />
                                 Live
                               </span>
                             : <span className='inline-flex items-center gap-1 text-[9px] font-bold uppercase text-pw-success'>
@@ -7116,25 +7293,36 @@ export default function QuizPage() {
                           <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
                             Taker {idx + 1}
                           </p>
-                        {resp.status !== 'in_progress' &&
-                          <p className='mt-1 text-[10px] text-pw-muted italic'>
-                          Submitted{' '}
-                          {new Date(
-                            resp.submittedAt || resp.timestamp,
-                          ).toLocaleString()}
-                        </p>
-                        }
-                         <p className='text-[8px] font-medium text-pw-muted'>
-                              Attempted{' '}
-                              {resp.answeredQuestions ??
+                          {resp.status !== 'in_progress' && (
+                            <p className='mt-1 text-[10px] text-pw-muted italic'>
+                              Submitted{' '}
+                              {new Date(
+                                resp.submittedAt || resp.timestamp,
+                              ).toLocaleString()}
+                            </p>
+                          )}
+                          <p className='text-[8px] font-medium text-pw-muted'>
+                            {(
+                              (resp.answeredQuestions ||
                                 resp.answers.filter(
                                   (answer: any) =>
                                     !answer.passed &&
                                     answer.answer !== undefined &&
                                     answer.answer !== '',
-                                ).length}{' '}
-                              / {resp.totalQuestions} questions
-                            </p>
+                                ).length) === resp.totalQuestions
+                            ) ?
+                              `Attempted all ${resp.totalQuestions} questions.`
+                            : `Attempted 
+                            {resp.answeredQuestions ??
+                              resp.answers.filter(
+                                (answer: any) =>
+                                  !answer.passed &&
+                                  answer.answer !== undefined &&
+                                  answer.answer !== '',
+                              ).length}{' '}
+                          / {resp.totalQuestions} questions`
+                            }
+                          </p>
                         </div>
 
                         {resp.status !== 'in_progress' && (
@@ -7142,15 +7330,21 @@ export default function QuizPage() {
                             <button
                               title={`Export taker ${idx + 1} as PDF`}
                               aria-label={`Export taker ${idx + 1} as PDF`}
-                              className='h-8 w-8 rounded-xl border-none bg-transparent p-1 text-[10px] text-pw-cyan hover:bg-white/6'
-                              onClick={() => exportResponsesPdf(viewingResponses, [resp], idx + 1)}>
+                              className='h-8 w-8 rounded-xl border-none flex items-center justify-center bg-transparent p-1 text-[10px] text-pw-cyan hover:bg-white/6'
+                              onClick={() =>
+                                exportResponsesPdf(
+                                  viewingResponses,
+                                  [resp],
+                                  idx + 1,
+                                )
+                              }>
                               <Share2 className='h-3.5 w-3.5' />
                             </button>
                           </div>
                         )}
                       </div>
 
-                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 py-2 border-y border-white/5 px-1 mb-1'>
+                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 py-2 border-y border-white/5 px-1 mb-1'>
                         {Object.entries(resp.userData).map(([key, val], i) => (
                           <div
                             key={key + i}
@@ -7161,14 +7355,17 @@ export default function QuizPage() {
                             <span className='text-white'>{val}</span>
                           </div>
                         ))}
-                      <div
-                            key={resp.id + 'score'}
-                            className='flex gap-1.5 text-[11px]'>
-                            <span className='text-pw-muted font-bold uppercase'>
-                              Score:
-                            </span>
-                            <span className='text-white'>{resp.score} out of {resp.scorePossible ?? resp.totalQuestions} </span>
-                          </div>
+                        <div
+                          key={resp.id + 'score'}
+                          className='flex gap-1.5 text-[11px]'>
+                          <span className='text-pw-muted font-bold uppercase'>
+                            Score:
+                          </span>
+                          <span className='text-white'>
+                            {resp.score} out of{' '}
+                            {resp.scorePossible ?? resp.totalQuestions}{' '}
+                          </span>
+                        </div>
                       </div>
 
                       {resp.isSignedUser && resp.signedUser && (
@@ -7206,21 +7403,23 @@ export default function QuizPage() {
                             : 'Unavailable'}
                           </span>
 
-                         {resp.submittedAt && <span>
-                            <b className='block text-pw-muted'>Submitted</b>
-                            {new Date(
-                              resp.submittedAt || resp.timestamp,
-                            ).toLocaleString()}
-                          </span>
-                        }
+                          {resp.submittedAt && (
+                            <span>
+                              <b className='block text-pw-muted'>Submitted</b>
+                              {new Date(
+                                resp.submittedAt || resp.timestamp,
+                              ).toLocaleString()}
+                            </span>
+                          )}
 
-                        {resp.durationSeconds && <span>
-                          <b className='block text-pw-muted'>Duration</b>
-                          {typeof resp.durationSeconds === 'number' ?
-                            `${Math.floor(resp.durationSeconds / 60)}m ${resp.durationSeconds % 60}s`
-                            : 'Unavailable'}
-                        </span>
-                        }
+                          {resp.durationSeconds && (
+                            <span>
+                              <b className='block text-pw-muted'>Duration</b>
+                              {typeof resp.durationSeconds === 'number' ?
+                                `${Math.floor(resp.durationSeconds / 60)}m ${resp.durationSeconds % 60}s`
+                              : 'Unavailable'}
+                            </span>
+                          )}
                           <span>
                             <b className='block text-pw-muted'>
                               Correct / incorrect
@@ -7238,39 +7437,41 @@ export default function QuizPage() {
                             }
                           </span>
 
-                        {resp.answers && resp.answers.filter(
-                          (answer: any) => answer.passed,
-                        ).length > 0 && <span>
-                            <b className='block text-pw-muted'>
-                              Passed questions
-                            </b>
-                            {
-                              resp.answers.filter(
-                                (answer: any) => answer.passed,
-                              ).length
-                            }
-                          </span>
-                        }
-
-                        {(resp.totalQuestions -
-                          new Set(
-                            resp.answers.map(
-                              (answer: any) => answer.questionId,
-                            ),
-                          ).size) > 0 &&
-                          <span>
-                            <b className='block text-pw-muted'>Unanswered</b>
-                            {Math.max(
-                              0,
-                              resp.totalQuestions -
-                              new Set(
-                                resp.answers.map(
-                                  (answer: any) => answer.questionId,
-                                ),
-                              ).size,
+                          {resp.answers &&
+                            resp.answers.filter((answer: any) => answer.passed)
+                              .length > 0 && (
+                              <span>
+                                <b className='block text-pw-muted'>
+                                  Passed questions
+                                </b>
+                                {
+                                  resp.answers.filter(
+                                    (answer: any) => answer.passed,
+                                  ).length
+                                }
+                              </span>
                             )}
-                          </span>
-                        }
+
+                          {resp.totalQuestions -
+                            new Set(
+                              resp.answers.map(
+                                (answer: any) => answer.questionId,
+                              ),
+                            ).size >
+                            0 && (
+                            <span>
+                              <b className='block text-pw-muted'>Unanswered</b>
+                              {Math.max(
+                                0,
+                                resp.totalQuestions -
+                                  new Set(
+                                    resp.answers.map(
+                                      (answer: any) => answer.questionId,
+                                    ),
+                                  ).size,
+                              )}
+                            </span>
+                          )}
                         </div>
                       )}
 
@@ -7290,7 +7491,7 @@ export default function QuizPage() {
                               return (
                                 <div
                                   key={`${branch.fromQuestionId}-${branchIndex}`}
-                                  className='grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-white/5 py-1 text-[10px] sm:grid-cols-4'>
+                                  className='grid grid-cols-2 gap-x-3 gap-y-0.5 border-b border-white/5 py-1 text-[10px] sm:grid-cols-4'>
                                   <span className='font-semibold'>
                                     {branch.category ||
                                       (branch.targetQuestionId ?
@@ -7370,44 +7571,49 @@ export default function QuizPage() {
                               animate={{ height: 'auto', opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
                               className='mt-2 grid grid-cols-1 gap-0 overflow-hidden rounded-xl bg-pw-surface/70 p-2 sm:p-4 bkblur xl:grid-cols-2'>
-                            {resp.answers.map((ans, i) => {
-                              const question =
-                                ans.questionSnapshot ||
-                                viewingResponses.questions.find(
-                                  (q) => q.id === ans.questionId,
+                              {resp.answers.map((ans, i) => {
+                                const question =
+                                  ans.questionSnapshot ||
+                                  viewingResponses.questions.find(
+                                    (q) => q.id === ans.questionId,
+                                  );
+                                const resolvedAnswer = resolveAnswerToText(
+                                  ans.questionSnapshot ?
+                                    {
+                                      ...viewingResponses,
+                                      questions: [ans.questionSnapshot],
+                                    }
+                                  : viewingResponses,
+                                  ans.questionId,
+                                  ans.answer,
                                 );
-                              const resolvedAnswer = resolveAnswerToText(
-                                ans.questionSnapshot ?
-                                  {
-                                    ...viewingResponses,
-                                    questions: [ans.questionSnapshot],
-                                  }
+                                const resolvedCorrect = resolveCorrectText(
+                                  ans.questionSnapshot ?
+                                    {
+                                      ...viewingResponses,
+                                      questions: [
+                                        {
+                                          ...ans.questionSnapshot,
+                                          correctIndex:
+                                            decodeStoredCorrectAnswer(
+                                              ans.questionSnapshot.correctIndex,
+                                            ),
+                                        },
+                                      ],
+                                    }
                                   : viewingResponses,
-                                ans.questionId,
-                                ans.answer,
-                              );
-                              const resolvedCorrect = resolveCorrectText(
-                                ans.questionSnapshot ?
-                                  {
-                                    ...viewingResponses,
-                                    questions: [
-                                      {
-                                        ...ans.questionSnapshot,
-                                        correctIndex:
-                                          decodeStoredCorrectAnswer(
-                                            ans.questionSnapshot.correctIndex,
-                                          ),
-                                      },
-                                    ],
-                                  }
-                                  : viewingResponses,
-                                ans.questionId,
-                              );
+                                  ans.questionId,
+                                );
 
-                              return (
-                                <div
-                                  key={i}
-                                  className={cn('space-y-0.5 py-2 sm:py-3', i !== resp.answers.length && 'border-b border-white/5 ', i === 0 && 'pt-0')} >
+                                return (
+                                  <div
+                                    key={i}
+                                    className={cn(
+                                      'space-y-0.5 py-2 sm:py-3',
+                                      i !== resp.answers.length &&
+                                        'border-b border-white/5 ',
+                                      i === 0 && 'pt-0',
+                                    )}>
                                     <p className='text-[10px] font-bold text-pw-muted uppercase'>
                                       Question {i + 1}
                                     </p>
