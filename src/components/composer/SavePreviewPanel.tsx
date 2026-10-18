@@ -27,6 +27,7 @@ import { PremiumGate } from './PremiumGate';
 import { LivePreview } from './LivePreview';
 import { toast } from 'sonner';
 import { XIcon } from '@/components/ui/XIcon';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 
 const cleanExportFeature = PREMIUM_FEATURES.find(
   (f) => f.id === 'clean_preview',
@@ -68,10 +69,11 @@ export function SavePreviewPanel() {
     setIsCapturing(true);
     try {
       const { captureElementToBlob } = await import('@/lib/composer/canvas-capture-utils');
-      const blob = await captureElementToBlob(previewRef.current, {
+      const raw = await captureElementToBlob(previewRef.current, {
         scale: 2,
         backgroundColor: darkMode ? '#02040f' : '#ffffff',
       });
+      const blob = await tagImageBlob(raw);
 
       const downloadUrl = URL.createObjectURL(blob);
       setPreviewBlob(downloadUrl);

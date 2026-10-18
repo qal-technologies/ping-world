@@ -35,6 +35,7 @@ export interface Question {
   id: string;
   type: QuestionType;
   text: string;
+  imageUrl?: string;
   options: QuizOption[];
   correctExplanation?: string;
   correctIndex: any; // index, bool, string (optionId), or Array<string> (optionIds)
@@ -90,8 +91,18 @@ export interface QuizTakerResponse {
   score: number;
   categoryScores?: Record<string, { correct: number; total: number }>;
   totalQuestions: number;
+  answeredQuestions?: number;
+  scorePossible?: number;
+  currentPathQuestionIds?: string[];
+  pathQuestionSnapshots?: any[];
   timestamp: string;
-  submissionReason?: 'completion' | 'timeout' | 'self_submit' | 'quit';
+  submissionReason?: 'completion' | 'timeout' | 'self_submit' | 'violation' | 'quit';
+  startedAt?: string | null;
+  submittedAt?: string | null;
+  durationSeconds?: number | null;
+  branchHistory?: Array<{ fromQuestionId: string; targetQuestionId?: string; category?: string; questionIds: string[]; at?: string }>;
+  isSignedUser?: boolean;
+  signedUser?: { username: string; displayName: string; email: string } | null;
   country?: string;
   continent?: string; // Continent-level geo tag (free tier)
 }
@@ -150,6 +161,7 @@ export interface Quiz {
   userId?: string;
   isCustom?: boolean;
   customUrl?: string;
+  responsesPublicId?: string;
   disclaimer?: string;
   customDisclaimer?: string; // Pro: replaces default PingWorld disclaimer
   hidePingWorldDisclaimer?: boolean; // Pro: hide PingWorld branding disclaimer
@@ -157,10 +169,9 @@ export interface Quiz {
   nextButtonText?: string; // Pro: custom Next button label
   prevButtonText?: string; // Pro: custom Previous button label
   allowPass?: boolean; // Allow takers to pass/skip questions without answering
+  calculateAllBranches?: boolean; // Include unvisited branch questions in the denominator
   fromPremium?: boolean;
   isTemplate?: boolean;
-  template?: boolean;
-  kind?: string;
   isPrivate?: boolean;
   privateKey?: string;
   privateKeyHash?: string;

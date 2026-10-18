@@ -5,7 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function capFirst(text: string) {
+export function capFirst (text?: string) {
+  if(!text) return;
   const trimmedText = text.trim();
   const outcome = trimmedText.charAt(0).toUpperCase() + trimmedText.slice(1);
   return outcome as string;

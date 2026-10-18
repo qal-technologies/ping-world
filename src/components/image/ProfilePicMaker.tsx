@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 import { makeHtml2CanvasCloneColorSafe } from '@/lib/image/html2canvas-color-safety';
 import { cn } from '@/lib/utils';
 import { TRENDY_OBJECT_MOCKS, ObjectMockItem } from '@/components/profile/ProfileAvatarDesigner';
@@ -133,7 +134,8 @@ export default function ProfilePicMaker() {
         foreignObjectRendering:true,
         onclone: (clonedDoc) => makeHtml2CanvasCloneColorSafe(previewRef.current!, clonedDoc),
       });
-      const url = canvas.toDataURL('image/png');
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode image.')), 'image/png'));
+      const url = URL.createObjectURL(await tagImageBlob(blob));
       const a = document.createElement('a');
       a.href = url;
       a.download = `pingworld-avatar-${Date.now()}.png`;

@@ -9,6 +9,7 @@ import { NetworkStatusBar } from '@/components/layout/NetworkStatusBar';
 import './globals.css';
 import { PageLayoutProvider } from '@/components/layout';
 import { AppFileViewerProvider } from '@/components/shared/AppFileViewer';
+import { CookieNotice } from '@/components/layout/CookieNotice';
 
 export const metadata: Metadata = {
   title: {
@@ -131,6 +132,7 @@ export default function RootLayout({
       </head>
       <body className='min-h-dvh flex flex-col antialiased'>
         <NetworkStatusBar />
+        <CookieNotice />
         <AppProvider>
           <PageLayoutProvider>
             <AppModalProvider>

@@ -35,7 +35,8 @@ export async function POST(request: NextRequest) {
     const admin = getSupabaseAdmin();
     if (event.type === 'invoice.paid') {
       const invoice = event.data?.object;
-      const subscriptionId = String(invoice?.subscription || invoice?.parent?.subscription_details?.subscription || '');
+      const rawSubscriptionId = invoice?.subscription || invoice?.parent?.subscription_details?.subscription || '';
+      const subscriptionId = typeof rawSubscriptionId === 'object' ? String(rawSubscriptionId.id || '') : String(rawSubscriptionId);
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!subscriptionId || !stripeKey) return NextResponse.json({ received: true });
       const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {

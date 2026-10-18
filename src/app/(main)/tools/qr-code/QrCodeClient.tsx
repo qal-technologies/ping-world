@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 
 export default function QrCodeGeneratorPage() {
   const searchParams = useSearchParams();
@@ -134,12 +135,13 @@ export default function QrCodeGeneratorPage() {
         ctx.drawImage(img, 20, 20);
 
         // jules edit: Native HTML5 toBlob saving prevents download truncation on modern browsers
-        canvas.toBlob((blob) => {
+        canvas.toBlob(async (blob) => {
           if (!blob) {
             toast.error("Failed to generate QR Code blob.");
             return;
           }
-          const downloadUrl = URL.createObjectURL(blob);
+          const attributedBlob = await tagImageBlob(blob);
+          const downloadUrl = URL.createObjectURL(attributedBlob);
           const downloadLink = document.createElement('a');
           downloadLink.download = 'pingworld-qr-code.png';
           downloadLink.href = downloadUrl;

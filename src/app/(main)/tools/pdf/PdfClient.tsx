@@ -72,6 +72,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import BookReaderModal from '@/components/pdf/BookReaderModal';
 import ImagePaletteDialog from '@/components/pdf/ImagePaletteDialog';
 import { useAppFileViewer } from '@/components/shared/AppFileViewer';
+import { tagJsPdfDocument, tagPdfLibDocument, tagHtmlDocument, tagTextExport, tagZipExport } from '@/lib/pingworld-attribution';
 
 interface PDFImagePage {
   id: string;
@@ -1324,7 +1325,7 @@ export default function PdfToolStudioPage() {
           </html>
         `;
 
-        const blob = new Blob(['\ufeff' + docHtml], {
+        const blob = new Blob(['\ufeff' + tagHtmlDocument(docHtml)], {
           type: 'application/msword',
         });
         const { saveAs } = await import('file-saver');
@@ -1349,6 +1350,7 @@ export default function PdfToolStudioPage() {
           doc.text(line, margin, y);
           y += lineHeight;
         }
+        tagJsPdfDocument(doc);
         doc.save(`${conversionFile.name.replace(/\.[^/.]+$/, '')}.pdf`);
         toast.dismiss(toastId);
         toast.success('Text exported to a paginated PDF.');
@@ -1375,6 +1377,7 @@ export default function PdfToolStudioPage() {
           doc.addImage(compressed.dataUrl, 'JPEG', (pageWidth - width) / 2, (pageHeight - height) / 2, width, height, `image-${index}`, 'FAST');
         }
         if (!doc) throw new Error('Choose at least one image.');
+        tagJsPdfDocument(doc);
         doc.save(`${files[0].name.replace(/\.[^/.]+$/, '')}${files.length > 1 ? '-images' : ''}.pdf`);
         toast.dismiss(toastId);
         toast.success(`${files.length} image${files.length === 1 ? '' : 's'} exported to PDF.`);
@@ -1401,7 +1404,7 @@ export default function PdfToolStudioPage() {
           pages.push(`--- Page ${pageNo} ---\n${pageText}`);
         }
         const { saveAs } = await import('file-saver');
-        saveAs(new Blob([pages.join('\n\n')], { type: 'text/plain;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.txt`);
+        saveAs(new Blob([tagTextExport(pages.join('\n\n'), 'text')], { type: 'text/plain;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.txt`);
         toast.dismiss(toastId);
         toast.success('PDF text exported. Scanned pages require OCR and are left blank.');
       } else if (fromFormat === 'txt' && toFormat === 'word') {
@@ -1409,7 +1412,7 @@ export default function PdfToolStudioPage() {
         const safeText = text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
         const docHtml = `<html><head><meta charset="utf-8"></head><body><pre style="font-family:Calibri,Arial,sans-serif;white-space:pre-wrap">${safeText}</pre></body></html>`;
         const { saveAs } = await import('file-saver');
-        saveAs(new Blob(['\ufeff', docHtml], { type: 'application/msword;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.doc`);
+        saveAs(new Blob(['\ufeff', tagHtmlDocument(docHtml)], { type: 'application/msword;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.doc`);
         toast.dismiss(toastId);
         toast.success('Text exported as a Word-compatible document.');
       } else if (['word', 'excel', 'pptx'].includes(fromFormat)) {
@@ -1453,11 +1456,11 @@ export default function PdfToolStudioPage() {
         const baseName = conversionFile.name.replace(/\.[^/.]+$/, '');
         if (toFormat === 'txt') {
           const { saveAs } = await import('file-saver');
-          saveAs(new Blob([text], { type: 'text/plain;charset=utf-8' }), `${baseName}.txt`);
+          saveAs(new Blob([tagTextExport(text, 'text')], { type: 'text/plain;charset=utf-8' }), `${baseName}.txt`);
         } else if (toFormat === 'word') {
           const safeText = text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
           const { saveAs } = await import('file-saver');
-          saveAs(new Blob([`\ufeff<html><head><meta charset="utf-8"></head><body><pre style="white-space:pre-wrap">${safeText}</pre></body></html>`], { type: 'application/msword;charset=utf-8' }), `${baseName}.doc`);
+          saveAs(new Blob([`\ufeff${tagHtmlDocument(`<html><head><meta charset="utf-8"></head><body><pre style="white-space:pre-wrap">${safeText}</pre></body></html>`)}`], { type: 'application/msword;charset=utf-8' }), `${baseName}.doc`);
         } else if (toFormat === 'pdf') {
           const { jsPDF } = await import('jspdf');
           const doc = new jsPDF();
@@ -1470,6 +1473,7 @@ export default function PdfToolStudioPage() {
             doc.text(line, margin, y);
             y += 5;
           }
+          tagJsPdfDocument(doc);
           doc.save(`${baseName}.pdf`);
         }
         toast.dismiss(toastId);
@@ -1877,6 +1881,7 @@ export default function PdfToolStudioPage() {
           }
         }
 
+        tagJsPdfDocument(doc);
         doc.save(`${finalFilename}.pdf`);
         toast.success('🎉 PDF Manuscript compiled and downloaded!');
       } else if (exportFormat === 'doc') {
@@ -1915,7 +1920,7 @@ export default function PdfToolStudioPage() {
 
         html += `</body></html>`;
 
-        const blob = new Blob(['\ufeff' + html], {
+        const blob = new Blob(['\ufeff' + tagHtmlDocument(html)], {
           type: 'application/msword',
         });
         const { saveAs } = await import('file-saver');
@@ -2039,13 +2044,14 @@ export default function PdfToolStudioPage() {
   ${frontCoverHtml}
   ${chapterSections}
   ${backCoverHtml}
+  <footer>${'Made with PingWorld · PINGWORLD_MADE_WITH_V1'}</footer>
 </body>
 </html>`;
 
         zip.file('OEBPS/content.xhtml', mainXhtml);
 
         // Generate zipped Blob
-        const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
+        const blob = await tagZipExport(await zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' }));
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.epub`);
         toast.success('🎉 Valid EPUB manuscript ZIP package exported!');
@@ -2091,7 +2097,7 @@ export default function PdfToolStudioPage() {
           });
         }
 
-        const blob = await generatePptxPackage(frontCoverTitle || 'Manuscript', slides);
+        const blob = await tagZipExport(await generatePptxPackage(frontCoverTitle || 'Manuscript', slides));
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.pptx`);
         toast.success('🎉 PowerPoint (.pptx) presentation exported!');
@@ -2101,7 +2107,7 @@ export default function PdfToolStudioPage() {
         pages.forEach((p, i) => {
           plain += `--- PAGE ${i + 1}: ${p.title} ---\n\n${p.content}\n\n`;
         });
-        const blob = new Blob([plain], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([tagTextExport(plain, 'text')], { type: 'text/plain;charset=utf-8' });
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${finalFilename}.txt`);
         toast.success('🎉 Text document exported!');
@@ -2120,6 +2126,7 @@ export default function PdfToolStudioPage() {
     const activeBook: any = {
       __pwbook: true,
       app: 'PingWorldBookStudio',
+      _pingworldAttribution: { tag: 'PINGWORLD_MADE_WITH_V1', madeWith: 'PingWorld' },
       version: '1.0',
       id: activeBookId,
       name: frontCoverTitle || 'Untitled Book',
@@ -3895,8 +3902,8 @@ export default function PdfToolStudioPage() {
               id='pdf-merge-file-input'
               type='file'
               multiple
-              // accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
-              accept='*'
+              accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
+              // accept='*'
               className='hidden'
               onChange={(e) => {
                 const files = e.target.files;
@@ -4168,6 +4175,7 @@ export default function PdfToolStudioPage() {
                   pages.forEach((page) => mergedPdf.addPage(page));
                 }
 
+                tagPdfLibDocument(mergedPdf);
                 const mergedBytes = await mergedPdf.save();
                 const blob = new Blob([mergedBytes as any], {
                   type: 'application/pdf',

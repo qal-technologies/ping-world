@@ -39,8 +39,8 @@ import {
   Crown,
   CloudCheck,
   BookOpen,
-  Eye,
   EyeOff,
+  Eye,
   User,
   File,
   Bold,
@@ -75,6 +75,7 @@ import { HybridStorage } from '@/lib/storage-utils';
 import Wrapper from '@/components/ui/wrapper';
 import QuizSettingItem from '@/components/quiz/quiz-setting-item';
 import { useAppContext } from '@/context/AppContext';
+import { usePageLayout } from '@/components/layout';
 import {
   computeExpiry,
   tierAtLeast,
@@ -93,6 +94,7 @@ import {
   unpackPingWorldMediaUrl,
 } from '@/lib/quiz/quiz-piping';
 import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
+import { exportQuizFeedbackPdf } from '@/lib/quiz/pdf-export';
 import { useAppFileViewer } from '@/components/shared/AppFileViewer';
 import {
   type Question,
@@ -104,6 +106,7 @@ import {
 } from '.';
 import { supabase } from '@/lib/supabase';
 import NextImage from 'next/image';
+import { optimizeImageForStorage } from '@/lib/media-optimization';
 
 const seedTemplateStorageKey = () => `pw_quiz_template_v1`;
 
@@ -180,10 +183,25 @@ const QuizBuilder = ({
   onCancel: () => void;
   isSaving: boolean;
 }) => {
+  const { openFile } = useAppFileViewer();
   const { premiumTier, isFeatureUnlocked, user } = useAppContext();
+  const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
+  useEffect(() => {
+    setHideNavbar(true);
+    setHideFooter(true);
+    setPaddingTop('pt-0');
+    return () => {
+      setHideNavbar(false);
+      setHideFooter(false);
+      setPaddingTop('');
+    };
+  }, [setHideNavbar, setHideFooter, setPaddingTop]);
   const [collapse, setCollapse] = useState<Record<string, boolean>>({});
   const [showBranchRules, setShowBranchRules] = useState(false);
   const [showLanguageDocs, setShowLanguageDocs] = useState(false);
+  const [showQuestionExplanation, setShowQuestionExplanation] = useState(false);
+  const [questionExplanationDraft, setQuestionExplanationDraft] = useState('');
+  const [questionExplanationPlacement, setQuestionExplanationPlacement] = useState<'in-result' | 'in-question'>('in-result');
 
   const quizUnlocked = isFeatureUnlocked('quiz');
 
@@ -846,7 +864,8 @@ const QuizBuilder = ({
               onSave({
                 ...editedQuiz,
                 isCustom: premiumTier === 'pro' && Boolean(quizId),
-                customUrl: premiumTier === 'pro' ? quizId || undefined : undefined,
+                customUrl:
+                  premiumTier === 'pro' ? quizId || undefined : undefined,
                 userId: user?.id || '',
                 fromPremium: quizUnlocked,
               });
@@ -1011,7 +1030,7 @@ const QuizBuilder = ({
 
         {/* Editor Area */}
         <div className='lg:col-span-3'>
-          <Card className='bg-transparent p-1 sm:p-4 pb-2 ring-0 sm:ring-1 pt-6 lg:pt-9 lg:p-8 h-full sm:bkblur'>
+          <Card className='bg-transparent sm:p-4 pb-2 ring-0 sm:ring-1 pt-6 lg:pt-9 lg:p-8 h-full sm:bkblur'>
             {currentStep === -1 ?
               <div className='space-y-2 mt-1'>
                 <div className='flex items-center justify-between'>
@@ -1243,7 +1262,8 @@ const QuizBuilder = ({
                       {editedQuiz.quizScroll &&
                         editedQuiz.surveyType !== 'form' && (
                           <p className='text-[10px] text-pw-muted ml-1'>
-                            💡 Scroll Show replaces the visible sequence when a branch is selected; Scroll All remains continuous.
+                            💡 Scroll Show replaces the visible sequence when a
+                            branch is selected; Scroll All remains continuous.
                           </p>
                         )}
                     </div>
@@ -1472,7 +1492,9 @@ const QuizBuilder = ({
 
                                 {detail.type === 'dob' && (
                                   <div className='space-y-1 border-t border-white/5 pt-2'>
-                                    <label className='text-[10px] font-semibold text-white'>Minimum age (optional)</label>
+                                    <label className='text-[10px] font-semibold text-white'>
+                                      Minimum age (optional)
+                                    </label>
                                     <Input
                                       type='number'
                                       min={0}
@@ -1480,17 +1502,39 @@ const QuizBuilder = ({
                                       step={1}
                                       placeholder='No minimum age'
                                       value={detail.minAge ?? ''}
-                                      onKeyDown={(event) => event.stopPropagation()}
+                                      onKeyDown={(event) =>
+                                        event.stopPropagation()
+                                      }
                                       onChange={(event) => {
                                         const input = event.target.value;
-                                        const minAge = input === '' ? undefined : Math.min(120, Math.max(0, Math.floor(Number(input))));
-                                        const askDetails = [...(editedQuiz.askDetails || [])];
-                                        askDetails[idx] = { ...askDetails[idx], minAge };
-                                        setEditedQuiz({ ...editedQuiz, askDetails });
+                                        const minAge =
+                                          input === '' ? undefined : (
+                                            Math.min(
+                                              120,
+                                              Math.max(
+                                                0,
+                                                Math.floor(Number(input)),
+                                              ),
+                                            )
+                                          );
+                                        const askDetails = [
+                                          ...(editedQuiz.askDetails || []),
+                                        ];
+                                        askDetails[idx] = {
+                                          ...askDetails[idx],
+                                          minAge,
+                                        };
+                                        setEditedQuiz({
+                                          ...editedQuiz,
+                                          askDetails,
+                                        });
                                       }}
                                       className='h-7 bg-black/40 text-[10px]'
                                     />
-                                    <p className='text-[9px] text-pw-muted'>Participants younger than this age cannot continue.</p>
+                                    <p className='text-[9px] text-pw-muted'>
+                                      Participants younger than this age cannot
+                                      continue.
+                                    </p>
                                   </div>
                                 )}
 
@@ -1879,18 +1923,49 @@ const QuizBuilder = ({
                                   editedQuiz.timer?.hasTimer
                                 : ''
                               }
-                              onChange={(e) =>
-                                setEditedQuiz({
-                                  ...editedQuiz,
-                                  timer: {
-                                    ...editedQuiz?.timer,
-                                    hasTimer:
-                                      e.target.value ?
-                                        parseInt(e.target.value)
-                                      : false,
-                                  },
-                                })
+                              max={
+                                editedQuiz.timer?.timerUnit === 'hours' ? 3 : 60
                               }
+                              maxLength={2}
+                              onChange={(e) => {
+                                const number = Number(e.target.value);
+                                if (e.target.value.length > 2) {
+                                  toast.error(
+                                    'Invalid timer setting : Maximum of 2',
+                                  );
+                                  return;
+                                }
+                                if (number) {
+                                  if (
+                                    editedQuiz.timer?.timerUnit === 'hours' &&
+                                    number > 3
+                                  ) {
+                                    toast.error(
+                                      'Invalid timer setting : Maximum of 3 hours for pro users',
+                                    );
+                                    return;
+                                  }
+                                  if (
+                                    editedQuiz.timer?.timerUnit !== 'hours' &&
+                                    number > 60
+                                  ) {
+                                    toast.error(
+                                      'Invalid timer setting : Maximum of 60 minutes',
+                                    );
+                                    return;
+                                  }
+                                  setEditedQuiz({
+                                    ...editedQuiz,
+                                    timer: {
+                                      ...editedQuiz?.timer,
+                                      hasTimer:
+                                        e.target.value ?
+                                          parseInt(e.target.value)
+                                        : false,
+                                    },
+                                  });
+                                }
+                              }}
                               placeholder={
                                 editedQuiz.timer?.timerUnit === 'seconds' ?
                                   'Sec'
@@ -2394,6 +2469,31 @@ const QuizBuilder = ({
                           </Button>
                         </QuizSettingItem>
 
+                        <QuizSettingItem
+                          label='Count every branch'
+                          description='When enabled, include questions from branches a participant did not reach in the final total.'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              setEditedQuiz({
+                                ...editedQuiz,
+                                calculateAllBranches:
+                                  !editedQuiz.calculateAllBranches,
+                              })
+                            }
+                            className={cn(
+                              'h-6 min-w-[80px]',
+                              editedQuiz.calculateAllBranches ?
+                                'bg-pw-success/10 border-pw-success text-pw-success'
+                              : 'bg-white/5 border-white/10',
+                            )}>
+                            {editedQuiz.calculateAllBranches ?
+                              'ALL BRANCHES'
+                            : 'PATH ONLY'}
+                          </Button>
+                        </QuizSettingItem>
+
                         <div className='space-y-4 mt-4'>
                           <div className='space-y-2'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase'>
@@ -2872,9 +2972,9 @@ const QuizBuilder = ({
                 )}
               </div>
             : <div
-                className='space-y-8'
+                className='space-y-6'
                 id='question-editor'>
-                <div className='flex items-center justify-between flex-wrap'>
+                <div className='flex items-center justify-between gap-1 flex-wrap'>
                   <h3 className='text-xl font-bold'>
                     {(() => {
                       const q = editedQuiz?.questions[currentStep];
@@ -2893,7 +2993,7 @@ const QuizBuilder = ({
                         : `Question ${stackPos}`;
                     })()}
                   </h3>
-                  <div className='flex gap-2 flex-wrap'>
+                  <div className='flex gap-2 flex-wrap items-center justify-between'>
                     <div className='gap-2 flex'>
                       <Button
                         variant='ghost'
@@ -3018,6 +3118,19 @@ const QuizBuilder = ({
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
+                            const question = editedQuiz.questions[currentStep];
+                            setQuestionExplanationDraft(question.correctExplanation || '');
+                            setQuestionExplanationPlacement(editedQuiz.correctOptionDes || 'in-result');
+                            setShowQuestionExplanation(true);
+                          }}
+                          className='h-8 gap-1.5 px-2 text-xs'>
+                          <MessageSquare className='h-3 w-3 text-pw-cyan' />
+                          {editedQuiz.questions[currentStep].correctExplanation ? 'Edit question explanation' : 'Add question explanation'}
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
                             moveQuestion(
                               currentStep,
                               'up',
@@ -3100,11 +3213,40 @@ const QuizBuilder = ({
                             </DropdownMenuContent>
                           </DropdownMenu>
 
-                          {['note', 'glossary', 'formula_sheet'].includes(editedQuiz.questions[currentStep].accessory || '') && (
+                          {['note', 'glossary', 'formula_sheet'].includes(
+                            editedQuiz.questions[currentStep].accessory || '',
+                          ) && (
                             <textarea
-                              rows={editedQuiz.questions[currentStep].accessory === 'note' ? 4 : 3}
-                              aria-label={editedQuiz.questions[currentStep].accessory === 'glossary' ? 'Glossary terms' : 'Accessory reference content'}
-                              placeholder={editedQuiz.questions[currentStep].accessory === 'glossary' ? 'One term per line: Term — definition' : editedQuiz.questions[currentStep].accessory === 'formula_sheet' ? 'One formula per line: Name = formula' : 'Add reference notes, instructions, or formulas…'}
+                              rows={
+                                (
+                                  editedQuiz.questions[currentStep]
+                                    .accessory === 'note'
+                                ) ?
+                                  4
+                                : 3
+                              }
+                              aria-label={
+                                (
+                                  editedQuiz.questions[currentStep]
+                                    .accessory === 'glossary'
+                                ) ?
+                                  'Glossary terms'
+                                : 'Accessory reference content'
+                              }
+                              placeholder={
+                                (
+                                  editedQuiz.questions[currentStep]
+                                    .accessory === 'glossary'
+                                ) ?
+                                  'One term per line: Term — definition'
+                                : (
+                                  editedQuiz.questions[currentStep]
+                                    .accessory === 'formula_sheet'
+                                ) ?
+                                  'One formula per line: Name = formula'
+                                : 'Add reference notes, instructions, or formulas…'
+
+                              }
                               onKeyDown={(e) => e.stopPropagation()}
                               value={
                                 editedQuiz.questions[currentStep]
@@ -3223,8 +3365,38 @@ const QuizBuilder = ({
                             })
                           }
                           placeholder='Enter your question (Use @ to mention parameters like @name or @email)'
-                          className='w-full h-20 bg-transparent p-2 sm:p-0 text-sm no-outline resize-none transition-all'
+                          className='w-full h-25 bg-transparent p-2 sm:p-0 text-sm no-outline resize-none transition-all'
                         />
+                        <div className='flex items-center gap-2 py-2'>
+                          {editedQuiz.questions[currentStep].imageUrl && (
+                            <button type='button' className='relative' onClick={() => openFile({ src: editedQuiz.questions[currentStep].imageUrl!, name: 'Question image', mimeType: 'image/webp', canDownload: false })}>
+                              <NextImage src={editedQuiz.questions[currentStep].imageUrl!} alt='Question image preview' width={88} height={64} unoptimized draggable={false} onContextMenu={(event) => event.preventDefault()} className='h-16 max-w-24 rounded-lg border border-white/10 object-contain select-none' />
+                              <span className='sr-only'>Open question image preview</span>
+                            </button>
+                          )}
+                          <label className='cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold text-pw-cyan hover:bg-white/10'>
+                            {editedQuiz.questions[currentStep].imageUrl ? 'Replace question image' : 'Add question image'}
+                            <input type='file' accept='image/*' className='sr-only' onChange={async (event) => {
+                              const file = event.target.files?.[0];
+                              event.target.value = '';
+                              if (!file) return;
+                              const maxBytes = premiumTier === 'free' ? 2 * 1024 * 1024 : premiumTier === 'pro' ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
+                              if (file.size > maxBytes) return toast.error(`Question images for your plan must be smaller than ${Math.round(maxBytes / 1024 / 1024)} MB.`);
+                              try {
+                                const optimized = await optimizeImageForStorage(file, 1800, 0.78);
+                                const imageUrl = await new Promise<string>((resolve, reject) => {
+                                  const reader = new FileReader();
+                                  reader.onerror = () => reject(new Error('Image could not be read.'));
+                                  reader.onload = () => resolve(String(reader.result));
+                                  reader.readAsDataURL(optimized);
+                                });
+                                updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], imageUrl });
+                                toast.success('Question image added.');
+                              } catch { toast.error('Question image could not be prepared.'); }
+                            }} />
+                          </label>
+                          {editedQuiz.questions[currentStep].imageUrl && <Button type='button' size='sm' variant='ghost' onClick={() => updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], imageUrl: undefined })} className='h-8 text-[10px] text-pw-danger'>Remove</Button>}
+                        </div>
                         {/* Mention Helper Badge List */}
                         {editedQuiz.askDetails &&
                           editedQuiz.askDetails.length > 0 && (
@@ -3492,8 +3664,8 @@ const QuizBuilder = ({
                     {editedQuiz.questions[currentStep].type === 'input' ?
                       /* Enhanced Input question rules & branching builder */
                       <div className='space-y-4'>
-                        <div className='bg-pw-primary/5 p-3 sm:p-4 rounded-2xl border border-pw-primary/10 flex flex-col gap-4 text-left'>
-                          <div className='flex items-center gap-3 border-b border-white/5 pb-3'>
+                        <div className='bg-pw-primary/5 p-2 sm:p-3 rounded-2xl border border-pw-primary/10 flex flex-col gap-2 sm:gap-4 text-left'>
+                          <div className='flex items-center gap-2 border-b border-white/5 pb-3'>
                             <Type className='h-6 w-6 text-pw-primary shrink-0' />
                             <div>
                               <p className='text-sm font-bold text-white'>
@@ -3507,7 +3679,7 @@ const QuizBuilder = ({
                           </div>
 
                           {/* Default Keyword & Case Sensitivity */}
-                          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 items-end'>
+                          <div className='grid grid-cols-1 md:grid-cols-2 gap-2 items-end'>
                             <div className='space-y-1'>
                               <label className='text-[10px] font-bold text-pw-muted uppercase block'>
                                 Target Keyword (Correct Answer)
@@ -3623,7 +3795,7 @@ const QuizBuilder = ({
                                 <div
                                   key={rIdx}
                                   className={cn(
-                                    'py-2 space-y-2 text-xs',
+                                    'py-2 space-y-1 sm:space-y-2 text-xs',
                                     (
                                       editedQuiz?.questions[currentStep]
                                         ?.inputBranchRules &&
@@ -3635,7 +3807,7 @@ const QuizBuilder = ({
                                       'border-none'
                                     : 'border-b border-white/5',
                                   )}>
-                                  <div className='flex items-center gap-2'>
+                                  <div className='flex items-center gap-1'>
                                     <Input
                                       placeholder='If input contains / matches keyword...'
                                       value={rule.keyword}
@@ -3813,16 +3985,18 @@ const QuizBuilder = ({
                                 })
                               }
                               placeholder='Explain why this is correct...'
-                              className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
+                              className='w-full h-16 bg-white/5 border border-white/10 rounded-xl p-2 text-xs focus:border-pw-primary focus:outline-none resize-none custom-scrollbar'
                             />
-                            <p className='text-[9px] text-pw-muted'>If left blank, the correct option’s explanation is used as the question explanation.</p>
-                            <p className='text-[9px] text-pw-muted'>If left blank, the correct option’s explanation is used as the question explanation.</p>
+                            <p className='text-[9px] text-pw-muted'>
+                              If left blank, the correct option’s explanation is
+                              used as the question explanation.
+                            </p>
                           </div>
                         </div>
                       </div>
                     : editedQuiz.questions[currentStep].type === 'upload' ?
-                      <div className='bg-pw-primary/5 p-4 rounded-2xl border border-pw-primary/10 space-y-4 text-left'>
-                        <div className='flex items-center gap-3 border-b border-white/5 pb-3'>
+                      <div className='bg-pw-primary/5 p-2 sm:p-3 rounded-2xl border border-pw-primary/10 space-y-2 space-y-3 text-left'>
+                        <div className='flex items-center gap-2 border-b border-white/5 pb-3'>
                           <Upload className='h-6 w-6 text-pw-primary shrink-0' />
                           <div>
                             <p className='text-sm font-bold text-white'>
@@ -3835,7 +4009,7 @@ const QuizBuilder = ({
                           </div>
                         </div>
 
-                        <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-2'>
                           <div className='space-y-1'>
                             <label className='text-[10px] font-bold text-pw-muted uppercase block'>
                               Accepted Formats
@@ -3881,6 +4055,7 @@ const QuizBuilder = ({
                                 return (
                                   !a.hide && (
                                     <option
+                                      disabled={!a.hide}
                                       value={a.type}
                                       key={a.type + a.title + i}
                                       className='bg-[#0A0C1B]'>
@@ -3956,7 +4131,7 @@ const QuizBuilder = ({
                         </div>
                       </div>
                     : editedQuiz.questions[currentStep].type === 'range' ?
-                      <div className='space-y-6 flex flex-col items-center py-4'>
+                      <div className='space-y-4 flex flex-col items-center py-4'>
                         <div className='w-full max-w-sm space-y-4'>
                           <div className='flex justify-between text-xs font-bold text-pw-muted opacity-50 uppercase'>
                             <span>
@@ -4046,7 +4221,7 @@ const QuizBuilder = ({
                           Survey only: no correct answer required.
                         </p>
                       </div>
-                    : <div className='space-y-3'>
+                    : <div className='space-y-2'>
                         <div
                           className={cn(
                             'w-full grid grid-cols-1 gap-2',
@@ -4149,6 +4324,40 @@ const QuizBuilder = ({
                                   </div>
 
                                   <div className='flex items-center flex-wrap gap-0.5'>
+                                    {/* Option Image Preview Badge */}
+                                    {opt.uploadUrl && (
+                                      <div className='relative shrink-0 group/img mr-1'>
+                                        <NextImage
+                                          src={opt.uploadUrl}
+                                          alt='Option'
+                                          width={32}
+                                          height={32}
+                                          // onClick={()=>openFile()}
+                                          unoptimized
+                                          className='h-8 w-8 object-cover rounded-md border border-white/10'
+                                        />
+                                        <button
+                                          type='button'
+                                          onClick={() => {
+                                            const newOpts = [
+                                              ...(editedQuiz.questions[
+                                                currentStep
+                                              ].options as QuizOption[]),
+                                            ];
+                                            delete newOpts[idx].uploadUrl;
+                                            updateQuestion(currentStep, {
+                                              ...editedQuiz.questions[
+                                                currentStep
+                                              ],
+                                              options: newOpts,
+                                            });
+                                          }}
+                                          className='absolute -top-1 -right-1 h-4 w-4 rounded-full bg-pw-danger text-white flex items-center justify-center text-[8px] font-bold opacity-0 group-hover/img:opacity-100 transition-opacity'>
+                                          ✕
+                                        </button>
+                                      </div>
+                                    )}
+
                                     {/* Scalable Option Action Drawer / Menu (MoreVertical Scaffold) */}
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
@@ -4159,7 +4368,7 @@ const QuizBuilder = ({
                                           <MoreVertical className='h-4 w-4' />
                                         </button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent className='w-56 bg-pw-surface/90 bkblur border border-white/10 p-2 shadow-2xl rounded-xl space-y-1 z-50'>
+                                      <DropdownMenuContent className='w-60 bg-pw-surface/90 bkblur border border-white/10 p-2 shadow-2xl rounded-xl space-y-1 z-50'>
                                         <DropdownMenuItem
                                           className='h-8 text-xs cursor-pointer gap-2'
                                           onSelect={(e) => e.preventDefault()}>
@@ -4245,7 +4454,7 @@ const QuizBuilder = ({
 
                                         {/* Option Feedback Note / Explanation */}
                                         <div
-                                          className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1'
+                                          className='space-y-1 w-full'
                                           onClick={(e) => e.stopPropagation()}>
                                           <span className='text-[9px] font-bold text-pw-muted uppercase block'>
                                             Option Explanation
@@ -4272,14 +4481,14 @@ const QuizBuilder = ({
                                                 options: newOpts,
                                               });
                                             }}
-                                            className='h-6 text-[10px] bg-white/5 border-white/10'
+                                            className='w-full h-18 text-[10px] bg-white/5 border-white/10 p-1 rounded-lg resize-none'
                                           />
                                         </div>
 
                                         {/* Option Score Weight for Checkbox questions */}
                                         {isCheckbox && (
                                           <div
-                                            className='p-1.5 bg-black/20 rounded-lg border border-white/5 space-y-1'
+                                            className='p-1 bg-black/20 rounded-lg border border-white/5 space-y-1'
                                             onClick={(e) =>
                                               e.stopPropagation()
                                             }>
@@ -4309,9 +4518,9 @@ const QuizBuilder = ({
                                                   options: newOpts,
                                                 });
                                               }}
-                                            className='w-full min-h-16 resize-y rounded-lg bg-white/5 border border-white/10 p-2 text-[10px]'
-                                          />
-                                        </div>
+                                              className='w-full min-h-10 rounded-lg bg-white/5 border border-white/10 p-1 text-[10px]'
+                                            />
+                                          </div>
                                         )}
 
                                         <DropdownMenuSeparator className='bg-white/5' />
@@ -4404,39 +4613,6 @@ const QuizBuilder = ({
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
-
-                                    {/* Option Image Preview Badge */}
-                                    {opt.uploadUrl && (
-                                      <div className='relative shrink-0 group/img mr-1'>
-                                        <NextImage
-                                          src={opt.uploadUrl}
-                                          alt='Option'
-                                          width={32}
-                                          height={32}
-                                          unoptimized
-                                          className='h-8 w-8 object-cover rounded-md border border-white/10'
-                                        />
-                                        <button
-                                          type='button'
-                                          onClick={() => {
-                                            const newOpts = [
-                                              ...(editedQuiz.questions[
-                                                currentStep
-                                              ].options as QuizOption[]),
-                                            ];
-                                            delete newOpts[idx].uploadUrl;
-                                            updateQuestion(currentStep, {
-                                              ...editedQuiz.questions[
-                                                currentStep
-                                              ],
-                                              options: newOpts,
-                                            });
-                                          }}
-                                          className='absolute -top-1 -right-1 h-4 w-4 rounded-full bg-pw-danger text-white flex items-center justify-center text-[8px] font-bold opacity-0 group-hover/img:opacity-100 transition-opacity'>
-                                          ✕
-                                        </button>
-                                      </div>
-                                    )}
 
                                     {/* Branching Logic for Option */}
                                     {(
@@ -4604,6 +4780,103 @@ const QuizBuilder = ({
                                                   Jump to Group
                                                 </p>
                                               </div>
+                                              {editedQuiz.quizLayout !==
+                                                'scroll' && (
+                                                <div
+                                                  className='my-1 w-full space-y-1'
+                                                  onClick={(e) =>
+                                                    e.stopPropagation()
+                                                  }>
+                                                  <Input
+                                                    aria-label={`Branch condition for option ${idx + 1}`}
+                                                    value={
+                                                      opt.branchCondition || ''
+                                                    }
+                                                    placeholder='Optional condition: @q1 HAS "term"'
+                                                    onChange={(event) => {
+                                                      const options = [
+                                                        ...(editedQuiz
+                                                          .questions[
+                                                          currentStep
+                                                        ]
+                                                          .options as QuizOption[]),
+                                                      ];
+                                                      options[idx] = {
+                                                        ...options[idx],
+                                                        branchCondition:
+                                                          event.target.value ||
+                                                          undefined,
+                                                      };
+                                                      updateQuestion(
+                                                        currentStep,
+                                                        {
+                                                          ...editedQuiz
+                                                            .questions[
+                                                            currentStep
+                                                          ],
+                                                          options,
+                                                        },
+                                                      );
+                                                    }}
+                                                    className='h-7 text-[9px] bg-white/5 border-white/10'
+                                                  />
+                                                  {opt.branchCondition && (
+                                                    <Input
+                                                      aria-label={`Else route for option ${idx + 1}`}
+                                                      value={
+                                                        opt.elseSkipToCat ?
+                                                          `group:${opt.elseSkipToCat}`
+                                                        : opt.elseSkipTo || ''
+                                                      }
+                                                      placeholder='Else route: question ID, group:Name, or end'
+                                                      onChange={(event) => {
+                                                        const value =
+                                                          event.target.value.trim();
+                                                        const options = [
+                                                          ...(editedQuiz
+                                                            .questions[
+                                                            currentStep
+                                                          ]
+                                                            .options as QuizOption[]),
+                                                        ];
+                                                        options[idx] = {
+                                                          ...options[idx],
+                                                          elseSkipTo:
+                                                            (
+                                                              value.startsWith(
+                                                                'group:',
+                                                              ) ||
+                                                              value === 'end'
+                                                            ) ?
+                                                              undefined
+                                                            : value ||
+                                                              undefined,
+                                                          elseSkipToCat:
+                                                            (
+                                                              value.startsWith(
+                                                                'group:',
+                                                              )
+                                                            ) ?
+                                                              value.slice(6)
+                                                            : undefined,
+                                                        };
+                                                        updateQuestion(
+                                                          currentStep,
+                                                          {
+                                                            ...editedQuiz
+                                                              .questions[
+                                                              currentStep
+                                                            ],
+                                                            options,
+                                                          },
+                                                        );
+                                                      }}
+                                                      className='h-7 text-[9px] bg-white/5 border-white/10'
+                                                    />
+                                                  )}
+                                                </div>
+                                              )}
+
                                               {Array.from(
                                                 new Set(
                                                   editedQuiz.questions
@@ -4656,35 +4929,6 @@ const QuizBuilder = ({
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                     }
-                                    {editedQuiz.quizLayout !== 'scroll' && editedQuiz.surveyType !== 'form' && (
-                                      <div className='mt-1 w-full space-y-1.5'>
-                                        <Input
-                                          aria-label={`Branch condition for option ${idx + 1}`}
-                                          value={opt.branchCondition || ''}
-                                          placeholder='Optional condition: @q1 HAS "term"'
-                                          onChange={(event) => {
-                                            const options = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                            options[idx] = { ...options[idx], branchCondition: event.target.value || undefined };
-                                            updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options });
-                                          }}
-                                          className='h-7 text-[9px] bg-white/5 border-white/10'
-                                        />
-                                        {opt.branchCondition && (
-                                          <Input
-                                            aria-label={`Else route for option ${idx + 1}`}
-                                            value={opt.elseSkipToCat ? `group:${opt.elseSkipToCat}` : opt.elseSkipTo || ''}
-                                            placeholder='Else route: question ID, group:Name, or end'
-                                            onChange={(event) => {
-                                              const value = event.target.value.trim();
-                                              const options = [...(editedQuiz.questions[currentStep].options as QuizOption[])];
-                                              options[idx] = { ...options[idx], elseSkipTo: value.startsWith('group:') || value === 'end' ? undefined : value || undefined, elseSkipToCat: value.startsWith('group:') ? value.slice(6) : undefined };
-                                              updateQuestion(currentStep, { ...editedQuiz.questions[currentStep], options });
-                                            }}
-                                            className='h-7 text-[9px] bg-white/5 border-white/10'
-                                          />
-                                        )}
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -4733,6 +4977,37 @@ const QuizBuilder = ({
         open={showLanguageDocs}
         onOpenChange={setShowLanguageDocs}
       />
+      <Dialog open={showQuestionExplanation} onOpenChange={setShowQuestionExplanation}>
+        <DialogContent className='w-[96vw] max-w-xl max-h-[90dvh] overflow-y-auto border-white/10 bg-pw-surface text-pw-text sm:rounded-2xl'>
+          <DialogHeader>
+            <DialogTitle>Question explanation</DialogTitle>
+            <DialogDescription>Write guidance for this question and choose where takers see it.</DialogDescription>
+          </DialogHeader>
+          <div className='space-y-3'>
+            <div className='rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs'>
+              <p className='font-semibold'>{editedQuiz.questions[currentStep]?.text || 'Untitled question'}</p>
+              <p className='mt-1 text-pw-muted'>Type: {editedQuiz.questions[currentStep]?.type?.replaceAll('_', ' ')}</p>
+            </div>
+            <textarea autoFocus rows={7} value={questionExplanationDraft} onChange={(event) => setQuestionExplanationDraft(event.target.value)} placeholder='Explain the reasoning or provide learning context…' className='w-full resize-y rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-pw-primary' />
+            <label className='block text-xs font-semibold text-pw-muted'>Display correct explanation
+              <select value={questionExplanationPlacement} onChange={(event) => setQuestionExplanationPlacement(event.target.value as 'in-result' | 'in-question')} className='mt-1 block h-10 w-full rounded-xl border border-white/10 bg-pw-surface px-3 text-sm text-pw-text'>
+                <option value='in-result'>In results</option><option value='in-question'>In question</option>
+              </select>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant='ghost' onClick={() => setShowQuestionExplanation(false)}>Cancel</Button>
+            <Button onClick={() => {
+              const question = editedQuiz.questions[currentStep];
+              if (question) {
+                updateQuestion(currentStep, { ...question, correctExplanation: questionExplanationDraft.trim() || undefined });
+                setEditedQuiz((current) => ({ ...current, correctOption: true, correctOptionDes: questionExplanationPlacement }));
+              }
+              setShowQuestionExplanation(false);
+            }}>Save explanation</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -4790,6 +5065,7 @@ export default function QuizPage() {
   const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
   const [isSavingQuiz, setIsSavingQuiz] = useState(false);
   const [isEmailingExport, setIsEmailingExport] = useState(false);
+  const [responseListSharing, setResponseListSharing] = useState(false);
   const responseCountQuizIds = useMemo(
     () => quizzes.map((quiz) => quiz.id).join(','),
     [quizzes],
@@ -4798,18 +5074,13 @@ export default function QuizPage() {
   const sortQuizCards = (items: Quiz[]) =>
     [...items].sort((left, right) => {
       const leftTemplate =
-        left.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id ||
-        left.isTemplate ||
-        left.template === true ||
-        left.kind === 'template';
+        left.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id || left.isTemplate;
       const rightTemplate =
-        right.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id ||
-        right.isTemplate ||
-        right.template === true ||
-        right.kind === 'template';
+        right.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id || right.isTemplate;
       if (leftTemplate !== rightTemplate) return leftTemplate ? 1 : -1;
       const createdTime = (quiz: Quiz) => {
-        const value = quiz.createdAt || (quiz as Quiz & { created_at?: string }).created_at;
+        const value =
+          quiz.createdAt || (quiz as Quiz & { created_at?: string }).created_at;
         if (typeof value === 'number') return value;
         const parsed = Date.parse(String(value || ''));
         return Number.isFinite(parsed) ? parsed : 0;
@@ -4819,8 +5090,12 @@ export default function QuizPage() {
 
   const openFeedback = async (sourceQuiz: Quiz) => {
     const quiz = normalizeQuizRecord(sourceQuiz);
-    if (quiz.isTemplate || quiz.template === true || quiz.kind === 'template' || quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
-      setViewingResponses({ ...quiz, responses: Array.isArray(quiz.responses) ? quiz.responses : [] });
+    if (quiz.isTemplate || quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
+      const responses = await HybridStorage.getTemplatePreviewResponse(quiz.id);
+      setViewingResponses({
+        ...quiz,
+        responses: Array.isArray(responses) ? responses : [],
+      });
       setIsLoadingFeedback(false);
       return;
     }
@@ -4900,10 +5175,15 @@ export default function QuizPage() {
   useEffect(() => {
     if (!isCreating) return;
     const historyMarker = `pw-quiz-builder-${Date.now()}`;
-    window.history.pushState({ ...(window.history.state || {}), quizBuilder: historyMarker }, '');
+    const originalState = window.history.state;
+    window.history.pushState(
+      { ...(originalState || {}), quizBuilder: historyMarker },
+      '',
+      window.location.href,
+    );
     const onPopState = () => {
       setIsCreating(false);
-      window.history.pushState({ ...(window.history.state || {}), quizBuilder: historyMarker }, '');
+      window.history.replaceState(originalState, '', window.location.href);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -5020,6 +5300,27 @@ export default function QuizPage() {
     }
   };
 
+  const toggleResponseListPublic = async () => {
+    if (!viewingResponses || responseListSharing) return;
+    setResponseListSharing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sign in again to manage response sharing.');
+      const result = await fetch(`/api/quizzes/${encodeURIComponent(viewingResponses.id)}/responses/public`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, credentials: 'omit', body: JSON.stringify({}),
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok) throw new Error(body.error || 'Could not update response sharing.');
+      if (body.enabled && body.publicId) {
+        const url = `${window.location.origin}/quiz/responses/${body.publicId}`;
+        await navigator.clipboard?.writeText(url).catch(() => {});
+        toast.success('Assessment responses are public and the link was copied.');
+      } else toast.success('Shared response page disabled. The previous link no longer works.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update response sharing.');
+    } finally { setResponseListSharing(false); }
+  };
+
   const safeDecodeBase64 = (str: any): any => {
     return decodeStoredCorrectAnswer(str);
   };
@@ -5070,48 +5371,137 @@ export default function QuizPage() {
   };
 
   const exportResponses = (quiz: Quiz, format: 'csv' | 'json' | 'txt') => {
-    if (!quiz.responses || quiz.responses.length === 0) {
+    const responses = (quiz.responses || []).filter(
+      (response) => response.status !== 'in_progress',
+    );
+    if (responses.length === 0) {
       toast.info('No responses to export yet.');
       return;
     }
 
-    const responses = quiz.responses || [];
-    void showConfirm('Images, videos, and other media are not embedded in feedback exports. Media URLs are retained where available, and participants can download the files separately.', { confirmText: 'Export without media', type: 'warning' }).then((confirmed) => {
+    void showConfirm(
+      'Images, videos, and other media are not embedded in feedback exports. Media URLs are retained where available, and participants can download the files separately.',
+      { confirmText: 'Export without media', type: 'warning' },
+    ).then((confirmed) => {
       if (confirmed) downloadExport();
     });
 
     const downloadExport = () => {
+      let content = '';
+      let mimeType = '';
+      if (format === 'csv') {
+        content = exportResponsesToCSV(quiz, responses);
+        mimeType = 'text/csv;charset=utf-8;';
+      } else if (format === 'json') {
+        content = exportResponsesToJSON(quiz, responses);
+        mimeType = 'application/json;charset=utf-8;';
+      } else {
+        content = exportResponsesToText(quiz, responses);
+        mimeType = 'text/plain;charset=utf-8;';
+      }
 
-    let content = '';
-    let mimeType = '';
-    if (format === 'csv') {
-      content = exportResponsesToCSV(quiz, responses);
-      mimeType = 'text/csv;charset=utf-8;';
-    } else if (format === 'json') {
-      content = exportResponsesToJSON(quiz, responses);
-      mimeType = 'application/json;charset=utf-8;';
-    } else {
-      content = exportResponsesToText(quiz, responses);
-      mimeType = 'text/plain;charset=utf-8;';
-    }
-
-    triggerExport(
-      `${quiz.title.replace(/\s+/g, '_')}_responses`,
-      format,
-      (filename) => {
-        const blob = new Blob([content], { type: mimeType });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.${format}`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success(`Responses exported to ${format.toUpperCase()}!`);
-      },
-    );
+      triggerExport(
+        `${quiz.title.replace(/\s+/g, '_')}_responses`,
+        format,
+        (filename) => {
+          const blob = new Blob([content], { type: mimeType });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', `${filename}.${format}`);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          toast.success(`Responses exported to ${format.toUpperCase()}!`);
+        },
+      );
     };
+  };
+
+  const exportResponsesPdf = (
+    quiz: Quiz,
+    sourceResponses: any[],
+    takerNumber?: number,
+  ) => {
+    const responses =
+      takerNumber === undefined ?
+        sourceResponses.filter((response) => response.status !== 'in_progress')
+      : sourceResponses;
+    if (!responses.length) {
+      toast.info('No submitted responses to export yet.');
+      return;
+    }
+    void showConfirm(
+      'The PDF embeds resized images when the source permits. Videos and documents remain downloadable links; images that cannot be fetched are listed as links.',
+      { confirmText: 'Create PDF', type: 'info' },
+    ).then((confirmed) => {
+      if (!confirmed || !viewingResponses) return;
+      triggerExport(
+        `${quiz.title.replace(/\s+/g, '_')}${takerNumber ? `_taker_${takerNumber}` : '_feedback'}`,
+        'pdf',
+        (filename) => {
+          void (async () => {
+            setIsLoadingFeedback(true);
+            try {
+              let completeResponses = [...responses];
+              if (
+                takerNumber === undefined &&
+                viewingResponses.id === quiz.id &&
+                viewingResponses.responsesNextOffset != null
+              ) {
+                let nextOffset: number | null =
+                  viewingResponses.responsesNextOffset;
+                let pageCount = 0;
+                while (nextOffset !== null && pageCount++ < 50) {
+                  const page = await HybridStorage.getQuizResponses(
+                    quiz.id,
+                    nextOffset,
+                  );
+                  completeResponses.push(...page.responses);
+                  nextOffset = page.nextOffset;
+                }
+                if (nextOffset !== null)
+                  throw new Error(
+                    'The assessment has more responses than can be included in one export.',
+                  );
+                const byId = new Map(
+                  completeResponses.map((response, index) => [
+                    String(response.id || `${response.timestamp}-${index}`),
+                    response,
+                  ]),
+                );
+                completeResponses = [...byId.values()];
+              }
+              await exportQuizFeedbackPdf(
+                {
+                  quiz,
+                  responses: completeResponses,
+                  setterUsername: username,
+                  setterDisplayName:
+                    user?.user_metadata?.display_name ||
+                    user?.user_metadata?.full_name ||
+                    username,
+                  responseIndex: takerNumber === undefined ? undefined : 0,
+                  takerNumber,
+                },
+                filename,
+              );
+              toast.success('Feedback PDF exported.');
+            } catch (error) {
+              console.error('[Quiz feedback PDF] Export failed:', error);
+              toast.error(
+                error instanceof Error ?
+                  error.message
+                : 'Could not create the feedback PDF. Please retry.',
+              );
+            } finally {
+              setIsLoadingFeedback(false);
+            }
+          })();
+        },
+      );
+    });
   };
 
   const clearResponses = async (quizId: string) => {
@@ -5165,9 +5555,7 @@ export default function QuizPage() {
     for (const quiz of items) {
       const isTemplate =
         quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id ||
-        Boolean(
-          quiz.isTemplate || quiz.template === true || quiz.kind === 'template',
-        );
+        Boolean(quiz.isTemplate);
       if (isTemplate) {
         toKeep.push(quiz);
         continue;
@@ -5222,19 +5610,32 @@ export default function QuizPage() {
         }
         return items;
       };
+
       const normalizeItems = (items: any[]) => items.map(normalizeQuizRecord);
       // 1. Serve local cache immediately
       const localData = await HybridStorage.getAll(
         'quiz',
         async (freshItems) => {
+          if(!freshItems || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
           // 2. Called in background when remote data arrives — silently refresh
           const remoteItems = normalizeItems(freshItems).filter(
             (item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
           );
           const processed = await processExpiryStatus(remoteItems);
-          setQuizzes(sortQuizCards(includeLocalSeed(processed)));
+          const incoming = sortQuizCards(includeLocalSeed(processed));
+          setQuizzes((current) => {
+            const currentById = new Map(current.map((item) => [item.id, item]));
+            let changed = current.length !== incoming.length;
+            const merged = incoming.map((item) => {
+              const previous = currentById.get(item.id);
+              if (!previous || JSON.stringify(previous) !== JSON.stringify(item)) changed = true;
+              return previous && JSON.stringify(previous) === JSON.stringify(item) ? previous : item;
+            });
+            return changed ? merged : current;
+          });
         },
       );
+
       const localQuizzes = normalizeItems(localData).filter(
         (item) => item.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id,
       );
@@ -5381,7 +5782,7 @@ export default function QuizPage() {
         )
       );
     });
-    if (invalid)
+    if (invalid && !isImport)
       return toast.error('Please fill in all questions and options.');
 
     // Obfuscate answer key for security
@@ -5510,6 +5911,8 @@ export default function QuizPage() {
       setIsCreating(false);
       setActiveQuiz(null);
       !isImport && toast.success('Quiz saved successfully!');
+      isImport && toast.success(`Quiz "${quiz.title}" imported successfully!`);
+
       quizHaptic([35, 45, 100]);
     } catch (e) {
       toast.error(`Failed to save quiz. - ${e}`);
@@ -5619,9 +6022,7 @@ export default function QuizPage() {
           quiz.expires_at = computeExpiry(premiumTier, 2).toISOString();
         }
 
-        handleSaveQuiz(quiz, true).then(() => {
-          toast.success(`Quiz "${quiz.title}" imported successfully!`);
-        });
+        handleSaveQuiz(quiz, true)
       } catch (err: any) {
         toast.error(err?.message || 'Invalid .pwquiz / .json format.');
       }
@@ -5753,10 +6154,10 @@ export default function QuizPage() {
                 className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
                 aria-busy='true'
                 aria-label='Loading assessments'>
-                {Array.from({ length: 4 }, (_, index) => (
+                {Array.from({ length: 2 }, (_, index) => (
                   <div
                     key={index}
-                    className='h-56 animate-pulse rounded-2xl border border-white/5 bg-white/[0.035]'
+                    className='h-50 animate-pulse rounded-2xl border border-white/5 bg-white/[0.035]'
                   />
                 ))}
               </div>
@@ -5788,7 +6189,6 @@ export default function QuizPage() {
                               </span>)}
                           {quiz?.questions?.length} Qts
                           {(quiz.isTemplate ||
-                            quiz.template === true ||
                             quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) && (
                             <span className='rounded-full border border-pw-cyan/30 bg-pw-cyan/10 px-2 py-0.5 text-[9px] font-bold text-pw-cyan'>
                               TEMPLATE
@@ -5999,23 +6399,23 @@ export default function QuizPage() {
               )}>
               {isLoadingFeedback && (
                 <div
-                  className='absolute inset-0 z-20 flex items-center justify-center bg-pw-surface/55 bkblur'
+                  className='absolute inset-0 z-20 flex items-center justify-center bg-pw-surface/70 bkblur'
                   role='status'
                   aria-live='polite'>
-                  <div className='flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-black/30 px-10 py-10 text-sm text-pw-muted'>
+                  <div className='flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-transparent px-10 py-10 text-sm text-pw-muted'>
                     <LoaderCircle className='h-7 w-7 animate-spin text-pw-primary' />
-                    Loading responses and analytics…
+                    Loading responses and analytics...
                   </div>
                 </div>
               )}
               <div className='flex justify-between items-center mb-8 gap-3 flex-wrap pt-4'>
-                <div className='mb-1'>
+                <div className='mb-1 px-2'>
                   <h2 className='text-2xl font-bold'>
                     {(
                       viewingResponses.responses &&
                       viewingResponses.responses.length > 0
                     ) ?
-                      `Feedback 
+                      `Feedback
                     ${
                       viewingResponses.responses &&
                       `(${viewingResponses.responses?.length})`
@@ -6028,6 +6428,10 @@ export default function QuizPage() {
                 </div>
 
                 <div className='flex items-center justify-between gap-2 flex-wrap px-2'>
+                  {!viewingResponses.isTemplate && viewingResponses.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && (viewingResponses.responses || []).some((response: any) => response.status !== 'in_progress') && <Button variant='outline' size='sm' title='Toggle public visibility for all assessment responses' aria-label='Toggle assessment response visibility' disabled={responseListSharing} onClick={() => void toggleResponseListPublic()} className='h-9 gap-1.5 border-pw-primary/30 text-xs text-pw-primary'>
+                    {responseListSharing ? <LoaderCircle size={14} className='animate-spin' /> : <Share2 size={14} />}
+                    Share
+                  </Button>}
                   {viewingResponses.responses &&
                     viewingResponses.responses.length > 0 && (
                       <>
@@ -6043,31 +6447,42 @@ export default function QuizPage() {
                               <ChevronDown size={14} />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent className='bg-pw-surface/90 bkblur border-white/10'>
+                          <DropdownMenuContent className='bg-pw-surface/70 w-50 bkblur border-white/10'>
                             <DropdownMenuItem
                               onClick={() =>
                                 exportResponses(viewingResponses, 'csv')
                               }
                               className='cursor-pointer text-xs'>
-                              Export Spreadsheet (.csv)
+                              Export as Spreadsheet
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() =>
                                 exportResponses(viewingResponses, 'json')
                               }
                               className='cursor-pointer text-xs'>
-                              Export Structured Data (.json)
+                              Export as JSON
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() =>
                                 exportResponses(viewingResponses, 'txt')
                               }
                               className='cursor-pointer text-xs'>
-                              Export Formatted Report (.txt)
+                              Export as TXT
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className='bg-white/10' />
+                            <DropdownMenuItem
+                              onClick={() =>
+                                exportResponsesPdf(
+                                  viewingResponses,
+                                  viewingResponses.responses || [],
+                                )
+                              }
+                              className='cursor-pointer text-xs font-semibold text-pw-success'>
+                              Export as PDF
                             </DropdownMenuItem>
                           </DropdownMenuContent>
-                      </DropdownMenu>
-                      
+                        </DropdownMenu>
+
                         <Button
                           variant='outline'
                           size='sm'
@@ -6089,8 +6504,8 @@ export default function QuizPage() {
                           className='h-9 gap-1.5 border-white/10 text-xs'>
                           <Mail size={15} />{' '}
                           {isEmailingExport ? 'Sending…' : 'Email CSV'}
-                      </Button>
-                      
+                        </Button>
+
                         <Button
                           variant='outline'
                           size='sm'
@@ -6122,6 +6537,7 @@ export default function QuizPage() {
                     let totalPass = 0;
                     let totalFail = 0;
                     let timeouts = 0;
+                    let violations = 0;
                     let completions = 0;
                     let selfSubmits = 0;
                     let quits = 0;
@@ -6188,6 +6604,7 @@ export default function QuizPage() {
                     responses.forEach((resp, rIdx) => {
                       const reason = resp.submissionReason || 'completion';
                       if (reason === 'timeout') timeouts++;
+                      else if (reason === 'violation') violations++;
                       else if (reason === 'self_submit') selfSubmits++;
                       else if (reason === 'quit') quits++;
                       else completions++;
@@ -6208,10 +6625,10 @@ export default function QuizPage() {
                         worstTaker = { name: takerName, score: resp.score };
                       }
 
-                      const passCutoff = Math.ceil(
-                        (resp.totalQuestions ||
-                          viewingResponses.questions.length) * 0.5,
-                      );
+                      const passCutoff =
+                        (resp.scorePossible ??
+                          resp.totalQuestions ??
+                          viewingResponses.questions.length) * 0.5;
                       if (resp.score >= passCutoff) totalPass++;
                       else totalFail++;
 
@@ -6349,7 +6766,7 @@ export default function QuizPage() {
                                 </div>
 
                                 {/* Metrics Grid */}
-                                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                                <div className='grid grid-cols-2 sm:grid-cols-5 gap-2 text-center'>
                                   <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
                                     <span className='text-[8px] font-bold uppercase text-pw-muted block'>
                                       Full Finishes
@@ -6364,6 +6781,14 @@ export default function QuizPage() {
                                     </span>
                                     <span className='text-lg font-bold font-mono text-pw-warning'>
                                       {timeouts}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Violations
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-danger'>
+                                      {violations}
                                     </span>
                                   </div>
                                   <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
@@ -6490,7 +6915,7 @@ export default function QuizPage() {
                               </>
                             : /* Survey Specific Response Distribution & Averages */
                               <div className='space-y-3'>
-                                <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-center'>
+                                <div className='grid grid-cols-2 sm:grid-cols-5 gap-2 text-center'>
                                   <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
                                     <span className='text-[8px] font-bold uppercase text-pw-muted block'>
                                       Completed
@@ -6513,6 +6938,14 @@ export default function QuizPage() {
                                     </span>
                                     <span className='text-lg font-bold font-mono text-pw-warning'>
                                       {timeouts}
+                                    </span>
+                                  </div>
+                                  <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
+                                    <span className='text-[8px] font-bold uppercase text-pw-muted block'>
+                                      Violations
+                                    </span>
+                                    <span className='text-lg font-bold font-mono text-pw-danger'>
+                                      {violations}
                                     </span>
                                   </div>
                                   <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
@@ -6645,298 +7078,522 @@ export default function QuizPage() {
                     />
                     <p>No responses yet.</p>
                   </div>
-                : [...(viewingResponses.responses || [])]
-                    .map((resp, idx) => (
-                      <Card
-                        key={idx}
-                        className='p-3 bg-white/5 bkblur ring-0 gap-0 space-y-2 relative overflow-hidden'>
-                        <div className='flex justify-between items-start px-2'>
-                          <div>
-                            <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
-                              {resp.userData.name ||
-                                resp.userData.email ||
-                                resp.userData.pingAuthName ||
-                                resp.userData.pingAuthEmail ||
-                                resp.userData[0] ||
-                                `Taker ${idx + 1}`}
-                            </p>
-                            <p className='text-[10px] text-pw-muted italic'>
-                              {new Date(resp.timestamp).toLocaleString()}
-                            </p>
-                          </div>
-
-                          {viewingResponses.type === 'quiz' && (
-                            <div className='bg-pw-primary/10 px-2.5 py-1 rounded-full text-[10px] font-bold text-pw-primary border border-pw-primary/20 shrink-0'>
-                              {resp.score} / {resp.totalQuestions}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className='flex flex-wrap gap-x-4 gap-y-1 py-2 border-y border-white/5 px-1 mb-1'>
-                          {Object.entries(resp.userData).map(
-                            ([key, val], i) => (
-                              <div
-                                key={key + i}
-                                className='flex gap-1.5 text-[11px]'>
-                                <span className='text-pw-muted font-bold uppercase'>
-                                  {key}:
-                                </span>
-                                <span className='text-white'>{val}</span>
-                              </div>
-                            ),
-                          )}
-                        </div>
-
+                : [...(viewingResponses.responses || [])].map((resp, idx) => (
+                    <Card
+                      key={idx}
+                      className='p-3 bg-white/5 bkblur ring-0 gap-0 space-y-2 relative overflow-hidden'>
+                      <div className='flex justify-between items-start px-2'>
                         <div>
-                          <div className='flex justify-between items-center'>
-                            <div className='flex gap-1 flex-wrap'>
-                              {resp.answers.map((a, i) => (
+                          <div className='mb-1 flex items-center gap-1.5'>
+                            {resp.status === 'in_progress' ?
+                              <span className='inline-flex items-center gap-1 text-[9px] font-bold uppercase text-pw-warning'>
+                                <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-pw-warning' />
+                                Live
+                              </span>
+                            : <span className='inline-flex items-center gap-1 text-[9px] font-bold uppercase text-pw-success'>
+                                <CheckCircle2 className='h-3 w-3' />
+                                Submitted
+                              </span>
+                            }
+                            {resp.submissionReason &&
+                              resp.submissionReason !== 'completion' &&
+                              resp.status !== 'in_progress' && (
+                                <span
+                                  className={cn(
+                                    'rounded-full px-2 py-0.5 text-[9px] font-semibold',
+                                    resp.submissionReason === 'violation' ?
+                                      'bg-pw-danger/15 text-pw-danger'
+                                    : 'bg-pw-warning/10 text-pw-warning',
+                                  )}>
+                                  {resp.submissionReason === 'timeout' ?
+                                    'Timed out'
+                                  : resp.submissionReason === 'violation' ?
+                                    'Security violation'
+                                  : 'Self-submitted'}
+                                </span>
+                              )}
+                          </div>
+                          <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
+                            Taker {idx + 1}
+                          </p>
+                        {resp.status !== 'in_progress' &&
+                          <p className='mt-1 text-[10px] text-pw-muted italic'>
+                          Submitted{' '}
+                          {new Date(
+                            resp.submittedAt || resp.timestamp,
+                          ).toLocaleString()}
+                        </p>
+                        }
+                         <p className='text-[8px] font-medium text-pw-muted'>
+                              Attempted{' '}
+                              {resp.answeredQuestions ??
+                                resp.answers.filter(
+                                  (answer: any) =>
+                                    !answer.passed &&
+                                    answer.answer !== undefined &&
+                                    answer.answer !== '',
+                                ).length}{' '}
+                              / {resp.totalQuestions} questions
+                            </p>
+                        </div>
+
+                        {resp.status !== 'in_progress' && (
+                          <div className='flex items-center gap-1'>
+                            <button
+                              title={`Export taker ${idx + 1} as PDF`}
+                              aria-label={`Export taker ${idx + 1} as PDF`}
+                              className='h-8 w-8 rounded-xl border-none bg-transparent p-1 text-[10px] text-pw-cyan hover:bg-white/6'
+                              onClick={() => exportResponsesPdf(viewingResponses, [resp], idx + 1)}>
+                              <Share2 className='h-3.5 w-3.5' />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 py-2 border-y border-white/5 px-1 mb-1'>
+                        {Object.entries(resp.userData).map(([key, val], i) => (
+                          <div
+                            key={key + i}
+                            className='flex gap-1.5 text-[11px]'>
+                            <span className='text-pw-muted font-bold uppercase'>
+                              {key}:
+                            </span>
+                            <span className='text-white'>{val}</span>
+                          </div>
+                        ))}
+                      <div
+                            key={resp.id + 'score'}
+                            className='flex gap-1.5 text-[11px]'>
+                            <span className='text-pw-muted font-bold uppercase'>
+                              Score:
+                            </span>
+                            <span className='text-white'>{resp.score} out of {resp.scorePossible ?? resp.totalQuestions} </span>
+                          </div>
+                      </div>
+
+                      {resp.isSignedUser && resp.signedUser && (
+                        <div className='grid grid-cols-1 gap-1 py-1 text-[10px] sm:grid-cols-2'>
+                          <span className='font-bold uppercase tracking-wide text-pw-primary sm:col-span-2'>
+                            Signed user
+                          </span>
+                          {resp.signedUser.displayName && (
+                            <span>
+                              <b className='text-pw-muted'>Display name: </b>
+                              {resp.signedUser.displayName}
+                            </span>
+                          )}
+                          {resp.signedUser.username && (
+                            <span>
+                              <b className='text-pw-muted'>Username: </b>@
+                              {resp.signedUser.username}
+                            </span>
+                          )}
+                          {resp.signedUser.email && (
+                            <span className='break-all sm:col-span-2'>
+                              <b className='text-pw-muted'>Email: </b>
+                              {resp.signedUser.email}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {resp.status !== 'in_progress' && (
+                        <div className='grid grid-cols-2 gap-2 text-[10px] py-2 mb-1 border-b border-white/5 sm:grid-cols-4'>
+                          <span>
+                            <b className='block text-pw-muted'>Started</b>
+                            {resp.startedAt ?
+                              new Date(resp.startedAt).toLocaleString()
+                            : 'Unavailable'}
+                          </span>
+
+                         {resp.submittedAt && <span>
+                            <b className='block text-pw-muted'>Submitted</b>
+                            {new Date(
+                              resp.submittedAt || resp.timestamp,
+                            ).toLocaleString()}
+                          </span>
+                        }
+
+                        {resp.durationSeconds && <span>
+                          <b className='block text-pw-muted'>Duration</b>
+                          {typeof resp.durationSeconds === 'number' ?
+                            `${Math.floor(resp.durationSeconds / 60)}m ${resp.durationSeconds % 60}s`
+                            : 'Unavailable'}
+                        </span>
+                        }
+                          <span>
+                            <b className='block text-pw-muted'>
+                              Correct / incorrect
+                            </b>
+                            {
+                              resp.answers.filter(
+                                (answer: any) => answer.correct === true,
+                              ).length
+                            }{' '}
+                            /{' '}
+                            {
+                              resp.answers.filter(
+                                (answer: any) => answer.correct === false,
+                              ).length
+                            }
+                          </span>
+
+                        {resp.answers && resp.answers.filter(
+                          (answer: any) => answer.passed,
+                        ).length > 0 && <span>
+                            <b className='block text-pw-muted'>
+                              Passed questions
+                            </b>
+                            {
+                              resp.answers.filter(
+                                (answer: any) => answer.passed,
+                              ).length
+                            }
+                          </span>
+                        }
+
+                        {(resp.totalQuestions -
+                          new Set(
+                            resp.answers.map(
+                              (answer: any) => answer.questionId,
+                            ),
+                          ).size) > 0 &&
+                          <span>
+                            <b className='block text-pw-muted'>Unanswered</b>
+                            {Math.max(
+                              0,
+                              resp.totalQuestions -
+                              new Set(
+                                resp.answers.map(
+                                  (answer: any) => answer.questionId,
+                                ),
+                              ).size,
+                            )}
+                          </span>
+                        }
+                        </div>
+                      )}
+
+                      {Array.isArray(resp.branchHistory) &&
+                        resp.branchHistory.length > 0 && (
+                          <div className='space-y-1'>
+                            <p className='text-[10px] font-bold uppercase tracking-wide text-pw-cyan'>
+                              Branches followed
+                            </p>
+                            {resp.branchHistory.map((branch, branchIndex) => {
+                              const branchAnswers = resp.answers.filter(
+                                (answer: any) =>
+                                  branch.questionIds.includes(
+                                    String(answer.questionId),
+                                  ),
+                              );
+                              return (
+                                <div
+                                  key={`${branch.fromQuestionId}-${branchIndex}`}
+                                  className='grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-white/5 py-1 text-[10px] sm:grid-cols-4'>
+                                  <span className='font-semibold'>
+                                    {branch.category ||
+                                      (branch.targetQuestionId ?
+                                        `Question ${branch.targetQuestionId}`
+                                      : 'Branch')}
+                                  </span>
+                                  <span>
+                                    {branch.questionIds.length} questions
+                                  </span>
+                                  <span>
+                                    Attempted{' '}
+                                    {
+                                      branchAnswers.filter(
+                                        (answer: any) =>
+                                          !answer.passed &&
+                                          answer.answer !== undefined &&
+                                          answer.answer !== '',
+                                      ).length
+                                    }
+                                  </span>
+                                  <span>
+                                    Failed{' '}
+                                    {
+                                      branchAnswers.filter(
+                                        (answer: any) =>
+                                          answer.correct === false,
+                                      ).length
+                                    }{' '}
+                                    · Passed{' '}
+                                    {
+                                      branchAnswers.filter(
+                                        (answer: any) => answer.passed,
+                                      ).length
+                                    }
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                      <div>
+                        <div className='flex justify-between items-center pt-1'>
+                          <div className='flex gap-1 flex-wrap'>
+                            {resp.answers.map((a, i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  'w-5 h-5 rounded-sm flex items-center justify-center text-[7px] font-bold',
+                                  a.correct === undefined ?
+                                    'bg-white/10 text-white/40'
+                                  : a.correct ?
+                                    'bg-pw-success/20 text-pw-success'
+                                  : 'bg-pw-danger/20 text-pw-danger',
+                                )}>
+                                {i + 1}
+                              </div>
+                            ))}
+                          </div>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='h-7 text-[10px] text-pw-cyan font-bold p-0 px-2 rounded-xl'
+                            onClick={() =>
+                              setExpandedResponse(
+                                expandedResponse === idx ? null : idx,
+                              )
+                            }>
+                            {expandedResponse === idx ? 'HIDE' : 'VIEW DETAILS'}
+                          </Button>
+                        </div>
+
+                        <AnimatePresence>
+                          {expandedResponse === idx && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className='mt-2 grid grid-cols-1 gap-0 overflow-hidden rounded-xl bg-pw-surface/70 p-2 sm:p-4 bkblur xl:grid-cols-2'>
+                            {resp.answers.map((ans, i) => {
+                              const question =
+                                ans.questionSnapshot ||
+                                viewingResponses.questions.find(
+                                  (q) => q.id === ans.questionId,
+                                );
+                              const resolvedAnswer = resolveAnswerToText(
+                                ans.questionSnapshot ?
+                                  {
+                                    ...viewingResponses,
+                                    questions: [ans.questionSnapshot],
+                                  }
+                                  : viewingResponses,
+                                ans.questionId,
+                                ans.answer,
+                              );
+                              const resolvedCorrect = resolveCorrectText(
+                                ans.questionSnapshot ?
+                                  {
+                                    ...viewingResponses,
+                                    questions: [
+                                      {
+                                        ...ans.questionSnapshot,
+                                        correctIndex:
+                                          decodeStoredCorrectAnswer(
+                                            ans.questionSnapshot.correctIndex,
+                                          ),
+                                      },
+                                    ],
+                                  }
+                                  : viewingResponses,
+                                ans.questionId,
+                              );
+
+                              return (
                                 <div
                                   key={i}
-                                  className={cn(
-                                    'w-5 h-5 rounded-sm flex items-center justify-center text-[7px] font-bold',
-                                    a.correct === undefined ?
-                                      'bg-white/10 text-white/40'
-                                    : a.correct ?
-                                      'bg-pw-success/20 text-pw-success'
-                                    : 'bg-pw-danger/20 text-pw-danger',
-                                  )}>
-                                  {i + 1}
-                                </div>
-                              ))}
-                            </div>
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              className='h-7 text-[10px] text-pw-cyan font-bold p-0 px-2 rounded-xl'
-                              onClick={() =>
-                                setExpandedResponse(
-                                  expandedResponse === idx ? null : idx,
-                                )
-                              }>
-                              {expandedResponse === idx ?
-                                'HIDE'
-                              : 'VIEW DETAILS'}
-                            </Button>
-                          </div>
+                                  className={cn('space-y-0.5 py-2 sm:py-3', i !== resp.answers.length && 'border-b border-white/5 ', i === 0 && 'pt-0')} >
+                                    <p className='text-[10px] font-bold text-pw-muted uppercase'>
+                                      Question {i + 1}
+                                    </p>
+                                    <p
+                                      className='text-xs font-medium leading-relaxed'
+                                      dangerouslySetInnerHTML={{
+                                        __html:
+                                          formatDetailVars(
+                                            (question?.text as string) || '',
+                                            resp.userData,
+                                            true,
+                                          ) || 'Question removed.',
+                                      }}
+                                    />
 
-                          <AnimatePresence>
-                            {expandedResponse === idx && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className='overflow-hidden bg-pw-surface/70 rounded-xl bkblur p-1 mt-2'>
-                                {resp.answers.map((ans, i) => {
-                                  const question =
-                                    viewingResponses.questions.find(
-                                      (q) => q.id === ans.questionId,
-                                    );
-                                  const resolvedAnswer = resolveAnswerToText(
-                                    viewingResponses,
-                                    ans.questionId,
-                                    ans.answer,
-                                  );
-                                  const resolvedCorrect = resolveCorrectText(
-                                    viewingResponses,
-                                    ans.questionId,
-                                  );
-
-                                  return (
-                                    <div
-                                      key={i}
-                                      className={cn(
-                                        'p-1 py-2 space-y-0.5',
-                                        i == resp.answers.length - 1 ?
-                                          ''
-                                        : 'border-b border-white/10',
-                                      )}>
-                                      <p className='text-[10px] font-bold text-pw-muted uppercase'>
-                                        Question {i + 1}
+                                    <div className='flex items-start gap-1 pt-1 flex-wrap'>
+                                      <p className='text-[10px] font-bold text-white shrink-0'>
+                                        ANSWER:
                                       </p>
-                                      <p
-                                        className='text-xs font-medium leading-relaxed'
-                                        dangerouslySetInnerHTML={{
-                                          __html:
-                                            formatDetailVars(
-                                              (question?.text as string) || '',
-                                              resp.userData,
-                                              true,
-                                            ) || 'Question removed.',
-                                        }}
-                                      />
-
-                                      <div className='flex items-start gap-2 pt-1 flex-wrap'>
-                                        <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
-                                          ANSWER:
-                                        </p>
-                                        {ans.fileUrl ?
-                                          <div className='flex items-center w-full justify-between bg-white/5 rounded-2xl border border-white/10 overflow-hidden'>
-                                            {(() => {
-                                              const previewUrl =
-                                                unpackPingWorldMediaUrl(
-                                                  String(ans.fileUrl),
-                                                ).url || String(ans.fileUrl);
-                                              const mime = String(
-                                                ans.fileType || '',
-                                              ).toLowerCase();
-                                              const fileName = String(
-                                                ans.fileName || '',
-                                              );
-                                              const detectedType =
-                                                (
-                                                  mime.startsWith('image/') ||
-                                                  /^data:image\//i.test(
-                                                    previewUrl,
-                                                  ) ||
-                                                  /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(
-                                                    fileName,
-                                                  )
-                                                ) ?
-                                                  'image'
-                                                : (
-                                                  mime.startsWith('video/') ||
-                                                  /^data:video\//i.test(
-                                                    previewUrl,
-                                                  ) ||
-                                                  /\.(mp4|webm|mov|m4v|ogv)$/i.test(
-                                                    fileName,
-                                                  )
-                                                ) ?
-                                                  'video'
-                                                : (
-                                                  mime.startsWith('audio/') ||
-                                                  /^data:audio\//i.test(
-                                                    previewUrl,
-                                                  ) ||
-                                                  /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(
-                                                    fileName,
-                                                  )
-                                                ) ?
-                                                  'audio'
-                                                : 'document';
-                                              const openAttachment = () =>
-                                                openFile({
-                                                  src: previewUrl,
-                                                  name:
-                                                    fileName ||
-                                                    'Response attachment',
-                                                });
-                                              const openButton = (
+                                      {ans.fileUrl ?
+                                        <div className='flex items-center w-full justify-between overflow-hidden'>
+                                          {(() => {
+                                            const previewUrl =
+                                              unpackPingWorldMediaUrl(
+                                                String(ans.fileUrl),
+                                              ).url || String(ans.fileUrl);
+                                            const mime = String(
+                                              ans.fileType || '',
+                                            ).toLowerCase();
+                                            const fileName = String(
+                                              ans.fileName || '',
+                                            );
+                                            const detectedType =
+                                              (
+                                                mime.startsWith('image/') ||
+                                                /^data:image\//i.test(
+                                                  previewUrl,
+                                                ) ||
+                                                /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(
+                                                  fileName,
+                                                )
+                                              ) ?
+                                                'image'
+                                              : (
+                                                mime.startsWith('video/') ||
+                                                /^data:video\//i.test(
+                                                  previewUrl,
+                                                ) ||
+                                                /\.(mp4|webm|mov|m4v|ogv)$/i.test(
+                                                  fileName,
+                                                )
+                                              ) ?
+                                                'video'
+                                              : (
+                                                mime.startsWith('audio/') ||
+                                                /^data:audio\//i.test(
+                                                  previewUrl,
+                                                ) ||
+                                                /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(
+                                                  fileName,
+                                                )
+                                              ) ?
+                                                'audio'
+                                              : 'document';
+                                            const openAttachment = () =>
+                                              openFile({
+                                                src: previewUrl,
+                                                name:
+                                                  fileName ||
+                                                  'Response attachment',
+                                              });
+                                            const openButton = (
+                                              <button
+                                                type='button'
+                                                onClick={openAttachment}
+                                                className='text-[10px] font-semibold text-pw-cyan hover:underline'>
+                                                Open {detectedType} fullscreen
+                                              </button>
+                                            );
+                                            if (detectedType === 'image')
+                                              return (
                                                 <button
                                                   type='button'
                                                   onClick={openAttachment}
-                                                  className='text-[10px] font-semibold text-pw-cyan hover:underline'>
-                                                  Open {detectedType} fullscreen
+                                                  className='flex w-full cursor-zoom-in flex-col items-center gap-1 p-2'>
+                                                  <NextImage
+                                                    src={previewUrl}
+                                                    alt='Uploaded response preview'
+                                                    width={320}
+                                                    height={192}
+                                                    unoptimized
+                                                    className='max-h-48 max-w-full rounded-xl object-contain'
+                                                  />
+                                                  <span className='text-[10px] text-pw-cyan'>
+                                                    Click image to view
+                                                    fullscreen
+                                                  </span>
                                                 </button>
                                               );
-                                              if (detectedType === 'image')
-                                                return (
-                                                  <button
-                                                    type='button'
-                                                    onClick={openAttachment}
-                                                    className='flex w-full cursor-zoom-in flex-col items-center gap-1 p-2'>
-                                                    <NextImage
-                                                      src={previewUrl}
-                                                      alt='Uploaded response preview'
-                                                      width={320}
-                                                      height={192}
-                                                      unoptimized
-                                                      className='max-h-48 max-w-full rounded-xl object-contain'
-                                                    />
-                                                    <span className='text-[10px] text-pw-cyan'>
-                                                      Click image to view
-                                                      fullscreen
-                                                    </span>
-                                                  </button>
-                                                );
-                                              if (detectedType === 'video')
-                                                return (
-                                                  <div className='flex w-full flex-col items-center gap-1 p-2'>
-                                                    <video
-                                                      src={previewUrl}
-                                                      controls
-                                                      playsInline
-                                                      preload='metadata'
-                                                      className='max-h-48 max-w-full rounded-xl object-contain'
-                                                    />
-                                                    {openButton}
-                                                  </div>
-                                                );
-                                              if (detectedType === 'audio')
-                                                return (
-                                                  <div className='flex w-full flex-col items-center gap-2 p-2'>
-                                                    <audio
-                                                      src={previewUrl}
-                                                      controls
-                                                      preload='metadata'
-                                                      className='w-full'
-                                                    />
-                                                    {openButton}
-                                                  </div>
-                                                );
+                                            if (detectedType === 'video')
                                               return (
-                                                <div className='flex w-full flex-wrap items-center justify-between gap-2 p-3'>
-                                                  <span className='flex min-w-0 items-center gap-2 truncate text-xs text-pw-text'>
-                                                    <File className='h-4 w-4 shrink-0' />
-                                                    {fileName ||
-                                                      'Response attachment'}
-                                                  </span>
+                                                <div className='flex w-full flex-col items-center gap-1 p-2'>
+                                                  <video
+                                                    src={previewUrl}
+                                                    controls
+                                                    playsInline
+                                                    preload='metadata'
+                                                    className='max-h-48 max-w-full rounded-xl object-contain'
+                                                  />
                                                   {openButton}
                                                 </div>
                                               );
-                                            })()}
-                                          </div>
-                                        : <p
+                                            if (detectedType === 'audio')
+                                              return (
+                                                <div className='flex w-full flex-col items-center gap-2 p-2'>
+                                                  <audio
+                                                    src={previewUrl}
+                                                    controls
+                                                    preload='metadata'
+                                                    className='w-full'
+                                                  />
+                                                  {openButton}
+                                                </div>
+                                              );
+                                            return (
+                                              <div className='flex w-full flex-wrap items-center justify-between gap-2 p-3'>
+                                                <span className='flex min-w-0 items-center gap-2 truncate text-xs text-pw-text'>
+                                                  <File className='h-4 w-4 shrink-0' />
+                                                  {fileName ||
+                                                    'Response attachment'}
+                                                </span>
+                                                {openButton}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      : <p
+                                          className={cn(
+                                            'text-[11px] font-mono',
+                                            ans.correct === undefined ?
+                                              'text-white/80'
+                                            : ans.correct ? 'text-pw-success'
+                                            : 'text-pw-danger',
+                                          )}
+                                          dangerouslySetInnerHTML={{
+                                            __html: formatDetailVars(
+                                              resolvedAnswer,
+                                              resp.userData,
+                                              false,
+                                              true,
+                                            ),
+                                          }}
+                                        />
+                                      }
+                                    </div>
+                                    {viewingResponses.type === 'quiz' &&
+                                      ans.correct === false &&
+                                      Boolean(resolvedCorrect) && (
+                                        <div className='flex items-start gap-1 pt-1 flex-wrap'>
+                                          <p className='text-[10px] font-bold text-pw-success shrink-0'>
+                                            CORRECT:
+                                          </p>
+                                          <p
                                             className={cn(
-                                              'text-[11px] font-mono',
-                                              ans.correct === undefined ?
-                                                'text-white/80'
-                                              : ans.correct ? 'text-pw-success'
-                                              : 'text-pw-danger',
+                                              'text-[11px] font-mono text-white/90',
                                             )}
                                             dangerouslySetInnerHTML={{
                                               __html: formatDetailVars(
-                                                resolvedAnswer,
+                                                resolvedCorrect,
                                                 resp.userData,
                                                 false,
                                                 true,
                                               ),
                                             }}
                                           />
-                                        }
-                                      </div>
-                                      {viewingResponses.type === 'quiz' &&
-                                        !ans.correct &&
-                                        Boolean(resolvedCorrect) && (
-                                          <div className='flex items-start gap-2 pt-1'>
-                                            <p className='text-[10px] font-bold text-pw-cyan shrink-0'>
-                                              CORRECT:
-                                            </p>
-                                            <p
-                                              className={cn(
-                                                'text-[11px] font-mono text-white/80',
-                                              )}
-                                              dangerouslySetInnerHTML={{
-                                                __html: formatDetailVars(
-                                                  resolvedCorrect,
-                                                  resp.userData,
-                                                  false,
-                                                  true,
-                                                ),
-                                              }}
-                                            />
-                                          </div>
-                                        )}
-                                    </div>
-                                  );
-                                })}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      </Card>
-                    ))
+                                        </div>
+                                      )}
+                                  </div>
+                                );
+                              })}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </Card>
+                  ))
                 }
                 {viewingResponses.responsesNextOffset !== null &&
                   viewingResponses.responsesNextOffset !== undefined && (

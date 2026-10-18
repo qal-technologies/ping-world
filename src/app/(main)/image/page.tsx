@@ -44,6 +44,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 import { cn } from '@/lib/utils';
 import ProfilePicMaker from '@/components/image/ProfilePicMaker';
 import BusinessCardMaker from '@/components/image/BusinessCardMaker';
@@ -512,12 +513,13 @@ export default function ImageToolkitPage() {
     const formatLabel = exportFormat.split('/')[1] || 'png';
 
     // Native HTML5 toBlob saving prevents download truncation on large images
-    canvas.toBlob((blob) => {
+    canvas.toBlob(async (blob) => {
       if (!blob) {
         toast.error('Export failed. Could not generate image blob.');
         return;
       }
-      const downloadUrl = URL.createObjectURL(blob);
+      const attributedBlob = await tagImageBlob(blob);
+      const downloadUrl = URL.createObjectURL(attributedBlob);
       const link = document.createElement('a');
       link.download = `pingworld-edited-${fileName.split('.')[0] || 'img'}.${formatLabel}`;
       link.href = downloadUrl;

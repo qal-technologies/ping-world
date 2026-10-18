@@ -661,6 +661,10 @@ async function buildSupabasePayload(
       'customUrl', 'custom_id', 'settings', 'is_synced',
     ].forEach((field) => delete settings[field]);
 
+    // This affects only response scoring; keep it with the server-owned
+    // assessment settings so the final denominator cannot be client-edited.
+    settings.calculateAllBranches = remoteContent.calculateAllBranches === true;
+
     return {
       id: baseId,
       user_id: userId,
@@ -900,6 +904,8 @@ const ALL_TYPES: StorageItem['type'][] = ['quiz', 'message', 'link', 'games'];
 
 const pendingResponsesKey = () =>
   `queue:${encodeURIComponent(activeStorageUserId)}`;
+const pendingAttemptQuitsKey = () =>
+  `quiz_attempt_quits:${encodeURIComponent(activeStorageUserId)}`;
 
 async function clearQuizScopedCache(quizId: string, removeCompletionMarker = false) {
   if (typeof window === 'undefined' || !quizId) return;
@@ -1056,6 +1062,8 @@ async function insertQuizResponse(quizId: string, response: any) {
         attemptToken: response.attemptToken, answers: attemptAnswers, questionOrder: draft.questionOrder,
         deviceKey: draft.deviceKey,
         userData: response.userData || draft.userData || {}, currentQuestionIndex: draft.currentQuestionIndex || 0,
+        visitedQuestionIds: response.visitedQuestionIds || draft.visitedQuestionIds || [],
+        branchHistory: response.branchHistory || draft.branchHistory || [],
       }),
     });
     // A previously submitted attempt is safe to retry through the idempotent response endpoint.
@@ -1067,9 +1075,13 @@ async function insertQuizResponse(quizId: string, response: any) {
     draft.remoteStarted = true;
     await HybridStorage.saveQuizAttemptDraft(quizId, draft);
   }
+  const { data: authSession } = await supabase.auth.getSession();
   const result = await fetch('/api/quiz-responses', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authSession.session?.access_token ? { Authorization: `Bearer ${authSession.session.access_token}` } : {}),
+    },
     body: JSON.stringify({ quizId, response: {
       ...response,
       answers,
@@ -1081,13 +1093,15 @@ async function insertQuizResponse(quizId: string, response: any) {
       submissionReason: persistedResponse.submissionReason || 'completion',
       assessmentType: persistedResponse.assessmentType || 'quiz',
       categoryScores: persistedResponse.categoryScores || null,
+      branchHistory: persistedResponse.branchHistory || [],
+      startedAt: persistedResponse.startedAt || null,
       answeredQuestions: persistedResponse.answeredQuestions ?? answers.length,
       },
     } }),
   });
   const payload = await result.json().catch(() => null);
   if (!result.ok) throw new Error(payload?.error || `The server could not save this response (HTTP ${result.status}).`);
-  return payload as { success: true; score: number; totalQuestions: number; categoryScores?: Record<string, { correct: number; total: number }> };
+  return payload as { success: true; responseId: string; score: number; totalQuestions: number; answeredQuestions?: number; scorePossible?: number; categoryScores?: Record<string, { correct: number; total: number }> };
 }
 
 async function externalizeResponseMedia(quizId: string, response: any) {
@@ -1159,6 +1173,28 @@ async function flushPendingResponses() {
   }
 }
 
+async function flushPendingAttemptQuits() {
+  if (!isOnline() || typeof window === 'undefined') return;
+  const queueKey = pendingAttemptQuitsKey();
+  const pending = (await readCacheValue<Array<{ quizId: string; attemptId: string; attemptToken: string }>>(queueKey)) || [];
+  for (let index = 0; index < pending.length; index++) {
+    const item = pending[index];
+    try {
+      const response = await fetch('/api/quiz-attempts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'quit', quizId: item.quizId, attemptId: item.attemptId, attemptToken: item.attemptToken }),
+      });
+      if (!response.ok) break;
+      pending.splice(index, 1);
+      index--;
+      if (queueKey !== pendingAttemptQuitsKey()) return;
+      await writeCacheValue(queueKey, pending);
+    } catch {
+      break;
+    }
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     console.info('[HybridStorage] Connection restored — syncing…');
@@ -1167,6 +1203,7 @@ if (typeof window !== 'undefined') {
       syncFromRemote(t);
     });
     void flushPendingResponses();
+    void flushPendingAttemptQuits();
   });
 }
 
@@ -1197,6 +1234,24 @@ export const HybridStorage = {
 
   async flushPendingResponses () {
     return flushPendingResponses();
+  },
+  async quitQuizAttempt(quizId: string, attemptId: string, attemptToken: string) {
+    const queueKey = pendingAttemptQuitsKey();
+    if (!isOnline()) {
+      const pending = (await readCacheValue<Array<{ quizId: string; attemptId: string; attemptToken: string }>>(queueKey)) || [];
+      if (!await writeCacheValue(queueKey, [...pending, { quizId, attemptId, attemptToken }])) throw new Error('The quit request could not be saved for later cleanup.');
+      await this.deleteQuizAttemptDraft(quizId);
+      return { success: true, queued: true };
+    }
+    const response = await fetch('/api/quiz-attempts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'quit', quizId, attemptId, attemptToken }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.success !== true) throw new Error(payload?.error || 'The attempt could not be closed. Please retry.');
+    await this.deleteQuizAttemptDraft(quizId);
+    return payload as { success: true; completed?: boolean };
   },
   async getCacheCounts() {
     const [quizzes, drafts, messages, documents, links, history] = await Promise.all([
@@ -1267,6 +1322,14 @@ export const HybridStorage = {
     if (!await writeCacheValue(key, next)) {
       throw new Error('Preview response could not be saved in IndexedDB.');
     }
+  },
+
+  async getTemplatePreviewResponse (quizId: string) {
+    const key = `template_responses:${encodeURIComponent(quizId)}`;
+    const existing = await readCacheValue<any[]>(key) || [];
+
+    if(existing) return existing;
+    else throw new Error('Preview response could not be fetched from the IndexedDB.');
   },
 
   async clearTemplatePreviewResponses(quizId: string) {
@@ -1350,7 +1413,7 @@ export const HybridStorage = {
       if (cachedPage && Array.isArray(cachedPage.responses)) {
         return { ...cachedPage, isLocalOnly: true, isCached: true };
       }
-      
+
       const localQuizzes = await readLocal('quiz', activeStorageUserId);
       const guestQuizzes = activeStorageUserId !== 'guest' ? await readLocal('quiz', 'guest') : [];
       const allLocal = [...flattenItems(localQuizzes), ...flattenItems(guestQuizzes)];
@@ -1407,6 +1470,14 @@ export const HybridStorage = {
         delete userData.assessmentType;
         delete userData.categoryScores;
         delete userData.answeredQuestions;
+        delete userData.scorePossible;
+        delete userData.currentPathQuestionIds;
+        delete userData.pathQuestionSnapshots;
+        delete userData.branchHistory;
+        delete userData.startedAt;
+        delete userData.durationSeconds;
+        delete userData.isSignedUser;
+        delete userData.signedUser;
         delete userData.responseMediaExternalized;
         const answers = Array.isArray(row.answers) ? row.answers : [];
         return {
@@ -1416,16 +1487,25 @@ export const HybridStorage = {
           totalQuestions: row.totalQuestions || 0,
           userData,
           answers,
-          ...(row.status ? { status: row.status, startedAt: row.startedAt } : {}),
+          ...(row.status ? { status: row.status } : {}),
+          startedAt: metadata.startedAt || row.startedAt || null,
+          submittedAt: row.timestamp,
+          durationSeconds: metadata.durationSeconds ?? row.durationSeconds ?? null,
           country: metadata.country,
           continent: metadata.continent,
-          submissionReason: metadata.submissionReason,
+          submissionReason: metadata.submissionReason || row.submissionReason,
           assessmentType: metadata.assessmentType,
           categoryScores: metadata.categoryScores,
-          answeredQuestions: metadata.answeredQuestions,
+          answeredQuestions: metadata.answeredQuestions ?? row.answeredQuestions,
+          scorePossible: metadata.scorePossible ?? row.scorePossible,
+          currentPathQuestionIds: metadata.currentPathQuestionIds ?? row.currentPathQuestionIds,
+          pathQuestionSnapshots: metadata.pathQuestionSnapshots ?? row.pathQuestionSnapshots,
+          branchHistory: metadata.branchHistory || row.branchHistory || [],
+          isSignedUser: Boolean(metadata.isSignedUser ?? row.isSignedUser),
+          signedUser: metadata.signedUser || row.signedUser || null,
         };
       });
-      
+
       await writeCacheValue(responseCacheKey, {
         responses: mapped,
         nextOffset,
@@ -1586,8 +1666,10 @@ export const HybridStorage = {
     const local = await readLocal(type, cacheOwner);
     const localFlat = flattenItems(local);
 
+    if(!isOnline() && localFlat) {
+      return localFlat;
+    } else if (isOnline() && !LOCAL_ONLY_TYPES.includes(type)) {
     // 2. Background sync if online
-    if (isOnline() && !LOCAL_ONLY_TYPES.includes(type)) {
       syncFromRemote(type, onUpdate);
     }
 

@@ -27,8 +27,8 @@ export interface PipingContext {
 
 /* ─────────────────────────── Media Tagging & Encryption ─────────────────────────── */
 
-const PW_MEDIA_PREFIX = 'pw_media_enc_v1::';
-const PW_MEDIA_SUFFIX = '::pw_tag_end';
+export const PW_MEDIA_PREFIX = 'pw_media_enc_v1::';
+export const PW_MEDIA_SUFFIX = '::pw_tag_end';
 
 /**
  * Encrypts / tags a Base64 text data URL with PingWorld verification tags and optional metadata.
@@ -39,7 +39,7 @@ export function packPingWorldMediaUrl(
 ): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
   // If already packed, return as is
-  if (rawUrl.startsWith(PW_MEDIA_PREFIX)) return rawUrl;
+  if(rawUrl.startsWith(PW_MEDIA_PREFIX) && rawUrl.endsWith(PW_MEDIA_SUFFIX)) return rawUrl;
 
   const header = {
     t: Date.now(),

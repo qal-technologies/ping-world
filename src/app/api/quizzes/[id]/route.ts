@@ -95,6 +95,7 @@ export async function GET(
     delete publicSettings.privateKey;
     delete publicSettings.privateKeyHash;
     delete publicSettings.allowedParticipantUsernames;
+    delete publicSettings.publicResponsesId;
     delete publicSettings.moderationStatus;
     delete publicSettings.moderationPausedAt;
     const safeQuiz = {
@@ -107,8 +108,10 @@ export async function GET(
       questions: sanitizedQuestions,
       endScreen: row.endScreen || settings.endScreen,
       customUrl: ownerIsActivePro ? String(row.custom_id || settings.customUrl || '') : '',
+      responsesPublicId: typeof settings.publicResponsesId === 'string' ? settings.publicResponsesId : '',
       isPrivate,
       accessGranted,
+      fromPremium: ownerIsActivePro,
       responses: [],
     };
     return NextResponse.json(

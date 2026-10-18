@@ -19,6 +19,7 @@ import { useComposer } from '@/lib/composer/useComposerStore';
 import { CANVAS_FONTS, PREMIUM_FEATURES } from '@/lib/composer/constants';
 import { PremiumGate } from './PremiumGate';
 import { toast } from 'sonner';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 
 const BG_PRESETS = [
   { label: 'Dark', value: 'linear-gradient(135deg, #12152e 0%, #1a1f40 100%)' },
@@ -238,10 +239,11 @@ export function CanvasBuilder() {
     setDownloading(true);
     try {
       const { captureElementToBlob } = await import('@/lib/composer/canvas-capture-utils');
-      const blob = await captureElementToBlob(canvasRef.current, {
+      const capturedBlob = await captureElementToBlob(canvasRef.current, {
         scale: 2,
         backgroundColor: null,
       });
+      const blob = await tagImageBlob(capturedBlob);
 
       const downloadUrl = URL.createObjectURL(blob);
       setCanvasPreview(downloadUrl);

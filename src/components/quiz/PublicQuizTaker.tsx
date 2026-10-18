@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
   CheckCircle2,
+  Check,
   ChevronRight,
   ChevronDown,
   CheckCircle,
@@ -33,7 +34,9 @@ import {
   Atom,
   Search,
   Copy,
+  Share2,
   ChevronUp,
+  RefreshCcw,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -79,6 +82,7 @@ import { triggerConfetti } from '@/lib/confetti';
 import { detectClientGeo } from '@/lib/countries/geo-detector';
 import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
 import { useAppFileViewer } from '@/components/shared/AppFileViewer';
+import { exportQuizFeedbackPdf } from '@/lib/quiz/pdf-export';
 import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
 import Image from 'next/image';
 
@@ -86,13 +90,19 @@ function getAssessmentDeviceKey(): string {
   if (typeof window === 'undefined') return '';
   try {
     const keyName = 'pw_assessment_device_key_v1';
-    let key = localStorage.getItem(keyName);
+    const cookieName = 'pw_assessment_device_key_v1';
+    const cookieKey = document.cookie
+      .split('; ')
+      .find((cookie) => cookie.startsWith(`${cookieName}=`))
+      ?.slice(cookieName.length + 1);
+    let key = cookieKey || localStorage.getItem(keyName);
     if (!key) {
       key = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
         byte.toString(16).padStart(2, '0'),
       ).join('');
-      localStorage.setItem(keyName, key);
     }
+    localStorage.setItem(keyName, key);
+    document.cookie = `${cookieName}=${key}; Path=/; Max-Age=31536000; SameSite=Strict${window.location.protocol === 'https:' ? '; Secure' : ''}`;
     return key;
   } catch {
     return '';
@@ -105,6 +115,113 @@ function getPrivateQuizAccessToken(quizId: string): string {
   } catch {
     return '';
   }
+}
+
+function calculateQuizPoints(questions: Question[], answers: any[], correctKeys: Record<string, any>, pathIds: string[]) {
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const answerIds = new Set(answers.map((answer) => String(answer.questionId)));
+  let earned = 0;
+  let possible = 0;
+  const addPossibleForQuestion = (question: Question, answer?: any) => {
+    // Upload questions are completion checks for now: a supplied file is a
+    // correct response worth one question point, independent of an answer key.
+    if (question.type === 'upload') {
+      possible += 1;
+      if (answer?.fileUrl || answer?.answer) {
+        if (answer?.correct !== false) earned += 1;
+      }
+      return;
+    }
+    const decoded = decodeStoredCorrectAnswer(correctKeys[question.id]);
+    const hasCorrectKey = !(decoded === null || decoded === undefined || decoded === '' || (Array.isArray(decoded) && decoded.length === 0));
+    if (!hasCorrectKey) {
+      // A passed question is in the participant's path but was not answered,
+      // so it never earns points. Keyless answered questions are creditable.
+      if (answer && !answer.passed && answer.answer !== undefined && answer.answer !== '') {
+        possible += 1;
+        earned += 1;
+      }
+      return;
+    }
+    const options = question.options || [];
+    const normalizeId = (value: unknown) => {
+      const byId = options.find((option: any, index: number) => String(option?.id ?? index) === String(value));
+      if (byId) return (byId as any)?.id ?? value;
+      const index = Number(value);
+      return Number.isInteger(index) && options[index] ? (options[index] as any)?.id ?? value : value;
+    };
+    const normalized = Array.isArray(decoded) ? decoded.map(normalizeId) : normalizeId(decoded);
+    const ids = (Array.isArray(normalized) ? normalized : [normalized]).map(String);
+    const custom = options.some((option: any) => option?.scoreWeight !== undefined && option?.scoreWeight !== null && option?.scoreWeight !== '' && Number.isFinite(Number(option.scoreWeight)) && Number(option.scoreWeight) >= 0);
+    const weightFor = (id: unknown) => {
+      const option = options.find((item: any, index: number) => String(item?.id ?? index) === String(id) || String(index) === String(id));
+      const weight = Number(option?.scoreWeight);
+      return Number.isFinite(weight) && weight >= 0 ? weight : 1;
+    };
+    if (question.type === 'input') {
+      possible += 1;
+      if (answer?.correct === true) earned += 1;
+      return;
+    }
+    if (question.type === 'checkbox' && !custom) {
+      possible += 1;
+      if (answer?.correct === true) earned += 1;
+      return;
+    }
+    if (question.type === 'checkbox') {
+      possible += ids.reduce((sum, id) => sum + weightFor(id), 0);
+      const selected = Array.isArray(answer?.answer) ? answer.answer : [];
+      earned += selected.reduce((sum: number, id: unknown) => ids.includes(String(id)) ? sum + weightFor(id) : sum, 0);
+      return;
+    }
+    const points = custom ? weightFor(normalized) : 1;
+    possible += points;
+    if (answer?.correct === true) earned += points;
+  };
+  for (const answer of answers) {
+    const question = byId.get(String(answer.questionId));
+    if (question) addPossibleForQuestion(question, answer);
+  }
+  for (const id of pathIds) {
+    if (answerIds.has(String(id))) continue;
+    const question = byId.get(String(id));
+    if (question) addPossibleForQuestion(question);
+  }
+  return { earned, possible };
+}
+
+function keepAnswerRevision(previous: any, next: any) {
+  if (!previous) return next;
+  const history = Array.isArray(previous.answerHistory) ? [...previous.answerHistory] : [];
+  const priorValue = {
+    answer: previous.answer,
+    fileName: previous.fileName,
+    fileUrl: previous.fileUrl,
+    fileType: previous.fileType,
+    correct: previous.correct,
+    recordedAt: previous.updatedAt || previous.recordedAt || new Date().toISOString(),
+  };
+  if (priorValue.answer !== undefined || priorValue.fileUrl) history.push(priorValue);
+  return { ...next, answerHistory: history, updatedAt: new Date().toISOString() };
+}
+
+function isAnswerAttempted(answer: any): boolean {
+  if (!answer || answer.passed) return false;
+  if (answer.fileUrl) return true;
+  const value = answer.answer;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return typeof value === 'number' || typeof value === 'boolean';
+}
+
+function formatAnswerRevision(value: any, question: Question): string {
+  if (value?.fileName) return String(value.fileName);
+  const values = Array.isArray(value?.answer) ? value.answer : [value?.answer];
+  const options = question.options || [];
+  return values.map((item: any) => {
+    const option = options.find((candidate: any, index: number) => String(candidate?.id ?? index) === String(item) || String(index) === String(item));
+    return String(option?.text ?? item ?? 'No answer');
+  }).filter(Boolean).join(', ');
 }
 
 function describeAcceptedFiles(accept = '') {
@@ -689,16 +806,19 @@ const CALCULATOR_KEYS = [
   'max(',
   'pow(',
   'π',
+  'C',
+  'DEL',
   'e',
   'x²',
   '^',
   '!',
   '(',
   ')',
-  'C',
-  'DEL',
   '÷',
   '×',
+  '1',
+  '2',
+  '3',
   '7',
   '8',
   '9',
@@ -707,9 +827,6 @@ const CALCULATOR_KEYS = [
   '5',
   '6',
   '+',
-  '1',
-  '2',
-  '3',
   '%',
   '0',
   '.',
@@ -849,11 +966,11 @@ const Calculator = () => {
               }
               onClick={() => press(key)}
               className={cn(
-                'h-10 min-w-0 rounded-lg px-1 font-mono text-[10px] font-bold transition active:scale-95 sm:text-xs',
+                'h-10 min-w-0 rounded-lg px-1 font-mono text-sm font-bold transition active:scale-95 sm:text-xs',
                 key.endsWith('(') && 'text-pw-cyan',
                 isOperator &&
                   key !== '=' &&
-                  'border-pw-primary/20 bg-pw-primary/10 text-pw-primary',
+                  'border-pw-primary/20 bg-pw-primary/10 text-pw-primary cols-span-2',
                 key === '=' && 'bg-pw-primary text-white',
               )}
               aria-label={
@@ -896,11 +1013,15 @@ function Taker() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
+  const [scorePossible, setScorePossible] = useState(0);
+  const [showCompletionScrollUp, setShowCompletionScrollUp] = useState(false);
   const [serverCategoryScores, setServerCategoryScores] = useState<Record<
     string,
     { correct: number; total: number }
   > | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const [showResponseShare, setShowResponseShare] = useState(false);
+  const [savedResponseId, setSavedResponseId] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [content, setContent] = useState('');
@@ -915,11 +1036,45 @@ function Taker() {
   const firstQuestionRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isFinished) {
+      setShowCompletionScrollUp(false);
+      return;
+    }
+    const panel = document.getElementById('bottom-completion');
+    const scoreElement = document.getElementById('total-score');
+    if (!panel || !scoreElement) return;
+    const update = () => {
+      const scrollable = panel.scrollHeight > panel.clientHeight + 8;
+      const scoreRect = scoreElement.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const scoreVisible = scoreRect.bottom > panelRect.top && scoreRect.top < panelRect.bottom;
+      setShowCompletionScrollUp(scrollable && !scoreVisible);
+    };
+    const observer = new ResizeObserver(update);
+    const mutations = new MutationObserver(update);
+    observer.observe(panel);
+    observer.observe(scoreElement);
+    mutations.observe(panel, { childList: true, subtree: true, characterData: true });
+    panel.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      panel.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [isFinished, score, scorePossible]);
+
+  useEffect(() => {
     if (quiz?.quizScroll && started) {
       let secondFrame = 0;
       const firstFrame = window.requestAnimationFrame(() => {
         secondFrame = window.requestAnimationFrame(() => {
-          firstQuestionRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' });
+          firstQuestionRef.current?.scrollIntoView({
+            behavior: 'auto',
+            block: 'start',
+          });
         });
       });
       return () => {
@@ -993,10 +1148,12 @@ function Taker() {
   const [detailsCollected, setDetailsCollected] = useState(false);
   const [userData, setUserData] = useState<Record<string, string>>({});
   const [isEndMsgExpanded, setIsEndMsgExpanded] = useState(false);
+  const [expandedQuestionExplanationIds, setExpandedQuestionExplanationIds] = useState<Record<string, boolean>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState('');
   const [reportedStatus, setReportedStatus] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSubmittingScreen, setShowSubmittingScreen] = useState(false);
   const [submissionFailed, setSubmissionFailed] = useState(false);
   const [isPreparingResponseFile, setIsPreparingResponseFile] = useState(false);
   const pendingResponseFileReadsRef = useRef(new Set<string>());
@@ -1007,15 +1164,24 @@ function Taker() {
   const [branchVisitCounts, setBranchVisitCounts] = useState<
     Record<string, number>
   >({});
-  const [scrollBranchQuestionIds, setScrollBranchQuestionIds] = useState<string[] | null>(null);
-  const [scrollBranchRootIndex, setScrollBranchRootIndex] = useState<number | null>(null);
+  const [scrollBranchQuestionIds, setScrollBranchQuestionIds] = useState<
+    string[] | null
+  >(null);
+  const [scrollBranchRootIndex, setScrollBranchRootIndex] = useState<
+    number | null
+  >(null);
   const scrollShowBranchActive = useRef(false);
 
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
+  const [visitedQuestionIds, setVisitedQuestionIds] = useState<string[]>([]);
+  const [branchHistory, setBranchHistory] = useState<Array<{ fromQuestionId: string; targetQuestionId?: string; category?: string; questionIds: string[]; at: string }>>([]);
+  const finalSubmissionSnapshotRef = useRef<{ answers: any[]; userData: Record<string, string>; questionIds: string[]; reason: 'completion' | 'timeout' | 'self_submit' | 'violation'; score: number; scorePossible: number; totalQuestions: number; branchHistory: Array<{ fromQuestionId: string; targetQuestionId?: string; category?: string; questionIds: string[]; at: string }>; startedAt: string } | null>(null);
+  const finalizationScreenTimerRef = useRef<number | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<number[]>([]);
   const [questionTimeLeft, setQuestionTimeLeft] = useState<number | null>(null);
   const [quizTheme, setQuizTheme] = useState<'dark' | 'light'>('dark');
   const [cheatAttempts, setCheatAttempts] = useState(0);
+  const lastSecuritySignalRef = useRef(0);
   const [showSecurityProtocol, setShowSecurityProtocol] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [quizUnavailable, setQuizUnavailable] = useState(false);
@@ -1030,6 +1196,9 @@ function Taker() {
   const restoredAttemptTimerRef = React.useRef(false);
   const restoredQuestionTimerRef = React.useRef(false);
   const lastAttemptSyncRef = React.useRef('');
+
+  const [openCat, setOpenCat] = useState(false);
+  const [openReview, setOpenReview] = useState(false);
 
   // Custom states for reporting quizzes
   const [showReportModal, setShowReportModal] = useState(false);
@@ -1052,18 +1221,39 @@ function Taker() {
           answer !== undefined &&
           (!Array.isArray(answer) || answer.length)
         ) {
-          const question = activeQuestions.find((item) => item.id === questionId);
+          const question = activeQuestions.find(
+            (item) => item.id === questionId,
+          );
           answers[questionId] = {
             ...(answers[questionId] || {}),
             questionId,
             answer,
-            ...(question ? { correct: (() => {
-              const key = decodeStoredCorrectAnswer(correctAnswersRef.current[questionId]);
-              if (key === null || key === undefined || key === '' || (Array.isArray(key) && key.length === 0)) return undefined;
-              return question.type === 'checkbox'
-                ? Array.isArray(answer) && answer.length === (Array.isArray(key) ? key.length : 1) && answer.every((value: unknown) => (Array.isArray(key) ? key : [key]).map(String).includes(String(value)))
-                : String(answer ?? '') === String(key);
-            })() } : {}),
+            ...(question ?
+              {
+                correct: (() => {
+                  const key = decodeStoredCorrectAnswer(
+                    correctAnswersRef.current[questionId],
+                  );
+                  if (
+                    key === null ||
+                    key === undefined ||
+                    key === '' ||
+                    (Array.isArray(key) && key.length === 0)
+                  )
+                    return undefined;
+                  return question.type === 'checkbox' ?
+                      Array.isArray(answer) &&
+                        answer.length ===
+                          (Array.isArray(key) ? key.length : 1) &&
+                        answer.every((value: unknown) =>
+                          (Array.isArray(key) ? key : [key])
+                            .map(String)
+                            .includes(String(value)),
+                        )
+                    : String(answer ?? '') === String(key);
+                })(),
+              }
+            : {}),
           };
         }
       }
@@ -1116,6 +1306,8 @@ function Taker() {
         questionOrder: activeQuestions.map((question) => question.id),
         userData: userDataOverride,
         currentQuestionIndex: currentQuestion,
+        visitedQuestionIds: Array.from(new Set([...(previous.visitedQuestionIds || []), ...(activeQuestions[currentQuestion]?.id ? [activeQuestions[currentQuestion].id] : [])])),
+        branchHistory,
         scrollAnswers,
         selectedOption,
         selectedOptions,
@@ -1136,6 +1328,8 @@ function Taker() {
       selectedOptions,
       timeLeft,
       userAnswers,
+      visitedQuestionIds,
+      branchHistory,
       userData,
     ],
   );
@@ -1143,6 +1337,11 @@ function Taker() {
   const syncAttemptSnapshot = useCallback(
     async (snapshot: Record<string, any>, keepalive = false) => {
       if (!quiz || isLocalPreview) return false;
+      let authHeaders: Record<string, string> = {};
+      try {
+        const { data: authState } = await supabase.auth.getSession();
+        if (authState.session?.access_token) authHeaders = { Authorization: `Bearer ${authState.session.access_token}` };
+      } catch {}
       let preparedSnapshot = snapshot;
       try {
         await HybridStorage.saveQuizAttemptDraft(quiz.id, snapshot);
@@ -1172,7 +1371,7 @@ function Taker() {
         try {
           const startResponse = await fetch('/api/quiz-attempts', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({
               action: 'start',
               quizId: quiz.id,
@@ -1183,6 +1382,8 @@ function Taker() {
               privateQuizAccessToken: getPrivateQuizAccessToken(quiz.id),
               userData: snapshot.userData,
               currentQuestionIndex: snapshot.currentQuestionIndex,
+              finalizing: Boolean(snapshot.finalSubmissionSnapshot),
+              submissionReason: snapshot.finalSubmissionSnapshot?.reason,
               allowBackwardNavigation: quiz.canGoBack !== false,
             }),
             keepalive,
@@ -1192,6 +1393,7 @@ function Taker() {
           const startResult = await startResponse.json();
           preparedSnapshot = {
             ...snapshot,
+            status: snapshot.finalSubmissionSnapshot ? 'submitting' : snapshot.status,
             remoteStarted: true,
             serverStartedAt:
               startResult.startedAt ||
@@ -1229,7 +1431,7 @@ function Taker() {
       try {
         const response = await fetch('/api/quiz-attempts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({
             action,
             quizId: quiz.id,
@@ -1239,6 +1441,10 @@ function Taker() {
             questionOrder: preparedSnapshot.questionOrder,
             userData: preparedSnapshot.userData,
             currentQuestionIndex: preparedSnapshot.currentQuestionIndex,
+            finalizing: Boolean(preparedSnapshot.finalSubmissionSnapshot),
+            submissionReason: preparedSnapshot.finalSubmissionSnapshot?.reason,
+            visitedQuestionIds: preparedSnapshot.visitedQuestionIds,
+            branchHistory: preparedSnapshot.branchHistory,
             allowBackwardNavigation: quiz.canGoBack !== false,
             deviceKey: preparedSnapshot.deviceKey,
             privateQuizAccessToken: getPrivateQuizAccessToken(quiz.id),
@@ -1246,10 +1452,15 @@ function Taker() {
           keepalive,
           signal: keepalive ? undefined : AbortSignal.timeout(5000),
         });
+        if (response.status === 409) {
+          activeAttemptRef.current = preparedSnapshot;
+          return { success: true, alreadyClosed: true };
+        }
         if (!response.ok) return false;
         const result = await response.json();
         const nextSnapshot = {
           ...preparedSnapshot,
+          status: preparedSnapshot.finalSubmissionSnapshot ? 'submitting' : preparedSnapshot.status,
           remoteStarted: true,
           serverStartedAt:
             result.startedAt ||
@@ -1261,6 +1472,8 @@ function Taker() {
         lastAttemptSyncRef.current = JSON.stringify({
           answers: preparedSnapshot.answers,
           currentQuestionIndex: preparedSnapshot.currentQuestionIndex,
+            visitedQuestionIds: preparedSnapshot.visitedQuestionIds,
+            branchHistory: preparedSnapshot.branchHistory,
         });
         return result;
       } catch {
@@ -1303,7 +1516,7 @@ function Taker() {
   );
 
   useEffect(() => {
-    if (!started || !quiz || isLocalPreview || isFinished) return;
+    if (!started || !quiz || isLocalPreview || isFinished || isSubmitting || finalizingRef.current) return;
     const snapshot = createAttemptSnapshot();
     activeAttemptRef.current = snapshot;
     void HybridStorage.saveQuizAttemptDraft(quiz.id, snapshot).catch(() => {
@@ -1326,6 +1539,7 @@ function Taker() {
     createAttemptSnapshot,
     currentQuestion,
     isFinished,
+    isSubmitting,
     isLocalPreview,
     quiz,
     scrollAnswers,
@@ -1339,8 +1553,9 @@ function Taker() {
   ]);
 
   useEffect(() => {
-    if (!started || !quiz || isLocalPreview || isFinished) return;
+    if (!started || !quiz || isLocalPreview || isFinished || isSubmitting || finalizingRef.current) return;
     const flush = () => {
+      if (finalizingRef.current) return;
       const snapshot = createAttemptSnapshot();
       void syncAttemptSnapshot(snapshot, true);
     };
@@ -1356,6 +1571,7 @@ function Taker() {
   }, [
     createAttemptSnapshot,
     isFinished,
+    isSubmitting,
     isLocalPreview,
     quiz,
     started,
@@ -1625,8 +1841,8 @@ function Taker() {
               const draft = await HybridStorage.getQuizAttemptDraft(
                 finalQuiz.id,
               );
-              if (
-                draft?.status === 'in_progress' &&
+          if (
+            (draft?.status === 'in_progress' || draft?.status === 'submitting') &&
                 Array.isArray(draft.questionOrder)
               )
                 restoredDraft = draft;
@@ -1646,6 +1862,8 @@ function Taker() {
           }
           setActiveQuestions(questionsToUse);
           setCurrentQuestion(0);
+          setVisitedQuestionIds(Array.isArray(restoredDraft?.visitedQuestionIds) ? [...new Set(restoredDraft.visitedQuestionIds.map(String))] : []);
+          setBranchHistory(Array.isArray(restoredDraft?.branchHistory) ? restoredDraft.branchHistory : []);
 
           // Pre-shuffle options
           if (finalQuiz.randomizeOptions) {
@@ -1708,7 +1926,13 @@ function Taker() {
             setShowDetails(false);
             setShowIntro(false);
             setStart(true);
-            if (navigator.onLine && restoredDraft.attemptToken) {
+            if (restoredDraft.finalSubmissionSnapshot) {
+              finalSubmissionSnapshotRef.current = restoredDraft.finalSubmissionSnapshot;
+              finalizingRef.current = false;
+              setSubmissionFailed(true);
+              setShowSubmittingScreen(true);
+            }
+            if (!restoredDraft.finalSubmissionSnapshot && navigator.onLine && restoredDraft.attemptToken) {
               void fetch('/api/quiz-attempts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1786,7 +2010,7 @@ function Taker() {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev && prev > 1) return prev - 1;
-        finalizeQuiz(userAnswers);
+        finalizeQuiz(userAnswers, 'timeout');
         return 0;
       });
     }, 1000);
@@ -1815,7 +2039,6 @@ function Taker() {
 
     if (showFeedback && !autoSubmit) {
       setShowFeedback(false);
-      return;
     }
 
     const currentQId = q?.id || '';
@@ -1882,8 +2105,14 @@ function Taker() {
       if (q.type === 'upload') {
         const existingUpload = userAnswers.find((a) => a.questionId === q.id);
         if (existingUpload) {
-          const uploadAnswer = { ...existingUpload, correct: computeIsCorrect(q.id, existingUpload.answer) };
-          const updatedAnswers = [...userAnswers.filter((a) => a.questionId !== q.id), uploadAnswer];
+          const uploadAnswer = keepAnswerRevision(existingUpload, {
+            ...existingUpload,
+            correct: computeIsCorrect(q.id, existingUpload.answer),
+          });
+          const updatedAnswers = [
+            ...userAnswers.filter((a) => a.questionId !== q.id),
+            uploadAnswer,
+          ];
           setUserAnswers(updatedAnswers);
           setScore(updatedAnswers.filter((a) => a.correct === true).length);
           proceedToNext(updatedAnswers);
@@ -1914,11 +2143,11 @@ function Taker() {
       let updatedAnswers;
       if (existingIdx > -1) {
         updatedAnswers = [...userAnswers];
-        updatedAnswers[existingIdx] = {
+        updatedAnswers[existingIdx] = keepAnswerRevision(userAnswers[existingIdx], {
           questionId: qId,
           answer: activeAns,
           correct,
-        };
+        });
       } else {
         updatedAnswers = [
           ...userAnswers,
@@ -1929,7 +2158,12 @@ function Taker() {
       setUserAnswers(updatedAnswers);
       setScore(updatedAnswers.filter((a) => a.correct).length);
 
-      if (quiz?.type === 'quiz' && quiz?.correctOption && quiz?.correctOptionDes === 'in-question') {
+      if (
+        quiz?.type === 'quiz' &&
+        quiz?.correctOption &&
+        quiz?.correctOptionDes === 'in-question' &&
+        !showFeedback
+      ) {
         setShowFeedback(true);
       } else {
         proceedToNext(updatedAnswers);
@@ -2005,8 +2239,10 @@ function Taker() {
   useEffect(() => {
     if (!started || !quiz?.enforceSecurity || isFinished) return;
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
+    const recordSecuritySignal = () => {
+        const now = Date.now();
+        if (now - lastSecuritySignalRef.current < 1500) return;
+        lastSecuritySignalRef.current = now;
         if (uploadPickerOpenRef.current) return;
         const nextAttempts = cheatAttempts + 1;
         setCheatAttempts(nextAttempts);
@@ -2016,7 +2252,7 @@ function Taker() {
           toast.error(
             `Multiple security violations detected. Auto-submitting ${capFirst(quiz?.type || 'Assessment')}`,
           );
-          finalizeQuiz(userAnswers);
+          finalizeQuiz(userAnswers, 'violation');
         } else {
           quizHaptic([80, 45, 80]);
           toast.warning(
@@ -2024,12 +2260,17 @@ function Taker() {
             { duration: 5000 },
           );
         }
-      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') recordSecuritySignal();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () =>
+    window.addEventListener('blur', recordSecuritySignal);
+    return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', recordSecuritySignal);
+    };
   }, [started, quiz, cheatAttempts, userAnswers, isFinished]);
 
   // Cybersecurity: lock highlighting, copy/paste, right-click context menus
@@ -2051,6 +2292,8 @@ function Taker() {
       'selectstart',
       'drag',
       'dragstart',
+      'securitypolicyviolation',
+      'drop',
     ] as const;
     blockedEvents.forEach((evt) =>
       document.addEventListener(evt, preventDefault, true),
@@ -2067,47 +2310,41 @@ function Taker() {
     if (!activeQuestions || activeQuestions.length === 0) return null;
     return activeQuestions[currentQuestion] || null;
   }, [activeQuestions, currentQuestion]);
+  const currentSavedAnswer = userAnswers.find((answer) => answer.questionId === q?.id);
+  const currentInputValue = q ? (quiz?.quizScroll ? scrollAnswers[q.id] : content) : undefined;
+  const currentChoiceValue = q ? (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOption) : undefined;
+  const canAdvanceCurrentQuestion = Boolean(q && (
+    q.type === 'upload' ? currentSavedAnswer?.fileUrl
+    : q.type === 'input' ? String(currentInputValue ?? '').trim()
+    : q.type === 'checkbox' ? ((quiz?.quizScroll ? scrollAnswers[q.id] : selectedOptions) || []).length > 0
+    : q.type === 'range' || q.type === 'rating' ? currentInputValue !== undefined && currentInputValue !== null && currentInputValue !== ''
+    : currentChoiceValue !== undefined && currentChoiceValue !== null && currentChoiceValue !== ''
+  ));
 
   const answeredCount = useMemo(() => {
-    return new Set(userAnswers.map((a) => a.questionId)).size;
+    return new Set(userAnswers.filter(isAnswerAttempted).map((a) => a.questionId)).size;
   }, [userAnswers]);
-  const weightedScore = useMemo(() => {
-    const questionsById = new Map(activeQuestions.map((question) => [question.id, question]));
-    let earned = 0;
-    let possible = 0;
-    for (const answer of userAnswers) {
-      const question = questionsById.get(answer.questionId);
-      if (!question) continue;
-      const decoded = decodeStoredCorrectAnswer(correctAnswersRef.current[question.id]);
-      if (decoded === null || decoded === undefined || decoded === '') continue;
-      const ids = (Array.isArray(decoded) ? decoded : [decoded]).map(String);
-      const weightFor = (id: unknown) => {
-        const option = (question.options || []).find((item: any, index: number) => String(item?.id ?? index) === String(id) || String(index) === String(id));
-        const value = Number(option?.scoreWeight);
-        return Number.isFinite(value) && value >= 0 ? Math.round(value) : 1;
-      };
-      if (question.type === 'input' || question.type === 'upload') {
-        possible += 1;
-        if (answer.correct === true) earned += 1;
-      } else if (question.type === 'checkbox') {
-        possible += ids.reduce((sum, id) => sum + weightFor(id), 0);
-        const selected = Array.isArray(answer.answer) ? answer.answer : [];
-        earned += selected.reduce((sum: number, id: unknown) => ids.includes(String(id)) ? sum + weightFor(id) : sum, 0);
-      } else {
-        possible += weightFor(decoded);
-        if (answer.correct === true) earned += weightFor(decoded);
-      }
-    }
-    return { earned, possible };
-  }, [activeQuestions, userAnswers]);
-  const detailContext = useCallback((answers: any[] = userAnswers) => ({
-    userData,
-    userAnswers: answers,
-    questions: activeQuestions,
-    score: weightedScore.earned,
-    scorePossible: weightedScore.possible,
-    totalQuestions: answers.length,
-  }), [userData, userAnswers, activeQuestions, weightedScore]);
+  const currentPathIds = quiz?.quizScroll && quiz.quizLayout !== 'scroll_show'
+    ? activeQuestions.map((question) => question.id)
+    : Array.from(new Set([...visitedQuestionIds, ...(started && activeQuestions[currentQuestion]?.id ? [activeQuestions[currentQuestion].id] : [])]));
+  const scorePathIds = quiz?.calculateAllBranches ? activeQuestions.map((question) => question.id) : currentPathIds;
+  const weightedScore = useMemo(
+    () => calculateQuizPoints(activeQuestions, userAnswers, correctAnswersRef.current, scorePathIds),
+    [activeQuestions, userAnswers, scorePathIds.join('|')],
+  );
+  const totalQuestions = quiz?.calculateAllBranches ? activeQuestions.length : currentPathIds.length;
+  const attemptedQuestions = new Set(userAnswers.filter(isAnswerAttempted).map((answer) => answer.questionId)).size;
+  const detailContext = useCallback(
+    (answers: any[] = userAnswers) => ({
+      userData,
+      userAnswers: answers,
+      questions: activeQuestions,
+      score: weightedScore.earned,
+      scorePossible: weightedScore.possible,
+      totalQuestions: quiz?.calculateAllBranches ? activeQuestions.length : Math.max(currentPathIds.length, answers.length),
+    }),
+    [userData, userAnswers, activeQuestions, weightedScore, quiz?.calculateAllBranches, currentQuestion, started, visitedQuestionIds],
+  );
 
   const computedCategoryScores = useMemo(() => {
     if (!quiz || userAnswers.length === 0) return {};
@@ -2136,13 +2373,13 @@ function Taker() {
     pendingUnloadCb.current = onConfirm;
     toast(
       <div className='flex flex-col gap-3 py-1'>
-        <p className='font-bold text-sm'>Leave Assessment?</p>
+        <p className='font-bold text-sm'>Leave {capFirst(quiz?.type) || 'Assessment'}?</p>
         <p className='text-xs text-pw-muted leading-relaxed'>
-          Your progress will be lost and you will need to start over.
+          Your unfinished attempt and uploaded files will be cleared. If retries are disabled, this assessment will remain marked as used on this device.
         </p>
         <div className='flex gap-2 pt-1'>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-danger/20 border border-pw-danger/40 text-pw-danger text-xs font-bold'
+            className='flex-1 h-9 rounded-xl bg-pw-danger/20 hover:bg-pw-danger hover:text-white border border-pw-danger/40 text-pw-danger text-xs font-bold'
             onClick={() => {
               toast.dismiss('quiz-leave-confirm');
               pendingUnloadCb.current?.();
@@ -2151,7 +2388,7 @@ function Taker() {
             Leave
           </button>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-primary/20 border border-pw-primary/40 text-pw-primary text-xs font-bold'
+            className='flex-1 h-9 rounded-xl bg-pw-primary/20 hover:bg-pw-primary hover:text-white border border-pw-primary/40 text-pw-primary text-xs font-bold'
             onClick={() => {
               toast.dismiss('quiz-leave-confirm');
               pendingUnloadCb.current = null;
@@ -2163,6 +2400,7 @@ function Taker() {
       {
         id: 'quiz-leave-confirm',
         duration: Infinity,
+        
       },
     );
   };
@@ -2170,21 +2408,21 @@ function Taker() {
   const confirmSubmitQuiz = () => {
     toast(
       <div className='flex flex-col gap-3 py-1'>
-        <p className='font-bold text-sm'>Submit Assessment?</p>
+        <p className='font-bold text-sm'>Submit {capFirst(quiz?.type) || 'Assessment'}?</p>
         <p className='text-xs text-pw-muted leading-relaxed'>
           Are you sure you want to finalize your answers and submit?
         </p>
         <div className='flex gap-2 pt-1'>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-success/20 border border-pw-success/40 text-pw-success text-xs font-bold'
+            className='flex-1 h-9 rounded-xl bg-pw-success/20 border hover:bg-pw-success/90 hover:text-white border-pw-success/40 text-pw-success text-xs font-bold'
             onClick={() => {
               toast.dismiss('quiz-submit-confirm');
-              finalizeQuiz(userAnswers);
+              finalizeQuiz(userAnswers, 'self_submit');
             }}>
             Submit
           </button>
           <button
-            className='flex-1 h-9 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary text-xs font-bold'
+            className='flex-1 h-9 rounded-xl bg-pw-primary/10 hover:bg-pw-primary/90 hover:text-white border border-pw-primary/20 text-pw-primary text-xs font-bold'
             onClick={() => toast.dismiss('quiz-submit-confirm')}>
             Cancel
           </button>
@@ -2204,6 +2442,7 @@ function Taker() {
     const secureAnswer = correctAnswersRef.current[qId];
     const question = activeQuestions.find((quest) => quest.id === qId);
     if (!question) return false;
+    if (question.type === 'upload') return true;
 
     const decodedCorrect = decodeStoredCorrectAnswer(secureAnswer);
     if (
@@ -2211,16 +2450,25 @@ function Taker() {
       decodedCorrect === undefined ||
       decodedCorrect === '' ||
       (Array.isArray(decodedCorrect) && decodedCorrect.length === 0)
-    )
-      return undefined;
+    ) {
+      // Questions without an answer key are informational/passable: an actual
+      // submitted answer receives credit, while a passed item stays neutral.
+      return answer !== undefined && answer !== null && answer !== '' && !(Array.isArray(answer) && answer.length === 0) ? true : undefined;
+    }
 
     if (question.type === 'checkbox') {
       const correctIds =
-        Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect];
+        (Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect]).map((value: unknown) => {
+          const options = question.options || [];
+          const byId = options.find((option: any, index: number) => String(option?.id ?? index) === String(value));
+          if (byId) return String((byId as any)?.id ?? value);
+          const index = Number(value);
+          return Number.isInteger(index) && options[index] ? String((options[index] as any)?.id ?? value) : String(value);
+        });
       return (
         Array.isArray(answer) &&
         answer.length === correctIds.length &&
-        answer.every((val: any) => correctIds.includes(val))
+        answer.every((val: any) => correctIds.some((correctId: any) => String(correctId) === String(val)))
       );
     } else if (question.type === 'input') {
       const userAns = String(answer || '').trim();
@@ -2247,7 +2495,10 @@ function Taker() {
         String(answer).toLowerCase() === String(decodedCorrect).toLowerCase()
       );
     }
-    return String(answer) === String(decodedCorrect);
+    const normalizedCorrect = typeof decodedCorrect === 'number' && question.options?.[decodedCorrect]
+      ? (question.options[decodedCorrect] as any)?.id ?? decodedCorrect
+      : decodedCorrect;
+    return String(answer) === String(normalizedCorrect);
   };
 
   const handlePass = () => {
@@ -2268,7 +2519,9 @@ function Taker() {
     proceedToNext(updated);
   };
 
-  const finalizeQuiz = async (finalAnswers: any[]) => {
+  const finalizeQuiz = async (finalAnswers: any[], submissionReason: 'completion' | 'timeout' | 'self_submit' | 'violation' = 'completion') => {
+    const existingSnapshot = finalSubmissionSnapshotRef.current;
+    if (finalizingRef.current && existingSnapshot) return;
     if (finalizingRef.current) return;
     if (pendingResponseFileReadsRef.current.size > 0) {
       toast.error(
@@ -2276,37 +2529,86 @@ function Taker() {
       );
       return;
     }
-    if (!isLocalPreview && !navigator.onLine) {
-      setSubmissionFailed(true);
-      toast.error(
-        'You are offline. Check your internet connection and try submitting again.',
-      );
-      return;
+    const activeQuestion = activeQuestions[currentQuestion];
+    if (!existingSnapshot && activeQuestion && activeQuestion.type !== 'upload') {
+      const activeValue = activeQuestion.type === 'input'
+        ? (quiz?.quizScroll ? scrollAnswers[activeQuestion.id] : content)
+        : activeQuestion.type === 'checkbox'
+          ? (quiz?.quizScroll ? scrollAnswers[activeQuestion.id] : selectedOptions)
+          : (quiz?.quizScroll ? scrollAnswers[activeQuestion.id] : selectedOption);
+      const hasValue = Array.isArray(activeValue) ? activeValue.length > 0 : String(activeValue ?? '').trim() !== '';
+      if (hasValue) {
+        const answerRecord = { questionId: activeQuestion.id, answer: activeValue, correct: computeIsCorrect(activeQuestion.id, activeValue) };
+        finalAnswers = [...finalAnswers.filter((answer) => answer.questionId !== activeQuestion.id), answerRecord];
+      }
     }
     finalizingRef.current = true;
+    const frozenAnswers = existingSnapshot?.answers || structuredClone(finalAnswers);
+    const frozenUserData = existingSnapshot?.userData || structuredClone({
+      ...userData,
+      ...(isLoggedIn ? {
+        pingAuthEmail: user?.email || '',
+        pingAuthName: username || user?.user_metadata?.username || user?.email?.split('@')[0] || '',
+        pingAuthDisplayName: user?.user_metadata?.display_name || user?.user_metadata?.full_name || username || '',
+      } : {}),
+    });
+    const frozenQuestionIds = existingSnapshot?.questionIds || Array.from(new Set([
+      ...currentPathIds,
+      ...(activeQuestions[currentQuestion]?.id ? [activeQuestions[currentQuestion].id] : []),
+      ...finalAnswers.map((answer: any) => String(answer.questionId || '')).filter(Boolean),
+    ]));
+    const frozenReason = existingSnapshot?.reason || submissionReason;
+    const frozenBranchHistory = existingSnapshot?.branchHistory || structuredClone(branchHistory);
+    const frozenStartedAt = existingSnapshot?.startedAt || activeAttemptRef.current?.serverStartedAt || activeAttemptRef.current?.startedAt || new Date().toISOString();
+    const frozenPoints = calculateQuizPoints(activeQuestions, frozenAnswers, correctAnswersRef.current, quiz?.calculateAllBranches ? activeQuestions.map((question) => question.id) : frozenQuestionIds);
+    const frozenScore = existingSnapshot?.score ?? (quiz?.type === 'quiz' ? frozenPoints.earned : 0);
+    const frozenScorePossible = existingSnapshot?.scorePossible ?? frozenPoints.possible;
+    const frozenTotalQuestions = existingSnapshot?.totalQuestions ?? (quiz?.calculateAllBranches ? activeQuestions.length : frozenQuestionIds.length);
+    finalSubmissionSnapshotRef.current = { answers: frozenAnswers, userData: frozenUserData, questionIds: frozenQuestionIds, reason: frozenReason, score: frozenScore, scorePossible: frozenScorePossible, totalQuestions: frozenTotalQuestions, branchHistory: frozenBranchHistory, startedAt: frozenStartedAt };
+    if (finalizationScreenTimerRef.current) window.clearTimeout(finalizationScreenTimerRef.current);
+    finalizationScreenTimerRef.current = window.setTimeout(() => setShowSubmittingScreen(true), 1400);
     setSubmissionFailed(false);
     setIsSubmitting(true);
+    if (!isLocalPreview && quiz) {
+      const currentAttempt = activeAttemptRef.current;
+      if (currentAttempt?.attemptId) {
+        const retainedSnapshot = {
+          ...currentAttempt,
+          status: 'submitting',
+          answers: Object.fromEntries(frozenAnswers.map((answer: any) => [String(answer.questionId), answer])),
+          userData: frozenUserData,
+          visitedQuestionIds: frozenQuestionIds,
+          branchHistory: frozenBranchHistory,
+          finalSubmissionSnapshot: finalSubmissionSnapshotRef.current,
+        };
+        activeAttemptRef.current = retainedSnapshot;
+        try {
+          await HybridStorage.saveQuizAttemptDraft(quiz.id, retainedSnapshot);
+        } catch (error) {
+          console.error('[PublicQuizTaker] Could not persist final submission snapshot locally:', error);
+        }
+      }
+    }
     let submissionSucceeded = false;
 
     if (quiz) {
       try {
-        let answersToSubmit = finalAnswers;
-        const finalScore =
-          quiz.type === 'quiz' ?
-            weightedScore.earned
-          : 0;
+        if (!isLocalPreview && !navigator.onLine) throw new Error('You are offline. Your answers are locked. Reconnect, then retry the save.');
+        let answersToSubmit = frozenAnswers;
+        const finalScore = frozenScore;
 
         // Detect taker's accurate country & continent via geo-detector
         const clientGeo = detectClientGeo();
 
         // Sanitize & trim all participant details to preserve exact values
         const sanitizedUserData: Record<string, string> = {};
-        const authData =
-          isLoggedIn && !quiz.askDetails ?
-            { pingAuthEmail: user?.email, pingAuthName: username }
-          : {};
+        const authData = isLoggedIn ? {
+          pingAuthEmail: user?.email || '',
+          pingAuthName: username || user?.user_metadata?.username || user?.email?.split('@')[0] || '',
+          pingAuthDisplayName: user?.user_metadata?.display_name || user?.user_metadata?.full_name || username || '',
+        } : {};
 
-        Object.entries({ ...userData, ...authData }).forEach(([k, v]) => {
+        Object.entries({ ...frozenUserData, ...authData }).forEach(([k, v]) => {
           const cleanKey = k.trim();
           if (cleanKey) {
             sanitizedUserData[cleanKey] = String(v ?? '').trim();
@@ -2318,8 +2620,11 @@ function Taker() {
           if (attempt?.attemptId && attempt?.attemptToken) {
             const finalSnapshot =
               await HybridStorage.prepareQuizAttemptSnapshot(quiz.id, {
-                ...createAttemptSnapshot(finalAnswers),
-                status: 'in_progress',
+                ...createAttemptSnapshot(frozenAnswers, frozenUserData),
+                visitedQuestionIds: frozenQuestionIds,
+                branchHistory: frozenBranchHistory,
+                finalSubmissionSnapshot: finalSubmissionSnapshotRef.current,
+                status: 'submitting',
               });
             const attemptSaved = await syncAttemptSnapshot(finalSnapshot);
             if (!attemptSaved)
@@ -2337,14 +2642,18 @@ function Taker() {
               answers: answersToSubmit,
               score: finalScore,
               assessmentType: quiz.type,
+              submissionReason: frozenReason,
               categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
-              totalQuestions: finalAnswers.length,
-              scorePossible: weightedScore.possible,
-              answeredQuestions: finalAnswers.length,
+              totalQuestions: frozenTotalQuestions,
+              scorePossible: frozenScorePossible,
+              answeredQuestions: frozenAnswers.filter((answer) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length,
               country: clientGeo.country,
               continent: clientGeo.continent,
               timezone: clientGeo.timezone,
               submissionId: attempt?.attemptId,
+              visitedQuestionIds: frozenQuestionIds,
+              branchHistory: frozenBranchHistory,
+              startedAt: frozenStartedAt,
               attemptId: attempt?.attemptId,
               attemptToken: attempt?.attemptToken,
             },
@@ -2360,6 +2669,7 @@ function Taker() {
               'The server did not confirm saving your assessment. Please retry submission.',
             );
           submissionSucceeded = true;
+          if (typeof responseSaved.responseId === 'string') setSavedResponseId(responseSaved.responseId);
           if (!quiz.allowRetry) {
             try {
               localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
@@ -2374,6 +2684,7 @@ function Taker() {
             setScore(responseSaved.score);
             if (responseSaved.categoryScores)
               setServerCategoryScores(responseSaved.categoryScores);
+            if (typeof responseSaved.scorePossible === 'number') setScorePossible(responseSaved.scorePossible);
             if (attempt?.attemptId)
               await HybridStorage.deleteQuizAttemptDraft(quiz.id);
           }
@@ -2383,16 +2694,21 @@ function Taker() {
             id: `template_resp_${Date.now()}`,
             timestamp: new Date().toISOString(),
             score: finalScore,
-            totalQuestions: finalAnswers.length,
-            answeredQuestions: finalAnswers.length,
+              totalQuestions: frozenTotalQuestions,
+              answeredQuestions: frozenAnswers.filter((answer) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length,
             userData: sanitizedUserData,
             answers: answersToSubmit,
             country: clientGeo.country,
             continent: clientGeo.continent,
             timezone: clientGeo.timezone,
             assessmentType: quiz.type,
+            submissionReason: frozenReason,
+            branchHistory: frozenBranchHistory,
+            startedAt: frozenStartedAt,
             categoryScores: quiz.type === 'quiz' ? categoryScores : undefined,
           };
+          setScore(finalScore);
+          setScorePossible(frozenScorePossible);
           await HybridStorage.saveTemplatePreviewResponse(
             quiz.id,
             templateResp,
@@ -2412,6 +2728,7 @@ function Taker() {
         );
       }
     }
+    if (finalizationScreenTimerRef.current) window.clearTimeout(finalizationScreenTimerRef.current);
     setIsSubmitting(false);
     finalizingRef.current = false;
     if (submissionSucceeded) {
@@ -2420,6 +2737,8 @@ function Taker() {
       if (quiz?.endScreen?.enableConfetti)
         triggerConfetti(quiz.endScreen?.confettiType || 'standard');
       setIsFinished(true);
+    } else {
+      setShowSubmittingScreen(true);
     }
   };
 
@@ -2434,8 +2753,17 @@ function Taker() {
     const answersToSave = latestAnswers || userAnswers;
 
     const q = activeQuestions[currentQuestion];
+    if (q) setVisitedQuestionIds((previous) => Array.from(new Set([...previous, q.id])));
+    const addPathQuestions = (ids: string[]) => setVisitedQuestionIds((previous) => Array.from(new Set([...previous, ...(q ? [q.id] : []), ...ids])));
+    const recordBranch = (targetQuestionId: string | undefined, category: string | undefined, questionIds: string[]) => {
+      if (!q) return;
+      const ids = Array.from(new Set(questionIds.map(String)));
+      setBranchHistory((previous) => [...previous, { fromQuestionId: q.id, targetQuestionId, category, questionIds: ids, at: new Date().toISOString() }].slice(-200));
+    };
     let nextIdx = currentQuestion + 1;
-    const isScrollLayout = !!(quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form');
+    const isScrollLayout = !!(
+      quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form'
+    );
     const isScrollShow = quiz?.quizLayout === 'scroll_show';
 
     let didBranch = false;
@@ -2450,7 +2778,7 @@ function Taker() {
           (answer) => answer.questionId === q.id,
         )?.answer;
         const userText = String(
-          formatDetailVars(savedInput ?? content ?? '', false, true),
+          formatDetailVars(savedInput ?? content ?? ''),
         ).trim();
         if (q.inputBranchRules && q.inputBranchRules.length > 0) {
           const matchedRule = q.inputBranchRules.find((rule) => {
@@ -2504,13 +2832,15 @@ function Taker() {
           });
 
           if (foundOpt && typeof foundOpt === 'object') {
-            const conditionPassed = !foundOpt.branchCondition || evaluateQuizCondition(foundOpt.branchCondition, {
-              userData,
-              userAnswers: answersToSave,
-              questions: activeQuestions,
-              score: weightedScore.earned,
-              totalQuestions: answersToSave.length,
-            });
+            const conditionPassed =
+              !foundOpt.branchCondition ||
+              evaluateQuizCondition(foundOpt.branchCondition, {
+                userData,
+                userAnswers: answersToSave,
+                questions: activeQuestions,
+                score: weightedScore.earned,
+                totalQuestions: answersToSave.length,
+              });
             if (foundOpt.branchCondition) skipQuestionFallback = true;
             if (conditionPassed) {
               if (foundOpt.skipTo) branchTarget = foundOpt.skipTo;
@@ -2576,6 +2906,13 @@ function Taker() {
           (quest) => quest.id === branchTarget,
         );
         if (targetIdx !== -1) {
+          const target = activeQuestions[targetIdx];
+          addPathQuestions(target.category?.trim()
+            ? activeQuestions.filter((question) => question.category?.trim().toLowerCase() === target.category!.trim().toLowerCase()).map((question) => question.id)
+            : [target.id]);
+          recordBranch(target.id, target.category?.trim() || undefined, target.category?.trim()
+            ? activeQuestions.filter((question) => question.category?.trim().toLowerCase() === target.category!.trim().toLowerCase()).map((question) => question.id)
+            : [target.id]);
           const targetQId = activeQuestions[targetIdx]?.id;
           const visits = branchVisitCounts[targetQId] || 0;
           if (visits >= 3) {
@@ -2592,6 +2929,9 @@ function Taker() {
       } else if (branchCat) {
         didBranch = true;
         const cleanCat = branchCat.trim().toLowerCase();
+        const categoryQuestionIds = activeQuestions.filter((question) => question.category?.trim().toLowerCase() === cleanCat).map((question) => question.id);
+        addPathQuestions(categoryQuestionIds);
+        recordBranch(undefined, branchCat.trim(), categoryQuestionIds);
         const targetIdx = activeQuestions.findIndex(
           (quest) =>
             quest.category && quest.category.trim().toLowerCase() === cleanCat,
@@ -2664,7 +3004,11 @@ function Taker() {
           setScrollBranchQuestionIds([nextQuestion.id]);
         } else {
           const root = scrollBranchRootIndex ?? 0;
-          setScrollBranchQuestionIds(activeQuestions.slice(root, nextIdx + 1).map((question) => question.id));
+          setScrollBranchQuestionIds(
+            activeQuestions
+              .slice(root, nextIdx + 1)
+              .map((question) => question.id),
+          );
         }
       }
     }
@@ -2677,6 +3021,7 @@ function Taker() {
     }
 
     if (quiz && nextIdx < activeQuestions.length) {
+      setVisitedQuestionIds((previous) => Array.from(new Set([...previous, ...(q ? [q.id] : []), nextQ.id])));
       setNavigationHistory((prev) => [...prev, currentQuestion]);
       setCurrentQuestion(nextIdx);
       setSelectedOption(null);
@@ -2704,8 +3049,6 @@ function Taker() {
   // Dynamic variable mention & cross-question piping engine
   const formatDetailVars = (
     rawText: string,
-    _showPrev?: boolean,
-    _hideBold?: boolean,
     contextOverride?: Record<string, any>,
   ) => {
     if (!rawText) return rawText;
@@ -2792,8 +3135,11 @@ function Taker() {
                     const posInStack = inStack.findIndex(
                       (item) => item.id === quest.id,
                     );
-                    return quiz?.quizLayout === 'scroll' || quiz?.surveyType === 'form'
-                      ? index + 1
+                    return (
+                        quiz?.quizLayout === 'scroll' ||
+                          quiz?.surveyType === 'form'
+                      ) ?
+                        index + 1
                       : Math.max(0, posInStack) + 1;
                   })()}
                   .
@@ -2832,7 +3178,8 @@ function Taker() {
                       const posInStack = inStack.findIndex(
                         (item) => item.id === quest.id,
                       );
-                      const stackTotal = inStack.length || activeQuestions.length;
+                      const stackTotal =
+                        inStack.length || activeQuestions.length;
                       return `Question ${Math.max(0, posInStack) + 1} of ${stackTotal}${quest.category ? ` · ${quest.category}` : ''}`;
                     })()}
                   </span>
@@ -2844,6 +3191,26 @@ function Taker() {
               </div>
             }
           </div>
+
+          {quest.imageUrl && (
+            <button
+              type='button'
+              aria-label='View question image'
+              onContextMenu={(event) => event.preventDefault()}
+              onClick={() => openFile({ src: quest.imageUrl!, name: 'Question image', mimeType: 'image/webp', canDownload: false })}
+              className='mb-3 block w-full cursor-zoom-in select-none text-left'>
+              <Image
+                width={1200}
+                height={900}
+                unoptimized
+                draggable={false}
+                onContextMenu={(event) => event.preventDefault()}
+                src={quest.imageUrl}
+                alt='Image for this question'
+                className='mx-auto h-auto max-h-[42dvh] w-auto max-w-full rounded-xl border border-white/10 object-contain pointer-events-none select-none'
+              />
+            </button>
+          )}
 
           <div className='space-y-2'>
             {quest.type === 'input' ?
@@ -2863,11 +3230,11 @@ function Taker() {
                     let updated;
                     if (existingIdx > -1) {
                       updated = [...userAnswers];
-                      updated[existingIdx] = {
+                      updated[existingIdx] = keepAnswerRevision(userAnswers[existingIdx], {
                         questionId: quest.id,
                         answer: e.target.value,
                         correct,
-                      };
+                      });
                     } else {
                       updated = [
                         ...userAnswers,
@@ -3019,10 +3386,10 @@ function Taker() {
               <div className='space-y-2 p-2 bg-white/5 border border-dashed bkblur border-white/20 rounded-3xl text-left'>
                 {quest.uploadInstruction && (
                   <p className='text-xs text-pw-cyan font-semibold mb-2 bg-pw-cyan/5 p-1.5 rounded-2xl border border-pw-cyan/10'>
-                    ℹ {formatDetailVars(quest.uploadInstruction)}
+                    {formatDetailVars(quest.uploadInstruction)}
                   </p>
                 )}
-                <p className='text-[10px] text-pw-muted px-1 pt-1.5'>
+                <p className='text-[10px] text-pw-muted px-1 pt-0.5'>
                   Expected file type:{' '}
                   {describeAcceptedFiles(
                     quest.allowedTypes ||
@@ -3058,10 +3425,10 @@ function Taker() {
                         );
                         return;
                       }
-
-                      pendingResponseFileReadsRef.current.add(quest.id);
-                      setIsPreparingResponseFile(true);
                       void (async () => {
+                        
+                                              pendingResponseFileReadsRef.current.add(quest.id);
+                                              setIsPreparingResponseFile(true);
                         try {
                           const optimizedFile =
                             await optimizeImageForStorage(file);
@@ -3178,8 +3545,11 @@ function Taker() {
                       /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
                         attached?.fileName || '',
                       );
+                    const mediaType = String(attached?.fileType || '').toLowerCase();
+                    const isVideo = mediaType.startsWith('video/') || attachedUrl.startsWith('data:video/') || /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/i.test(attached?.fileName || '');
+                    const isAudio = mediaType.startsWith('audio/') || attachedUrl.startsWith('data:audio/') || /\.(mp3|wav|m4a|aac|ogg|flac)(?:[?#]|$)/i.test(attached?.fileName || '');
                     return (
-                      <div className='mt-2 space-y-1'>
+                      <div className='mt-2 space-y-2 rounded-xl border border-white/10 bg-white/5 p-2'>
                         {isImage && (
                           <button
                             type='button'
@@ -3188,32 +3558,62 @@ function Taker() {
                                 src: attachedUrl,
                                 name: attached?.fileName || 'Uploaded answer',
                                 mimeType: attached?.fileType,
-                                canEdit: (attached?.fileType || '').startsWith('image/'),
-                                onEditSave: (editedFile) => new Promise<void>((resolve, reject) => {
-                                  const reader = new FileReader();
-                                  reader.onerror = () => reject(new Error('Could not read the edited image.'));
-                                  reader.onload = () => {
-                                    const packedUrl = packPingWorldMediaUrl(String(reader.result));
-                                    const updated = userAnswers.map((answer) => answer.questionId === quest.id ? { ...answer, fileName: editedFile.name, fileType: editedFile.type, fileUrl: packedUrl } : answer);
-                                    setUserAnswers(updated);
-                                    if (quiz?.quizScroll) setScrollAnswers((previous) => ({ ...previous, [quest.id]: packedUrl }));
-                                    else setContent(packedUrl);
-                                    resolve();
-                                  };
-                                  reader.readAsDataURL(editedFile);
-                                }),
+                                canEdit: (attached?.fileType || '').startsWith(
+                                  'image/',
+                                ),
+                                onEditSave: (editedFile) =>
+                                  new Promise<void>((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onerror = () =>
+                                      reject(
+                                        new Error(
+                                          'Could not read the edited image.',
+                                        ),
+                                      );
+                                    reader.onload = () => {
+                                      const packedUrl = packPingWorldMediaUrl(
+                                        String(reader.result),
+                                      );
+                                      const updated = userAnswers.map(
+                                        (answer) =>
+                                          answer.questionId === quest.id ?
+                                            {
+                                              ...answer,
+                                              fileName: editedFile.name,
+                                              fileType: editedFile.type,
+                                              fileUrl: packedUrl,
+                                            }
+                                          : answer,
+                                      );
+                                      setUserAnswers(updated);
+                                      if (quiz?.quizScroll)
+                                        setScrollAnswers((previous) => ({
+                                          ...previous,
+                                          [quest.id]: packedUrl,
+                                        }));
+                                      else setContent(packedUrl);
+                                      resolve();
+                                    };
+                                    reader.readAsDataURL(editedFile);
+                                  }),
                               })
                             }
                             className='block w-full cursor-zoom-in text-left'>
                             <Image
+                              width={800}
+                              height={600}
+                              unoptimized
                               src={attachedUrl}
                               alt={
                                 attached?.fileName || 'Uploaded answer preview'
                               }
-                              className='max-h-48 max-w-full rounded-xl border border-white/10 object-contain'
+                              className='h-auto max-h-56 w-auto max-w-full rounded-xl border border-white/10 object-contain'
                             />
                           </button>
                         )}
+                        {isVideo && <video src={attachedUrl} controls playsInline preload='metadata' className='mx-auto max-h-56 w-full max-w-xl rounded-xl bg-black object-contain' />}
+                        {isAudio && <audio src={attachedUrl} controls preload='metadata' className='w-full' />}
+                        {!isImage && !isVideo && !isAudio && <div className='flex items-center gap-2 rounded-lg bg-black/20 p-3 text-xs text-pw-text'><FileText className='h-5 w-5 shrink-0 text-pw-cyan' /><div className='min-w-0'><p className='truncate font-semibold'>{attached?.fileName || 'Attached file'}</p><p className='text-[10px] text-pw-muted'>{attached?.fileType || 'File ready to preview'}</p></div></div>}
                         <button
                           type='button'
                           onClick={() =>
@@ -3255,21 +3655,29 @@ function Taker() {
                     quest.id === q?.id;
                   let feedbackClasses =
                     isSelected ?
-                      'bg-pw-primary/12 border-pw-primary text-white font-bold'
+                      'bg-pw-primary/10 border-pw-primary text-white font-bold'
                     : 'bg-white/5 border-white/10 text-white/90';
 
                   if (isFeedbackMode) {
                     const decodedCorrect = decodeStoredCorrectAnswer(
-                      quest.correctIndex,
+                      correctAnswersRef.current[quest.id],
                     );
-                    const hasCorrectIndex = decodedCorrect !== null && decodedCorrect !== undefined && decodedCorrect !== '' && !(Array.isArray(decodedCorrect) && decodedCorrect.length === 0);
-                    const isCorrectOpt = hasCorrectIndex && (
-                      Array.isArray(decodedCorrect) ?
+                    const hasCorrectIndex =
+                      decodedCorrect !== null &&
+                      decodedCorrect !== undefined &&
+                      decodedCorrect !== '' &&
+                      !(
+                        Array.isArray(decodedCorrect) &&
+                        decodedCorrect.length === 0
+                      );
+                    const isCorrectOpt =
+                      hasCorrectIndex &&
+                      (Array.isArray(decodedCorrect) ?
                         decodedCorrect.includes(optId)
                       : String(decodedCorrect) === optId ||
                         String(decodedCorrect) === String(oIdx));
 
-                    if (isSelected) {
+                    if (isSelected && hasCorrectIndex) {
                       feedbackClasses =
                         isCorrectOpt ?
                           'bg-pw-success/20 border-pw-success text-pw-success font-bold shadow-lg shadow-pw-success/10'
@@ -3308,11 +3716,11 @@ function Taker() {
                           let updated;
                           if (existingIdx > -1) {
                             updated = [...userAnswers];
-                            updated[existingIdx] = {
+                            updated[existingIdx] = keepAnswerRevision(userAnswers[existingIdx], {
                               questionId: quest.id,
                               answer: val,
                               correct,
-                            };
+                            });
                           } else {
                             updated = [
                               ...userAnswers,
@@ -3342,7 +3750,10 @@ function Taker() {
                           optImage ? 'flex-col sm:flex-row' : 'flex-row',
                         )}>
                         {optImage && (
-                          <Image
+                        <Image
+                            width={800}
+                            height={600}
+                            unoptimized
                             src={optImage}
                             alt='Option attachment'
                             onClick={(e) => {
@@ -3353,7 +3764,7 @@ function Taker() {
                                 kind: 'image',
                               });
                             }}
-                            className='h-16 w-16 object-cover rounded-lg border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                            className='h-auto max-h-32 w-auto max-w-full rounded-lg border border-white/10 object-contain shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
                           />
                         )}
                         <span
@@ -3364,14 +3775,13 @@ function Taker() {
                         />
                       </div>
 
-                      <CheckCircle
-                        className={cn(
-                          'h-4 w-4 transition-all shrink-0',
-                          isSelected ?
-                            'text-pw-primary w-4.5 h-4.5'
-                          : 'text-pw-muted',
-                        )}
-                      />
+                      {quest.type === 'checkbox' ? (
+                        <span aria-hidden='true' className={cn('h-4 w-4 shrink-0 rounded-[3px] border flex items-center justify-center transition-colors', isSelected ? 'bg-pw-primary border-pw-primary text-white' : 'border-white/40')}>
+                          {isSelected && <Check className='h-3 w-3' />}
+                        </span>
+                      ) : (
+                        <CheckCircle className={cn('h-4 w-4 transition-all shrink-0', isSelected ? 'w-4.5 h-4.5' : '')} />
+                      )}
                     </button>
                   );
                 })}
@@ -3392,9 +3802,9 @@ function Taker() {
                     );
                     const optExp = selOptObj?.explanation;
                     return optExp ?
-                        <div className='p-2.5 rounded-xl bg-pw-cyan/10 border border-pw-cyan/20 text-pw-cyan/90 italic whitespace-pre-wrap flex items-start gap-2'>
-                          <span className='font-bold not-italic shrink-0'>
-                            ℹ Option Note:
+                        <div className='p-2 rounded-xl bg-pw-cyan/5 border border-pw-cyan/15 text-pw-cyan/90 whitespace-pre-wrap flex items-start gap-1 flex-col'>
+                          <span className='font-bold italic shrink-0 flex gap-1 items-center'>
+                            Option Tip:
                           </span>
                           <span
                             dangerouslySetInnerHTML={{
@@ -3405,24 +3815,56 @@ function Taker() {
                       : null;
                   })()}
 
-                  {(quest.correctExplanation || (() => {
-                    const decoded = decodeStoredCorrectAnswer(quest.correctIndex);
-                    const correctIds = Array.isArray(decoded) ? decoded : [decoded];
-                    return currentOptions.find((option: any, index: number) => correctIds.some((id) => String(id) === String(option?.id || index) || String(id) === String(index)))?.explanation;
-                  })()) && (
-                    <div className='p-2 rounded-xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary/90 italic whitespace-pre-wrap flex items-start gap-2'>
-                      <span className='font-bold not-italic shrink-0'>
-                        💡 Explanation:
+              {((quest.correctExplanation && quiz?.correctOptionDes === 'in-question') ||
+                    (() => {
+                      const decoded = decodeStoredCorrectAnswer(
+                        correctAnswersRef.current[quest.id],
+                      );
+                      const correctIds =
+                        Array.isArray(decoded) ? decoded : [decoded];
+                      return currentOptions.find((option: any, index: number) =>
+                        correctIds.some(
+                          (id) =>
+                            String(id) === String(option?.id || index) ||
+                            String(id) === String(index),
+                        ),
+                      )?.explanation;
+                    })()) && (
+                    <div className='p-2 rounded-xl bg-pw-surface/10 border border-pw-muted/20 text-white/90 whitespace-pre-wrap flex items-start gap-1 flex-col'>
+                      <span className='font-bold italic shrink-0 flex items-center gap-1'>
+                        <BookOpen className='w-4 h-4' /> Explanation:
                       </span>
                       <span
+                        className={cn(!expandedQuestionExplanationIds[quest.id] && 'line-clamp-4')}
                         dangerouslySetInnerHTML={{
-                          __html: formatDetailVars(quest.correctExplanation || (() => {
-                            const decoded = decodeStoredCorrectAnswer(quest.correctIndex);
-                            const correctIds = Array.isArray(decoded) ? decoded : [decoded];
-                            return currentOptions.find((option: any, index: number) => correctIds.some((id) => String(id) === String(option?.id || index) || String(id) === String(index)))?.explanation || '';
-                          })()),
+                          __html: formatDetailVars(
+                            quest.correctExplanation ||
+                              (() => {
+                                const decoded = decodeStoredCorrectAnswer(
+                                  correctAnswersRef.current[quest.id],
+                                );
+                                const correctIds =
+                                  Array.isArray(decoded) ? decoded : [decoded];
+                                return (
+                                  currentOptions.find(
+                                    (option: any, index: number) =>
+                                      correctIds.some(
+                                        (id) =>
+                                          String(id) ===
+                                            String(option?.id || index) ||
+                                          String(id) === String(index),
+                                      ),
+                                  )?.explanation || ''
+                                );
+                              })(),
+                          ),
                         }}
                       />
+                      {(String(quest.correctExplanation || '').length > 180 || currentOptions.some((option: any) => String(option?.explanation || '').length > 180)) && (
+                        <button type='button' aria-expanded={Boolean(expandedQuestionExplanationIds[quest.id])} onClick={() => setExpandedQuestionExplanationIds((current) => ({ ...current, [quest.id]: !current[quest.id] }))} className='text-[11px] font-semibold text-pw-cyan hover:underline'>
+                          {expandedQuestionExplanationIds[quest.id] ? 'Read less' : 'Read more'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3449,6 +3891,11 @@ function Taker() {
         </h2>
       </motion.div>
     );
+  }
+
+  if (showSubmittingScreen && !isFinished) {
+    const retrySnapshot = finalSubmissionSnapshotRef.current;
+    return <div className='flex min-h-[100dvh] items-center justify-center bg-[#0A0C1B] p-5 text-white'><Card className='w-full max-w-md space-y-4 border-white/10 bg-pw-surface/80 p-6 text-center'><div className='mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-pw-primary/10'>{submissionFailed ? <AlertTriangle className='h-7 w-7 text-pw-warning' /> : <LoaderCircle className='h-7 w-7 animate-spin text-pw-primary' />}</div><h1 className='text-xl font-bold'>{submissionFailed ? 'Could not save your response' : 'Saving your response'}</h1><p className='text-sm text-pw-muted'>{submissionFailed ? (isOnline ? 'Your answers are locked and still available here. Check your connection, then retry the save.' : 'You are offline. Your answers are locked and will not change. Reconnect, then retry the save.') : 'Please keep this page open while we securely save your answers.'}</p>{submissionFailed && retrySnapshot && <Button onClick={() => { void finalizeQuiz(retrySnapshot.answers, retrySnapshot.reason); }} disabled={isSubmitting} className='btn-primary w-full'>{isSubmitting ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Saving…</> : 'Retry save'}</Button>}</Card></div>;
   }
 
   if (isOfflineUncached) {
@@ -3635,18 +4082,15 @@ function Taker() {
   }
 
   if (isFinished) {
-    const totalQuestions = userAnswers.length;
+    const totalQuestions = finalSubmissionSnapshotRef.current?.totalQuestions ?? (quiz?.calculateAllBranches ? activeQuestions.length : currentPathIds.length);
+    const attemptedCount = userAnswers.filter((answer) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length;
     const endTitle = formatDetailVars(
       quiz?.endScreen?.title || 'Assessment Completed!',
-      false,
-      false,
       detailContext(),
     );
     const endMsg = formatDetailVars(
       quiz?.endScreen?.message.trim() ||
         'Thank you for completing this assessment, @name! You scored @score out of @total (@percentage).',
-      false,
-      false,
       detailContext(),
     );
 
@@ -3654,6 +4098,18 @@ function Taker() {
       <div
         key='completion-view'
         className='quiz-taker-font relative h-[100dvh] w-full bg-[#0A0C1B] text-white flex items-center justify-center p-5 overflow-hidden'>
+        <div
+          className={cn(
+            'w-55 sm:w-65 h-55 sm:h-65 rounded-full bg-pw-cyan/20 blur-3xl absolute top-[-60px] left-[-60px] z-1',
+          )}
+        />
+
+        <div
+          className={cn(
+            'w-55 sm:w-65 h-55 sm:h-65 rounded-full bg-pw-primary/20 blur-3xl absolute bottom-[-60px] right-[-60px] z-1',
+          )}
+        />
+
         {quiz?.fromPremium && (
           <>
             {quiz?.branding?.shadeColor && (
@@ -3683,24 +4139,24 @@ function Taker() {
 
         <div
           className={cn(
-            'max-w-md w-full space-y-1 relative z-10 text-center max-h-screen overflow-hidden',
+            'max-w-xl w-full space-y-1 z-10 text-center max-h-screen overflow-hidden relative',
             quiz?.endScreen?.textAlign === 'center' && 'text-center',
             quiz?.endScreen?.textAlign === 'left' && 'text-left',
             quiz?.endScreen?.textAlign === 'right' && 'text-right',
           )}>
-          <div className='flex flex-col item-center sticky top-1 z-50 space-y-2 bg-[#0A0C1B]/80 bkblur w-full h-fit p-2 pt-5'>
+          <div className='flex flex-col item-center sticky top-1 z-50 space-y-2 w-full h-fit p-1 pt-6'>
             <div
               className={cn(
-                'w-20 h-20 rounded-full flex items-center justify-center border mb-3',
+                'w-20 h-20 rounded-full flex items-center justify-center border mb-3 animation-fade-in-up stagger-6 shadow-lg',
                 quiz?.endScreen?.textAlign === 'left' ? 'ml-0 mr-auto'
                 : quiz?.endScreen?.textAlign === 'right' ? 'ml-auto mr-0'
                 : 'mx-auto',
                 quiz?.endScreen?.completionIcon === 'diamond' &&
-                  'bg-pw-success/10 border-pw-success/20',
+                  'bg-pw-success/10 border-pw-success/20 shadow-pw-success/10',
                 quiz?.endScreen?.completionIcon === 'badge' &&
-                  'bg-pw-primary/10 border-pw-primary/20',
+                  'bg-pw-primary/10 border-pw-primary/20 shadow-pw-primary/10',
                 quiz?.endScreen?.completionIcon === 'trophy' &&
-                  'bg-pw-warning/10 border-pw-warning/20',
+                  'bg-pw-warning/10 border-pw-warning/20 shadow-pw-warning/10',
               )}>
               {quiz?.endScreen?.completionIcon === 'diamond' ?
                 <Diamond className='h-12 w-12 text-pw-success' />
@@ -3711,7 +4167,7 @@ function Taker() {
               : <CheckCircle className='h-12 w-12 text-pw-success' />}
             </div>
             <h1
-              className='text-lg font-extrabold font-display whitespace-pre-wrap'
+              className='text-xl font-extrabold font-display whitespace-pre-wrap'
               dangerouslySetInnerHTML={{ __html: endTitle }}
             />
             <div className='relative'>
@@ -3734,12 +4190,14 @@ function Taker() {
               )}
             </div>
 
-            <div className='divider mt-3 sm:hidden' />
+            <div className='divider mt-2 sm:hidden' />
           </div>
 
-          <div className='block space-y-2 w-full h-fit max-h-[48dvh] overflow-y-auto no-scrollbar relative'>
+          <div
+            className='block space-y-1 w-full h-fit max-h-[45dvh] overflow-y-auto no-scrollbayr custokm-scrollbar mb-1 relative'
+            id='bottom-completion'>
             {quiz?.type === 'quiz' && quiz?.endScreen.showPerformance && (
-              <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:backdrop-blur-lg sm:border sm:border-white/5 sm:rounded-2xl space-y-4 mt-4 text-left'>
+              <Card className='p-2 sm:p-6 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:backdrop-blur-lg sm:border sm:border-white/5 sm:rounded-2xl space-y-2 mt-4 text-left'>
                 <div
                   className='text-center'
                   id='total-score'>
@@ -3747,7 +4205,10 @@ function Taker() {
                     TOTAL OVERALL SCORE
                   </span>
                   <span className='text-3xl font-bold font-mono text-pw-primary'>
-                    {score} / {totalQuestions}
+                    {score} / {scorePossible || weightedScore.possible}
+                  </span>
+                  <span className='mt-1 block text-xs text-pw-muted tracking-wide'>
+                    Attempted {attemptedCount} of {totalQuestions} questions
                   </span>
                 </div>
 
@@ -3769,7 +4230,9 @@ function Taker() {
                         ).length;
 
                         return (
-                          <div className='border-t border-white/5 pt-3 space-y-1.5'>
+                          <div className='space-y-1.5'>
+                            <div className='divider mb-3 sm:hidden' />
+
                             <div className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
                               <span className='font-bold text-white'>
                                 Other Questions ({independentQs.length})
@@ -3784,46 +4247,46 @@ function Taker() {
 
                       {/* Group / Category Questions Score Breakdown */}
 
-                      <div className='border-t border-white/5 pt-3 space-y-2'>
-                        <span className='text-[10px] text-pw-primary uppercase font-bold tracking-widest block'>
-                          Category Scores
-                        </span>
+                      <div className='space-y-1.5'>
+                        <div className='divider mb-4 sm:hidden' />
 
-                        {Object.entries(categoryScores).map(
-                          ([cat, stats], idx) => (
+                        <p
+                          className='text-[10px] text-pw-primary uppercase font-bold tracking-widest flex items-center gap-1 justify-between mb-1'
+                          onClick={() => setOpenCat(!openCat)}>
+                          <span>Category Scores</span>{' '}
+                          <div className=' p-1 text-pw-primary bg-transparent cursor-pointer flex items-center gap-1'>
+                            {Object.entries(categoryScores).length > 3 && (
+                              <>
+                                <span>
+                                  ({Object.entries(categoryScores).length})
+                                </span>
+                                {openCat ?
+                                  <ChevronDown className='w-4 h-4' />
+                                : <ChevronLeft className='w-4 h-4' />}
+                              </>
+                            )}
+                          </div>
+                        </p>
+
+                        {Object.entries(categoryScores)
+                          .slice(0, !openCat ? 3 : undefined)
+                          .map(([cat, stats], idx) => (
                             <div
                               key={cat + idx}
-                              className='flex items-center justify-between text-xs p-2 bg-white/5 rounded-xl bkblur'>
-                              <span className='font-bold text-white'>
-                                📁 {capFirst(cat)} ({stats.total})
+                              className='flex items-center justify-between flex-wrap text-xs p-2 bg-white/5 rounded-xl bkblur'>
+                              <span className='font-bold text-white flex gap-1 items-center truncate'>
+                                <Folder className='w-3 h-3 text-pw-primary' />{' '}
+                                {capFirst(cat)} ({stats.total})
                               </span>
                               <span className='font-mono text-pw-primary font-bold'>
                                 {stats.correct} / {stats.total}
                               </span>
                             </div>
-                          ),
-                        )}
+                          ))}
                       </div>
                     </>
                   )}
               </Card>
-            )}
-
-            {quiz?.correctOptionDes === 'in-result' &&
-              activeQuestions.some(
-                (q) =>
-                  q.correctExplanation ||
-                  (q.options as any[])?.some((o: any) => o.explanation),
-              ) && userAnswers.length > 2 && !document.getElementById('total-score')?.checkVisibility() && (
-              <Button className={'absolute bottom-1 right-1 w-11 h-11 p-1 flex items-center rounded-full shadow-md shadow-pw-primary/40 bg-pw-surface/80 bkblur hover:shadow-lg'} onClick={() => {
-                document.getElementById('total-score')?.scrollIntoView();
-              }}>
-                <ChevronUp className='w-4 h-4 text-white'/>
-              </Button>
-              )}
-            
-            {quiz?.type === 'quiz' && (
-              <div className='divider my-4 sm:hidden' />
             )}
 
             {/* Per-question explanation review */}
@@ -3836,314 +4299,448 @@ function Taker() {
                   (q.options as any[])?.some((o: any) => o.explanation),
               ) &&
               userAnswers.length > 0 && (
-                <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left h-fit'>
-                  <span className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block'>
-                    Question Review & Explanations
-                  </span>
-                  {activeQuestions.map((q, qi) => {
-                    const ans = userAnswers.find((a) => a.questionId === q.id);
-                    const opts = (q.options as any[]) || [];
-                    const userAnswerText =
-                      ans ?
-                        Array.isArray(ans.answer) ?
-                          ans.answer
-                            .map(
-                              (id: string) =>
-                                opts.find((o: any) => o.id === id)?.text || id,
+                <>
+                  <div className='divider my-4 sm:hidden' />
+
+                  <Card className='p-2 sm:p-5 bg-transparent ring-0 sm:bg-white/[0.02] sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-3 mt-4 text-left h-fit'>
+                    <p className='text-[10px] text-pw-muted uppercase font-bold tracking-widest block flex flex-wrap gap-1 justify-between items-center text-pw-cyan'>
+                      <span>Question Review & Explanations</span>{' '}
+                      <button
+                        className='px-1 bg-transparent text-xs border-none hover:underline cursor-pointer'
+                        onClick={() => setOpenReview(!openReview)}>
+                        {openReview ? 'Close' : 'View'}{' '}
+                      </button>
+                    </p>
+
+                    {openReview &&
+                      activeQuestions.map((q, qi) => {
+                        const ans = userAnswers.find(
+                          (a) => a.questionId === q.id,
+                        );
+                        const opts = (q.options as any[]) || [];
+                        const userAnswerText =
+                          ans ?
+                            Array.isArray(ans.answer) ?
+                              ans.answer
+                                .map(
+                                  (id: string) =>
+                                    opts.find((o: any) => o.id === id)?.text ||
+                                    id,
+                                )
+                                .join(', ')
+                            : opts.find((o: any) => o.id === ans.answer)
+                                ?.text || String(ans.answer)
+                          : '(No answer)';
+                        const selOpt =
+                          !Array.isArray(ans?.answer) ?
+                            opts.find((o: any) => o.id === ans?.answer)
+                          : null;
+
+                        // Option image for selected answer
+                        const rawSelOptImg =
+                          selOpt?.uploadUrl ||
+                          (typeof selOpt?.imageUrl === 'string' ?
+                            selOpt.imageUrl
+                          : selOpt?.imageUrl?.url);
+                        const selOptImgUrl =
+                          rawSelOptImg ?
+                            unpackPingWorldMediaUrl(rawSelOptImg).url
+                          : undefined;
+
+                        // Question image if present
+                        const rawQImg =
+                          (q as any)?.uploadUrl ||
+                          (typeof (q as any)?.imageUrl === 'string' ?
+                            (q as any).imageUrl
+                          : (q as any)?.imageUrl?.url) ||
+                          (q as any)?.image;
+                        const qImgUrl =
+                          rawQImg ?
+                            unpackPingWorldMediaUrl(rawQImg).url
+                          : undefined;
+
+                        // DecodedCorrectIndex:
+                        const decodedIndex = decodeStoredCorrectAnswer(
+                          correctAnswersRef.current[q.id],
+                        );
+                        const hasCorrectIndex =
+                          decodedIndex !== null &&
+                          decodedIndex !== undefined &&
+                          decodedIndex !== '' &&
+                          !(
+                            Array.isArray(decodedIndex) &&
+                            decodedIndex.length === 0
+                          );
+                        const correctOpt =
+                          hasCorrectIndex ?
+                            opts.find(
+                              (o: any, oI: number) =>
+                                o.id === decodedIndex ||
+                                String(oI) === String(decodedIndex) ||
+                                o.text === decodedIndex,
                             )
-                            .join(', ')
-                        : opts.find((o: any) => o.id === ans.answer)?.text ||
-                          String(ans.answer)
-                      : '(No answer)';
-                    const selOpt =
-                      !Array.isArray(ans?.answer) ?
-                        opts.find((o: any) => o.id === ans?.answer)
-                      : null;
+                          : undefined;
 
-                    // Option image for selected answer
-                    const rawSelOptImg =
-                      selOpt?.uploadUrl ||
-                      (typeof selOpt?.imageUrl === 'string' ?
-                        selOpt.imageUrl
-                      : selOpt?.imageUrl?.url);
-                    const selOptImgUrl =
-                      rawSelOptImg ?
-                        unpackPingWorldMediaUrl(rawSelOptImg).url
-                      : undefined;
-
-                    // Question image if present
-                    const rawQImg =
-                      (q as any)?.uploadUrl ||
-                      (typeof (q as any)?.imageUrl === 'string' ?
-                        (q as any).imageUrl
-                      : (q as any)?.imageUrl?.url) ||
-                      (q as any)?.image;
-                    const qImgUrl =
-                      rawQImg ?
-                        unpackPingWorldMediaUrl(rawQImg).url
-                      : undefined;
-
-                    // DecodedCorrectIndex:
-                    const decodedIndex = decodeStoredCorrectAnswer(
-                      q.correctIndex,
-                    );
-                    const hasCorrectIndex = decodedIndex !== null && decodedIndex !== undefined && decodedIndex !== '' && !(Array.isArray(decodedIndex) && decodedIndex.length === 0);
-                    const correctOpt = hasCorrectIndex ? opts.find(
-                      (o: any, oI: number) =>
-                        o.id === decodedIndex ||
-                        String(oI) === String(decodedIndex) ||
-                        o.text === decodedIndex,
-                    ) : undefined;
-
-                    return (
-                      <div
-                        key={q.id}
-                        className={cn(
-                          'p-2 sm:p-3 rounded-xl border text-xs space-y-1.5 bkblur',
-                          ans?.correct === true ?
-                            'bg-pw-success/5 border-pw-success/20'
-                          : ans?.correct === false ? 'bg-pw-danger/5 border-pw-danger/20' : 'bg-white/5 border-white/10',
-                        )}>
-                        <div
-                          className={cn(
-                            'flex items-start gap-2',
-                            q.category?.trim() && 'flex-col',
-                          )}>
-                          <span
+                        return (
+                          <div
+                            key={q.id}
                             className={cn(
-                              'font-bold shrink-0',
-                              ans?.correct === true ? 'text-pw-success' : ans?.correct === false ? (
-                                'text-pw-danger'
-                              ) : 'text-pw-muted',
+                              'p-2.5 sm:p-3.5 rounded-xl border text-xs space-y-1.5 bkblur',
+                              ans?.correct === true ?
+                                'bg-pw-success/5 border-pw-success/20'
+                              : ans?.correct === false ?
+                                'bg-pw-danger/5 border-pw-danger/20'
+                              : 'bg-white/5 border-white/10',
                             )}>
-                            {ans?.correct === true ? '✓' : ans?.correct === false ? '✗' : '•'}{' '}
-                        {`Q${qi + 1}${q.category ? ` (${q.category})` : ''}`}
-                          </span>
-                          <span
-                            className='text-white/80 whitespace-pre-wrap'
-                            dangerouslySetInnerHTML={{
-                              __html: formatDetailVars(q.text),
-                            }}
-                          />
-                        </div>
+                            <div
+                              className={cn(
+                                'flex items-start gap-1',
+                                q.category?.trim() && 'flex-col',
+                              )}>
+                              <span
+                                className={cn(
+                                  'font-bold shrink-0',
+                                  ans?.correct === true ? 'text-pw-success'
+                                  : ans?.correct === false ? 'text-pw-danger'
+                                  : 'text-pw-muted',
+                                )}>
+                                {ans?.correct === true ?
+                                  '✓'
+                                : ans?.correct === false ?
+                                  '✗'
+                                : '•'}{' '}
+                                {`Q${qi + 1}${q.category ? ` (${q.category})` : ''}`}
+                              </span>
+                              <span
+                                className='text-white/80 whitespace-pre-wrap mb-1'
+                                dangerouslySetInnerHTML={{
+                                  __html: formatDetailVars(q.text),
+                                }}
+                              />
+                            </div>
 
-                        {/* Question image attachment if present */}
-                        {qImgUrl && (
-                          <div className='pl-3 my-1'>
-                            <Image
-                              src={qImgUrl}
-                              alt='Question media'
-                              onClick={() =>
-                                openFile({
-                                  src: qImgUrl,
-                                  name: `Question attachment - Q${qi + 1}`,
-                                })
-                              }
-                              className='max-h-24 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
-                            />
-                          </div>
-                        )}
-
-                        <p className='text-pw-muted pl-4 whitespace-pre-wrap'>
-                          Your answer:{' '}
-                          <span
-                            className='font-bold text-white'
-                            dangerouslySetInnerHTML={{
-                              __html: formatDetailVars(userAnswerText),
-                            }}
-                          />
-                        </p>
-
-                        {/* Selected option image display */}
-                        {selOptImgUrl && (
-                          <div className='pl-3 my-1 flex items-center gap-2'>
-                            <span className='text-[10px] text-pw-muted'>
-                              Selected Image:
-                            </span>
-                            <Image
-                              src={selOptImgUrl}
-                              alt='Selected option attachment'
-                              onClick={() =>
-                                openFile({
-                                  src: selOptImgUrl,
-                                  name: `Selected option image - Q${qi + 1}`,
-                                })
-                              }
-                              className='h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
-                            />
-                          </div>
-                        )}
-
-                        {/* Uploaded answer attachment preview */}
-                        {ans?.fileUrl &&
-                          (() => {
-                            const unpacked =
-                              unpackPingWorldMediaUrl(ans.fileUrl).url ||
-                              ans.fileUrl;
-                            const fileName =
-                              ans.fileName || `Uploaded answer - Q${qi + 1}`;
-                            const isImage =
-                              ans.fileType?.startsWith('image/') ||
-                              String(unpacked).startsWith('data:image/') ||
-                              /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
-                                fileName,
-                              );
-                            return (
-                              <div className='pl-3 my-1 flex items-center gap-2'>
-                                {isImage && (
-                                  <Image
-                                    src={unpacked}
-                                    alt={fileName}
-                                    onClick={() =>
-                                      openFile({
-                                        src: unpacked,
-                                        name: fileName,
-                                        mimeType: ans.fileType,
-                                      })
-                                    }
-                                    className='max-h-28 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
-                                  />
-                                )}
-                                <button
-                                  type='button'
+                            {/* Question image attachment if present */}
+                            {qImgUrl && (
+                              <div className='pl-3 my-1'>
+                                <Image
+                                  width={1200}
+                                  height={800}
+                                  unoptimized
+                                  draggable={false}
+                                  src={qImgUrl}
+                                  alt='Question media'
                                   onClick={() =>
                                     openFile({
-                                      src: unpacked,
-                                      name: fileName,
-                                      mimeType: ans.fileType,
+                                      src: qImgUrl,
+                                      name: `Question attachment - Q${qi + 1}`,
+                                      canDownload: false,
                                     })
                                   }
-                                  className='text-[10px] flex items-center gap-1 mb-1 text-pw-cyan hover:underline truncate'>
-                                  <CheckCircle2 className='w-5 h-5' />
-                                  Preview {fileName}
-                                </button>
+                                  onContextMenu={(event) => event.preventDefault()}
+                                  className='max-h-24 rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity select-none'
+                                />
                               </div>
-                            );
-                          })()}
+                            )}
+                            <div
+                              className={cn(
+                                'pl-3 border-l-2',
+                                ans?.correct === true ? 'border-pw-success'
+                                : ans?.correct === false ? 'border-pw-danger'
+                                : 'border-pw-muted',
+                              )}>
+                              <p className='text-pw-muted whitespace-pre-wrap'>
+                                Your answer:{' '}
+                                <span
+                                  className='font-bold text-white'
+                                  dangerouslySetInnerHTML={{
+                                    __html: formatDetailVars(userAnswerText),
+                                  }}
+                                />
+                              </p>
+                              {Array.isArray(ans?.answerHistory) && ans.answerHistory.length > 0 && (
+                                <div className='mt-2 space-y-1 text-[11px] text-pw-muted'>
+                                  {ans.answerHistory.map((revision: any, revisionIndex: number) => (
+                                    <p key={`${q.id}-revision-${revisionIndex}`} className='whitespace-pre-wrap'>
+                                      ({revisionIndex + 1}) {formatAnswerRevision(revision, q)}
+                                    </p>
+                                  ))}
+                                  <p className='whitespace-pre-wrap'>({ans.answerHistory.length + 1}) {formatAnswerRevision(ans, q)}</p>
+                                </div>
+                              )}
 
-                        {/* Show correct answer if taker got it wrong and correct answer was set */}
-                        {ans?.correct === false &&
-                          decodedIndex !== null && decodedIndex !== undefined && decodedIndex !== '' &&
-                          correctOpt &&
-                          (
-                            correctOpt?.uploadUrl ||
-                            correctOpt?.imageUrl ||
-                            correctOpt?.imageUrl?.url
-                          )(() => {
-                            const rawCorrectImg =
-                              correctOpt?.uploadUrl ||
-                              (typeof correctOpt?.imageUrl === 'string' ?
-                                correctOpt?.imageUrl
-                              : correctOpt?.imageUrl?.url);
-                            const correctImgUrl =
-                              rawCorrectImg ?
-                                unpackPingWorldMediaUrl(rawCorrectImg).url
-                              : undefined;
-                            return (
-                              <div className='pl-3 text-xs text-pw-success/90 font-medium space-y-1 pt-0.5'>
-                                <p>
-                                  Correct answer:{' '}
-                                  <span
-                                    className='font-bold text-pw-success'
-                                    dangerouslySetInnerHTML={{
-                                      __html: formatDetailVars(
-                                        correctOpt?.text ||
-                                          String(decodedIndex),
+                              {/* Selected option image display */}
+                              {selOptImgUrl && (
+                                <div className='my-1 flex items-center gap-2 flex-wrap'>
+                                  <span className='text-[10px] text-pw-muted'>
+                                    Selected Image:
+                                  </span>
+                                  <Image
+                                    width={800}
+                                    height={600}
+                                    unoptimized
+                                    src={selOptImgUrl}
+                                    alt='Selected option attachment'
+                                    onClick={() =>
+                                      openFile({
+                                        src: selOptImgUrl,
+                                        name: `Selected option image - Q${qi + 1}`,
+                                      })
+                                    }
+                                    className='h-12 w-12 rounded-lg object-cover border border-white/10 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                  />
+                                </div>
+                              )}
+
+                              {/* Uploaded answer attachment preview */}
+                              {ans?.fileUrl &&
+                                (() => {
+                                  const unpacked =
+                                    unpackPingWorldMediaUrl(ans.fileUrl).url ||
+                                    ans.fileUrl;
+                                  const fileName =
+                                    ans.fileName ||
+                                    `Uploaded answer - Q${qi + 1}`;
+                                  const isImage =
+                                    ans.fileType?.startsWith('image/') ||
+                                    String(unpacked).startsWith(
+                                      'data:image/',
+                                    ) ||
+                                    /\.(png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(
+                                      fileName,
+                                    );
+                                  return (
+                                    <div className='my-1 flex items-start gap-1 flex-col'>
+                                      {isImage && (
+                                        <Image
+                                          width={800}
+                                          height={600}
+                                          unoptimized
+                                          src={unpacked}
+                                          alt={fileName}
+                                          onClick={() =>
+                                            openFile({
+                                              src: unpacked,
+                                              name: fileName,
+                                              mimeType: ans.fileType,
+                                            })
+                                          }
+                                          className='h-auto max-h-28 w-auto max-w-full rounded-lg object-contain border border-white/10 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                        />
+                                      )}
+                                      <button
+                                        type='button'
+                                        onClick={() =>
+                                          openFile({
+                                            src: unpacked,
+                                            name: fileName,
+                                            mimeType: ans.fileType,
+                                          })
+                                        }
+                                        className='text-[10px] flex items-center gap-1 mb-1 text-pw-cyan hover:underline truncate'>
+                                        <CheckCircle2 className='w-4 h-4' />
+                                        Preview {fileName}
+                                      </button>
+                                    </div>
+                                  );
+                                })()}
+
+                              {/* Show correct answer if taker got it wrong and correct answer was set */}
+                              {ans?.correct === false &&
+                                decodedIndex !== null &&
+                                decodedIndex !== undefined &&
+                                decodedIndex !== '' &&
+                                correctOpt &&
+                                (correctOpt?.uploadUrl ||
+                                  correctOpt?.imageUrl ||
+                                  correctOpt?.imageUrl?.url) &&
+                                (() => {
+                                  const rawCorrectImg =
+                                    correctOpt?.uploadUrl ||
+                                    (typeof correctOpt?.imageUrl === 'string' ?
+                                      correctOpt?.imageUrl
+                                    : correctOpt?.imageUrl?.url);
+                                  const correctImgUrl =
+                                    rawCorrectImg ?
+                                      unpackPingWorldMediaUrl(rawCorrectImg).url
+                                    : undefined;
+                                  return (
+                                    <div className='text-xs text-pw-success/90 font-medium space-y-1 pt-0.5'>
+                                      <p>
+                                        Correct answer:{' '}
+                                        <span
+                                          className='font-bold text-pw-success'
+                                          dangerouslySetInnerHTML={{
+                                            __html: formatDetailVars(
+                                              correctOpt?.text ||
+                                                String(decodedIndex),
+                                            ),
+                                          }}
+                                        />
+                                      </p>
+                                      {correctImgUrl && (
+                                        <div className='flex items-center gap-1 mt-1 flex-col'>
+                                          <span className='text-[10px] text-pw-muted'>
+                                            Correct Image:
+                                          </span>
+                                          <Image
+                                            width={800}
+                                            height={600}
+                                            unoptimized
+                                            src={correctImgUrl}
+                                            alt='Correct option attachment'
+                                            onClick={() =>
+                                              openFile({
+                                                src: correctImgUrl,
+                                                kind: 'image',
+                                                name: `Correct Option Image - Q${qi + 1}`,
+                                              })
+                                            }
+                                            className='h-12 w-12 rounded-lg object-cover border border-pw-success/30 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+
+                              {((q.correctExplanation && quiz?.correctOptionDes === 'in-result') ||
+                                (hasCorrectIndex ?
+                                  correctOpt?.explanation
+                                : undefined)) && (
+                                <p
+                                  className='text-pw-cyan/90 mt-2 mb-1 whitespace-pre-wrap'
+                                  dangerouslySetInnerHTML={{
+                                    __html:
+                                      '<b>Question Tip:</b> ' +
+                                      formatDetailVars(
+                                        q.correctExplanation ||
+                                          correctOpt?.explanation ||
+                                          '',
                                       ),
+                                  }}
+                                />
+                              )}
+                              {selOpt?.explanation &&
+                                q.correctExplanation !== selOpt.explanation && (
+                                <>
+                                  <div className='my-2 divider'/>
+                                  <p
+                                    className='text-pw-cyan/90 whitespace-pre-wrap'
+                                    dangerouslySetInnerHTML={{
+                                      __html:
+                                        '<b>Option Tip:</b> ' +
+                                        formatDetailVars(selOpt.explanation),
                                     }}
                                   />
-                                </p>
-                                {correctImgUrl && (
-                                  <div className='flex items-center gap-2 mt-1'>
-                                    <span className='text-[10px] text-pw-muted'>
-                                      Correct Image:
-                                    </span>
-                                    <Image
-                                      src={correctImgUrl}
-                                      alt='Correct option attachment'
-                                      onClick={() =>
-                                        openFile({
-                                          src: correctImgUrl,
-                                          kind: 'image',
-                                          name: `Correct Option Image - Q${qi + 1}`,
-                                        })
-                                      }
-                                      className='h-12 w-12 rounded-lg object-cover border border-pw-success/30 shrink-0 cursor-zoom-in hover:opacity-90 transition-opacity'
-                                    />
-                                  </div>
+                                  </>
                                 )}
-                              </div>
-                            );
-                          })()}
-
-                        {(q.correctExplanation || (hasCorrectIndex ? correctOpt?.explanation : undefined)) && (
-                          <p
-                            className='pl-3 text-pw-cyan/90 mt-2 mb-1 whitespace-pre-wrap'
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                'Question Tip: ' +
-                                formatDetailVars(q.correctExplanation || correctOpt?.explanation || ''),
-                            }}
-                          />
-                        )}
-                        {selOpt?.explanation &&
-                          q.correctExplanation !== selOpt.explanation && (
-                            <p
-                              className='pl-3 border-t border-pw-cyan/40 pt-2 text-pw-cyan/90 italic whitespace-pre-wrap'
-                              dangerouslySetInnerHTML={{
-                                __html:
-                                  'Option Tip: ' +
-                                  formatDetailVars(selOpt.explanation),
-                              }}
-                            />
-                          )}
-                      </div>
-                    );
-                  })}
-                </Card>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </Card>
+                </>
               )}
-          </div>
-          <div className='flex flex-col sm:flex-row flex-wrap gap-2 w-full mt-4 items-center justify-center'>
-            {quiz?.allowRetry && (
-              <Button
-                variant={'outline'}
-                onClick={() => {
-                  window.location.reload();
-                }}
-                className='bg-transparent w-full max-w-[200px] px-4 h-9 border-pw-cyan border-2 flex items-center rounded-xl font-bold'>
-                Retry {capFirst(quiz?.type || 'Assessment')}
-              </Button>
-            )}
-            <Link
-              href={isLoggedIn ? '/quiz' : '/tools'}
-              className='w-full'>
-              <Button className='gradient-dark w-full max-w-[300px] px-4 items-center text-center border-none flex h-10 rounded-xl font-bold'>
-                Close Quiz
-              </Button>
-            </Link>
+
+            <AnimatePresence>
+              {showCompletionScrollUp && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 12 }}
+                  transition={{ duration: 0.18 }}
+                  className='fixed bottom-4 right-4 z-[80]'>
+                  <Button
+                    aria-label='Scroll to score'
+                    className='w-11 h-11 p-1 flex items-center rounded-full shadow-md shadow-pw-primary/40 bg-pw-surface/80 bkblur hover:shadow-lg'
+                    onClick={() => document.getElementById('total-score')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+                    <ChevronUp className='w-4 h-4 text-white' />
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* PingWorld compliance disclaimer footer on completion screen */}
-          <div className='text-[10px] text-pw-muted leading-tight max-w-sm mx-auto text-center font-body'>
-            <div className='divider my-4' />
+          <div className='w-full my-2 block'>
+            <div className='divider my-2 mb-3 sm:hidden' />
 
-            <p>
-              {(
-                quiz?.fromPremium &&
-                quiz?.hidePingWorldDisclaimer &&
-                quiz?.disclaimer
-              ) ?
-                <span
-                  className='whitespace-pre-wrap'
-                  dangerouslySetInnerHTML={{
-                    __html: formatDetailVars(quiz.disclaimer),
+            <div className='flex flex-row gap-1 w-full self-center items-center justify-center'>
+              <Link
+                href={isLoggedIn ? '/quiz' : '/tools'}
+                className='w-full'>
+                <Button className='gradient-dark w-full px-4 max-w-xl hover:rounded-full items-center text-center border-none flex h-10 rounded-xl font-bold'>
+                  Close Quiz
+                </Button>
+              </Link>
+
+              {quiz?.allowRetry && (
+                <Button
+                  variant={'ghost'}
+                  onClick={() => {
+                    window.location.reload();
                   }}
-                />
-              : `PingWorld is a service provider hosting this ${quiz?.type ?? 'assessment'}. We are not responsible for any questions, responses, or outcomes generated in this ${quiz?.type ?? 'assessment'}.`
-              }
-            </p>
+                  className='gradient-brand w-10 h-10 border-pw-cyan border-none flex items-center rounded-full font-bold'>
+                  <RefreshCcw className='w-5 h-5' />
+                </Button>
+              )}
+            </div>
+
+            {!isLocalPreview && savedResponseId && <div className='flex justify-center pt-3'>
+              <Button type='button' variant='outline' className='border-white/15 bg-white/5 text-white hover:bg-white/10' onClick={() => setShowResponseShare(true)}>
+                <Share2 className='mr-2 h-4 w-4' /> Share or export response
+              </Button>
+            </div>}
+          </div>
+          {/* PingWorld compliance disclaimer footer on completion screen */}
+          <div className='text-[10px] text-pw-muted leading-tight max-w-sm mx-auto text-left font-body'>
+            <div className='divider my-3' />
+            <div className='flex gap-1 items-center justify-center'>
+              <Image
+                width={20}
+                height={20}
+                src='/images/logo.png'
+                alt='Ping World Logo'
+                className='h-5 w-5 object-fit'
+              />
+
+              <p>
+                PingWorld is a service provider hosting this{' '}
+                {quiz?.type ?? 'assessment'}. We are not responsible for any
+                questions, responses, or outcomes generated in this{' '}
+                {quiz?.type ?? 'assessment'}.
+              </p>
+            </div>
           </div>
         </div>
+        {showResponseShare && <div className='fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4' role='dialog' aria-modal='true' aria-labelledby='response-share-title' onMouseDown={(event) => { if (event.target === event.currentTarget) setShowResponseShare(false); }}>
+          <Card className='w-full max-w-md space-y-4 border-white/10 bg-[#111426] p-5 text-left shadow-2xl'>
+            <div className='flex items-start justify-between gap-4'>
+              <div><h2 id='response-share-title' className='text-lg font-bold text-white'>Share your response</h2><p className='mt-1 text-sm text-pw-muted'>Choose a private view link or download a PDF copy.</p></div>
+              <Button type='button' variant='ghost' size='icon' aria-label='Close' onClick={() => setShowResponseShare(false)}><X className='h-4 w-4' /></Button>
+            </div>
+            <Button type='button' className='btn-primary w-full' disabled={!quiz?.responsesPublicId} onClick={async () => {
+              try {
+                if (!quiz?.responsesPublicId) throw new Error('The setter has not enabled response sharing for this assessment.');
+                const url = `${window.location.origin}/quiz/responses/${quiz.responsesPublicId}/taker?responseId=${encodeURIComponent(savedResponseId)}`;
+                await navigator.clipboard.writeText(url);
+                toast.success('Response link copied.');
+                setShowResponseShare(false);
+              } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create a response link.'); }
+            }}><Copy className='mr-2 h-4 w-4' />Copy response link</Button>
+            {!quiz?.responsesPublicId && <p className='text-xs text-pw-muted'>Response links are disabled by the assessment setter.</p>}
+            <Button type='button' variant='outline' className='w-full border-white/15 bg-white/5 text-white hover:bg-white/10' onClick={async () => {
+              try {
+                const snapshot = finalSubmissionSnapshotRef.current;
+                const questions = (snapshot?.questionIds || []).map((id) => activeQuestions.find((question) => String(question.id) === String(id))).filter(Boolean);
+                const responseAnswers = snapshot?.answers || [];
+                const attemptedCount = new Set(responseAnswers.filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '' && !(Array.isArray(answer.answer) && answer.answer.length === 0)).map((answer: any) => String(answer.questionId))).size;
+                await exportQuizFeedbackPdf({ quiz: { ...quiz, questions }, responses: [{ id: savedResponseId, timestamp: new Date().toISOString(), submittedAt: new Date().toISOString(), startedAt: snapshot?.startedAt, score, scorePossible, totalQuestions: snapshot?.totalQuestions, answeredQuestions: attemptedCount, userData, answers: responseAnswers, branchHistory: snapshot?.branchHistory || [], submissionReason: snapshot?.reason, pathQuestionSnapshots: questions }], responseIndex: 0, takerNumber: 1 }, `${quiz?.title || 'assessment'}-response`);
+                setShowResponseShare(false);
+              } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not export this response.'); }
+            }}><FileText className='mr-2 h-4 w-4' />Export PDF</Button>
+            <Button type='button' variant='ghost' className='w-full text-pw-muted' onClick={() => setShowResponseShare(false)}>Cancel</Button>
+          </Card>
+        </div>}
       </div>
     );
   }
@@ -4156,7 +4753,7 @@ function Taker() {
       key='taker-wrapper'
       onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
       className={cn(
-        'relative min-h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
+        'relative h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
         quiz?.enforceSecurity && 'select-none',
       )}>
       {/* Sleek Glowing Background Objects */}
@@ -4211,7 +4808,10 @@ function Taker() {
             {/* Show clear foreground image/logo if configured */}
             {quiz?.fromPremium && quiz?.branding?.icon ?
               <Image
-                src={quiz?.branding?.icon}
+                src={unpackPingWorldMediaUrl(quiz.branding.icon).url || quiz.branding.icon}
+                width={240}
+                height={240}
+                unoptimized
                 alt='Intro Logo'
                 className='h-20 w-20 object-contain rounded-2xl mb-4 mx-auto border-1 border-white/10 shadow-2xl bg-black/40 bkblur'
               />
@@ -4435,7 +5035,7 @@ function Taker() {
                                     [detail.title]: opt,
                                   })
                                 }
-                                className='h-8 rounded-xl focus:bg-pw-primary/10 cursor-pointer group justify-between gap-1 text-white/90 hover:text-white'>
+                                className='h-8 rounded-xl focus:bg-pw-primary/10 cursor-pointer group justify-between gap-1 text-white hover:text-white'>
                                 <span className='line-clamp-1 truncate'>
                                   {capFirst(opt)}
                                 </span>{' '}
@@ -4705,7 +5305,7 @@ function Taker() {
         <div
           key='assessment-view'
           className={cn(
-            'container relative z-10 p-0 mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-10 max-w-7xl flex flex-col max-h-screen overflow-y-auto',
+            'relative z-10 p-0 mx-auto px-3 md:px-6 pt-6 md:pt-8 max-w-7xl flex flex-col h-screen max-h-[100dvh] pb-10 overflow-y-auto custom-scrollbar',
             quizTheme === 'dark' ? 'text-white' : 'text-black',
           )}>
           {!isOnline && (
@@ -4726,12 +5326,16 @@ function Taker() {
               />
             </motion.div>
           )}
-          <div className='mb-6 flex flex-col gap-2 w-full relative self-center max-w-4xl'>
+
+          <div className='mb-6 flex flex-col gap-2 w-full relative self-center max-w-4xl sticky top-0 z-30'>
             {/* Brand Icon */}
             {quiz?.fromPremium && quiz?.branding?.icon && (
               <div className='flex justify-center mb-4'>
                 <Image
-                  src={quiz?.branding?.icon}
+                  width={30}
+                  height={30}
+                  src={unpackPingWorldMediaUrl(quiz.branding.icon).url || quiz.branding.icon}
+                  unoptimized
                   alt='Brand Logo'
                   className='h-15 w-auto rounded-xl object-contain drop-shadow-md'
                 />
@@ -4755,11 +5359,11 @@ function Taker() {
             )}
 
             {/* Header Row */}
-            <div className='sticky top-0 z-30 flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 rounded-4xl border border-white/10 bg-pw-surface/90 p-2 shadow-xl backdrop-blur-2xl self-center'>
-              <div className='flex items-center gap-4 pl-3'>
+            <div className='sticky top-0 flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 rounded-4xl border border-white/10 bg-pw-bg/60 p-2 pt-2.5 shadow-xl bkblur backdrop-blur-2xl self-center'>
+              <div className='flex items-center pl-1.5'>
                 <h1 className='text-lg md:text-xl font-bold font-display tracking-tight leading-none'>
                   <span
-                    className='whitespace-pre-wrap truncate'
+                    className='whitespace-pre-wrap line-clamp-2 truncate'
                     dangerouslySetInnerHTML={{
                       __html: formatDetailVars(quiz?.title || ''),
                     }}
@@ -4773,7 +5377,22 @@ function Taker() {
                   title={`Quit ${capFirst(quiz.type)}`}
                   size='sm'
                   onClick={() =>
-                    confirmLeaveQuiz(() => (window.location.href = '/quiz'))
+                    confirmLeaveQuiz(() => {
+                      void (async () => {
+                        try {
+                          const attempt = activeAttemptRef.current;
+                          if (attempt?.attemptId && attempt?.attemptToken) {
+                            await HybridStorage.quitQuizAttempt(quiz.id, attempt.attemptId, attempt.attemptToken);
+                            if (!quiz.allowRetry) localStorage.setItem(`completed_quiz_${quiz.id}`, 'true');
+                          } else if (attempt?.attemptId) {
+                            await HybridStorage.deleteQuizAttemptDraft(quiz.id);
+                          }
+                          window.location.href = '/quiz';
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : 'Could not clear this attempt. Please retry.');
+                        }
+                      })();
+                    })
                   }
                   className='h-10 px-4 gap-2 rounded-full text-pw-danger hover:bg-pw-danger/10 hover:text-pw-danger transition-all active:scale-95 border border-pw-danger/10'>
                   <LogOut size={16} />
@@ -4804,7 +5423,7 @@ function Taker() {
               </div>
             </div>
 
-            <div className='flex flex-col gap-3 mb-2 pt-1 px-2'>
+            <div className='relative flex flex-col gap-3 mb-2 pt-1 px-2'>
               {/* Only show progress bar if NO branching is detected */}
               {(() => {
                 const hasBranching = activeQuestions.some(
@@ -4824,7 +5443,7 @@ function Taker() {
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{
-                        width: `${(answeredCount / activeQuestions.length) * 100}%`,
+                        width: `${(answeredCount / Math.max(1, quiz?.calculateAllBranches ? activeQuestions.length : totalQuestions)) * 100}%`,
                       }}
                       className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
                     />
@@ -4844,15 +5463,15 @@ function Taker() {
                     <div
                       title={`${capFirst(quiz?.type)} Timer`}
                       className={cn(
-                        'flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-mono lg:text-sm border transition-all',
+                        'flex items-center gap-1.5 p-1 pr-2 rounded-full text-[12px] font-mono lg:text-sm border transition-all bkblur text-shadow-md shadow-md',
                         timeLeft < 60 ?
                           'bg-pw-danger/10 border-pw-danger/50 text-pw-danger animate-pulse'
-                        : 'bg-white/5 border-white/10 text-pw-primary',
+                        : 'bg-pw-cyan/10 border-pw-cyan/30 text-pw-cyan',
                       )}>
                       <Clock
                         size={16}
                         className={
-                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-primary'
+                          timeLeft < 60 ? 'text-pw-danger' : 'text-pw-cyan'
                         }
                       />
                       {Math.floor(timeLeft / 60)}:
@@ -4863,9 +5482,9 @@ function Taker() {
                   {/* Realtime Live Score Display */}
                   {(quiz?.showScore || quiz?.showRealtimeScore) &&
                     quiz?.type === 'quiz' && (
-                      <div className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pw-primary/15 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md'>
-                        <Brain className='w-3.5 h-3.5' /> {weightedScore.earned} /{' '}
-                        {weightedScore.possible}
+                      <div className='inline-flex items-center gap-1.5 p-1 pr-2 rounded-full bg-pw-primary/10 border border-pw-primary/30 text-pw-primary text-xs font-mono font-bold shadow-md bkblur text-shadow-md'>
+                        <Brain className='w-3.5 h-3.5' /> {weightedScore.earned}{' '}
+                        / {weightedScore.possible}
                       </div>
                     )}
                 </div>
@@ -4874,7 +5493,7 @@ function Taker() {
                   <Button
                     title={`Submit ${capFirst(quiz.type)}`}
                     onClick={confirmSubmitQuiz}
-                    className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden'>
+                    className='h-10 max-w-[200px] w-1/3 px-4 rounded-xl gap-2 bg-pw-success/10 border border-pw-success/20 text-pw-success hover:bg-pw-success/20 font-black text-xs transition-all active:scale-95 shadow-lg shadow-pw-success/10 flex md:hidden bkblur'>
                     <CheckCircle2 size={18} />
                     <span className='font-bold'>SUBMIT</span>
                   </Button>
@@ -4889,12 +5508,15 @@ function Taker() {
               quiz?.quizScroll &&
               (quiz?.quizLayout === 'scroll_show' || !quiz?.quizLayout)
             ) ?
-              <div className='flex max-h-[calc(100dvh-7rem)] min-h-0 flex-col items-center w-full gap-0 overflow-y-auto overscroll-contain px-2 pb-4 custom-scrollbar'>
-                {(quiz?.quizLayout === 'scroll_show'
-                  ? activeQuestions.filter((question, idx) => scrollShowBranchActive.current
-                    ? Boolean(scrollBranchQuestionIds?.includes(question.id))
-                    : idx <= currentQuestion)
-                  : activeQuestions)
+              <div className='flex h-fit max-h-[calc(100dvh-10rem)] min-h-0 flex-col items-center w-full gap-0 overscroll-contain px-2 pb-4'>
+                {(quiz?.quizLayout === 'scroll_show' ?
+                  activeQuestions.filter((question, idx) =>
+                    scrollShowBranchActive.current ?
+                      Boolean(scrollBranchQuestionIds?.includes(question.id))
+                    : idx <= currentQuestion,
+                  )
+                : activeQuestions
+                )
                   .map((quest, idx) => ({ quest, idx }))
                   .filter(
                     ({ quest, idx }) =>
@@ -4917,7 +5539,7 @@ function Taker() {
                   )}
                   <Button
                     onClick={() => handleNext()}
-                    disabled={isSubmitting || isPreparingResponseFile}
+                    disabled={isSubmitting || isPreparingResponseFile || !canAdvanceCurrentQuestion}
                     className='btn-primary h-11 px-10 rounded-xl font-bold gap-2'>
                     {isSubmitting ?
                       <>
@@ -4973,7 +5595,7 @@ function Taker() {
                           });
                         return;
                       }
-                      void finalizeQuiz(userAnswers);
+                      void finalizeQuiz(userAnswers, 'self_submit');
                     }}
                     disabled={isSubmitting || isPreparingResponseFile}
                     className='btn-primary h-12 px-10 rounded-2xl font-black gap-4 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none'>
@@ -5060,7 +5682,7 @@ function Taker() {
                               <Button
                                 onClick={handleNext}
                                 disabled={
-                                  isSubmitting || isPreparingResponseFile
+                                  isSubmitting || isPreparingResponseFile || !canAdvanceCurrentQuestion
                                 }
                                 className='btn-primary h-10 px-8 rounded-2xl font-black gap-2 shadow-2xl shadow-pw-primary/30 transition-all hover:scale-[1.02] active:scale-[0.96]'>
                                 {isSubmitting ?
@@ -5157,6 +5779,7 @@ function Taker() {
           </AnimatePresence>
         </div>
       )}
+      {isSubmitting && !showSubmittingScreen && <div className='fixed inset-0 z-[120] cursor-wait bg-slate-950/10 backdrop-blur-[1px]' role='status' aria-label='Saving response; answers are locked'><span className='sr-only'>Saving response. Answers are locked.</span></div>}
 
       {/* Report Takedown Modal */}
       {showReportModal && (

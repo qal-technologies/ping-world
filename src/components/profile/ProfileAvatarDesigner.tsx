@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 import { cn } from '@/lib/utils';
 
 export interface ObjectMockItem {
@@ -269,7 +270,14 @@ export default function ProfileAvatarDesigner({
       }
       ctx.restore();
 
-      const exportedUrl = canvas.toDataURL('image/png');
+      const exportedBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not encode avatar image.')), 'image/png'));
+      const taggedBlob = await tagImageBlob(exportedBlob);
+      const exportedUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read tagged avatar image.'));
+        reader.onerror = () => reject(new Error('Could not read tagged avatar image.'));
+        reader.readAsDataURL(taggedBlob);
+      });
       await onSaveAvatar(exportedUrl);
       toast.success('Custom avatar & mock design applied!');
     } catch (err: any) {

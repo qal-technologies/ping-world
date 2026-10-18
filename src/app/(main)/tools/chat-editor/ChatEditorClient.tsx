@@ -37,6 +37,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 import { cn } from '@/lib/utils';
 import html2canvas from 'html2canvas';
 
@@ -140,12 +141,12 @@ export default function ChatEditorPage() {
         ctx.fillText('#ping-world chat-mimic', 20, canvas.height - 20);
       }
 
-      canvas.toBlob((blob) => {
+      canvas.toBlob(async (blob) => {
         if (!blob) {
           toast.dismiss();
           return toast.error('Export failed.');
         }
-        const downloadUrl = URL.createObjectURL(blob);
+        const downloadUrl = URL.createObjectURL(await tagImageBlob(blob));
         const link = document.createElement('a');
         link.download = `pingworld-chat-${editingName.toLowerCase()}.png`;
         link.href = downloadUrl;
@@ -203,12 +204,12 @@ export default function ChatEditorPage() {
         ctx.fillText('DESIGNED ON PING-WORLD.SITE', 20, canvas.height - 20);
       }
 
-      canvas.toBlob((blob) => {
+      canvas.toBlob(async (blob) => {
         if (!blob) {
           toast.dismiss();
           return toast.error('Export failed.');
         }
-        const downloadUrl = URL.createObjectURL(blob);
+        const downloadUrl = URL.createObjectURL(await tagImageBlob(blob));
         const link = document.createElement('a');
         link.download = `pingworld-post-${postHandle}.png`;
         link.href = downloadUrl;

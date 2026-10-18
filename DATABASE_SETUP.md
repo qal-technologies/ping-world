@@ -367,11 +367,12 @@ CREATE TABLE IF NOT EXISTS public.quiz_responses (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   quiz_id UUID REFERENCES public.quizzes ON DELETE CASCADE,
   timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  score INTEGER NOT NULL,
+  score NUMERIC NOT NULL,
   total_questions INTEGER NOT NULL,
   user_data JSONB DEFAULT '{}'::jsonb NOT NULL,
   answers JSONB DEFAULT '[]'::jsonb NOT NULL
 );
+ALTER TABLE public.quiz_responses ALTER COLUMN score TYPE NUMERIC USING score::NUMERIC;
 
 -- Enable RLS on Quiz Responses
 ALTER TABLE public.quiz_responses ENABLE ROW LEVEL SECURITY;
@@ -406,7 +407,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_device_once
 CREATE OR REPLACE FUNCTION public.submit_quiz_attempt_response(
   response_uuid UUID,
   quiz_uuid UUID,
-  response_score INTEGER,
+  response_score NUMERIC,
   response_total INTEGER,
   response_user_data JSONB,
   response_answers JSONB,
@@ -449,7 +450,8 @@ BEGIN
   VALUES (response_uuid, quiz_uuid, response_score, response_total, response_user_data, response_answers);
 
   UPDATE public.quiz_attempts
-  SET status = 'submitted', updated_at = now()
+  SET status = 'submitted', answers = '{}'::jsonb, user_data = '{}'::jsonb,
+      question_order = '[]'::jsonb, current_question_index = 0, updated_at = now()
   WHERE id = attempt_uuid AND status = 'in_progress';
   IF NOT FOUND THEN
     RAISE EXCEPTION 'ATTEMPT_CLOSE_FAILED';
@@ -458,8 +460,9 @@ BEGIN
   RETURN QUERY SELECT response_uuid;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.submit_quiz_attempt_response(UUID, UUID, INTEGER, INTEGER, JSONB, JSONB, UUID, TEXT) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.submit_quiz_attempt_response(UUID, UUID, INTEGER, INTEGER, JSONB, JSONB, UUID, TEXT) TO service_role;
+DROP FUNCTION IF EXISTS public.submit_quiz_attempt_response(UUID, UUID, INTEGER, INTEGER, JSONB, JSONB, UUID, TEXT);
+REVOKE ALL ON FUNCTION public.submit_quiz_attempt_response(UUID, UUID, NUMERIC, INTEGER, JSONB, JSONB, UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_quiz_attempt_response(UUID, UUID, NUMERIC, INTEGER, JSONB, JSONB, UUID, TEXT) TO service_role;
 
 -- Reports are write/read restricted to the server admin client. Five distinct
 -- reporters place an assessment into review; the public quiz API then pauses it.

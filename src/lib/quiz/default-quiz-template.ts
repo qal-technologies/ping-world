@@ -37,6 +37,7 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
   type: 'quiz',
   quizLayout: 'single',
   quizScroll: false,
+  isTemplate:true,
   showScore: true,
   allowRetry: true,
   randomizeQuestions: false,

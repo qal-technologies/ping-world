@@ -1026,7 +1026,7 @@ export default function PricingPage() {
                 <span className='min-w-0'>
                   <span className='block text-xs font-bold text-pw-text'>Automatically renew this plan</span>
                   <span className='mt-0.5 block text-[10px] leading-relaxed text-pw-muted'>
-                    {autoRenew ? 'Your subscription will renew at the end of each billing period until you cancel.' : 'Your access will end after the period you pay for. Stripe will not renew the subscription.'}
+                    {autoRenew ? 'Your subscription will renew at the end of each billing period until you cancel.' : 'Your access will end after the period you pay for. The subscription will not renew.'}
                   </span>
                 </span>
               </label>

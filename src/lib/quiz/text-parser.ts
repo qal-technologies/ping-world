@@ -7,6 +7,7 @@
  */
 
 import { unpackPingWorldMediaUrl } from './quiz-piping';
+import { tagTextExport } from '@/lib/pingworld-attribution';
 
 const ALLOWED_TAGS_REGEX = /<\/?(b|strong|i|em|code|pre|u|mark|a|sub|sup|br)\b[^>]*>/gi;
 
@@ -104,13 +105,32 @@ export function formatAnswerForExport(
   return cleanTextForCSV(String(answer));
 }
 
+function responsePathQuestions(response: any, quiz: any) {
+  const saved = response.pathQuestionSnapshots || response.userData?.pathQuestionSnapshots;
+  if (Array.isArray(saved) && saved.length) return saved;
+  const answerSnapshots = (response.answers || []).map((answer: any) => answer.questionSnapshot).filter(Boolean);
+  if (answerSnapshots.length) return answerSnapshots;
+  const ids = response.currentPathQuestionIds || response.userData?.currentPathQuestionIds;
+  const questions = quiz.questions || [];
+  return Array.isArray(ids) ? ids.map((id: string) => questions.find((question: any) => String(question.id) === String(id))).filter(Boolean) : questions;
+}
+
 /**
  * Exports quiz responses into standard RFC-4180 CSV with data parity.
  */
 export function exportResponsesToCSV(quiz: any, responses: any[]): string {
   if (!responses || responses.length === 0) return '';
 
-  const questions = quiz.questions || [];
+  const questionBySnapshot = new Map<string, any>();
+  for (const question of quiz.questions || []) {
+    questionBySnapshot.set(`${String(question.id)}\u0000${String(question.text ?? '')}`, question);
+  }
+  for (const response of responses) {
+    for (const question of responsePathQuestions(response, quiz)) {
+      questionBySnapshot.set(`${String(question.id)}\u0000${String(question.text ?? '')}`, question);
+    }
+  }
+  const questions = [...questionBySnapshot.values()];
   const askDetails = quiz.askDetails || [];
   const isQuiz = quiz.type === 'quiz';
   const csvCell = (value: unknown) => {
@@ -124,15 +144,16 @@ export function exportResponsesToCSV(quiz: any, responses: any[]): string {
   const headers = [
     'Quiz ID',
     'Timestamp',
-    ...(isQuiz ? ['Score', 'Total Questions', 'Percentage'] : ['Submission Status']),
+    ...(isQuiz ? ['Score', 'Total Questions', 'Attempted Questions', 'Score Possible', 'Percentage'] : ['Submission Status']),
+    'Response Path JSON',
     ...askDetails.map((d: any) => cleanTextForCSV(d.title || d)),
-    ...questions.map((q: any, idx: number) => `Q${idx + 1}: ${cleanTextForCSV(q.text)}`),
+    ...questions.map((q: any, idx: number) => `Q${idx + 1} [${q.id}]: ${cleanTextForCSV(q.text)}`),
   ];
 
   const rows = responses.map((r) => {
     const score = isQuiz ? (r.score ?? 0) : '';
     const total = r.totalQuestions ?? questions.length;
-    const possible = r.userData?.scorePossible !== undefined ? Math.max(0, Number(r.userData.scorePossible) || 0) : total;
+    const possible = r.scorePossible !== undefined ? Math.max(0, Number(r.scorePossible) || 0) : r.userData?.scorePossible !== undefined ? Math.max(0, Number(r.userData.scorePossible) || 0) : total;
     const pct = isQuiz ? (possible > 0 ? `${Math.round((Number(score) / possible) * 100)}%` : '0%') : '';
 
     const detailCols = askDetails.map((d: any) => {
@@ -141,8 +162,12 @@ export function exportResponsesToCSV(quiz: any, responses: any[]): string {
       return cleanTextForCSV(String(rawVal));
     });
 
+    const responseQuestions = new Map(responsePathQuestions(r, quiz).map((q: any) => [`${String(q.id)}\u0000${String(q.text ?? '')}`, q]));
     const questionCols = questions.map((q: any) => {
-      const ansObj = (r.answers || []).find((a: any) => a.questionId === q.id);
+      const questionInThisResponse = responseQuestions.get(`${String(q.id)}\u0000${String(q.text ?? '')}`);
+      if (!questionInThisResponse) return '';
+      const ansObj = (r.answers || []).find((a: any) => String(a.questionId) === String(q.id));
+      if (ansObj?.questionSnapshot && String(ansObj.questionSnapshot.text ?? '') !== String(q.text ?? '')) return '';
       const val = ansObj ? formatAnswerForExport(ansObj.answer, q, 'csv') : '';
       const mediaUrl = typeof ansObj?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(ansObj.fileUrl).url || ansObj.fileUrl) : '';
       return `${String(val ?? '')}${mediaUrl ? ` [Media URL: ${mediaUrl}]` : ''}`;
@@ -151,13 +176,17 @@ export function exportResponsesToCSV(quiz: any, responses: any[]): string {
     return [
       quiz.id,
       r.timestamp || '',
-      ...(isQuiz ? [score, total, pct] : [r.submissionReason || 'completion']),
+      ...(isQuiz ? [score, total, r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length, possible, pct] : [r.submissionReason || 'completion']),
+      JSON.stringify(responsePathQuestions(r, quiz).map((question: any) => {
+        const answer = (r.answers || []).find((item: any) => String(item.questionId) === String(question.id));
+        return { questionId: question.id, questionText: question.text, category: question.category || null, answer: answer ? formatAnswerForExport(answer.answer, question, 'json') : null, passed: Boolean(answer?.passed), isCorrect: answer?.correct ?? null, mediaUrl: typeof answer?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl) : null };
+      })),
       ...detailCols,
       ...questionCols,
     ].map(csvCell).join(',');
   });
 
-  return [headers.map(csvCell).join(','), ...rows].join('\r\n');
+  return tagTextExport([headers.map(csvCell).join(','), ...rows].join('\r\n'), 'csv');
 }
 
 /**
@@ -174,10 +203,28 @@ export function exportResponsesToJSON(quiz: any, responses: any[]): string {
       responseNumber: idx + 1,
       timestamp: r.timestamp,
       score: quiz.type === 'quiz' ? (r.score ?? 0) : null,
-      totalQuestions: r.totalQuestions || quiz.questions?.length || 0,
+      responseId: r.id || null,
+      totalQuestions: r.totalQuestions ?? quiz.questions?.length ?? 0,
+      attemptedQuestions: r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length,
+      scorePossible: r.scorePossible !== undefined ? Math.max(0, Number(r.scorePossible) || 0) : r.userData?.scorePossible !== undefined ? Math.max(0, Number(r.userData.scorePossible) || 0) : null,
+      currentPathQuestionIds: r.currentPathQuestionIds || r.userData?.currentPathQuestionIds || (r.answers || []).map((answer: any) => answer.questionId),
+      pathQuestions: responsePathQuestions(r, quiz).map((question: any) => {
+        const ansObj = (r.answers || []).find((answer: any) => String(answer.questionId) === String(question.id));
+        return {
+          questionId: question.id,
+          questionText: cleanTextForCSV(question.text),
+          category: question.category || 'Independent',
+          type: question.type || null,
+          options: (question.options || []).map((option: any) => ({ id: option.id, text: cleanTextForCSV(option.text), explanation: option.explanation || null })),
+          answer: ansObj ? formatAnswerForExport(ansObj.answer, question, 'json') : null,
+          passed: Boolean(ansObj?.passed),
+          isCorrect: ansObj?.correct ?? null,
+          mediaUrl: typeof ansObj?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(ansObj.fileUrl).url || ansObj.fileUrl) : null,
+        };
+      }),
       percentage: quiz.type === 'quiz'
         ? (() => {
-            const possible = r.userData?.scorePossible !== undefined ? Math.max(0, Number(r.userData.scorePossible) || 0) : (r.totalQuestions || quiz.questions?.length || 0);
+            const possible = r.scorePossible !== undefined ? Math.max(0, Number(r.scorePossible) || 0) : r.userData?.scorePossible !== undefined ? Math.max(0, Number(r.userData.scorePossible) || 0) : (r.totalQuestions || quiz.questions?.length || 0);
             return possible > 0 ? Math.round(((r.score ?? 0) / possible) * 100) : 0;
           })()
         : null,
@@ -186,21 +233,23 @@ export function exportResponsesToJSON(quiz: any, responses: any[]): string {
       continent: r.continent || null,
       userData: r.userData || {},
       categoryScores: quiz.type === 'quiz' ? (r.categoryScores || {}) : null,
-      answers: (quiz.questions || []).map((q: any) => {
-        const ansObj = (r.answers || []).find((a: any) => a.questionId === q.id);
+      answers: (r.answers || []).map((ansObj: any) => {
+        const q = ansObj.questionSnapshot || (quiz.questions || []).find((question: any) => question.id === ansObj.questionId) || {};
         return {
-          questionId: q.id,
+          questionId: ansObj.questionId,
           questionText: cleanTextForCSV(q.text),
           category: q.category || 'Independent',
           answer: ansObj ? formatAnswerForExport(ansObj.answer, q, 'json') : null,
           mediaUrl: typeof ansObj?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(ansObj.fileUrl).url || ansObj.fileUrl) : null,
           isCorrect: quiz.type === 'quiz' ? (ansObj?.correct ?? null) : null,
+          passed: Boolean(ansObj?.passed),
+          options: Array.isArray(q.options) ? q.options.map((option: any) => ({ id: option.id, text: cleanTextForCSV(option.text), explanation: option.explanation || null })) : [],
         };
       }),
     })),
   };
 
-  return JSON.stringify(exportPayload, null, 2);
+  return tagTextExport(JSON.stringify(exportPayload, null, 2), 'json');
 }
 
 /**
@@ -218,7 +267,11 @@ export function exportResponsesToText(quiz: any, responses: any[]): string {
     lines.push(`## Participant #${idx + 1}`);
     lines.push(`- Submission Date: ${r.timestamp || 'N/A'}`);
     if (quiz.type === 'quiz') {
-      lines.push(`- Score: ${r.score ?? 0} / ${r.totalQuestions || quiz.questions?.length || 0}`);
+      const possible = r.scorePossible ?? r.userData?.scorePossible ?? r.totalQuestions ?? 0;
+      const attempted = r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length;
+      lines.push(`- Score: ${r.score ?? 0} / ${possible} points`);
+      lines.push(`- Questions: ${attempted} attempted / ${r.totalQuestions ?? 0} total`);
+      lines.push(`- Submission reason: ${r.submissionReason || 'completion'}`);
     } else {
       lines.push(`- Submission: ${r.submissionReason || 'completion'}`);
     }
@@ -230,15 +283,16 @@ export function exportResponsesToText(quiz: any, responses: any[]): string {
     }
 
     lines.push('### Answers:');
-    (quiz.questions || []).forEach((q: any, qIdx: number) => {
-      const ansObj = (r.answers || []).find((a: any) => a.questionId === q.id);
-      const formattedAns = ansObj ? formatAnswerForExport(ansObj.answer, q, 'text') : '(No Answer)';
+    responsePathQuestions(r, quiz).forEach((q: any, qIdx: number) => {
+      const ansObj = (r.answers || []).find((answer: any) => String(answer.questionId) === String(q.id));
+      const formattedAns = ansObj ? (ansObj.passed ? '(Passed)' : formatAnswerForExport(ansObj.answer, q, 'text')) : '(Not answered)';
       const mediaUrl = typeof ansObj?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(ansObj.fileUrl).url || ansObj.fileUrl) : '';
-      lines.push(`  ${qIdx + 1}. [${q.id}] ${cleanTextForCSV(q.text)}`);
+      lines.push(`  ${qIdx + 1}. [${ansObj.questionId}] ${cleanTextForCSV(q.text)}`);
       lines.push(`     Answer: ${formattedAns}${mediaUrl ? `\n     Media URL: ${mediaUrl}` : ''}`);
+      if (ansObj?.correct !== undefined) lines.push(`     Correct: ${ansObj.correct ? 'Yes' : 'No'}`);
     });
     lines.push('\n--------------------------------------------------\n');
   });
 
-  return lines.join('\n');
+  return tagTextExport(lines.join('\n'), 'text');
 }

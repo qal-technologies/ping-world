@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { tagImageBlob } from '@/lib/pingworld-attribution';
 import { makeHtml2CanvasCloneColorSafe } from '@/lib/image/html2canvas-color-safety';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
@@ -745,7 +746,8 @@ export default function BusinessCardMaker() {
           watermarkOverlays.forEach((el) => el.remove());
         },
       });
-      const url = canvas.toDataURL('image/png');
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode image.')), 'image/png'));
+      const url = URL.createObjectURL(await tagImageBlob(blob));
       const a = document.createElement('a');
       a.href = url;
       a.download = `business-card-${side}-${Date.now()}.png`;

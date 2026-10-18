@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { AudioEditingEngine, AudioMetadata } from '@/lib/dev-engines/audio-editing';
 import { toast } from 'sonner';
+import { tagWavBlob } from '@/lib/pingworld-attribution';
 
 export default function AudioVisualizer() {
   const [freq, setFreq] = useState(440);
@@ -38,8 +39,8 @@ export default function AudioVisualizer() {
     setIsPlaying(false);
   };
 
-  const handleDownload = () => {
-    const blob = engineRef.current.exportWAV(freq, 2.0, waveType);
+  const handleDownload = async () => {
+    const blob = await tagWavBlob(engineRef.current.exportWAV(freq, 2.0, waveType));
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -74,9 +75,10 @@ export default function AudioVisualizer() {
     try {
       const trimmedBlob = await engineRef.current.trimAudio(uploadedFile, trimStart, trimEnd);
       // Simulate/mock conversion to MP3 container headers if needed, otherwise output WAV PCM
-      const finalBlob = exportFormat === 'mp3'
+      let finalBlob = exportFormat === 'mp3'
         ? new Blob([trimmedBlob], { type: 'audio/mp3' })
         : trimmedBlob;
+      if (exportFormat === 'wav') finalBlob = await tagWavBlob(finalBlob);
 
       const url = URL.createObjectURL(finalBlob);
       const a = document.createElement('a');

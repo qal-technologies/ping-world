@@ -141,6 +141,7 @@
 
 * {
   transition: all ease 400ms;
+  scroll-behavior: smooth;
 }
 
 html {
@@ -167,12 +168,12 @@ body {
 
 /* ─── Custom Scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   transition:
     width ease-in 0.5s,
     height ease 0.6s;
-    
+    scroll-behavior: smooth;
 }
 
 ::-webkit-scrollbar-track {
@@ -180,14 +181,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
+  border-radius: 20%;
   background: #5c6fff55;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  width: 16px;
-  height: 16px;
   background: #5c6fffaa;
-  border-radius: 99px;
 }
 
 ::selection {
@@ -199,7 +198,7 @@ body {
 .quiz-taker-font,
 .quiz-taker-font .font-display,
 .quiz-taker-font .font-mono {
-  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif, serif !important;
 }
 
 h1,
@@ -817,11 +816,6 @@ pre {
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(92, 111, 255, 0.3) transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {

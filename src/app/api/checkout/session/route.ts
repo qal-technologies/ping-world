@@ -137,9 +137,9 @@ export async function POST(req: NextRequest) {
         checkoutToolId,
       );
       params.append('subscription_data[metadata][billingCycle]', billingCycle);
-      if (!autoRenew) params.append('subscription_data[cancel_at_period_end]', 'true');
       params.append('metadata[autoRenew]', String(autoRenew));
       params.append('subscription_data[metadata][autoRenew]', String(autoRenew));
+      if (!autoRenew) params.append('subscription_data[cancel_at_period_end]', 'true');
 
       const stripeRes = await fetch(
         'https://api.stripe.com/v1/checkout/sessions',

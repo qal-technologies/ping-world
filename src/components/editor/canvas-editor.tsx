@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { saveAs } from "file-saver";
+import { tagImageBlob } from "@/lib/pingworld-attribution";
 
 const FONTS = [
   "Space Grotesk",
@@ -114,14 +115,15 @@ export default function CanvasEditor() {
     }
   };
 
-  const exportImage = () => {
+  const exportImage = async () => {
     if (!canvas) return;
     const dataURL = canvas.toDataURL({
       format: 'png',
       quality: 1,
       multiplier: 1,
     });
-    saveAs(dataURL, "pingworld-post.png");
+    const imageBlob = await (await fetch(dataURL)).blob();
+    saveAs(await tagImageBlob(imageBlob), "pingworld-post.png");
     toast.success("Image exported!");
   };
 

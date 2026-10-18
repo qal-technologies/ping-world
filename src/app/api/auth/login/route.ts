@@ -16,7 +16,15 @@ export async function POST(request: NextRequest) {
   if (ipLimit.limited) {
     return NextResponse.json(
       { error: 'Too many sign-in attempts. Wait 15 minutes and try again.' },
-      { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(Math.max(1, Math.ceil((ipLimit.reset - Date.now()) / 1000))) } },
+      {
+        status: 429,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Retry-After': String(
+            Math.max(1, Math.ceil((ipLimit.reset - Date.now()) / 1000)),
+          ),
+        },
+      },
     );
   }
   try {
@@ -35,11 +43,27 @@ export async function POST(request: NextRequest) {
     )
       return denied();
     const key = identifier.toLowerCase();
-    const identifierLimit = isRateLimited(key, 'api:login-identifier', 8, 15 * 60_000);
+    const identifierLimit = isRateLimited(
+      key,
+      'api:login-identifier',
+      8,
+      15 * 60_000,
+    );
     if (identifierLimit.limited) {
       return NextResponse.json(
         { error: 'Too many sign-in attempts. Wait 15 minutes and try again.' },
-        { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(Math.max(1, Math.ceil((identifierLimit.reset - Date.now()) / 1000))) } },
+        {
+          status: 429,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Retry-After': String(
+              Math.max(
+                1,
+                Math.ceil((identifierLimit.reset - Date.now()) / 1000),
+              ),
+            ),
+          },
+        },
       );
     }
     let email = key;
@@ -73,7 +97,10 @@ export async function POST(request: NextRequest) {
     });
     if (error?.code === 'email_not_confirmed') {
       return NextResponse.json(
-        { error: 'Verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' },
+        {
+          error: 'Verify your email before signing in.',
+          code: 'EMAIL_NOT_VERIFIED',
+        },
         { status: 403, headers: { 'Cache-Control': 'no-store' } },
       );
     }
@@ -81,7 +108,10 @@ export async function POST(request: NextRequest) {
     if (!data.user?.email_confirmed_at) {
       await authClient.auth.signOut({ scope: 'local' });
       return NextResponse.json(
-        { error: 'Verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' },
+        {
+          error: 'Verify your email before signing in.',
+          code: 'EMAIL_NOT_VERIFIED',
+        },
         { status: 403, headers: { 'Cache-Control': 'no-store' } },
       );
     }

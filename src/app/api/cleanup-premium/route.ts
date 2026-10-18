@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
+import { FLEXIBLE_FEATURES, PREMIUM_TIERS } from '@/lib/config/premium';
+
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -47,14 +49,14 @@ export async function GET(request: NextRequest) {
           let expiry = typeof metadata.tier_expires_at === 'string' ? metadata.tier_expires_at : String(metadata.tier_expired_at);
           const subscriptionId = typeof metadata.stripe_subscription_id === 'string' ? metadata.stripe_subscription_id : '';
           if (subscriptionId && stripeKey) {
-            const stripeResponse = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
-              headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(10_000), cache: 'no-store',
-            });
-            const stripeSubscription = await stripeResponse.json().catch(() => null);
-            if (!stripeResponse.ok || !stripeSubscription) throw new Error('Could not verify Stripe subscription before expiry cleanup.');
-            if (['active', 'trialing', 'past_due', 'unpaid', 'incomplete'].includes(String(stripeSubscription.status))) {
-              const stripeEnd = Number(stripeSubscription.current_period_end);
-              if (Number.isFinite(stripeEnd) && stripeEnd * 1000 > now) {
+            try {
+              const stripeResponse = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+                headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(10_000), cache: 'no-store',
+              });
+              const stripeSubscription = await stripeResponse.json().catch(() => null);
+              if (stripeResponse.ok && stripeSubscription && ['active', 'trialing'].includes(String(stripeSubscription.status))) {
+                const stripeEnd = Number(stripeSubscription.current_period_end);
+                if (Number.isFinite(stripeEnd) && stripeEnd * 1000 > now) {
                 expiry = new Date(stripeEnd * 1000).toISOString();
                 const tier = ['flexible', 'standard', 'pro'].includes(String(metadata.tier)) ? String(metadata.tier) : 'free';
                 const selectedTool = String(stripeSubscription.metadata?.selectedFlexibleToolId || metadata.purchased_tools?.[0] || '');
@@ -67,13 +69,11 @@ export async function GET(request: NextRequest) {
                 await admin.from('profiles').upsert({ id: user.id, tier, updated_at: new Date().toISOString() });
                 await clearExpiredPremiumQuizData(admin, user.id).catch(() => undefined);
                 return user.id;
+                }
               }
-              if (['active', 'trialing'].includes(String(stripeSubscription.status))) {
-                throw new Error('Stripe reports an active subscription but no valid future period end. Cleanup deferred.');
-              }
+            } catch (stripeError) {
+              console.warn('[cleanup-premium] Subscription check unavailable; expiring by stored date.', stripeError instanceof Error ? stripeError.message : 'unknown');
             }
-          } else if (subscriptionId && !stripeKey) {
-            throw new Error('Stripe is not configured; refusing to clear a Stripe-backed entitlement.');
           }
           if (String(metadata.tier || 'free') !== 'free') {
             const nextAppMetadata = { ...metadata, tier: 'free', purchased_tools: [], tier_expired_at: expiry };

@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
+import { tagJsPdfDocument, tagHtmlDocument, tagTextExport } from '@/lib/pingworld-attribution';
 import { toast } from 'sonner';
 import { tools } from '@/lib/general/data';
 
@@ -217,7 +218,7 @@ export default function EditorPage() {
     const textContent = tempDiv.innerText || tempDiv.textContent || '';
 
     triggerExport(title || 'document', 'txt', (filename) => {
-      const blob = new Blob([textContent], {
+      const blob = new Blob([tagTextExport(textContent, 'text')], {
         type: 'text/plain;charset=utf-8',
       });
       const url = URL.createObjectURL(blob);
@@ -244,7 +245,7 @@ export default function EditorPage() {
       const footer = '</body></html>';
       const sourceHTML = header + htmlContent + footer;
 
-      const blob = new Blob(['\ufeff' + sourceHTML], {
+      const blob = new Blob(['\ufeff' + tagHtmlDocument(sourceHTML)], {
         type: 'application/msword',
       });
 
@@ -278,6 +279,7 @@ export default function EditorPage() {
 
         const splitText = doc.splitTextToSize(textContent, 180);
         doc.text(splitText, 15, 35);
+        tagJsPdfDocument(doc);
         doc.save(`${filename}.pdf`);
         toast.dismiss();
         toast.success('Exported as PDF document!');

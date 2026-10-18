@@ -8,15 +8,15 @@ function correctFor(
   question: Record<string, any>,
   answer: any,
 ): boolean | undefined {
+  if (question.type === 'upload') return answer !== undefined && answer !== null && answer !== '' ? true : undefined;
   let expected = decodeStoredCorrectAnswer(question.correctIndex);
   if (
     expected === null ||
     expected === undefined ||
     expected === '' ||
-    (Array.isArray(expected) && expected.length === 0) ||
-    question.type === 'upload'
+    (Array.isArray(expected) && expected.length === 0)
   )
-    return undefined;
+    return answer !== undefined && answer !== null && answer !== '' && !(Array.isArray(answer) && answer.length === 0) ? true : undefined;
   if (typeof expected === 'number' && Array.isArray(question.options)) {
     const option = question.options[expected];
     expected = option && typeof option === 'object' ? option.id : option;
@@ -37,6 +37,15 @@ function correctFor(
     );
   }
   return String(answer ?? '').trim() === String(expected ?? '').trim();
+}
+
+function isAttemptedAnswer(answer: any): boolean {
+  if (!answer || answer.passed) return false;
+  if (answer.fileUrl) return true;
+  const value = answer.answer;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return typeof value === 'number' || typeof value === 'boolean';
 }
 
 export async function GET(
@@ -69,7 +78,7 @@ export async function GET(
     const admin = getSupabaseAdmin();
     const { data: quiz, error: quizError } = await admin
       .from('quizzes')
-      .select('id,user_id,type,questions')
+      .select('id,user_id,type,questions,settings')
       .eq('id', id)
       .maybeSingle();
     if (quizError || !quiz)
@@ -119,8 +128,19 @@ export async function GET(
       timestamp: row.timestamp,
       score: row.score || 0,
       totalQuestions: row.total_questions || 0,
+      answeredQuestions: row.user_data?.answeredQuestions ?? (Array.isArray(row.answers) ? new Set(row.answers.filter(isAttemptedAnswer).map((answer: any) => String(answer.questionId))).size : 0),
+      scorePossible: row.user_data?.scorePossible,
+      currentPathQuestionIds: row.user_data?.currentPathQuestionIds,
+      pathQuestionSnapshots: row.user_data?.pathQuestionSnapshots,
       userData: row.user_data || {},
       answers: Array.isArray(row.answers) ? row.answers : [],
+      submissionReason: row.user_data?.submissionReason,
+      startedAt: row.user_data?.startedAt,
+      submittedAt: row.timestamp,
+      durationSeconds: row.user_data?.durationSeconds,
+      branchHistory: row.user_data?.branchHistory || [],
+      isSignedUser: Boolean(row.user_data?.isSignedUser),
+      signedUser: row.user_data?.signedUser || null,
     }));
 
     const questionMap = new Map(
@@ -134,10 +154,16 @@ export async function GET(
         attempt.answers && typeof attempt.answers === 'object' ?
           attempt.answers
         : {};
+      const attemptQuestionMap = new Map(questionMap);
+      const questionSnapshots = snapshot.__questionSnapshots && typeof snapshot.__questionSnapshots === 'object' ? snapshot.__questionSnapshots : {};
+      for (const [questionId, savedQuestion] of Object.entries(questionSnapshots)) {
+        if (savedQuestion && typeof savedQuestion === 'object') attemptQuestionMap.set(String(questionId), savedQuestion);
+      }
       let answers = await Promise.all(
         Object.entries(snapshot).map(
           async ([questionId, value]: [string, any]) => {
-            const question = questionMap.get(questionId);
+            if (['__visitedQuestionIds', '__branchHistory', '__signedUser', '__questionSnapshots'].includes(questionId)) return null;
+            const question = attemptQuestionMap.get(questionId);
             if (!question) return null;
             const answer =
               value && typeof value === 'object' && 'answer' in value ?
@@ -165,6 +191,14 @@ export async function GET(
           },
         ),
       );
+      const storedPathIds = Array.isArray(snapshot.__visitedQuestionIds)
+        ? snapshot.__visitedQuestionIds.map(String)
+        : [];
+      const allQuestionsInPath = snapshot.__calculateAllBranches === true || (Boolean(snapshot.__attemptSettings?.quizScroll) && snapshot.__attemptSettings?.quizLayout !== 'scroll_show');
+      const currentPathQuestionIds = allQuestionsInPath
+        ? (Array.isArray(quiz.questions) ? quiz.questions : []).map((question: any) => String(question.id))
+        : Array.from(new Set([...storedPathIds, ...answers.map((answer: any) => String(answer?.questionId || '')).filter(Boolean)]));
+      const branchHistory = Array.isArray(snapshot.__branchHistory) ? snapshot.__branchHistory : [];
       const questionOrder =
         Array.isArray(attempt.question_order) ?
           attempt.question_order.map(String)
@@ -187,12 +221,35 @@ export async function GET(
       const totals = new Map<string, { correct: number; total: number }>();
       for (const answer of answers as any[]) {
         if (typeof answer.correct !== 'boolean') continue;
-        const question: any = questionMap.get(answer.questionId);
+        const question: any = attemptQuestionMap.get(answer.questionId);
         const category = String(question?.category || 'General');
         const value = totals.get(category) || { correct: 0, total: 0 };
         value.total += 1;
         if (answer.correct) value.correct += 1;
         totals.set(category, value);
+      }
+      let scorePossible = 0;
+      const answeredById = new Map((answers as any[]).map((answer) => [String(answer.questionId), answer]));
+      for (const questionId of currentPathQuestionIds) {
+        const question: any = attemptQuestionMap.get(questionId);
+        if (!question || quiz.type !== 'quiz') continue;
+        const answer = answeredById.get(questionId);
+        if (answer && typeof answer.pointsPossible === 'number') { scorePossible += Math.max(0, answer.pointsPossible); continue; }
+        if (answer && typeof answer.correct === 'boolean') { scorePossible += 1; continue; }
+        const key = decodeStoredCorrectAnswer(question.correctIndex);
+        if (key === null || key === undefined || key === '' || (Array.isArray(key) && !key.length)) continue;
+        const options = Array.isArray(question.options) ? question.options : [];
+        const keys = (Array.isArray(key) ? key : [key]).map((value: any) => {
+          if ((typeof value === 'number' || /^\d+$/.test(String(value))) && options[Number(value)]) return String(options[Number(value)]?.id ?? value);
+          return String(value);
+        });
+        const custom = options.some((option: any) => option?.scoreWeight !== undefined && option?.scoreWeight !== null && option?.scoreWeight !== '' && Number.isFinite(Number(option.scoreWeight)) && Number(option.scoreWeight) >= 0);
+        if (question.type === 'input' || question.type === 'upload' || !custom) scorePossible += 1;
+        else scorePossible += keys.reduce((sum: number, id: string) => {
+          const index = options.findIndex((option: any, optionIndex: number) => String(option?.id ?? optionIndex) === id || String(optionIndex) === id);
+          const weight = Number(options[index]?.scoreWeight);
+          return sum + (Number.isFinite(weight) && weight >= 0 ? weight : 1);
+        }, 0);
       }
       responses.push({
         id: attempt.id,
@@ -203,8 +260,28 @@ export async function GET(
           quiz.type === 'quiz' ?
             answers.reduce((sum: number, answer: any) => sum + (answer.pointsEarned !== undefined ? Math.max(0, Number(answer.pointsEarned) || 0) : (answer.correct ? 1 : 0)), 0)
           : 0,
-        totalQuestions: answers.length,
-        answeredQuestions: answers.length,
+        totalQuestions: currentPathQuestionIds.length,
+        scorePossible,
+        branchHistory,
+        isSignedUser: Boolean(snapshot.__signedUser),
+        signedUser: snapshot.__signedUser || null,
+        currentPathQuestionIds,
+        pathQuestionSnapshots: currentPathQuestionIds.map((questionId: string) => {
+          const question: any = attemptQuestionMap.get(questionId);
+          return question ? {
+            id: questionId,
+            text: String(question.text ?? ''),
+            type: String(question.type ?? ''),
+            category: question.category,
+            imageUrl: typeof question.imageUrl === 'string' && !question.imageUrl.startsWith('data:') ? question.imageUrl : undefined,
+            uploadUrl: typeof question.uploadUrl === 'string' && !question.uploadUrl.startsWith('data:') ? question.uploadUrl : undefined,
+            correctIndex: question.correctIndex ?? null,
+            correctExplanation: typeof question.correctExplanation === 'string' ? question.correctExplanation : undefined,
+            options: (Array.isArray(question.options) ? question.options : []).map((option: any) => ({ id: String(option?.id ?? ''), text: String(option?.text ?? option ?? '') })),
+          } : null;
+        }).filter(Boolean),
+        answeredQuestions: answers.filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length,
+        durationSeconds: Math.max(0, Math.floor((Date.now() - new Date(attempt.started_at).getTime()) / 1000)),
         userData: attempt.user_data || {},
         answers,
         categoryScores: Object.fromEntries(totals),
