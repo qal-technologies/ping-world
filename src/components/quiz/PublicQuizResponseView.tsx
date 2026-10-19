@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { LoaderCircle, LockKeyhole } from 'lucide-react';
 import Image from 'next/image';
+import { useAppFileViewer } from '@/components/shared/AppFileViewer';
 
 type PublicOption = { id?: string; text?: string; explanation?: string };
 type PublicQuestion = {
@@ -30,6 +31,7 @@ type PublicResponse = {
   totalQuestions?: number;
   answeredQuestions?: number;
   scorePossible?: number;
+  branchHistory?: Array<{ fromQuestionId: string; category?: string; questionIds?: string[] }>;
   userData?: Record<string, unknown>;
   pathQuestionSnapshots?: PublicQuestion[];
   answers?: PublicAnswer[];
@@ -46,6 +48,7 @@ export default function PublicQuizResponseView({
   const [response, setResponse] = useState<PublicResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { openFile } = useAppFileViewer();
   useEffect(() => {
     let alive = true;
     void fetch(
@@ -110,7 +113,7 @@ export default function PublicQuizResponseView({
     question: PublicQuestion,
   ) => {
     if (!answer) return 'No answer recorded';
-    if (answer.passed) return 'Passed';
+    if (answer.passed) return 'Skipped';
     if (answer.fileUrl) return answer.fileName || 'Uploaded file';
     const values =
       Array.isArray(answer.answer) ? answer.answer : [answer.answer];
@@ -156,13 +159,8 @@ export default function PublicQuizResponseView({
             : 'Unavailable'}
           </p>
         </div>
-        {Object.entries(response.userData || {}).map(([key, value]) => (
-          <p
-            key={key}
-            className='mt-1 text-xs text-pw-muted'>
-            <b>{key}:</b> {String(value)}
-          </p>
-        ))}
+        {Object.entries(response.userData || {}).filter(([key, value]) => !['categoryScores','submissionReason','assessmentType','isSignedUser','signedUser','currentPathQuestionIds','pathQuestionSnapshots','branchHistory','attemptTokenHash','deviceKeyHash','attemptId','deviceKey'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).length > 0 && <section className='mt-3 grid grid-cols-1 gap-1 border-t border-white/10 pt-3 sm:grid-cols-2'><h2 className='col-span-full text-sm font-semibold'>Participant details</h2>{Object.entries(response.userData || {}).filter(([key, value]) => !['categoryScores','submissionReason','assessmentType','isSignedUser','signedUser','currentPathQuestionIds','pathQuestionSnapshots','branchHistory','attemptTokenHash','deviceKeyHash','attemptId','deviceKey'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).map(([key, value]) => <p key={key} className='text-xs text-pw-muted'><b>{key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (letter) => letter.toUpperCase())}:</b> {String(value)}</p>)}</section>}
+        {(response.branchHistory || []).length > 0 && <section className='mt-3 border-t border-white/10 pt-3'><h2 className='text-sm font-semibold'>Branch path</h2><ol className='mt-1 space-y-1 text-xs text-pw-muted'>{response.branchHistory!.map((branch, index) => { const triggerIndex = questions.findIndex((item) => String(item.id) === String(branch.fromQuestionId)); const branchNums = (branch.questionIds || []).map((id) => questions.findIndex((item) => String(item.id) === String(id)) + 1).filter((number) => number > 0); return <li key={`${branch.fromQuestionId}-${index}`}>Question {triggerIndex >= 0 ? triggerIndex + 1 : index + 1} → {branch.category ? `Group: ${branch.category}` : 'General flow'} · Questions {branchNums.length ? branchNums.join(', ') : branch.questionIds?.length || 0}</li>; })}</ol></section>}
       </Card>
       <section className='space-y-1'>
         {questions.map((question: PublicQuestion, index: number) => {
@@ -207,6 +205,11 @@ export default function PublicQuizResponseView({
                   {label(answer, question)}
                 </p>
               }
+              {answer?.fileUrl && (
+                <button type='button' onClick={() => openFile({ src: answer.fileUrl!, name: answer.fileName || 'Response upload', canDownload: true })} className='text-sm text-pw-cyan underline'>
+                  Preview uploaded file
+                </button>
+              )}
               {answer?.correct === true && (
                 <span className='text-xs font-semibold text-pw-success'>
                   Correct

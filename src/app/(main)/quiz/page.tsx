@@ -49,6 +49,7 @@ import {
   Highlighter,
   Mail,
   LoaderCircle,
+  Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -5263,6 +5264,7 @@ export default function QuizPage() {
       }
       setViewingResponses({
         ...quiz,
+        responsesPublicId: result.isLocalOnly ? (quiz as any).settings?.publicResponsesId || quiz.responsesPublicId : result.responsesPublicId || undefined,
         questions: quiz.questions,
         responses: result.responses,
         responsesNextOffset: result.nextOffset,
@@ -5440,22 +5442,25 @@ export default function QuizPage() {
             Authorization: `Bearer ${session.access_token}`,
           },
           credentials: 'omit',
-          body: JSON.stringify({}),
+          body: JSON.stringify({ enabled: !Boolean(viewingResponses.responsesPublicId || (viewingResponses as any).settings?.publicResponsesId) }),
         },
       );
       const body = await result.json().catch(() => ({}));
       if (!result.ok)
         throw new Error(body.error || 'Could not update response sharing.');
       if (body.enabled && body.publicId) {
+        setViewingResponses((current) => current ? { ...current, responsesPublicId: body.publicId } : current);
         const url = `${window.location.origin}/quiz/responses/${body.publicId}`;
         await navigator.clipboard?.writeText(url).catch(() => {});
         toast.success(
           'Assessment responses are public and the link was copied.',
         );
-      } else
+      } else {
+        setViewingResponses((current) => current ? { ...current, responsesPublicId: undefined } : current);
         toast.success(
           'Shared response page disabled. The previous link no longer works.',
         );
+      }
     } catch (error) {
       toast.error(
         error instanceof Error ?
@@ -6595,8 +6600,8 @@ export default function QuizPage() {
                       <Button
                         variant='outline'
                         size='sm'
-                        title='Toggle public visibility for all assessment responses'
-                        aria-label='Toggle assessment response visibility'
+                        title={viewingResponses.responsesPublicId ? 'Make assessment responses private' : 'Make assessment responses public'}
+                        aria-label={viewingResponses.responsesPublicId ? 'Make assessment responses private' : 'Make assessment responses public'}
                         disabled={responseListSharing}
                         onClick={() => void toggleResponseListPublic()}
                         className='h-9 gap-1.5 border-pw-primary/30 text-xs text-pw-primary'>
@@ -6605,8 +6610,7 @@ export default function QuizPage() {
                             size={14}
                             className='animate-spin'
                           />
-                        : <Share2 size={14} />}
-                        Share
+                        : viewingResponses.responsesPublicId ? <><EyeOff size={14} /> Private</> : <><Share2 size={14} /> Public</>}
                       </Button>
                     )}
                   {viewingResponses.responses &&
@@ -6924,7 +6928,7 @@ export default function QuizPage() {
                                 <div className='space-y-1.5'>
                                   <div className='flex justify-between text-xs font-mono font-bold'>
                                     <span className='text-pw-success'>
-                                      {totalPass} Passed ({passPct}%)
+                                      {totalPass} Correct ({passPct}%)
                                     </span>
                                     <span className='text-pw-danger'>
                                       {totalFail} Failed ({100 - passPct}%)
@@ -7340,6 +7344,15 @@ export default function QuizPage() {
                               }>
                               <Share2 className='h-3.5 w-3.5' />
                             </button>
+                            {viewingResponses.responsesPublicId && <button type='button' title={`Copy taker ${idx + 1} response link`} aria-label={`Copy taker ${idx + 1} response link`} className='h-8 w-8 rounded-xl flex items-center justify-center bg-transparent p-1 text-pw-cyan hover:bg-white/6' onClick={async () => {
+                              try {
+                                const publicId = viewingResponses.responsesPublicId;
+                                if (!publicId || !resp.id) throw new Error('This response link is unavailable.');
+                                const link = `${window.location.origin}/quiz/responses/${publicId}/taker?responseId=${encodeURIComponent(String(resp.id))}`;
+                                await navigator.clipboard.writeText(link);
+                                toast.success(`Taker ${idx + 1} response link copied.`);
+                              } catch { toast.error('Could not copy this response link.'); }
+                            }}><Copy className='h-3.5 w-3.5' /></button>}
                           </div>
                         )}
                       </div>
@@ -7442,7 +7455,7 @@ export default function QuizPage() {
                               .length > 0 && (
                               <span>
                                 <b className='block text-pw-muted'>
-                                  Passed questions
+                                  Skipped questions
                                 </b>
                                 {
                                   resp.answers.filter(
@@ -7477,7 +7490,7 @@ export default function QuizPage() {
 
                       {Array.isArray(resp.branchHistory) &&
                         resp.branchHistory.length > 0 && (
-                          <div className='space-y-1'>
+                          <div className='space-y-1 mt-1'>
                             <p className='text-[10px] font-bold uppercase tracking-wide text-pw-cyan'>
                               Branches followed
                             </p>
@@ -7488,19 +7501,18 @@ export default function QuizPage() {
                                     String(answer.questionId),
                                   ),
                               );
+                              const savedBranchQuestions = resp.pathQuestionSnapshots || viewingResponses.questions || [];
+                              const triggerIndex = savedBranchQuestions.findIndex((question: any) => String(question.id) === String(branch.fromQuestionId));
+                              const triggerLabel = triggerIndex >= 0 ? `Question ${triggerIndex + 1}` : 'Question';
+                              const branchQuestionNumbers = (branch.questionIds || []).map((id: string) => savedBranchQuestions.findIndex((question: any) => String(question.id) === String(id)) + 1).filter((number: number) => number > 0);
                               return (
                                 <div
                                   key={`${branch.fromQuestionId}-${branchIndex}`}
                                   className='grid grid-cols-2 gap-x-3 gap-y-0.5 border-b border-white/5 py-1 text-[10px] sm:grid-cols-4'>
                                   <span className='font-semibold'>
-                                    {branch.category ||
-                                      (branch.targetQuestionId ?
-                                        `Question ${branch.targetQuestionId}`
-                                      : 'Branch')}
+                                    {triggerLabel} → {branch.category ? `Group: ${branch.category}` : 'General flow'}
                                   </span>
-                                  <span>
-                                    {branch.questionIds.length} questions
-                                  </span>
+                                  <span>Questions {branchQuestionNumbers.length ? branchQuestionNumbers.join(', ') : branch.questionIds.length}</span>
                                   <span>
                                     Attempted{' '}
                                     {
@@ -7520,7 +7532,7 @@ export default function QuizPage() {
                                           answer.correct === false,
                                       ).length
                                     }{' '}
-                                    · Passed{' '}
+                                    · Skipped{' '}
                                     {
                                       branchAnswers.filter(
                                         (answer: any) => answer.passed,

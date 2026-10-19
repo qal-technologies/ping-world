@@ -29,7 +29,7 @@ const stripMarkup = (value: unknown) =>
 
 const answerText = (answer: any, question: any) => {
   if (!answer) return 'Unanswered';
-  if (answer.passed) return 'Passed';
+  if (answer.passed) return 'Skipped';
   if (answer.fileUrl)
     return `${answer.fileName || answer.fileType || 'Uploaded media'}: ${answer.fileUrl}`;
   const raw = Array.isArray(answer.answer) ? answer.answer : [answer.answer];
@@ -364,8 +364,10 @@ export async function exportQuizFeedbackPdf (
         const branchAnswers = (response.answers || []).filter((answer: any) =>
           branch.questionIds?.includes(String(answer.questionId)),
         );
+        const triggerIndex = (input.quiz.questions || []).findIndex((question: any) => String(question.id) === String(branch.fromQuestionId));
+        const branchLabel = `Question ${triggerIndex >= 0 ? triggerIndex + 1 : 'in flow'} → ${branch.category ? `Group: ${branch.category}` : 'General flow'}`;
         addText(
-          `Branch: ${branch.category || branch.targetQuestionId || 'General'} || ${branch.questionIds?.length || 0} questions || ${branchAnswers.filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length} attempted || ${branchAnswers.filter((answer: any) => answer.correct === false).length} failed || ${branchAnswers.filter((answer: any) => answer.passed).length} passed`,
+          `${branchLabel} || ${branch.questionIds?.length || 0} questions || ${branchAnswers.filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length} attempted || ${branchAnswers.filter((answer: any) => answer.correct === false).length} failed || ${branchAnswers.filter((answer: any) => answer.passed).length} skipped`,
           {size: 12, indent: 5},
         );
       }

@@ -57,6 +57,7 @@ export async function tagImageBlob(blob: Blob): Promise<Blob> {
     const tag = pngChunk('tEXt', textData);
     const parts: Uint8Array[] = [input.subarray(0, 8)];
     let offset = 8;
+    let foundEnd = false;
     while (offset + 12 <= input.length) {
       const length = new DataView(input.buffer, input.byteOffset + offset, 4).getUint32(0, false);
       const end = offset + 12 + length;
@@ -65,8 +66,9 @@ export async function tagImageBlob(blob: Blob): Promise<Blob> {
       parts.push(input.subarray(offset, end));
       if (chunkType === 'IHDR') parts.push(tag);
       offset = end;
-      if (chunkType === 'IEND') break;
+      if (chunkType === 'IEND') { foundEnd = true; break; }
     }
+    if (!foundEnd) return blob;
     if (offset < input.length) parts.push(input.subarray(offset));
     const output = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
     let outputOffset = 0;
@@ -91,16 +93,10 @@ export async function tagImageBlob(blob: Blob): Promise<Blob> {
   }
 
   if (signatureWebp || type === 'image/webp') {
-    const payload = xmpPacket();
-    const paddedLength = payload.length + (payload.length % 2);
-    const chunk = new Uint8Array(8 + paddedLength);
-    chunk.set(utf8.encode('XMP '), 0);
-    new DataView(chunk.buffer).setUint32(4, payload.length, true);
-    chunk.set(payload, 8);
-    const output = new Uint8Array(input.length + chunk.length);
-    output.set(input.subarray(0, 12)); output.set(chunk, 12); output.set(input.subarray(12), 12 + chunk.length);
-    new DataView(output.buffer).setUint32(4, output.length - 8, true);
-    return new Blob([output], { type: blob.type || 'image/webp' });
+    // Adding XMP requires converting simple VP8/VP8L files to the extended
+    // WebP container and setting its feature flags. Appending an XMP chunk to
+    // the simple form corrupts some decoders, so preserve the original bytes.
+    return blob;
   }
   return blob;
 }

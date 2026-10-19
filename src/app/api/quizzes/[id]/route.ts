@@ -4,6 +4,7 @@ import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { getRequestUser } from '@/lib/api-auth';
 import { verifyQuizAccessToken } from '@/lib/quiz/private-access-token';
 import { hasActiveQuizProTier, resolveQuizPrivacySettings } from '@/lib/quiz/quiz-privacy';
+import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,10 +137,45 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return NextResponse.json({ error: 'Invalid assessment.' }, { status: 400 });
     }
     const admin = getSupabaseAdmin();
-    const { data: quiz, error: readError } = await admin.from('quizzes').select('id').eq('id', id).eq('user_id', user.id).maybeSingle();
+    const { data: quiz, error: readError } = await admin.from('quizzes').select('id,questions,settings').eq('id', id).eq('user_id', user.id).maybeSingle();
     if (readError || !quiz) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
-    const { error: notificationError } = await admin.from('notification_batches').delete().eq('resource_id', id).eq('recipient_id', user.id);
+    const [{ data: responses, error: responsesError }, { data: attempts, error: attemptsError }] = await Promise.all([
+      admin.from('quiz_responses').select('answers').eq('quiz_id', id),
+      admin.from('quiz_attempts').select('answers').eq('quiz_id', id),
+    ]);
+    if (responsesError || attemptsError) throw responsesError || attemptsError;
+    const responsePaths = (responses || []).flatMap((row: any) => (Array.isArray(row.answers) ? row.answers : []).flatMap((answer: any) => [answer?.fileUrl, ...(Array.isArray(answer?.answerHistory) ? answer.answerHistory.map((revision: any) => revision?.fileUrl) : [])]));
+    const attemptPaths = (attempts || []).flatMap((row: any) => Object.entries(row.answers || {}).filter(([key]) => !key.startsWith('__')).flatMap(([, answer]: [string, any]) => [answer?.fileUrl, ...(Array.isArray(answer?.answerHistory) ? answer.answerHistory.map((revision: any) => revision?.fileUrl) : [])]));
+    const questionPaths = (Array.isArray(quiz.questions) ? quiz.questions : []).flatMap((question: any) => [question?.imageUrl, question?.uploadUrl, ...(question?.options || []).flatMap((option: any) => [option?.imageUrl, option?.uploadUrl])]);
+    const brandingPaths = [quiz.settings?.branding?.image, quiz.settings?.branding?.icon];
+    const objectPath = (value: unknown, bucket: string) => {
+      if (typeof value !== 'string' || value.startsWith('data:')) return null;
+      const unpacked = unpackPingWorldMediaUrl(value).url || value;
+      if (!unpacked.startsWith('http')) return unpacked;
+      try {
+        const path = new URL(unpacked).pathname;
+        const marker = `/object/public/${bucket}/`;
+        const signedMarker = `/object/sign/${bucket}/`;
+        const index = Math.max(path.indexOf(marker), path.indexOf(signedMarker));
+        return index < 0 ? null : decodeURIComponent(path.slice(index + (path.startsWith(marker, index) ? marker.length : signedMarker.length)));
+      } catch { return null; }
+    };
+    const responseMedia = [...responsePaths, ...attemptPaths].map((path) => objectPath(path, 'quiz-response-media')).filter((path): path is string => Boolean(path?.startsWith(`${id}/`)));
+    const setterMedia = [...questionPaths, ...brandingPaths].map((path) => objectPath(path, 'quiz-media')).filter((path): path is string => Boolean(path?.startsWith(`${user.id}/${id}/`)));
+    if (responseMedia.length) {
+      const { error } = await admin.storage.from('quiz-response-media').remove([...new Set(responseMedia)]);
+      if (error) throw error;
+    }
+    if (setterMedia.length) {
+      const { error } = await admin.storage.from('quiz-media').remove([...new Set(setterMedia)]);
+      if (error) throw error;
+    }
+    const { error: notificationError } = await admin.from('notification_batches').delete().eq('resource_id', id);
     if (notificationError) throw notificationError;
+    const { error: attemptDeleteError } = await admin.from('quiz_attempts').delete().eq('quiz_id', id);
+    if (attemptDeleteError) throw attemptDeleteError;
+    const { error: responseDeleteError } = await admin.from('quiz_responses').delete().eq('quiz_id', id);
+    if (responseDeleteError) throw responseDeleteError;
     const { error } = await admin.from('quizzes').delete().eq('id', id).eq('user_id', user.id);
     if (error) throw error;
     return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } });

@@ -142,6 +142,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPurchasedTools(Array.isArray(tools) ? tools : [tools]);
 
         try {
+          // Firebase is an optional bridge. Avoid requests that can only fail
+          // when the client-side Firebase app is not configured in this deploy.
+          if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || !process.env.NEXT_PUBLIC_FIREBASE_APP_ID) throw new Error('Firebase client is not configured.');
           if (!authSession?.access_token) throw new Error('No Supabase access token is available.');
           const res = await fetch('/api/auth/firebase-token', {
             method: 'POST',
@@ -157,7 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             console.log('[Firebase Auth Bridge] Signed into Firebase with Supabase UID successfully!');
           }
         } catch (firebaseErr) {
-          console.warn('[Firebase Auth Bridge] Session bridging was bypassed or failed:', firebaseErr);
+          if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) console.warn('[Firebase Auth Bridge] Session bridging was bypassed or failed:', firebaseErr);
         }
       } else {
         await HybridStorage.setUserId('guest');
@@ -168,11 +171,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPurchasedTools([]);
 
         try {
+          if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || !process.env.NEXT_PUBLIC_FIREBASE_APP_ID) throw new Error('Firebase client is not configured.');
           const { signInAnonymously } = await import('firebase/auth');
           const { auth: firebaseAuth } = await import('@/lib/firebase');
           await signInAnonymously(firebaseAuth);
         } catch (firebaseErr) {
-          console.warn('[Firebase Auth Bridge] Anonymous authentication fallback was bypassed or failed:', firebaseErr);
+          if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) console.warn('[Firebase Auth Bridge] Anonymous authentication fallback was bypassed or failed:', firebaseErr);
         }
       }
     } catch (err) {

@@ -27,6 +27,7 @@ const storageDiagnosticFetch: typeof fetch = async (input, init) => {
 // access only to the exact object path issued by our server route.
 export const supabaseStorage = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    storageKey: 'pingworld-supabase-storage-only',
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,

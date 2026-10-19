@@ -551,7 +551,13 @@ async function persistQuizMedia(value: any, path: string) {
   if (typeof value !== 'string') return value;
   const unpacked = unpackPingWorldMediaUrl(value);
   const source = unpacked.url || value;
-  if (!source.startsWith('data:')) return value;
+  if (!source.startsWith('data:')) {
+    const ownerQuizPrefix = path.split('/').slice(0, 2).join('/') + '/';
+    if (!source.startsWith('http') && source.startsWith(ownerQuizPrefix)) {
+      return supabaseStorage.storage.from('quiz-media').getPublicUrl(source).data.publicUrl;
+    }
+    return value;
+  }
 
   const response = await fetch(source);
   if (!response.ok) throw new Error('Could not read uploaded assessment media.');
@@ -621,10 +627,11 @@ async function externalizeQuizMedia(quiz: any, userId: string) {
       return q;
     }));
   }
-  if (typeof quiz.branding?.image === 'string') {
+  if (typeof quiz.branding?.image === 'string' || typeof quiz.branding?.icon === 'string') {
     output.branding = {
       ...quiz.branding,
-      image: await persistQuizMedia(quiz.branding.image, `${safeUser}/${safeQuiz}/branding/image`),
+      ...(typeof quiz.branding?.image === 'string' ? { image: await persistQuizMedia(quiz.branding.image, `${safeUser}/${safeQuiz}/branding/image`) } : {}),
+      ...(typeof quiz.branding?.icon === 'string' ? { icon: await persistQuizMedia(quiz.branding.icon, `${safeUser}/${safeQuiz}/branding/icon`) } : {}),
     };
   }
   return output;
@@ -1398,7 +1405,7 @@ export const HybridStorage = {
     if (!await deleteCacheValue(key)) throw new Error('Assessment response cache could not be cleared from IndexedDB.');
   },
 
-  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; totalCount?: number; isLocalOnly?: boolean, isCached?:boolean }> {
+  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; totalCount?: number; responsesPublicId?: string | null; isLocalOnly?: boolean, isCached?:boolean }> {
     let session = null;
     try {
       const { data } = await supabase.auth.getSession();
@@ -1443,6 +1450,7 @@ export const HybridStorage = {
     };
 
     const cachedPage = await readCachedPage();
+    if (quizId === 'pingworld-mastery-showcase' || quizId === 'pingworld-showcase-assessment') return loadLocalResponses();
     if (!session?.access_token || !isOnline()) {
       return cachedPage && Array.isArray(cachedPage.responses)
         ? { ...cachedPage, isLocalOnly: true, isCached: true }
@@ -1459,7 +1467,7 @@ export const HybridStorage = {
           ? { ...cachedPage, isLocalOnly: true, isCached: true }
           : loadLocalResponses();
       }
-      const { responses: data = [], nextOffset = null, totalCount } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null; totalCount?: number };
+      const { responses: data = [], nextOffset = null, totalCount, responsesPublicId } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null; totalCount?: number; responsesPublicId?: string | null };
       const mapped = (data || []).map((row: any) => {
         const metadata = row.userData || {};
         const userData = { ...metadata };
@@ -1479,6 +1487,11 @@ export const HybridStorage = {
         delete userData.isSignedUser;
         delete userData.signedUser;
         delete userData.responseMediaExternalized;
+        delete userData.attemptTokenHash;
+        delete userData.deviceKeyHash;
+        delete userData.attemptId;
+        delete userData.attemptToken;
+        delete userData.deviceKey;
         const answers = Array.isArray(row.answers) ? row.answers : [];
         return {
           id: row.id,
@@ -1511,7 +1524,7 @@ export const HybridStorage = {
         nextOffset,
         totalCount,
       });
-      return { responses: mapped, nextOffset, totalCount, isLocalOnly: false };
+      return { responses: mapped, nextOffset, totalCount, responsesPublicId, isLocalOnly: false };
     } catch {
       return cachedPage && Array.isArray(cachedPage.responses)
         ? { ...cachedPage, isLocalOnly: true, isCached: true }

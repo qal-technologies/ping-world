@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await readJsonWithinLimit(request, 512 * 1024)) as Record<
+    const body = (await readJsonWithinLimit(request, 5 * 1024 * 1024)) as Record<
       string,
       any
     >;
@@ -303,7 +303,7 @@ export async function POST(request: NextRequest) {
             Object.entries(answers).length > questionIds.size ||
             Object.entries(answers).some(
               ([id, value]) =>
-                !questionIds.has(id) || JSON.stringify(value).length > 32_000,
+                !questionIds.has(id) || JSON.stringify(value).length > 4 * 1024 * 1024,
             )
           ) {
             return NextResponse.json(
@@ -460,6 +460,11 @@ export async function POST(request: NextRequest) {
             { error: 'This device has already used its attempt.' },
             { status: 409 },
           );
+        const { data: priorResponse, error: responseCheckError } = await admin
+          .from('quiz_responses').select('id').eq('quiz_id', quizId)
+          .eq('user_data->>deviceKeyHash', deviceKeyHash).limit(1).maybeSingle();
+        if (responseCheckError) throw responseCheckError;
+        if (priorResponse) return NextResponse.json({ error: 'This device has already used its attempt.' }, { status: 409 });
       }
       const suppliedToken =
         typeof body.attemptToken === 'string' ? body.attemptToken : '';
@@ -508,7 +513,7 @@ export async function POST(request: NextRequest) {
         answerEntries.length > questionIds.size ||
         answerEntries.some(
           ([id, value]) =>
-            !questionIds.has(id) || JSON.stringify(value).length > 32_000,
+            !questionIds.has(id) || JSON.stringify(value).length > 4 * 1024 * 1024,
         )
       ) {
         return NextResponse.json(
@@ -655,7 +660,7 @@ export async function POST(request: NextRequest) {
       answerEntries.length > attemptKnownIds.size ||
       answerEntries.some(
         ([id, value]) =>
-          !attemptKnownIds.has(id) || JSON.stringify(value).length > 32_000,
+          !attemptKnownIds.has(id) || JSON.stringify(value).length > 4 * 1024 * 1024,
       )
     ) {
       return NextResponse.json(

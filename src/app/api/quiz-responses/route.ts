@@ -8,11 +8,23 @@ import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
 import { resolvePipedText } from '@/lib/quiz/quiz-piping';
 import { isNotificationRecipientActive, sendPushToUser } from '@/lib/notifications/push-server';
 
-function sameValue(left: unknown, right: unknown) {
-  if (Array.isArray(left) && Array.isArray(right)) {
-    return left.length === right.length && left.every((item) => right.some((other) => String(item) === String(other)));
+function sameValue(left: unknown, right: unknown, options: any[] = []) {
+  const normalizeOption = (value: unknown) => {
+    const byId = options.find((option: any, index: number) => String(option?.id ?? index) === String(value));
+    if (byId) return String(byId.id ?? value);
+    const index = Number(value);
+    return Number.isInteger(index) && options[index] ? String(options[index]?.id ?? value) : String(value);
+  };
+  if (Array.isArray(left) || Array.isArray(right)) {
+    const leftValues = (Array.isArray(left) ? left : [left]).map(normalizeOption).sort();
+    const rightValues = (Array.isArray(right) ? right : [right]).map(normalizeOption).sort();
+    return leftValues.length === rightValues.length && leftValues.every((item, index) => item === rightValues[index]);
   }
-  return String(left ?? '').trim() === String(right ?? '').trim();
+  // Numeric option indexes and stable option IDs both occur in legacy saved
+  // answers. Resolve both through the same option list before comparison.
+  return options.length
+    ? normalizeOption(left) === normalizeOption(right)
+    : String(left ?? '').trim() === String(right ?? '').trim();
 }
 
 function hasSubmittedAnswer(answer: any): boolean {
@@ -38,6 +50,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid submission.' }, { status: 400 });
     }
     const admin = getSupabaseAdmin();
+    // A response may have committed while its HTTP reply was lost. Treat the
+    // attempt ID as an idempotency key so a safe retry can complete in the UI.
+    if (typeof submitted.submissionId === 'string' && typeof submitted.attemptToken === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submitted.submissionId)) {
+      const { data: prior } = await admin.from('quiz_responses').select('id,score,total_questions,user_data').eq('id', submitted.submissionId).eq('quiz_id', quizId).maybeSingle();
+      const tokenHash = createHash('sha256').update(submitted.attemptToken).digest('hex');
+      if (prior && prior.user_data?.attemptTokenHash === tokenHash) return NextResponse.json({ success: true, responseId: prior.id, score: prior.score, totalQuestions: prior.total_questions, answeredQuestions: prior.user_data?.answeredQuestions || 0, scorePossible: prior.user_data?.scorePossible || 0, categoryScores: prior.user_data?.categoryScores || {} }, { status: 200 });
+    }
     const { data: quiz, error: quizError } = await admin.from('quizzes')
       .select('id,user_id,title,type,questions,settings,expires_at').eq('id', quizId).maybeSingle();
     if (quizError || !quiz || (quiz.expires_at && new Date(quiz.expires_at).getTime() < Date.now())) {
@@ -146,7 +165,7 @@ export async function POST(request: NextRequest) {
         } else {
           correct = question.type === 'true_false'
             ? String(answer ?? '').trim().toLowerCase() === String(correctValue ?? '').trim().toLowerCase()
-            : sameValue(answer, correctValue);
+            : sameValue(answer, correctValue, Array.isArray(question.options) ? question.options : []);
           const options = Array.isArray(question.options) ? question.options : [];
           const correctIds = (Array.isArray(correctValue) ? correctValue : [correctValue]).map(String);
           const hasCustomWeights = options.some((option: any) => option?.scoreWeight !== undefined && option?.scoreWeight !== null && option?.scoreWeight !== '' && Number.isFinite(Number(option.scoreWeight)) && Number(option.scoreWeight) >= 0);
@@ -158,7 +177,12 @@ export async function POST(request: NextRequest) {
           if (question.type === 'checkbox') {
             if (hasCustomWeights) {
               pointsPossible = correctIds.reduce((sum, id) => sum + weightFor(id), 0);
-              const selectedIds = Array.isArray(answer) ? answer : [];
+              const selectedIds = (Array.isArray(answer) ? answer : []).map((value: unknown) => {
+                const optionIndex = Number(value);
+                const option = Number.isInteger(optionIndex) ? options[optionIndex] : undefined;
+                const byId = options.find((item: any, index: number) => String(item?.id ?? index) === String(value));
+                return String(byId?.id ?? (option && typeof option === 'object' ? option.id : value));
+              });
               pointsEarned = selectedIds.reduce((sum: number, id: unknown) => correctIds.includes(String(id)) ? sum + weightFor(id) : sum, 0);
             } else {
               pointsPossible = 1;
@@ -353,6 +377,8 @@ export async function POST(request: NextRequest) {
     const score = quiz.type === 'quiz' ? answers.reduce((sum, answer: any) => sum + Math.max(0, answer.pointsEarned !== undefined ? Number(answer.pointsEarned) || 0 : (answer.correct ? 1 : 0)), 0) : 0;
     const responseUserData = {
       ...userData,
+      ...(typeof attempt?.device_key_hash === 'string' ? { deviceKeyHash: attempt.device_key_hash } : {}),
+      ...(typeof submitted.attemptToken === 'string' ? { attemptTokenHash: createHash('sha256').update(submitted.attemptToken).digest('hex') } : {}),
       answeredQuestions: Number(userData.answeredQuestions) || 0,
       scorePossible: Number(userData.scorePossible) || 0,
       currentPathQuestionIds,
@@ -438,6 +464,10 @@ export async function POST(request: NextRequest) {
         }
       }
       else row.id = submittedRow.response_id;
+      // Keep response persistence and its retry/idempotency record, then remove
+      // the bulky in-progress attempt snapshot that is no longer needed.
+      const { error: attemptCleanupError } = await admin.from('quiz_attempts').delete().eq('id', attempt.id).eq('quiz_id', quizId);
+      if (attemptCleanupError) console.warn('[api/quiz-responses] Saved response but attempt cleanup will need retry:', attemptCleanupError.code || 'unknown');
     } else {
       const { error } = await admin.from('quiz_responses').insert(row);
       if (error) {

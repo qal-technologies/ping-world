@@ -285,7 +285,7 @@ export function exportResponsesToText(quiz: any, responses: any[]): string {
     lines.push('### Answers:');
     responsePathQuestions(r, quiz).forEach((q: any, qIdx: number) => {
       const ansObj = (r.answers || []).find((answer: any) => String(answer.questionId) === String(q.id));
-      const formattedAns = ansObj ? (ansObj.passed ? '(Passed)' : formatAnswerForExport(ansObj.answer, q, 'text')) : '(Not answered)';
+      const formattedAns = ansObj ? (ansObj.passed ? '(Skipped)' : formatAnswerForExport(ansObj.answer, q, 'text')) : '(Not answered)';
       const mediaUrl = typeof ansObj?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(ansObj.fileUrl).url || ansObj.fileUrl) : '';
       lines.push(`  ${qIdx + 1}. [${ansObj.questionId}] ${cleanTextForCSV(q.text)}`);
       lines.push(`     Answer: ${formattedAns}${mediaUrl ? `\n     Media URL: ${mediaUrl}` : ''}`);

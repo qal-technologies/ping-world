@@ -117,6 +117,19 @@ function getPrivateQuizAccessToken(quizId: string): string {
   }
 }
 
+function normalizeOptionValue(question: Question, value: unknown): string {
+  const raw = value && typeof value === 'object' && 'id' in (value as any)
+    ? (value as any).id
+    : value;
+  const options = question.options || [];
+  const byId = options.find((option: any, index: number) => String(option?.id ?? index) === String(raw));
+  if (byId) return String((byId as any)?.id ?? raw);
+  const index = Number(raw);
+  return Number.isInteger(index) && options[index]
+    ? String((options[index] as any)?.id ?? raw)
+    : String(raw);
+}
+
 function calculateQuizPoints(questions: Question[], answers: any[], correctKeys: Record<string, any>, pathIds: string[]) {
   const byId = new Map(questions.map((question) => [question.id, question]));
   const answerIds = new Set(answers.map((answer) => String(answer.questionId)));
@@ -201,8 +214,25 @@ function keepAnswerRevision(previous: any, next: any) {
     correct: previous.correct,
     recordedAt: previous.updatedAt || previous.recordedAt || new Date().toISOString(),
   };
-  if (priorValue.answer !== undefined || priorValue.fileUrl) history.push(priorValue);
-  return { ...next, answerHistory: history, updatedAt: new Date().toISOString() };
+  const normalize = (value: any) => {
+    if (Array.isArray(value)) return JSON.stringify([...value].map(String).sort());
+    if (value && typeof value === 'object') return JSON.stringify(value, Object.keys(value).sort());
+    return String(value ?? '').trim();
+  };
+  const sameAnswer = normalize(previous.answer) === normalize(next.answer) &&
+    String(previous.fileUrl || '') === String(next.fileUrl || '') &&
+    String(previous.fileName || '') === String(next.fileName || '');
+  if (!sameAnswer && (priorValue.answer !== undefined || priorValue.fileUrl)) {
+    // Keep a bounded history. A question can be revisited often, and an upload
+    // data URL in every revision would otherwise exceed attempt snapshot limits.
+    if (typeof priorValue.fileUrl === 'string' && priorValue.fileUrl.startsWith('data:')) {
+      priorValue.fileUrl = '';
+      priorValue.fileName = priorValue.fileName || 'Previous uploaded file';
+    }
+    history.push(priorValue);
+    if (history.length > 5) history.splice(0, history.length - 5);
+  }
+  return { ...next, ...(history.length ? { answerHistory: history } : {}), updatedAt: new Date().toISOString() };
 }
 
 function isAnswerAttempted(answer: any): boolean {
@@ -2333,7 +2363,10 @@ function Taker() {
     [activeQuestions, userAnswers, scorePathIds.join('|')],
   );
   const totalQuestions = quiz?.calculateAllBranches ? activeQuestions.length : currentPathIds.length;
-  const attemptedQuestions = new Set(userAnswers.filter(isAnswerAttempted).map((answer) => answer.questionId)).size;
+  const touchedQuestions = new Set(userAnswers.map((answer) => String(answer.questionId))).size;
+  const hasTimer = Boolean(quiz?.timer?.hasTimer);
+  const quitThreshold = Math.ceil((quiz?.questions.length || 0) * 0.75);
+  const canQuitAssessment = !hasTimer && touchedQuestions < quitThreshold;
   const detailContext = useCallback(
     (answers: any[] = userAnswers) => ({
       userData,
@@ -2457,18 +2490,11 @@ function Taker() {
     }
 
     if (question.type === 'checkbox') {
-      const correctIds =
-        (Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect]).map((value: unknown) => {
-          const options = question.options || [];
-          const byId = options.find((option: any, index: number) => String(option?.id ?? index) === String(value));
-          if (byId) return String((byId as any)?.id ?? value);
-          const index = Number(value);
-          return Number.isInteger(index) && options[index] ? String((options[index] as any)?.id ?? value) : String(value);
-        });
+      const correctIds = (Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect]).map((value: unknown) => normalizeOptionValue(question, value));
+      const selectedIds = (Array.isArray(answer) ? answer : []).map((value: unknown) => normalizeOptionValue(question, value));
       return (
-        Array.isArray(answer) &&
-        answer.length === correctIds.length &&
-        answer.every((val: any) => correctIds.some((correctId: any) => String(correctId) === String(val)))
+        selectedIds.length === correctIds.length &&
+        selectedIds.every((value) => correctIds.includes(value))
       );
     } else if (question.type === 'input') {
       const userAns = String(answer || '').trim();
@@ -2495,10 +2521,7 @@ function Taker() {
         String(answer).toLowerCase() === String(decodedCorrect).toLowerCase()
       );
     }
-    const normalizedCorrect = typeof decodedCorrect === 'number' && question.options?.[decodedCorrect]
-      ? (question.options[decodedCorrect] as any)?.id ?? decodedCorrect
-      : decodedCorrect;
-    return String(answer) === String(normalizedCorrect);
+    return normalizeOptionValue(question, answer) === normalizeOptionValue(question, decodedCorrect);
   };
 
   const handlePass = () => {
@@ -2515,7 +2538,7 @@ function Taker() {
     ];
     setUserAnswers(updated);
     setScore(updated.filter((a) => a.correct).length);
-    toast.info('Question passed');
+    toast.info('Question skipped');
     proceedToNext(updated);
   };
 
@@ -3895,7 +3918,7 @@ function Taker() {
 
   if (showSubmittingScreen && !isFinished) {
     const retrySnapshot = finalSubmissionSnapshotRef.current;
-    return <div className='flex min-h-[100dvh] items-center justify-center bg-[#0A0C1B] p-5 text-white'><Card className='w-full max-w-md space-y-4 border-white/10 bg-pw-surface/80 p-6 text-center'><div className='mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-pw-primary/10'>{submissionFailed ? <AlertTriangle className='h-7 w-7 text-pw-warning' /> : <LoaderCircle className='h-7 w-7 animate-spin text-pw-primary' />}</div><h1 className='text-xl font-bold'>{submissionFailed ? 'Could not save your response' : 'Saving your response'}</h1><p className='text-sm text-pw-muted'>{submissionFailed ? (isOnline ? 'Your answers are locked and still available here. Check your connection, then retry the save.' : 'You are offline. Your answers are locked and will not change. Reconnect, then retry the save.') : 'Please keep this page open while we securely save your answers.'}</p>{submissionFailed && retrySnapshot && <Button onClick={() => { void finalizeQuiz(retrySnapshot.answers, retrySnapshot.reason); }} disabled={isSubmitting} className='btn-primary w-full'>{isSubmitting ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Saving…</> : 'Retry save'}</Button>}</Card></div>;
+    return <main className='relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-pw-bg px-4 py-10 text-white'><div className='pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-pw-primary/20 blur-[110px]' /><div className='pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-pw-cyan/10 blur-[120px]' /><Card className='relative w-full max-w-lg overflow-hidden border-white/10 bg-pw-surface/75 p-0 shadow-2xl shadow-black/30 backdrop-blur-xl'><div className='h-1 w-full bg-gradient-to-r from-pw-primary via-pw-cyan to-pw-primary' /><div className='space-y-5 p-6 text-center sm:p-9'><div className={cn('mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border', submissionFailed ? 'border-pw-warning/30 bg-pw-warning/10' : 'border-pw-primary/30 bg-pw-primary/10')}>{submissionFailed ? <AlertTriangle className='h-8 w-8 text-pw-warning' /> : <LoaderCircle className='h-8 w-8 animate-spin text-pw-primary' />}</div><div><p className='text-[11px] font-bold uppercase tracking-[.22em] text-pw-cyan'>{capFirst(quiz?.type || 'assessment')} · secure submission</p><h1 className='mt-2 text-2xl font-extrabold tracking-tight'>{submissionFailed ? 'Your response is still here' : 'Saving your response'}</h1><p className='mx-auto mt-2 max-w-sm text-sm leading-relaxed text-pw-muted'>{submissionFailed ? (isOnline ? 'Your answers are locked. Check your connection, then retry the save.' : 'You are offline. Your answers are locked and unchanged. Reconnect to retry the save.') : 'We’re securing your answers and confirming the submission. Please keep this page open.'}</p></div>{!submissionFailed && <div className='mx-auto flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-3 py-1.5 text-xs text-pw-muted'><span className='h-2 w-2 animate-pulse rounded-full bg-pw-cyan' />Submission in progress</div>}{submissionFailed && retrySnapshot && <Button onClick={() => { void finalizeQuiz(retrySnapshot.answers, retrySnapshot.reason); }} disabled={isSubmitting} className='btn-primary w-full rounded-xl py-5'>{isSubmitting ? <><LoaderCircle className='mr-2 h-4 w-4 animate-spin' />Saving…</> : 'Retry save'}</Button>}<p className='text-[11px] text-pw-muted/80'>Your answers are frozen while we confirm this submission.</p></div></Card></main>;
   }
 
   if (isOfflineUncached) {
@@ -5372,6 +5395,8 @@ function Taker() {
               </div>
 
               <div className='flex items-center gap-2'>
+                <AnimatePresence initial={false}>
+                {canQuitAssessment && <motion.div key='quit-assessment' initial={{ opacity: 0, x: 12, width: 0 }} animate={{ opacity: 1, x: 0, width: 'auto' }} exit={{ opacity: 0, x: 12, width: 0 }} className='overflow-hidden'>
                 <Button
                   variant='ghost'
                   title={`Quit ${capFirst(quiz.type)}`}
@@ -5400,6 +5425,8 @@ function Taker() {
                     Quit
                   </span>
                 </Button>
+                </motion.div>}
+                </AnimatePresence>
 
                 {/* Report button */}
                 <Button

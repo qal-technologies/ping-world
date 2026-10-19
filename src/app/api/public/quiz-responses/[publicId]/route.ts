@@ -24,7 +24,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return {
         id: row.id, timestamp: row.timestamp, score: row.score, totalQuestions: row.total_questions,
         answeredQuestions: userData.answeredQuestions ?? 0, scorePossible: userData.scorePossible ?? row.total_questions,
-        userData: Object.fromEntries(Object.entries(userData).filter(([key]) => !['canViewPublic','publicId','attemptId','attemptToken','deviceKey','currentPathQuestionIds','pathQuestionSnapshots','branchHistory'].includes(key))),
+        branchHistory: Array.isArray(userData.branchHistory) ? userData.branchHistory : [],
+        userData: Object.fromEntries(Object.entries(userData).filter(([key]) => !['canViewPublic','publicId','attemptId','attemptToken','attemptTokenHash','deviceKey','deviceKeyHash','currentPathQuestionIds','pathQuestionSnapshots','branchHistory'].includes(key))),
         pathQuestionSnapshots: Array.isArray(userData.pathQuestionSnapshots) ? userData.pathQuestionSnapshots.map(sanitizeQuestion) : [],
         answers: answerRows.map((item) => {
           if (!item || typeof item !== 'object') return item;
