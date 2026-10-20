@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { getRequestUser } from '@/lib/api-auth';
 import { verifyQuizAccessToken } from '@/lib/quiz/private-access-token';
-import { hasActiveQuizProTier, resolveQuizPrivacySettings } from '@/lib/quiz/quiz-privacy';
+import { readQuizTierEntitlements, resolveQuizPrivacySettings } from '@/lib/quiz/quiz-privacy';
 import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 
 export const dynamic = 'force-dynamic';
@@ -55,13 +55,13 @@ export async function GET(
         { status: 404 },
       );
     }
-    const ownerIsActivePro = await hasActiveQuizProTier(admin, row.user_id);
-    if (!isQuizUuid && !ownerIsActivePro) {
+    const ownerEntitlements = await readQuizTierEntitlements(admin, row.user_id);
+    if (!isQuizUuid && !ownerEntitlements.pro) {
       return NextResponse.json({ error: 'This custom assessment URL is no longer active.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
     }
     let settings =
       row.settings && typeof row.settings === 'object' ? row.settings : {};
-    settings = await resolveQuizPrivacySettings(admin, { id: row.id, user_id: row.user_id }, settings, ownerIsActivePro);
+    settings = await resolveQuizPrivacySettings(admin, { id: row.id, user_id: row.user_id }, settings, ownerEntitlements);
     if (settings.moderationStatus === 'under_review') {
       return NextResponse.json(
         { error: 'This assessment is paused while it is reviewed.' },
@@ -80,10 +80,19 @@ export async function GET(
     }
     const questions = Array.isArray(row.questions) ? row.questions : [];
     const sanitizedQuestions = questions.map(
-      (question: Record<string, unknown>) => ({
-        ...question,
-        correctIndex: null,
-      }),
+      (question: Record<string, unknown>) => {
+        const maxSize = ownerEntitlements.pro ? 50 : ownerEntitlements.quiz ? 15 : 5;
+        const configuredSize = Number(question.maxFileSize);
+        const safeTypes = !ownerEntitlements.quiz
+          ? (typeof question.allowedTypes === 'string' ? question.allowedTypes.split(',').map((type) => type.trim()).filter((type) => type && type !== '.' && !type.toLowerCase().endsWith('.zip') && !type.toLowerCase().startsWith('video/') && !type.toLowerCase().startsWith('audio/')).join(',') : '') || 'image/*,.pdf,.doc,.docx,.txt,.json,application/json'
+          : question.allowedTypes;
+        return {
+          ...question,
+          ...(typeof safeTypes === 'string' ? { allowedTypes: safeTypes } : {}),
+          maxFileSize: Math.min(Number.isFinite(configuredSize) && configuredSize > 0 ? configuredSize : maxSize, maxSize),
+          correctIndex: null,
+        };
+      },
     );
     const columns = { ...row };
     delete columns.settings;
@@ -108,11 +117,11 @@ export async function GET(
       type: row.type || settings.type || 'quiz',
       questions: sanitizedQuestions,
       endScreen: row.endScreen || settings.endScreen,
-      customUrl: ownerIsActivePro ? String(row.custom_id || settings.customUrl || '') : '',
+      customUrl: ownerEntitlements.pro ? String(row.custom_id || settings.customUrl || '') : '',
       responsesPublicId: typeof settings.publicResponsesId === 'string' ? settings.publicResponsesId : '',
       isPrivate,
       accessGranted,
-      fromPremium: ownerIsActivePro,
+      fromPremium: ownerEntitlements.quiz,
       responses: [],
     };
     return NextResponse.json(
@@ -144,9 +153,36 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       admin.from('quiz_attempts').select('answers').eq('quiz_id', id),
     ]);
     if (responsesError || attemptsError) throw responsesError || attemptsError;
-    const responsePaths = (responses || []).flatMap((row: any) => (Array.isArray(row.answers) ? row.answers : []).flatMap((answer: any) => [answer?.fileUrl, ...(Array.isArray(answer?.answerHistory) ? answer.answerHistory.map((revision: any) => revision?.fileUrl) : [])]));
-    const attemptPaths = (attempts || []).flatMap((row: any) => Object.entries(row.answers || {}).filter(([key]) => !key.startsWith('__')).flatMap(([, answer]: [string, any]) => [answer?.fileUrl, ...(Array.isArray(answer?.answerHistory) ? answer.answerHistory.map((revision: any) => revision?.fileUrl) : [])]));
-    const questionPaths = (Array.isArray(quiz.questions) ? quiz.questions : []).flatMap((question: any) => [question?.imageUrl, question?.uploadUrl, ...(question?.options || []).flatMap((option: any) => [option?.imageUrl, option?.uploadUrl])]);
+    const answerMediaPaths = (value: unknown): unknown[] => {
+      if (!value || typeof value !== 'object') return [];
+      const answer = value as { fileUrl?: unknown; answerHistory?: unknown };
+      const history = Array.isArray(answer.answerHistory) ? answer.answerHistory : [];
+      return [answer.fileUrl, ...history.flatMap((revision) =>
+        revision && typeof revision === 'object'
+          ? [(revision as { fileUrl?: unknown }).fileUrl]
+          : [],
+      )];
+    };
+    const responsePaths = (responses || []).flatMap((row: { answers?: unknown }) =>
+      Array.isArray(row.answers) ? row.answers.flatMap(answerMediaPaths) : [],
+    );
+    const attemptPaths = (attempts || []).flatMap((row: { answers?: unknown }) =>
+      row.answers && typeof row.answers === 'object'
+        ? Object.entries(row.answers as Record<string, unknown>)
+            .filter(([key]) => !key.startsWith('__'))
+            .flatMap(([, answer]) => answerMediaPaths(answer))
+        : [],
+    );
+    const questionPaths = (Array.isArray(quiz.questions) ? quiz.questions : []).flatMap((value: unknown) => {
+      if (!value || typeof value !== 'object') return [];
+      const question = value as { imageUrl?: unknown; uploadUrl?: unknown; options?: unknown };
+      const options = Array.isArray(question.options) ? question.options : [];
+      return [question.imageUrl, question.uploadUrl, ...options.flatMap((option) =>
+        option && typeof option === 'object'
+          ? [(option as { imageUrl?: unknown }).imageUrl, (option as { uploadUrl?: unknown }).uploadUrl]
+          : [],
+      )];
+    });
     const brandingPaths = [quiz.settings?.branding?.image, quiz.settings?.branding?.icon];
     const objectPath = (value: unknown, bucket: string) => {
       if (typeof value !== 'string' || value.startsWith('data:')) return null;

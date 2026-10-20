@@ -35,6 +35,7 @@ type SharedResponse = {
 type SharedPayload = {
   quiz?: { title?: string };
   responses: SharedResponse[];
+  totalCount?: number;
   nextOffset: number | null;
 };
 
@@ -91,6 +92,7 @@ export default function PublicQuizResponsesView({
           {
             ...current,
             responses: [...current.responses, ...(page.responses || [])],
+            totalCount: page.totalCount ?? current.totalCount,
             nextOffset: page.nextOffset ?? null,
           }
         : current,
@@ -126,7 +128,7 @@ export default function PublicQuizResponsesView({
     );
   return (
     <main className='mx-auto min-h-[70dvh] w-full max-w-4xl space-y-2 px-3 py-8'>
-      <Card className='border-white/10 bg-pw-surface/70 p-2 sm:p-4 mb-2'>
+      <Card className='border-white/10 bg-pw-surface/70 p-2 gap-1 sm:p-4 mb-2'>
         <p className='text-xs font-bold uppercase tracking-widest text-pw-primary'>
           PingWorld · shared assessment responses
         </p>
@@ -134,8 +136,8 @@ export default function PublicQuizResponsesView({
           {data.quiz?.title || 'Assessment responses'}
         </h1>
         <p className='text-sm text-pw-muted'>
-          {data.responses.length} response
-          {data.responses.length === 1 ? '' : 's'} shared by the setter.
+          {data.totalCount ?? data.responses.length} response
+          {(data.totalCount ?? data.responses.length) === 1 ? '' : 's'} shared by the setter.
         </p>
       </Card>
       {data.responses.length === 0 ?
@@ -145,11 +147,11 @@ export default function PublicQuizResponsesView({
       : data.responses.map((response, index) => (
           <Card
             key={response.id}
-            className='space-y-3 border-white/10 bg-white/[0.03] p-4 sm:p-5'>
+            className='space-y-3 border-white/10 bg-white/[0.03] gap-2 p-4 sm:p-5'>
             <div className='flex flex-wrap items-start justify-between gap-1'>
               <div className='mb-1'>
                 <h2 className='font-bold'>
-                  Taker {data.responses.length - index}
+                  Taker {Math.max(1, (data.totalCount ?? data.responses.length) - index)}
                   {response.signedUser ?
                     ` · ${response.signedUser.displayName || response.signedUser.username} (signed user)`
                   : ''}
@@ -170,7 +172,7 @@ export default function PublicQuizResponsesView({
                 </p>
               </div>
             </div>
-            {Object.entries(response.userData || {}).filter(([key, value]) => !['categoryScores','submissionReason','assessmentType','isSignedUser','signedUser','currentPathQuestionIds','pathQuestionSnapshots','branchHistory','attemptTokenHash','deviceKeyHash'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).length > 0 && <section className='grid grid-cols-1 gap-1 border-t border-white/10 pt-2 sm:grid-cols-2'><h3 className='col-span-full text-xs font-semibold text-pw-text'>Participant details</h3>{Object.entries(response.userData || {}).filter(([key, value]) => !['categoryScores','submissionReason','assessmentType','isSignedUser','signedUser','currentPathQuestionIds','pathQuestionSnapshots','branchHistory','attemptTokenHash','deviceKeyHash'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).map(([key, value]) => <p key={key} className='text-xs text-pw-muted'><b>{key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (letter) => letter.toUpperCase())}:</b> {String(value)}</p>)}</section>}
+          {Object.entries(response.userData || {}).filter(([key, value]) => !['categoryScores', 'submissionReason', 'assessmentType', 'isSignedUser', 'signedUser', 'currentPathQuestionIds', 'pathQuestionSnapshots', 'branchHistory', 'attemptTokenHash', 'deviceKeyHash'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).length > 0 && <section className='grid grid-cols-1 gap-1 border-t border-white/10 pt-2 sm:grid-cols-2'><h3 className='col-span-full text-xs font-semibold text-pw-text'>Participant details</h3>{Object.entries(response.userData || {}).filter(([key, value]) => !['categoryScores', 'submissionReason', 'assessmentType', 'isSignedUser', 'signedUser', 'currentPathQuestionIds', 'pathQuestionSnapshots', 'branchHistory', 'attemptTokenHash', 'deviceKeyHash'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).map(([key, value]) => <p key={key} className='text-xs text-pw-muted'><b>{key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (letter) => letter.toUpperCase())}:</b> {String(value)}</p>)}</section>}
             {(response.branchHistory || []).length > 0 && <section className='border-t border-white/10 pt-2'><h3 className='text-xs font-semibold'>Branch path</h3><ol className='mt-1 space-y-1 text-xs text-pw-muted'>{response.branchHistory!.map((branch, branchIndex) => { const pathQuestions = response.pathQuestionSnapshots || []; const triggerIndex = pathQuestions.findIndex((question) => String(question.id) === String(branch.fromQuestionId)); const branchNums = (branch.questionIds || []).map((id) => pathQuestions.findIndex((question) => String(question.id) === String(id)) + 1).filter((number) => number > 0); return <li key={`${branch.fromQuestionId}-${branchIndex}`}>Question {triggerIndex >= 0 ? triggerIndex + 1 : branchIndex + 1} → {branch.category ? `Group: ${branch.category}` : 'General flow'} · Questions {branchNums.length ? branchNums.join(', ') : branch.questionIds?.length || 0}</li>; })}</ol></section>}
           
           {(response?.pathQuestionSnapshots|| [])?.length > 0 && <div className='divider my-4' />}

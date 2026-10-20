@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { readJsonWithinLimit } from '@/lib/api-auth';
+import { readQuizTierEntitlements } from '@/lib/quiz/quiz-privacy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     const admin = getSupabaseAdmin();
     const [{ data: attempt, error: attemptError }, { data: quiz, error: quizError }] = await Promise.all([
       admin.from('quiz_attempts').select('id,quiz_id,attempt_token_hash,status,started_at').eq('id', attemptId).maybeSingle(),
-      admin.from('quizzes').select('id,questions,settings,expires_at').eq('id', quizId).maybeSingle(),
+      admin.from('quizzes').select('id,user_id,questions,settings,expires_at').eq('id', quizId).maybeSingle(),
     ]);
     if (attemptError || quizError) throw attemptError || quizError;
     if (!attempt || attempt.quiz_id !== quizId || attempt.status !== 'in_progress' ||
@@ -51,10 +52,24 @@ export async function POST(request: NextRequest) {
     if (!quiz || (quiz.expires_at && new Date(quiz.expires_at).getTime() < Date.now())) {
       return NextResponse.json({ error: 'Assessment not found or expired.' }, { status: 404 });
     }
-    const question = (Array.isArray(quiz.questions) ? quiz.questions : []).find((item: any) => String(item?.id) === questionId);
-    if (!question || question.type !== 'upload') {
+    const questionValue = (Array.isArray(quiz.questions) ? quiz.questions : []).find((item: unknown) =>
+      Boolean(item && typeof item === 'object' && String((item as Record<string, unknown>).id) === questionId),
+    );
+    if (!questionValue || typeof questionValue !== 'object' || (questionValue as Record<string, unknown>).type !== 'upload') {
       return NextResponse.json({ error: 'This question does not accept file uploads.' }, { status: 400 });
     }
+    const question = questionValue as Record<string, unknown>;
+    const entitlements = await readQuizTierEntitlements(admin, typeof quiz.user_id === 'string' ? quiz.user_id : null);
+    const storedTypes = typeof question.allowedTypes === 'string' ? question.allowedTypes.split(',').map((type) => type.trim().toLowerCase()).filter(Boolean) : [];
+    const selectedTypes = entitlements.quiz ? storedTypes : storedTypes.filter((type: string) => type !== '.' && !type.endsWith('.zip') && !type.startsWith('video/') && !type.startsWith('audio/'));
+    if (!entitlements.quiz && selectedTypes.length === 0) selectedTypes.push('image/*', '.pdf', '.doc', '.docx', '.txt', '.json', 'application/json');
+    const extension = `.${(pathParts[2].split('.').pop() || '').toLowerCase()}`;
+    const allowedByQuestion = !selectedTypes.length || selectedTypes.includes('.') || selectedTypes.some((type: string) =>
+      type.startsWith('.') ? type === extension
+      : type.endsWith('/*') ? contentType.startsWith(type.slice(0, -1))
+      : type === contentType,
+    );
+    if (!allowedByQuestion) return NextResponse.json({ error: 'This file type is not allowed for the selected question.' }, { status: 415 });
     const settings = quiz.settings && typeof quiz.settings === 'object' ? quiz.settings : {};
     const timer = settings.timer && typeof settings.timer === 'object' ? settings.timer : {};
     const rawTimer = timer.hasTimer;

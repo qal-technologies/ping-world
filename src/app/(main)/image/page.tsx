@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useState, useRef, useEffect } from 'react';
 import NextImage from 'next/image';
@@ -569,8 +570,8 @@ export default function ImageToolkitPage() {
           {unit}
         </span>
       </div>
-      <input
-        type='range'
+      <ThemedSlider
+
         min={min}
         max={max}
         step={0.5}
@@ -746,15 +747,15 @@ export default function ImageToolkitPage() {
                   className={'rounded-full'}>
                       <RefreshCw className='h-4 w-4' />
                   </Button>
-                  
-                  
+
+
                     <Button
                       variant='ghost'
                     onClick={handleDownload}
                   className='rounded-full'>
                       <Download className='h-4 w-4' />
                   </Button>
-                  
+
                   <Button
                       variant='ghost'
                   className={'rounded-full'}>

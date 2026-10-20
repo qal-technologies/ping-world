@@ -268,7 +268,7 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
   "showScore" BOOLEAN DEFAULT true,
   "hasTimer" BOOLEAN DEFAULT false,
   "correctOption" BOOLEAN DEFAULT true,
-  "correctOptionDes" BOOLEAN DEFAULT true,
+  "correctOptionDes" TEXT DEFAULT 'in-result',
   "randomizeOptions" BOOLEAN DEFAULT false,
   "randomizeQuestions" BOOLEAN DEFAULT false,
   "allowRetry" BOOLEAN DEFAULT true,
@@ -287,61 +287,73 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
 -- batches explicitly when deleting a resource.
 ALTER TABLE public.notification_batches DROP CONSTRAINT IF EXISTS notification_batches_resource_id_fkey;
 
--- Only an actively subscribed Pro account may persist private settings or a
--- custom quiz URL/branding. The trigger uses server-managed app metadata.
+-- Assessment writes are restricted using server-managed app metadata.
+-- Existing installations should run database/migrations/20261020_assessment_tier_feature_cleanup.sql.
 CREATE OR REPLACE FUNCTION public.enforce_pro_assessment_privacy()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth, pg_temp
-AS $$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, auth, pg_temp AS $$
 DECLARE
   owner_metadata JSONB;
-  expiry_text TEXT;
   expiry_at TIMESTAMPTZ;
+  tier_name TEXT := 'free';
+  purchased_tools JSONB := '[]'::jsonb;
+  quiz_is_active BOOLEAN := false;
   pro_is_active BOOLEAN := false;
+  max_file_size_mb NUMERIC := 5;
+  max_expiry_days INTEGER := 2;
 BEGIN
-  IF jsonb_typeof(NEW.settings) <> 'object' OR NEW.settings IS NULL THEN
-    NEW.settings := '{}'::jsonb;
-  END IF;
+  IF jsonb_typeof(NEW.settings) <> 'object' OR NEW.settings IS NULL THEN NEW.settings := '{}'::jsonb; END IF;
+  IF jsonb_typeof(NEW.questions) <> 'array' OR NEW.questions IS NULL THEN NEW.questions := '[]'::jsonb; END IF;
   SELECT raw_app_meta_data INTO owner_metadata FROM auth.users WHERE id = NEW.user_id;
-  expiry_text := owner_metadata->>'tier_expires_at';
-  IF owner_metadata->>'tier' = 'pro' AND expiry_text IS NOT NULL THEN
+  tier_name := COALESCE(owner_metadata->>'tier', 'free');
+  purchased_tools := COALESCE(owner_metadata->'purchased_tools', '[]'::jsonb);
+  IF tier_name IN ('pro', 'standard', 'flexible') THEN
     BEGIN
-      expiry_at := expiry_text::timestamptz;
-      pro_is_active := expiry_at > now();
+      expiry_at := (owner_metadata->>'tier_expires_at')::timestamptz;
+      pro_is_active := tier_name = 'pro' AND expiry_at > now();
+      quiz_is_active := expiry_at > now() AND (tier_name IN ('pro', 'standard') OR (tier_name = 'flexible' AND purchased_tools ?| ARRAY['quizzable', 'quiz', 'quiz-builder']));
+      max_expiry_days := CASE WHEN pro_is_active THEN 30 WHEN tier_name = 'standard' AND quiz_is_active THEN 14 WHEN quiz_is_active THEN 7 ELSE 2 END;
     EXCEPTION WHEN OTHERS THEN
       pro_is_active := false;
+      quiz_is_active := false;
     END;
   END IF;
-
+  IF NOT quiz_is_active THEN
+    NEW.settings := (NEW.settings - 'branding' - 'allowPass') || jsonb_build_object('fromPremium', false);
+  ELSE
+    NEW.settings := jsonb_set(NEW.settings, '{fromPremium}', 'true'::jsonb, true);
+    max_file_size_mb := CASE WHEN tier_name = 'pro' THEN 50 ELSE 15 END;
+  END IF;
+  IF NEW.expires_at IS NULL OR NEW.expires_at > NEW.created_at + make_interval(days => max_expiry_days) THEN
+    NEW.expires_at := NEW.created_at + make_interval(days => max_expiry_days);
+  END IF;
   IF NOT pro_is_active THEN
     NEW.custom_id := NULL;
-    NEW.settings := (NEW.settings - 'branding' - 'customUrl' - 'custom_id' - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames')
-      || jsonb_build_object('isPrivate', false);
-    RETURN NEW;
+    NEW.settings := (NEW.settings - 'customUrl' - 'custom_id' - 'privateKey' - 'privateKeyHash' - 'allowedParticipants' - 'allowedParticipantUsernames' - 'customDisclaimer' - 'hidePingWorldDisclaimer') || jsonb_build_object('isPrivate', false);
+  ELSE
+    IF NEW.custom_id IS NOT NULL AND NEW.custom_id !~ '^[a-z0-9_-]{1,12}$' THEN RAISE EXCEPTION 'A Pro custom quiz URL must be 1 to 12 lowercase letters, numbers, hyphens, or underscores'; END IF;
+    IF NEW.settings->>'isPrivate' IS DISTINCT FROM 'true' THEN
+      NEW.settings := NEW.settings - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames';
+    ELSIF COALESCE(NEW.settings->>'privateKeyHash', '') !~ '^[a-fA-F0-9]{64}$' THEN
+      RAISE EXCEPTION 'An active Pro assessment must have a valid access-key hash before it can be private';
+    ELSE
+      NEW.settings := NEW.settings - 'privateKey';
+    END IF;
   END IF;
-
-  IF NEW.custom_id IS NOT NULL AND NEW.custom_id !~ '^[a-z0-9_-]{1,12}$' THEN
-    RAISE EXCEPTION 'A Pro custom quiz URL must be 1 to 12 lowercase letters, numbers, hyphens, or underscores';
-  END IF;
-
-  IF NEW.settings->>'isPrivate' IS DISTINCT FROM 'true' THEN
-    NEW.settings := NEW.settings - 'privateKey' - 'privateKeyHash' - 'allowedParticipantUsernames';
-    RETURN NEW;
-  END IF;
-
-  IF COALESCE(NEW.settings->>'privateKeyHash', '') !~ '^[a-fA-F0-9]{64}$' THEN
-    RAISE EXCEPTION 'An active Pro assessment must have a valid access-key hash before it can be private';
-  END IF;
-  NEW.settings := NEW.settings - 'privateKey';
+  SELECT COALESCE(jsonb_agg(CASE WHEN jsonb_typeof(q.value) = 'object' THEN
+    jsonb_set(jsonb_set(q.value, '{maxFileSize}', to_jsonb(LEAST(max_file_size_mb, GREATEST(1,
+      CASE WHEN COALESCE(q.value->>'maxFileSize', '') ~ '^[0-9]+(\.[0-9]+)?$' THEN (q.value->>'maxFileSize')::numeric ELSE max_file_size_mb END
+    ))), true), '{allowedTypes}', to_jsonb(CASE
+      WHEN NOT quiz_is_active AND (COALESCE(q.value->>'allowedTypes', '') = '.' OR position('video/' in lower(COALESCE(q.value->>'allowedTypes', ''))) > 0 OR position('audio/' in lower(COALESCE(q.value->>'allowedTypes', ''))) > 0 OR position('.zip' in lower(COALESCE(q.value->>'allowedTypes', ''))) > 0)
+        THEN 'image/*,.pdf,.doc,.docx,.txt,.json,application/json'
+      ELSE COALESCE(q.value->>'allowedTypes', 'image/*,.pdf,.doc,.docx,.txt,.json,application/json')
+    END), true) ELSE q.value END ORDER BY q.ordinality), '[]'::jsonb)
+  INTO NEW.questions FROM jsonb_array_elements(NEW.questions) WITH ORDINALITY AS q(value, ordinality);
   RETURN NEW;
-END;
-$$;
+END; $$;
 DROP TRIGGER IF EXISTS enforce_pro_assessment_privacy ON public.quizzes;
-CREATE TRIGGER enforce_pro_assessment_privacy
-  BEFORE INSERT OR UPDATE OF settings, user_id, custom_id ON public.quizzes
-  FOR EACH ROW EXECUTE FUNCTION public.enforce_pro_assessment_privacy();
+CREATE TRIGGER enforce_pro_assessment_privacy BEFORE INSERT OR UPDATE OF settings, user_id, custom_id, questions ON public.quizzes
+FOR EACH ROW EXECUTE FUNCTION public.enforce_pro_assessment_privacy();
 REVOKE ALL ON FUNCTION public.enforce_pro_assessment_privacy() FROM PUBLIC, anon, authenticated;
 
 -- Enable RLS on Quizzes
@@ -805,20 +817,8 @@ select cron.schedule(
 ```
 
 The app database schema also creates the service-role-only idempotency ledger for welcome and paid subscription emails. Configure the Stripe webhook endpoint at `/api/stripe/webhook` with `STRIPE_WEBHOOK_SECRET`; subscription confirmation is sent only after Stripe reports the paid/active checkout and the verified account is updated server-side.
+## Assessment database repairs
 
+The `correctOptionDes` column is `TEXT` in the schema above because the builder stores `in-question` or `in-result`. Existing databases should apply `database/migrations/20261020_quiz_correct_option_des_type.sql` once. If that migration has already been applied successfully, do not run it again as a separate setup step.
 
-1. Look into snapshotting the answers too, meaning if a question has been answered before and later routed back (through branching or prev button, or any means), snap the initial and new answers and in the response or feedback number them like: (1) first answer (2) second answer, this is necessary for integrity and follow up. The entire assessment section should be foolproof and never make mistakes.
-2. Look into the branching too, both for all scroll layouts and on response view, make sure they line properly and is well grouped, the scroll show (scroll but not show all at once), would follow the branching where, new added questions are by group. and navigation to a new group, hides the old branch questions in the scroll and start adding per current group, if no group show them one by one.
-3. In the completion section of the taker page, handle the view properly, the scroll up button should only show if the bottom completion scroll height is scrollable and the score is not directly in view, make it enter and leave with a fade in bottom animation and handle the positioning properly so it always sticks at the bottom right.
-4. In the anticheat, try eays possible to make it detect screenshots or other ways of cheating and make sure to prevent it. I notice that if you split screen on mobile or on pc, the window visibility event doesnt detect when the user enters the second app, and this can lead to cheating.
-5. There's no input or way to add question explanation for the question level. Make a modal and add a trigger in the question morevertical dropdown, that says add question explanation (and also indicates if already added - show edit instead of add), if clicked this trigger opens a modal that shows the question text, type and an input to add explanation. This modal should take up space (all screen in small device) and have a dropdown to still tweak showing explantion in result or in question. Truncate explantion when shown in question to a lineclamp of 4 to make sure the ui doesnt squek and show a read more button and enlarge and show all.
-6. Add a way of adding images and backed by question text, where the setter can add an image and use text to ask a question in terms of the image. this can be helpful in telling students to identify the image or what is in the image, and all question types can be used in answering. Max this images too per tier and endevour to handling shrinking too when uploading, to the setter allow fullscreen view but no editable, remove it from being downloadbale and cancel all selections or pointer events that can make it selectable or downloadable, this is to prevent copying and asking otehr sources for answers. Images should be optimized to be efficient and usable at the same time.
-7. Hide and disable the next button until at least an option is seltected or an input is typed or uploaded made.
-8. Make the real time score and general scoring include uploads in the count. for now all upload should mark as correct, because they are just required to make an upload for now, and no compaasion engine is made foe now, so all correct and counted in the scroing on the taker and setter feedback pages.
-9. For checkbox options add a square checkbox instead of a check and when selected mark the box to relate.
-10. Create a /view page in the web app, with an input to upload the file or media you are planning to view, then it uses the fileviewer to display the file or media properly. This would be in handle for people who has some files but dont have the right sofware to view them. Including other trying file types, like EPUB, PPT and other media and document file type and actually display them as they should. Like powerpoints should display like one and not just the text extract, but should actually display the disigns and everything, same goes to other files too. Hnadle the fullscreen, that when triggered, it still uses our customized media, file and player controls and when tapped fades out and when tapped comes in, using the device controls when in full screen kinda defeats the making of the themed controls too. For audios add visual animations, for documents, when in full screen always show timedout page counts by the side, that fades out, and in when touched or left for a whiel. It should also have a potrait and landscape mode optionally too, handle audio range to be kinda vertical to help accomodate other controls. allow wrapping for controls too for smaller screens. make the double tab on the right and left handle media 10 sec forward or backward, and for files it goes/scrolls to the next or previous file page. add a setting gear icon at the top for only the viewer page appfileviewer so they can set tings like default orientation, playback time, media speed, and other settings.
-11. In the export pdf, make the pingworld logo a watermark with 0.1 opacity at the center of each page (make sure that the logo doesnt too disrupt the text and file visibility), also at the last page, add a assessment full rundown, where you just show a participant, their details and just their scrore, this helps narrow this down, instead of all the bugging correct, explantions, questions and answer, makes it hard for teahcers or setters know actually what each person score, but this would be the fix. Also on each taker detail show their score.
-12. Always remember that if no correct index, never show option as incorrect or count as incorrect, meaning if an entire assessment is set without any correct index, all attempted question should be correct.
-13. Create a subpage in quiz (quiz/response/[id]) and (quiz/responses/[id]/taker/), where a response link can be used or sent to view all the responses of a particular quiz, and a link from the tker response can be sent with the response id, to be able to view the answers of that taker, on the share button in the taker, ask if they eant to export to pdf or copy link and they can use the x button to cancel instead, if they copy, add the taker response link, and if they export do it, if they cancel do nothing. This is necessary so a setter can show a taker their response without having to show all responses. Handle this very well and avoid any put, or post methods, they can only see the data but cannot add or remove them, and the id for the quiz should be different from the quiz id, so smart ones doesnt just use the id of an assessment and just monitor what others answers and use it. Add a toggle to the feeback in the logged verified user feedback modal to update the canViewPublic for the respnses, so if turned off, even if the link was sent before it automatically becomes private, and whenever it is toggle on, a new uid is created and added to the publicId key of the response/feedback and the old link becomes nonfunctional. on the respnse page, select the responses that matches the uid and return that particular assessment, same change occurs to any taker link sent beofre the change becomes void too, because the reponse id in its path qoldnt match any response anymore.
-14. For ip traking, completion checks and all higly secure use of data, use cookie as i heard it is very secure. I noticed users can clear local storage and it would be like they have not done an assessment and can be able to tey again. Create a cookie banner too and implement it to work too.
-15. In assessment page, i noticed that even when data is off, thje loadquizzes still keeps loading and not just default to the localcashe, it makes the loading take longer. and for the onUpdate in the loadquizzes, make sure that the refresh only happens if new data was returned, and on each check, if the returned freshitems is same with the already exisiting one, do not refresh and keep bugging the ui with reloads even when nothing was returned. Even if something returns, isnt it possible to only update that particular card that got a new data, and add to db directly instead of refreshing the whole cards and page? why not just update only that data and only the related ui elements to the new data gets changed and updated, and it do not have to keep refreshing the section
+For an existing database, apply `database/migrations/20261020_assessment_tier_feature_cleanup.sql` once after deploying the application. It updates the assessment write trigger so saved fields and upload limits are enforced against current server-managed tier metadata. If already applied successfully, no repeat run is needed.

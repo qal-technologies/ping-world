@@ -11,6 +11,8 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@hookform/resolvers": "^5.2.2",
+    "@office-kit/pptx": "^0.24.1",
+    "@office-kit/pptx-preview": "^0.16.0",
     "@supabase/supabase-js": "^2.107.0",
     "@tiptap/extension-color": "^3.25.0",
     "@tiptap/extension-highlight": "^3.25.0",
@@ -23,6 +25,7 @@
     "@uiw/react-color": "^2.10.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "docx-preview": "^0.4.1",
     "fabric": "^7.4.0",
     "file-saver": "^2.0.5",
     "firebase": "^12.16.0",

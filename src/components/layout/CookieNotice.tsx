@@ -28,14 +28,14 @@ export function CookieNotice() {
   return (
     <aside
       aria-label='Cookie notice'
-      className='fixed bottom-3 left-3 z-[110] w-[min(26rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl'>
+      className='fixed bottom-3 left-3 z-[110] w-[min(26rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-slate-950/60 p-4 pt-5 text-white shadow-2xl backdrop-blur-xl'>
       <p className='text-sm font-semibold'>Essential cookies</p>
       <p className='mt-1 text-xs leading-relaxed text-white/70'>
-        PingWorld uses a first-party device key to help protect assessment attempts and preserve integrity. No advertising cookies are used.
-        {' '}<Link href='/privacy' className='underline underline-offset-2'>Privacy details</Link>
+        PingWorld uses a first-party device key to help track tools, protect assessment attempts and preserve integrity. No advertising cookies are used.
+        {' '}<Link href='/privacy' className='underline underline-offset-2'>Our Privacy</Link>
       </p>
-      <Button onClick={acknowledge} size='sm' className='mt-3 h-8 rounded-lg px-3 text-xs'>
-        Continue
+      <Button onClick={acknowledge} size='sm' className='mt-3 w-[70%] h-8 rounded-lg px-4 text-xs'>
+        Accept
       </Button>
     </aside>
   );

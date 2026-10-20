@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
@@ -338,8 +339,8 @@ export function MediaEditor() {
                   {Math.round(filters.brightness * 100)}%
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0.2}
                 max={2}
                 step={0.05}
@@ -361,8 +362,8 @@ export function MediaEditor() {
                   {Math.round(filters.contrast * 100)}%
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0.2}
                 max={2}
                 step={0.05}
@@ -384,8 +385,8 @@ export function MediaEditor() {
                   {Math.round(filters.saturate * 100)}%
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0}
                 max={3}
                 step={0.1}
@@ -407,8 +408,8 @@ export function MediaEditor() {
                   {Math.round(filters.grayscale * 100)}%
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0}
                 max={1}
                 step={0.05}
@@ -430,8 +431,8 @@ export function MediaEditor() {
                   {Math.round(filters.sepia * 100)}%
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0}
                 max={1}
                 step={0.05}
@@ -453,8 +454,8 @@ export function MediaEditor() {
                   {filters.blur}px
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0}
                 max={10}
                 step={0.5}
@@ -476,8 +477,8 @@ export function MediaEditor() {
                   {Math.round(filters.invert * 100)}%
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0}
                 max={1}
                 step={0.05}
@@ -499,8 +500,8 @@ export function MediaEditor() {
                   {filters.hue}°
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={0}
                 max={360}
                 step={5}

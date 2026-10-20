@@ -30,10 +30,10 @@ type StorageName = { bucket: string; table?: string };
 const isOnline = (): boolean =>
   typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-function reportSyncFailure(type: StorageItem['type'], id: string, error: unknown) {
+function reportSyncFailure(type: StorageItem['type'], id: string, error: unknown, title?: string) {
   if (typeof window === 'undefined') return;
   const message = error instanceof Error ? error.message : 'Remote save failed.';
-  window.dispatchEvent(new CustomEvent('pw_sync_error', { detail: { type, id, message } }));
+  window.dispatchEvent(new CustomEvent('pw_sync_error', { detail: { type, id, title, message } }));
 }
 
 function reportResponseSyncFailure(error: unknown) {
@@ -627,7 +627,7 @@ async function externalizeQuizMedia(quiz: any, userId: string) {
       return q;
     }));
   }
-  if (typeof quiz.branding?.image === 'string' || typeof quiz.branding?.icon === 'string') {
+  if (quiz.branding && typeof quiz.branding === 'object') {
     output.branding = {
       ...quiz.branding,
       ...(typeof quiz.branding?.image === 'string' ? { image: await persistQuizMedia(quiz.branding.image, `${safeUser}/${safeQuiz}/branding/image`) } : {}),
@@ -892,7 +892,7 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
           } else throw error;
         }
       } catch (e) {
-        reportSyncFailure(type, item.id, e);
+        reportSyncFailure(type, item.id, e, item.content?.title || item.content?.name);
         console.error(`[HybridStorage] Failed to push item ${item.id}:`, e);
       }
     }
@@ -1122,7 +1122,17 @@ async function externalizeResponseMedia(quizId: string, response: any) {
     if (!media.ok) throw new Error('Could not read uploaded response file.');
     const blob = await optimizeImageForStorage(await media.blob());
     if (blob.size > 50 * 1024 * 1024) throw new Error('Response files must be smaller than 50 MB to upload.');
-    const extension = (blob.type.split('/')[1] || 'bin').split(';')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'bin';
+    const mimeType = (blob.type || unpacked.type || '').toLowerCase().split(';')[0];
+    const knownExtensions: Record<string, string> = {
+      'application/pdf': 'pdf', 'application/json': 'json', 'application/zip': 'zip',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+      'text/plain': 'txt', 'text/csv': 'csv', 'image/jpeg': 'jpg', 'image/png': 'png',
+      'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif', 'image/bmp': 'bmp',
+    };
+    const extension = knownExtensions[mimeType] || mimeType.split('/')[1]?.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'bin';
     const path = `${safeStorageSegment(quizId)}/${safeStorageSegment(String(response.submissionId || response.attemptId || 'pending'))}/${safeStorageSegment(String(answer.questionId || index))}-${await blobFingerprint(blob)}.${extension}`;
     if (!response.attemptId || !response.attemptToken) {
       throw new Error('This response upload has no active attempt authorization. Keep the response saved locally and retry from the assessment.');
@@ -1203,14 +1213,25 @@ async function flushPendingAttemptQuits() {
 }
 
 if (typeof window !== 'undefined') {
+  let onlineRetryInFlight = false;
   window.addEventListener('online', () => {
-    console.info('[HybridStorage] Connection restored — syncing…');
-    ALL_TYPES.forEach((t) => {
-      pushUnsyncedItems(t);
-      syncFromRemote(t);
-    });
-    void flushPendingResponses();
-    void flushPendingAttemptQuits();
+    if (onlineRetryInFlight) return;
+    onlineRetryInFlight = true;
+    void (async () => {
+      try {
+        const userId = await getActiveUserId();
+        if (!userId) return;
+        if (userId !== activeStorageUserId) await setActiveStorageUser(userId);
+        for (const type of ALL_TYPES) {
+          await pushUnsyncedItems(type);
+          await syncFromRemote(type);
+        }
+        await flushPendingResponses();
+        await flushPendingAttemptQuits();
+      } finally {
+        onlineRetryInFlight = false;
+      }
+    })();
   });
 }
 
@@ -1548,7 +1569,7 @@ export const HybridStorage = {
    * 1. Writes to local cache IMMEDIATELY (no network wait).
    * 2. Pushes to Supabase in the background if online.
    */
-  async save(key: string, content: any, type: StorageItem['type']) {
+  async save(key: string, content: any, type: StorageItem['type'], options: { requireRemote?: boolean } = {}) {
     const timestamp = new Date().toISOString();
     const saveOwner = activeStorageUserId;
 
@@ -1572,7 +1593,41 @@ export const HybridStorage = {
 
     // 2. Push to remote in background (non-blocking)
     const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id);
-    if (isOnline() && !LOCAL_ONLY_TYPES.includes(type) && (type !== 'quiz' || validQuizUuid)) {
+    if (options.requireRemote && saveOwner !== 'guest' && !LOCAL_ONLY_TYPES.includes(type) && (type !== 'quiz' || validQuizUuid) && isOnline()) {
+      try {
+        const userId = await getActiveUserId();
+        if (!userId || userId !== saveOwner || activeStorageUserId !== saveOwner) {
+          throw new Error('Your sign-in session changed before the save completed. Sign in again and retry.');
+        }
+        if (type === 'games') {
+          const { db } = await import('@/lib/firebase');
+          const { doc, setDoc } = await import('firebase/firestore');
+          await setDoc(doc(db, 'tournaments', item.id), {
+            id: item.id, user_id: userId, name: content.name || 'Tournament Standings',
+            teams: content.teams || [], updated_at: timestamp,
+          });
+        } else {
+          const payload = await buildSupabasePayload(type, content, userId, timestamp);
+          let { error } = await supabase.from(tableName(type)).upsert(payload);
+          if (error?.code === '23503' && error.message.includes('profiles')) {
+            await supabase.from('profiles').upsert({ id: userId, username: 'user_' + userId.substring(0, 8), display_name: 'User' });
+            error = (await supabase.from(tableName(type)).upsert(payload)).error;
+          }
+          if (error) throw error;
+        }
+        if (activeStorageUserId !== saveOwner) throw new Error('The active account changed before the save completed.');
+        const refreshed = await readLocal(type, saveOwner);
+        const savedItem = refreshed.find((entry) => entry.id === item.id);
+        if (savedItem) savedItem.is_synced = true;
+        await writeLocal(type, refreshed, saveOwner);
+        item.is_synced = true;
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+      } catch (error) {
+        reportSyncFailure(type, item.id, error, content?.title || content?.name);
+        throw error;
+      }
+    }
+    if (!options.requireRemote && isOnline() && saveOwner !== 'guest' && !LOCAL_ONLY_TYPES.includes(type) && (type !== 'quiz' || validQuizUuid)) {
       (async () => {
         try {
           const userId = await getActiveUserId();

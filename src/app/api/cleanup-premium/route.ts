@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
-import { FLEXIBLE_FEATURES, PREMIUM_TIERS } from '@/lib/config/premium';
+import { FLEXIBLE_FEATURES } from '@/lib/config/premium';
 
 
 export const dynamic = 'force-dynamic';
@@ -44,8 +44,7 @@ export async function GET(request: NextRequest) {
       for (let offset = 0; offset < expired.length; offset += 8) {
         const batch = expired.slice(offset, offset + 8);
         const results = await Promise.allSettled(batch.map(async (user) => {
-          let currentUser = user;
-          let metadata = currentUser.app_metadata || {};
+          const metadata = user.app_metadata || {};
           let expiry = typeof metadata.tier_expires_at === 'string' ? metadata.tier_expires_at : String(metadata.tier_expired_at);
           const subscriptionId = typeof metadata.stripe_subscription_id === 'string' ? metadata.stripe_subscription_id : '';
           if (subscriptionId && stripeKey) {
@@ -58,7 +57,7 @@ export async function GET(request: NextRequest) {
                 const stripeEnd = Number(stripeSubscription.current_period_end);
                 if (Number.isFinite(stripeEnd) && stripeEnd * 1000 > now) {
                 expiry = new Date(stripeEnd * 1000).toISOString();
-                const tier = ['flexible', 'standard', 'pro'].includes(String(metadata.tier)) ? String(metadata.tier) : 'free';
+                const tier = ['flexible', 'standard', 'pro'].includes(String(stripeSubscription.metadata?.tier || metadata.tier)) ? String(stripeSubscription.metadata?.tier || metadata.tier) : 'free';
                 const selectedTool = String(stripeSubscription.metadata?.selectedFlexibleToolId || metadata.purchased_tools?.[0] || '');
                 const tools = tier === 'flexible' ? (FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ? [selectedTool] : []) : tier === 'free' ? [] : ['all'];
                 const { data: account, error: lookupError } = await admin.auth.admin.getUserById(user.id);
@@ -66,8 +65,9 @@ export async function GET(request: NextRequest) {
                 const refreshedMetadata = { ...metadata, tier, tier_expires_at: expiry, tier_expired_at: null, purchased_tools: tools, stripe_subscription_id: subscriptionId, auto_renew: !stripeSubscription.cancel_at_period_end };
                 const { error: refreshError } = await admin.auth.admin.updateUserById(user.id, { app_metadata: refreshedMetadata });
                 if (refreshError) throw refreshError;
-                await admin.from('profiles').upsert({ id: user.id, tier, updated_at: new Date().toISOString() });
-                await clearExpiredPremiumQuizData(admin, user.id).catch(() => undefined);
+                const { error: profileError } = await admin.from('profiles').upsert({ id: user.id, tier, updated_at: new Date().toISOString() });
+                if (profileError) throw profileError;
+                await clearExpiredPremiumQuizData(admin, user.id, tier, tools);
                 return user.id;
                 }
               }

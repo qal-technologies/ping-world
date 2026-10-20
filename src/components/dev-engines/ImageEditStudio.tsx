@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useState, useRef, useEffect } from 'react';
 import { ImageIcon, Sliders, RefreshCw, Layers, Sparkles, Wand2 } from 'lucide-react';
@@ -163,8 +164,8 @@ export default function ImageEditStudio() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-white/5 pt-4">
         <div className="space-y-2">
           <label className="text-xs font-bold uppercase text-pw-muted block">Contrast Adjustment: {contrast}%</label>
-          <input
-            type="range"
+          <ThemedSlider
+
             min="-100"
             max="100"
             value={contrast}
@@ -175,8 +176,8 @@ export default function ImageEditStudio() {
 
         <div className="space-y-2">
           <label className="text-xs font-bold uppercase text-pw-muted block">Highlight Gain: {highlight}%</label>
-          <input
-            type="range"
+          <ThemedSlider
+
             min="-100"
             max="100"
             value={highlight}
@@ -187,8 +188,8 @@ export default function ImageEditStudio() {
 
         <div className="space-y-2">
           <label className="text-xs font-bold uppercase text-pw-muted block">Color Saturation: {sat}%</label>
-          <input
-            type="range"
+          <ThemedSlider
+
             min="0"
             max="300"
             value={sat}
@@ -199,8 +200,8 @@ export default function ImageEditStudio() {
 
         <div className="space-y-2">
           <label className="text-xs font-bold uppercase text-pw-muted block">Hue Shift Angle: {hue}°</label>
-          <input
-            type="range"
+          <ThemedSlider
+
             min="0"
             max="360"
             value={hue}

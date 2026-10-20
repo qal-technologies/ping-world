@@ -133,7 +133,7 @@ export default function PublicQuizResponseView({
   };
   return (
     <main className='mx-auto min-h-[70dvh] w-full max-w-4xl space-y-1 px-2 py-8'>
-      <Card className='border-white/10 bg-pw-surface/70 p-2 sm:p-4'>
+      <Card className='border-white/10 bg-pw-surface/70 gap-1 p-2 sm:p-4'>
         <p className='text-xs font-bold uppercase tracking-widest text-pw-primary'>
           PingWorld · shared response
         </p>
@@ -168,7 +168,7 @@ export default function PublicQuizResponseView({
           return (
             <Card
               key={`${question.id}-${index}`}
-              className='space-y-1 border-white/10 bg-white/[0.03] ml-1 p-2 sm:p-4'>
+              className='space-y-1 border-white/10 bg-white/[0.03] ml-1 gap-1 p-2 sm:p-4'>
               <h2 className='text-sm font-bold mb-1'>
                 {index + 1}. {question.text || 'Question'}
               </h2>

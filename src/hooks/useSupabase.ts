@@ -17,7 +17,7 @@ export interface SupabaseTables {
     showScore?: boolean;
     hasTimer?: boolean;
     correctOption?: boolean;
-    correctOptionDes?: boolean;
+    correctOptionDes?: 'in-question' | 'in-result' | null;
     randomizeOptions?: boolean;
     randomizeQuestions?: boolean;
     allowRetry?: boolean;

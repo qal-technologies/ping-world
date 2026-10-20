@@ -83,12 +83,27 @@ export async function POST(request: NextRequest) {
         app_metadata: { ...account.user.app_metadata, tier, tier_expires_at: expiresAt, tier_expired_at: tier === 'free' ? expiresAt : null, purchased_tools: tools, stripe_subscription_id: subscription.id, stripe_customer_id: String(subscription.customer || ''), auto_renew: !subscription.cancel_at_period_end },
       });
       if (error) return NextResponse.json({ error: 'Could not update subscription status.' }, { status: 503 });
-      await admin.from('profiles').upsert({ id: userId, tier, updated_at: new Date().toISOString() });
+      const { error: profileError } = await admin.from('profiles').upsert({ id: userId, tier, updated_at: new Date().toISOString() });
+      if (profileError) return NextResponse.json({ error: 'Could not update subscription profile.' }, { status: 503 });
       if (tier === 'free') {
         try { await clearExpiredPremiumQuizData(admin, userId); }
         catch (cleanupError) {
           console.error('[stripe/webhook] Premium quiz cleanup failed:', cleanupError instanceof Error ? cleanupError.message : 'unknown');
           return NextResponse.json({ error: 'Plan changed, but premium quiz cleanup will retry.' }, { status: 503 });
+        }
+      } else if (event.type === 'customer.subscription.updated' && (() => {
+        const previous = account.user.app_metadata || {};
+        const previousTier = String(previous.tier || 'free');
+        const rank: Record<string, number> = { free: 0, flexible: 1, standard: 2, pro: 3 };
+        const previousTools = Array.isArray(previous.purchased_tools) ? previous.purchased_tools.map(String) : [];
+        const hadQuiz = previousTier === 'pro' || previousTier === 'standard' || (previousTier === 'flexible' && previousTools.some((tool) => ['quizzable', 'quiz', 'quiz-builder'].includes(tool.toLowerCase())));
+        const hasQuiz = tier === 'pro' || tier === 'standard' || (tier === 'flexible' && tools.some((tool) => ['quizzable', 'quiz', 'quiz-builder'].includes(tool.toLowerCase())));
+        return (rank[tier] ?? 0) < (rank[previousTier] ?? 0) || (hadQuiz && !hasQuiz);
+      })()) {
+        try { await clearExpiredPremiumQuizData(admin, userId, tier, tools); }
+        catch (cleanupError) {
+          console.error('[stripe/webhook] Tier-change quiz cleanup failed:', cleanupError instanceof Error ? cleanupError.message : 'unknown');
+          return NextResponse.json({ error: 'Plan changed, but assessment feature cleanup will retry.' }, { status: 503 });
         }
       }
       return NextResponse.json({ received: true });

@@ -54,6 +54,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 import { toast } from 'sonner';
 import { capFirst, cn } from '@/lib/utils';
 import { useAppModal } from '@/components/ui/AppModalProvider';
@@ -186,6 +187,8 @@ const QuizBuilder = ({
 }) => {
   const { openFile } = useAppFileViewer();
   const { premiumTier, isFeatureUnlocked, user } = useAppContext();
+  const quizUnlocked = isFeatureUnlocked('quiz');
+  const assessmentTier = quizUnlocked ? premiumTier : 'free';
   const { setHideNavbar, setHideFooter, setPaddingTop } = usePageLayout();
   useEffect(() => {
     setHideNavbar(true);
@@ -204,8 +207,6 @@ const QuizBuilder = ({
   const [questionExplanationDraft, setQuestionExplanationDraft] = useState('');
   const [questionExplanationPlacement, setQuestionExplanationPlacement] =
     useState<'in-result' | 'in-question'>('in-result');
-
-  const quizUnlocked = isFeatureUnlocked('quiz');
 
   // Pre-process quiz to decode secured indices for editing
   const decodedQuestions = (quiz.questions || []).map((q) => {
@@ -2052,7 +2053,7 @@ const QuizBuilder = ({
                         {quiz.id !== DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && (
                           <QuizSettingItem
                             label='Active Lifespan (Expiry)'
-                            description={`Select how long this assessment remains active. ${premiumTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${premiumTier} plan.`}`}>
+                            description={`Select how long this assessment remains active. ${assessmentTier === 'free' ? 'Free tier max is 2 days.' : `You are in ${assessmentTier} plan.`}`}>
                             <div className='flex flex-col gap-2 w-full'>
                               {editedQuiz.isExpiryLocked ?
                                 <div className='flex items-center gap-2 p-2 rounded-xl bg-pw-warning/8 border border-pw-warning/30'>
@@ -2120,7 +2121,7 @@ const QuizBuilder = ({
                                         tier === 'flexible' ? tier4Flex : tier;
 
                                       const isEligible = tierAtLeast(
-                                        premiumTier,
+                                        assessmentTier,
                                         tier2use as any,
                                       );
                                       return (
@@ -2130,7 +2131,7 @@ const QuizBuilder = ({
                                           onClick={() => {
                                             if (isEligible) {
                                               const newExpiry = computeExpiry(
-                                                premiumTier,
+                                                assessmentTier,
                                                 days,
                                               );
                                               const oldExpiry = [
@@ -2924,8 +2925,7 @@ const QuizBuilder = ({
                                   %
                                 </span>
                               </div>
-                              <input
-                                type='range'
+                              <ThemedSlider
                                 min='0'
                                 max='1'
                                 step='0.05'
@@ -2939,7 +2939,10 @@ const QuizBuilder = ({
                                     },
                                   })
                                 }
-                                className='w-full accent-pw-primary cursor-pointer'
+                                className='w-full cursor-pointer'
+                                trackHeight={4}
+                                activeHeight={7}
+                                thumbShape='rounded'
                               />
                             </div>
 
@@ -2948,8 +2951,7 @@ const QuizBuilder = ({
                                 <span>Blur Radius</span>
                                 <span>{editedQuiz.branding?.blur ?? 2}px</span>
                               </div>
-                              <input
-                                type='range'
+                              <ThemedSlider
                                 min='0'
                                 max='20'
                                 step='1'
@@ -2963,7 +2965,10 @@ const QuizBuilder = ({
                                     },
                                   })
                                 }
-                                className='w-full accent-pw-primary cursor-pointer'
+                                className='w-full cursor-pointer'
+                                trackHeight={4}
+                                activeHeight={7}
+                                thumbShape='rounded'
                               />
                             </div>
                           </div>
@@ -3422,10 +3427,7 @@ const QuizBuilder = ({
                                 const file = event.target.files?.[0];
                                 event.target.value = '';
                                 if (!file) return;
-                                const maxBytes =
-                                  premiumTier === 'free' ? 2 * 1024 * 1024
-                                  : premiumTier === 'pro' ? 15 * 1024 * 1024
-                                  : 5 * 1024 * 1024;
+                                const maxBytes = !quizUnlocked ? 2 * 1024 * 1024 : premiumTier === 'pro' ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
                                 if (file.size > maxBytes)
                                   return toast.error(
                                     `Question images for your plan must be smaller than ${Math.round(maxBytes / 1024 / 1024)} MB.`,
@@ -4108,7 +4110,7 @@ const QuizBuilder = ({
                                 })
                               }>
                               {[
-                                { title: 'All', type: '.', hide: quizUnlocked },
+                                { title: 'All', type: '.', locked: true },
                                 { title: 'Pdf', type: '.pdf' },
                                 { title: 'Docs', type: '.doc,.docx' },
                                 { title: 'Text', type: '.txt' },
@@ -4119,32 +4121,31 @@ const QuizBuilder = ({
                                 {
                                   title: 'Zip',
                                   type: '.zip',
-                                  hide: quizUnlocked,
+                                  locked: true,
                                 },
                                 { title: 'Image', type: 'image/*' },
                                 {
                                   title: 'Video',
                                   type: 'video/*',
-                                  hide: quizUnlocked,
+                                  locked: true,
                                 },
                                 {
                                   title: 'Audio',
                                   type: 'audio/*',
-                                  hide: quizUnlocked,
+                                  locked: true,
                                 },
-                              ].map((a, i) => {
-                                return (
-                                  !a.hide && (
+                              ]
+                                .filter((a) => !a.locked || quizUnlocked)
+                                .map((a, i) => {
+                                  return (
                                     <option
-                                      disabled={!a.hide}
                                       value={a.type}
                                       key={a.type + a.title + i}
                                       className='bg-[#0A0C1B]'>
                                       {a.title.toUpperCase()}
                                     </option>
-                                  )
-                                );
-                              })}
+                                  );
+                                })}
                             </select>
                           </div>
 
@@ -4158,14 +4159,10 @@ const QuizBuilder = ({
                               value={
                                 editedQuiz.questions[currentStep].maxFileSize ||
                                 (!quizUnlocked ? 5
-                                : quizUnlocked && premiumTier !== 'pro' ? 15
-                                : 50)
+                                : premiumTier === 'pro' ? 50 : 15)
                               }
                               onChange={(e) => {
-                                const maxAllowed =
-                                  !quizUnlocked ? 5
-                                  : quizUnlocked ? 15
-                                  : 50;
+                                const maxAllowed = !quizUnlocked ? 5 : premiumTier === 'pro' ? 50 : 15;
                                 const requested =
                                   parseFloat(e.target.value) || 5;
                                 if (requested > maxAllowed) {
@@ -4184,9 +4181,9 @@ const QuizBuilder = ({
                               Plan Limit:{' '}
                               {!quizUnlocked ?
                                 '5MB (Free)'
-                              : quizUnlocked ?
-                                '15MB (Flex)'
-                              : '50MB (Pro/Std)'}
+                              : premiumTier === 'pro' ?
+                                '50MB (Pro)'
+                              : '15MB (Flexible/Standard)'}
                             </p>
                           </div>
                         </div>
@@ -4222,12 +4219,14 @@ const QuizBuilder = ({
                               Max: {editedQuiz.questions[currentStep].max || 10}
                             </span>
                           </div>
-                          <input
-                            type='range'
+                          <ThemedSlider
                             min={editedQuiz.questions[currentStep].min || 0}
                             max={editedQuiz.questions[currentStep].max || 10}
                             step={editedQuiz.questions[currentStep].step || 1}
-                            className='w-full accent-pw-primary cursor-pointer'
+                            className='w-full cursor-pointer'
+                            trackHeight={4}
+                            activeHeight={7}
+                            thumbShape='rounded'
                             // disabled
                           />
                           <div className='grid grid-cols-3 gap-2'>
@@ -5150,6 +5149,7 @@ export default function QuizPage() {
   const { premiumTier, isFeatureUnlocked, user, username, isLoading } =
     useAppContext();
   const quizUnlocked = isFeatureUnlocked('quiz');
+  const assessmentTier = quizUnlocked ? premiumTier : 'free';
 
   const triggerExport = (
     defaultName: string,
@@ -5267,6 +5267,7 @@ export default function QuizPage() {
         responsesPublicId: result.isLocalOnly ? (quiz as any).settings?.publicResponsesId || quiz.responsesPublicId : result.responsesPublicId || undefined,
         questions: quiz.questions,
         responses: result.responses,
+        responsesTotalCount: result.totalCount ?? result.responses.length,
         responsesNextOffset: result.nextOffset,
       });
     } catch (error: unknown) {
@@ -5299,28 +5300,76 @@ export default function QuizPage() {
   useEffect(() => {
     if (!isCreating) return;
     const historyMarker = `pw-quiz-builder-${Date.now()}`;
-    const originalState = window.history.state;
+    const builderUrl = window.location.href;
     window.history.pushState(
-      { ...(originalState || {}), quizBuilder: historyMarker },
+      { ...(window.history.state || {}), quizBuilder: historyMarker },
       '',
-      window.location.href,
+      builderUrl,
     );
     const onPopState = () => {
+      // The builder is a full-screen layer on the same route. Consume the
+      // history gesture here, close it, and keep the underlying page in place.
+      window.history.pushState(
+        { ...(window.history.state || {}), quizBuilder: historyMarker },
+        '',
+        builderUrl,
+      );
       setIsCreating(false);
-      window.history.replaceState(originalState, '', window.location.href);
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      // Saving/cancelling from the builder must remove its same-route marker;
+      // otherwise the next Back press appears to do nothing.
+      if (window.history.state?.quizBuilder === historyMarker) window.history.back();
+    };
   }, [isCreating]);
+
+  // Keep the open feedback panel current while takers submit or continue an
+  // attempt. The response endpoint is explicitly uncached; merge only changed
+  // rows so the list does not jump or discard pages already loaded.
+  useEffect(() => {
+    if (!viewingResponses || viewingResponses.isTemplate || !user?.id) return;
+    let stopped = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (stopped || inFlight || !navigator.onLine) return;
+      inFlight = true;
+      try {
+        const page = await HybridStorage.getQuizResponses(viewingResponses.id, 0);
+        if (stopped || page.isCached || page.isLocalOnly) return;
+        setViewingResponses((current) => {
+          if (!current || current.id !== viewingResponses.id) return current;
+          const fresh = new Map((page.responses || []).map((response: any) => [String(response.id), response]));
+          const merged = [...(page.responses || [])];
+          for (const response of current.responses || []) {
+            // A live attempt that no longer appears in the fresh attempt set
+            // was either submitted (the saved response has a new id) or
+            // cleaned up. Keep older submitted rows, but drop stale attempts.
+            if (!fresh.has(String(response.id)) && response.status !== 'in_progress') merged.push(response);
+          }
+          merged.sort((left: any, right: any) => new Date(right.timestamp || 0).getTime() - new Date(left.timestamp || 0).getTime());
+          return { ...current, responses: merged, responsesTotalCount: page.totalCount ?? merged.length, responsesNextOffset: page.nextOffset };
+        });
+      } catch (error) {
+        console.warn('[Quiz feedback] Live response refresh failed:', error);
+      } finally {
+        inFlight = false;
+      }
+    };
+    const onOnline = () => void refresh();
+    window.addEventListener('online', onOnline);
+    const timer = window.setInterval(() => void refresh(), 10_000);
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('online', onOnline); };
+  }, [viewingResponses?.id, viewingResponses?.isTemplate, user?.id]);
 
   useEffect(() => {
     const onSyncError = (event: Event) => {
-      const detail = (event as CustomEvent<{ type?: string; message?: string }>)
+      const detail = (event as CustomEvent<{ type?: string; id?: string; title?: string; message?: string }>)
         .detail;
       if (detail?.type === 'quiz') {
         toast.error(
-          detail.message ||
-            'Quiz media or cloud save failed. Your local copy is still available.',
+          `${detail.title || `Assessment ${detail.id || ''}`}: ${detail.message || 'Cloud save failed. Your local copy is still available.'}`,
         );
       }
     };
@@ -5871,6 +5920,7 @@ export default function QuizPage() {
   };
 
   const handleSaveQuiz = async (quiz: Quiz, isImport?: boolean) => {
+    let removedTierFeatures = false;
     const originalQuizId = quiz.id;
     const hasDatabaseUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -5890,6 +5940,44 @@ export default function QuizPage() {
         isCustom: true,
         userId: user.id,
       };
+    }
+    const maxFileSizeMb = !quizUnlocked ? 5 : premiumTier === 'pro' ? 50 : 15;
+    const normalizedQuestions = (quiz.questions || []).map((question) => {
+      const requestedSize = Number(question.maxFileSize);
+      const allowedSize = Number.isFinite(requestedSize) && requestedSize > 0
+        ? Math.min(requestedSize, maxFileSizeMb)
+        : maxFileSizeMb;
+      if (allowedSize !== requestedSize) removedTierFeatures = true;
+      const normalized = { ...question, maxFileSize: allowedSize };
+      if (!quizUnlocked) {
+        const rawAllowedTypes = typeof normalized.allowedTypes === 'string' ? normalized.allowedTypes : '';
+        const allowedTypes = rawAllowedTypes.split(',').map((type) => type.trim()).filter((type) => type && type !== '.' && !type.toLowerCase().endsWith('.zip') && !type.toLowerCase().startsWith('video/') && !type.toLowerCase().startsWith('audio/'));
+        const nextAllowedTypes = allowedTypes.length ? allowedTypes.join(',') : 'image/*,.pdf,.doc,.docx,.txt,.json,application/json';
+        if (nextAllowedTypes !== rawAllowedTypes) removedTierFeatures = true;
+        normalized.allowedTypes = nextAllowedTypes;
+      }
+      return normalized;
+    });
+    if (!quizUnlocked && (quiz.branding || quiz.allowPass)) removedTierFeatures = true;
+    if (premiumTier !== 'pro' && (quiz.customUrl || quiz.isCustom || quiz.isPrivate || quiz.customDisclaimer || quiz.hidePingWorldDisclaimer)) removedTierFeatures = true;
+    quiz = {
+      ...quiz,
+      fromPremium: quizUnlocked,
+      ...(quizUnlocked ? {} : { branding: undefined, allowPass: false }),
+      ...(premiumTier === 'pro' ? {} : {
+        customUrl: undefined,
+        isCustom: false,
+        isPrivate: false,
+        privateKey: undefined,
+        privateKeyHash: undefined,
+        allowedParticipantUsernames: undefined,
+        customDisclaimer: undefined,
+        hidePingWorldDisclaimer: false,
+      }),
+      questions: normalizedQuestions,
+    };
+    if (isImport && !quizUnlocked && quiz.questions.length > 10) {
+      return toast.error('This file has more than 10 questions. Reduce the question count or unlock the quiz plan before importing it.');
     }
     if (!quiz.title) return toast.error('Quiz needs a title!');
     if (quiz?.questions?.length === 0)
@@ -5967,7 +6055,7 @@ export default function QuizPage() {
     let finalExpiry = quiz.expires_at;
     const expiryValidation = validateQuizExpiry(
       finalExpiry,
-      premiumTier,
+      assessmentTier,
       quiz.createdAt || Date.now(),
     );
 
@@ -6029,12 +6117,12 @@ export default function QuizPage() {
 
     setIsSavingQuiz(true);
     try {
+      await HybridStorage.setUserId(user?.id || null);
       const isLocalSeed = quizToSave.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
-      const isSynced =
-        isLocalSeed ? false : (
-          (await HybridStorage.save(quizToSave.id, quizToSave, 'quiz'))
-            .is_synced
-        );
+      const wasOnline = typeof navigator === 'undefined' || navigator.onLine;
+      const isSynced = isLocalSeed ? false : (
+        await HybridStorage.save(quizToSave.id, quizToSave, 'quiz', { requireRemote: Boolean(user?.id && wasOnline) })
+      ).is_synced;
       if (isLocalSeed) {
         localStorage.setItem(
           seedTemplateStorageKey(),
@@ -6073,12 +6161,18 @@ export default function QuizPage() {
       setQuizzes(sortQuizCards(newQuizzes));
       setIsCreating(false);
       setActiveQuiz(null);
-      !isImport && toast.success('Quiz saved successfully!');
+      if (removedTierFeatures) toast.info('Features outside your current assessment plan were removed or adjusted before saving.');
+      !isImport && (user?.id
+        ? isSynced ? toast.success('Assessment saved successfully.') : toast.info('Saved on this device. It will sync when your connection is restored.')
+        : toast.info('Assessment saved on this device. Sign in to sync it to your account.'));
       isImport && toast.success(`Quiz "${quiz.title}" imported successfully!`);
 
       quizHaptic([35, 45, 100]);
     } catch (e) {
-      toast.error(`Failed to save quiz. - ${e}`);
+      const reason = e instanceof Error ? e.message :
+        e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message || 'The database rejected this assessment.')
+        : String(e);
+      toast.error(`Could not save “${quizToSave.title}” (${quizToSave.id}): ${reason}`);
       quizHaptic(14);
     } finally {
       setIsSavingQuiz(false);
@@ -6166,8 +6260,10 @@ export default function QuizPage() {
     reader.onload = (event) => {
       try {
         const quiz = JSON.parse(event.target?.result as string);
-        if (!quiz.title || !quiz?.questions)
+        if (typeof quiz?.title !== 'string' || !quiz.title.trim() || !Array.isArray(quiz?.questions))
           throw new Error('Invalid quiz file structure.');
+        if (quiz.questions.length === 0 || quiz.questions.length > 200)
+          throw new Error('The import must contain between 1 and 200 questions.');
 
         quiz.id = generateQuizId(); // New fresh ID for import
 
@@ -6175,17 +6271,19 @@ export default function QuizPage() {
         if (quiz.expires_at) {
           const isExpired = new Date(quiz.expires_at).getTime() < Date.now();
           if (isExpired) {
-            const freshExpiry = computeExpiry(premiumTier, 2).toISOString();
+            const freshExpiry = computeExpiry(assessmentTier, 2).toISOString();
             quiz.expires_at = freshExpiry;
             toast.info(
               'Imported quiz was expired. Lifespan refreshed for your tier.',
             );
           }
         } else {
-          quiz.expires_at = computeExpiry(premiumTier, 2).toISOString();
+          quiz.expires_at = computeExpiry(assessmentTier, 2).toISOString();
         }
 
-        handleSaveQuiz(quiz, true);
+        void handleSaveQuiz(quiz, true).catch((saveError: unknown) => {
+          toast.error(saveError instanceof Error ? saveError.message : 'Could not import this assessment.');
+        });
       } catch (err: any) {
         toast.error(err?.message || 'Invalid .pwquiz / .json format.');
       }
@@ -6236,7 +6334,7 @@ export default function QuizPage() {
   return (
     <div
       className={cn(
-        'container mx-auto px-4 py-12 max-w-8xl min-h-screen pb-20 transition-all duration-500',
+        'w-full mx-auto px-4 py-12 max-w-8xl min-h-screen pb-20 transition-all duration-500',
         quizUnlocked &&
           'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
       )}>
@@ -6398,7 +6496,7 @@ export default function QuizPage() {
                                     label === 'Expired' ?
                                       'text-red-400 border-red-400/30 bg-red-400/10'
                                     : urgent ?
-                                      'text-amber-400 border-amber-400/30 bg-amber-400/10'
+                                      'text-amber-400 border-amber-400/30 bg-amber-400/10 animate-pulse'
                                     : 'text-pw-success border-pw-success/30 bg-pw-success/10',
                                   )}>
                                   <Clock className='h-2.5 w-2.5 mr-1' />
@@ -6581,7 +6679,7 @@ export default function QuizPage() {
                       `Feedback
                     ${
                       viewingResponses.responses &&
-                      `(${viewingResponses.responses?.length})`
+                      `(${viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length})`
                     }`
                     : 'No Feedback'}
                   </h2>
@@ -6743,8 +6841,9 @@ export default function QuizPage() {
                       resp: any,
                       fallbackIdx: number,
                     ) => {
+                      const takerLabel = `Taker #${Math.max(1, (viewingResponses.responsesTotalCount ?? responses.length) - fallbackIdx)}`;
                       const ud = resp.userData;
-                      if (!ud) return `Taker #${fallbackIdx + 1}`;
+                      if (!ud) return takerLabel;
                       if (typeof ud === 'object') {
                         return (
                           ud.name ||
@@ -6760,10 +6859,10 @@ export default function QuizPage() {
                           (Object.values(ud).length > 0 ?
                             String(Object.values(ud)[0])
                           : null) ||
-                          `Taker #${fallbackIdx + 1}`
+                          takerLabel
                         );
                       }
-                      return String(ud) || `Taker #${fallbackIdx + 1}`;
+                      return String(ud) || takerLabel;
                     };
 
                     let bestTaker = { name: 'None', score: -1 };
@@ -7295,7 +7394,7 @@ export default function QuizPage() {
                               )}
                           </div>
                           <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
-                            Taker {idx + 1}
+                            Taker {Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx)}
                           </p>
                           {resp.status !== 'in_progress' && (
                             <p className='mt-1 text-[10px] text-pw-muted italic'>
@@ -7332,25 +7431,25 @@ export default function QuizPage() {
                         {resp.status !== 'in_progress' && (
                           <div className='flex items-center gap-1'>
                             <button
-                              title={`Export taker ${idx + 1} as PDF`}
-                              aria-label={`Export taker ${idx + 1} as PDF`}
+                              title={`Export taker ${Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx)} as PDF`}
+                              aria-label={`Export taker ${Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx)} as PDF`}
                               className='h-8 w-8 rounded-xl border-none flex items-center justify-center bg-transparent p-1 text-[10px] text-pw-cyan hover:bg-white/6'
                               onClick={() =>
                                 exportResponsesPdf(
                                   viewingResponses,
                                   [resp],
-                                  idx + 1,
+                                  Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx),
                                 )
                               }>
                               <Share2 className='h-3.5 w-3.5' />
                             </button>
-                            {viewingResponses.responsesPublicId && <button type='button' title={`Copy taker ${idx + 1} response link`} aria-label={`Copy taker ${idx + 1} response link`} className='h-8 w-8 rounded-xl flex items-center justify-center bg-transparent p-1 text-pw-cyan hover:bg-white/6' onClick={async () => {
+                            {viewingResponses.responsesPublicId && <button type='button' title={`Copy taker ${Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx)} response link`} aria-label={`Copy taker ${Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx)} response link`} className='h-8 w-8 rounded-xl flex items-center justify-center bg-transparent p-1 text-pw-cyan hover:bg-white/6' onClick={async () => {
                               try {
                                 const publicId = viewingResponses.responsesPublicId;
                                 if (!publicId || !resp.id) throw new Error('This response link is unavailable.');
                                 const link = `${window.location.origin}/quiz/responses/${publicId}/taker?responseId=${encodeURIComponent(String(resp.id))}`;
                                 await navigator.clipboard.writeText(link);
-                                toast.success(`Taker ${idx + 1} response link copied.`);
+                                toast.success(`Taker ${Math.max(1, (viewingResponses.responsesTotalCount ?? viewingResponses.responses?.length ?? 0) - idx)} response link copied.`);
                               } catch { toast.error('Could not copy this response link.'); }
                             }}><Copy className='h-3.5 w-3.5' /></button>}
                           </div>
@@ -7841,6 +7940,7 @@ export default function QuizPage() {
                                     ...page.responses,
                                   ],
                                   responsesNextOffset: page.nextOffset,
+                                  responsesTotalCount: page.totalCount ?? current.responsesTotalCount,
                                   responsesLoadingMore: false,
                                 }
                               : null,

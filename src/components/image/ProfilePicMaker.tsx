@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import React, { useState, useRef } from 'react';
 import Image from 'next/image';
@@ -124,7 +125,7 @@ export default function ProfilePicMaker() {
     setExporting(true);
     try {
       const {default: html2canvas} = await import('html2canvas');
-      
+
       const canvas = await html2canvas(previewRef.current, {
         backgroundColor: null,
         scale: 4,
@@ -230,7 +231,7 @@ export default function ProfilePicMaker() {
               <div
                 className={cn(
                   'absolute bottom-3 right-3 p-1 rounded-full border-2 border-white/20 shadow-xl flex items-center justify-center z-30',
-                 
+
                 )}>
                 {badge === 'verified' && (
                   <span className='h-7 w-7 rounded-full bg-pw-primary flex items-center justify-center text-white text-xs font-black shadow-lg'>
@@ -341,8 +342,8 @@ export default function ProfilePicMaker() {
                   <span className='text-pw-muted'>Zoom Level</span>
                   <span className='font-mono text-pw-cyan'>{zoom}%</span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={50}
                   max={250}
                   value={zoom}
@@ -357,8 +358,8 @@ export default function ProfilePicMaker() {
                   <span className='text-pw-muted'>Pan X (Left/Right)</span>
                   <span className='font-mono text-pw-primary'>{panX}px</span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={-120}
                   max={120}
                   value={panX}
@@ -373,8 +374,8 @@ export default function ProfilePicMaker() {
                   <span className='text-pw-muted'>Pan Y (Up/Down)</span>
                   <span className='font-mono text-pw-success'>{panY}px</span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={-120}
                   max={120}
                   value={panY}
@@ -432,8 +433,8 @@ export default function ProfilePicMaker() {
                     <span className='text-pw-muted'>Accessory Height (Y)</span>
                     <span className='font-mono text-pw-cyan'>{mockY}px</span>
                   </div>
-                  <input
-                    type='range'
+                  <ThemedSlider
+
                     min={-60}
                     max={60}
                     value={mockY}
@@ -446,8 +447,8 @@ export default function ProfilePicMaker() {
                     <span className='text-pw-muted'>Accessory Scale</span>
                     <span className='font-mono text-amber-400'>{Math.round(mockScale * 100)}%</span>
                   </div>
-                  <input
-                    type='range'
+                  <ThemedSlider
+
                     min={50}
                     max={180}
                     value={Math.round(mockScale * 100)}
@@ -540,8 +541,8 @@ export default function ProfilePicMaker() {
                   <span className='text-pw-muted'>Ring Thickness</span>
                   <span className='font-mono text-pw-cyan'>{border}px</span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={0}
                   max={18}
                   value={border}
@@ -555,8 +556,8 @@ export default function ProfilePicMaker() {
                   <span className='text-pw-muted'>Glow Radiance</span>
                   <span className='font-mono text-pw-primary'>{glow}%</span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={0}
                   max={100}
                   value={glow}

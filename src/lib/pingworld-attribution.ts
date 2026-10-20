@@ -93,10 +93,70 @@ export async function tagImageBlob(blob: Blob): Promise<Blob> {
   }
 
   if (signatureWebp || type === 'image/webp') {
-    // Adding XMP requires converting simple VP8/VP8L files to the extended
-    // WebP container and setting its feature flags. Appending an XMP chunk to
-    // the simple form corrupts some decoders, so preserve the original bytes.
-    return blob;
+    // XMP is a first-class WebP RIFF chunk. Simple VP8/VP8L images are
+    // upgraded to the extended container before the metadata is added.
+    const readFourCc = (offset: number) => String.fromCharCode(...input.subarray(offset, offset + 4));
+    const readU32 = (offset: number) => new DataView(input.buffer, input.byteOffset + offset, 4).getUint32(0, true);
+    if (!signatureWebp || readU32(4) + 8 !== input.length) return blob;
+    const chunks: Uint8Array[] = [];
+    let offset = 12;
+    let vp8x: Uint8Array | null = null;
+    let imageWidth = 0;
+    let imageHeight = 0;
+    let hasAlpha = false;
+    while (offset + 8 <= input.length) {
+      const size = readU32(offset + 4);
+      const end = offset + 8 + size + (size & 1);
+      if (end > input.length) return blob;
+      const type = readFourCc(offset);
+      const chunk = input.subarray(offset, end);
+      chunks.push(chunk);
+      if (type === 'VP8X') vp8x = chunk;
+      if (type === 'ALPH') hasAlpha = true;
+      if (type === 'VP8L' && size >= 5 && input[offset + 8] === 0x2f) {
+        const b1 = input[offset + 9], b2 = input[offset + 10], b3 = input[offset + 11], b4 = input[offset + 12];
+        imageWidth = 1 + b1 + ((b2 & 0x3f) << 8);
+        imageHeight = 1 + ((b2 & 0xc0) >> 6) + (b3 << 2) + ((b4 & 0x0f) << 10);
+        hasAlpha ||= (b4 & 0x10) !== 0;
+      } else if (type === 'VP8 ' && size >= 10 && input[offset + 11] === 0x9d && input[offset + 12] === 0x01 && input[offset + 13] === 0x2a) {
+        imageWidth = new DataView(input.buffer, input.byteOffset + offset + 14, 2).getUint16(0, true) & 0x3fff;
+        imageHeight = new DataView(input.buffer, input.byteOffset + offset + 16, 2).getUint16(0, true) & 0x3fff;
+      }
+      offset = end;
+    }
+    if (offset !== input.length) return blob;
+    const chunk = (fourCc: string, payload: Uint8Array) => {
+      const result = new Uint8Array(8 + payload.length + (payload.length & 1));
+      result.set(utf8.encode(fourCc), 0);
+      new DataView(result.buffer).setUint32(4, payload.length, true);
+      result.set(payload, 8);
+      return result;
+    };
+    const metadata = chunk('XMP ', xmpPacket());
+    if (vp8x) {
+      const updatedVp8x = vp8x.slice();
+      updatedVp8x[8] |= 0x04; // VP8X XMP metadata feature flag.
+      chunks[chunks.indexOf(vp8x)] = updatedVp8x;
+    } else {
+      if (!imageWidth || !imageHeight || imageWidth > 0x1000000 || imageHeight > 0x1000000) return blob;
+      const features = new Uint8Array(10);
+      if (hasAlpha) features[0] |= 0x10;
+      const width = imageWidth - 1, height = imageHeight - 1;
+      features[4] = width & 0xff; features[5] = (width >>> 8) & 0xff; features[6] = (width >>> 16) & 0xff;
+      features[7] = height & 0xff; features[8] = (height >>> 8) & 0xff; features[9] = (height >>> 16) & 0xff;
+      features[0] |= 0x04;
+      chunks.unshift(chunk('VP8X', features));
+    }
+    const existingXmp = chunks.findIndex((part) => String.fromCharCode(...part.subarray(0, 4)) === 'XMP ');
+    if (existingXmp >= 0) chunks.splice(existingXmp, 1);
+    chunks.push(metadata);
+    const outputLength = 12 + chunks.reduce((total, part) => total + part.length, 0);
+    const output = new Uint8Array(outputLength);
+    output.set(input.subarray(0, 12), 0);
+    let cursor = 12;
+    for (const part of chunks) { output.set(part, cursor); cursor += part.length; }
+    new DataView(output.buffer).setUint32(4, output.length - 8, true);
+    return new Blob([output.buffer as ArrayBuffer], { type: 'image/webp' });
   }
   return blob;
 }

@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useState } from 'react';
 import SimilarTools from '@/components/shared/SimilarTools';
@@ -183,8 +184,8 @@ export default function PasswordGeneratorPage() {
                   {length} chars
                 </span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min={8}
                 max={64}
                 value={length}

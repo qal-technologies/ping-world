@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useState } from 'react';
 import { BookOpen, Minimize2, Maximize2, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -121,8 +122,8 @@ export default function BookReaderModal({
               <span className='text-xs text-pw-muted font-mono'>
                 Zoom: {readerZoom}%
               </span>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min='60'
                 max='140'
                 value={readerZoom}

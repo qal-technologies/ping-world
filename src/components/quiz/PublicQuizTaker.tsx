@@ -42,6 +42,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -1030,7 +1031,7 @@ function Taker() {
   setPaddingTop('pt-0');
 
   const { isLoggedIn, username, user } = useAppContext();
-  const { showAlert } = useAppModal();
+  const { showAlert, showConfirm } = useAppModal();
 
   const params = useParams();
   const routeParamId = (params?.id || params?.customQuizId) as string;
@@ -1185,6 +1186,8 @@ function Taker() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmittingScreen, setShowSubmittingScreen] = useState(false);
   const [submissionFailed, setSubmissionFailed] = useState(false);
+  const isSubmittingRef = React.useRef(false);
+  isSubmittingRef.current = isSubmitting;
   const [isPreparingResponseFile, setIsPreparingResponseFile] = useState(false);
   const pendingResponseFileReadsRef = useRef(new Set<string>());
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
@@ -1203,6 +1206,8 @@ function Taker() {
   const scrollShowBranchActive = useRef(false);
 
   const [userAnswers, setUserAnswers] = useState<any[]>([]);
+  const latestUserAnswersRef = React.useRef<any[]>([]);
+  latestUserAnswersRef.current = userAnswers;
   const [visitedQuestionIds, setVisitedQuestionIds] = useState<string[]>([]);
   const [branchHistory, setBranchHistory] = useState<Array<{ fromQuestionId: string; targetQuestionId?: string; category?: string; questionIds: string[]; at: string }>>([]);
   const finalSubmissionSnapshotRef = useRef<{ answers: any[]; userData: Record<string, string>; questionIds: string[]; reason: 'completion' | 'timeout' | 'self_submit' | 'violation'; score: number; scorePossible: number; totalQuestions: number; branchHistory: Array<{ fromQuestionId: string; targetQuestionId?: string; category?: string; questionIds: string[]; at: string }>; startedAt: string } | null>(null);
@@ -1223,6 +1228,8 @@ function Taker() {
   const correctAnswersRef = React.useRef<Record<string, any>>({});
   const activeAttemptRef = React.useRef<Record<string, any> | null>(null);
   const finalizingRef = React.useRef(false);
+  const finalizeForNavigationRef = React.useRef<((answers: any[], reason: 'self_submit' | 'violation') => Promise<void>) | null>(null);
+  const navigationPromptOpenRef = React.useRef(false);
   const restoredAttemptTimerRef = React.useRef(false);
   const restoredQuestionTimerRef = React.useRef(false);
   const lastAttemptSyncRef = React.useRef('');
@@ -2433,7 +2440,7 @@ function Taker() {
       {
         id: 'quiz-leave-confirm',
         duration: Infinity,
-        
+
       },
     );
   };
@@ -2528,7 +2535,9 @@ function Taker() {
     if (!q) return;
     const passedRecord = {
       questionId: q.id,
-      answer: '(Passed)',
+      // Keep the persisted `passed` flag for existing response/API readers,
+      // but use the unambiguous label in participant-facing review.
+      answer: '(Skipped)',
       passed: true,
       correct: computeIsCorrect(q.id, undefined),
     };
@@ -2764,6 +2773,54 @@ function Taker() {
       setShowSubmittingScreen(true);
     }
   };
+
+  finalizeForNavigationRef.current = (answers, reason) => finalizeQuiz(answers, reason);
+
+  useEffect(() => {
+    if (!started || isFinished || !quiz) return;
+    const assessmentUrl = window.location.href;
+    const marker = `pw-active-assessment-${quiz.id}-${Date.now()}`;
+    const installGuard = () => {
+      window.history.pushState({ ...(window.history.state || {}), activeAssessment: marker }, '', assessmentUrl);
+    };
+    installGuard();
+    const onPopState = () => {
+      // Restore the active assessment URL before asking, so Back and Forward
+      // cannot leave an in-progress attempt behind.
+      installGuard();
+      // Finalization freezes answers and must finish or be retried before the
+      // page can be left, including when the assessment itself is untimed.
+      if (isSubmittingRef.current) return;
+      if (navigationPromptOpenRef.current) return;
+      navigationPromptOpenRef.current = true;
+      void showConfirm(
+        quiz.enforceSecurity
+          ? 'Leaving now will submit this assessment and mark the response as a security violation. Do you want to submit?'
+          : 'Your assessment is still active. Submit your response before leaving this page?',
+        { title: 'Leave assessment?', confirmText: 'Submit assessment', cancelText: 'Stay here', type: 'warning' },
+      ).then((shouldSubmit) => {
+        navigationPromptOpenRef.current = false;
+        if (shouldSubmit) {
+          void finalizeForNavigationRef.current?.(
+            latestUserAnswersRef.current,
+            quiz.enforceSecurity ? 'violation' : 'self_submit',
+          );
+        }
+      });
+    };
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isSubmittingRef.current && !quiz.timer?.hasTimer && !quiz.enforceSecurity) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('popstate', onPopState);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      if (window.history.state?.activeAssessment === marker) window.history.back();
+    };
+  }, [started, isFinished, quiz?.id, quiz?.enforceSecurity, quiz?.timer?.hasTimer, showConfirm]);
 
   // Strict category branching isolation & 3x loop-protected routing engine
   const proceedToNext = (
@@ -3325,9 +3382,8 @@ function Taker() {
                       </span>
                       <span className='text-xs text-white/55'>{max}</span>
                     </div>
-                    <input
+                    <ThemedSlider
                       aria-label='Choose a value'
-                      type='range'
                       min={min}
                       max={max}
                       step={step}
@@ -3342,7 +3398,10 @@ function Taker() {
                       onChange={(event) =>
                         saveValue(Number(event.target.value))
                       }
-                      className='h-2 w-full cursor-pointer accent-cyan-300'
+                      className='w-full cursor-pointer'
+                      trackHeight={6}
+                      activeHeight={9}
+                      thumbShape='rounded'
                     />
                   </div>
                 );
@@ -3436,10 +3495,7 @@ function Taker() {
                       if (!file) return;
 
                       // Enforce max size limit (MB)
-                      const maxMb =
-                        quiz?.fromPremium ?
-                          Math.min(Number(quest.maxFileSize) || 5, 50)
-                        : 5;
+                      const maxMb = Math.max(1, Math.min(Number(quest.maxFileSize) || 5, 50));
                       const sizeInMb = file.size / (1024 * 1024);
 
                       if (sizeInMb > maxMb) {
@@ -3449,7 +3505,7 @@ function Taker() {
                         return;
                       }
                       void (async () => {
-                        
+
                                               pendingResponseFileReadsRef.current.add(quest.id);
                                               setIsPreparingResponseFile(true);
                         try {
@@ -4776,7 +4832,7 @@ function Taker() {
       key='taker-wrapper'
       onContextMenu={(e) => quiz?.enforceSecurity && e.preventDefault()}
       className={cn(
-        'relative h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
+        'relative isolate h-screen flex flex-col bg-pw-bg text-white overflow-x-hidden selection:bg-pw-primary/30 selection:text-white',
         quiz?.enforceSecurity && 'select-none',
       )}>
       {/* Sleek Glowing Background Objects */}
@@ -4902,7 +4958,7 @@ function Taker() {
               </p>
             : !quiz?.hidePingWorldDisclaimer ?
               <p className='mb-1 text-[10px] flex flex-col'>
-                {quiz?.fromPremium && quiz?.customDisclaimer ?
+                {quiz?.customDisclaimer ?
                   <span
                     className='whitespace-pre-wrap'
                     dangerouslySetInnerHTML={{
@@ -5366,7 +5422,7 @@ function Taker() {
             )}
 
             {/* Disclaimer Banner */}
-            {quiz?.fromPremium && quiz?.customDisclaimer && (
+            {quiz?.customDisclaimer && (
               <div className='flex items-start gap-3 p-3 bg-pw-warning/5 border border-pw-warning/20 rounded-2xl mb-3 text-xs text-pw-muted leading-relaxed'>
                 <AlertTriangle
                   size={14}

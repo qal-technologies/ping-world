@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useRef, useState, useEffect } from 'react';
 import {
@@ -451,8 +452,8 @@ export function CanvasBuilder() {
                     {selectedShape.size}px
                   </span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={10}
                   max={250}
                   value={selectedShape.size}
@@ -477,8 +478,8 @@ export function CanvasBuilder() {
                     {Math.round(selectedShape.opacity * 100)}%
                   </span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={0.1}
                   max={1}
                   step={0.05}
@@ -504,8 +505,8 @@ export function CanvasBuilder() {
                     {selectedShape.borderWidth}px
                   </span>
                 </div>
-                <input
-                  type='range'
+                <ThemedSlider
+
                   min={0}
                   max={10}
                   value={selectedShape.borderWidth}

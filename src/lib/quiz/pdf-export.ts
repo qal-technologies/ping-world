@@ -225,6 +225,8 @@ export async function exportQuizFeedbackPdf (
     input.responseIndex === undefined ?
       input.responses.filter((response) => response.status !== 'in_progress')
       : [input.responses[input.responseIndex]].filter(Boolean);
+  const takerNumberFor = (index: number) =>
+    input.takerNumber || responseList.length - index;
       const logoUrl =
       typeof window !== 'undefined' ?
         `${window.location.origin}/images/logo.png`
@@ -304,7 +306,7 @@ export async function exportQuizFeedbackPdf (
       addMargin(35);
 
       heading(
-        `Taker ${input.takerNumber || (input.responseIndex === undefined ? responseIndex + 1 : input.responseIndex + 1)}`,
+        `Taker ${takerNumberFor(responseIndex)}`,
       );
       addText(
         `Score: ${response.score ?? 0} / ${response.scorePossible ?? response.totalQuestions ?? 0}`)
@@ -488,7 +490,7 @@ export async function exportQuizFeedbackPdf (
         .filter(([key]) => !['answeredQuestions', 'scorePossible', 'currentPathQuestionIds', 'pathQuestionSnapshots', 'branchHistory', 'submissionReason', 'startedAt', 'durationSeconds'].includes(key))
         .map(([key, value]) => `${key}: ${value}`)
         .join(' · ');
-      addText(`Taker ${input.takerNumber || i + 1}  |  ${details || response.signedUser?.displayName || 'Participant'}  |  Score: ${response.score ?? 0} / ${response.scorePossible ?? response.totalQuestions ?? 0}`, { size: 11 });
+      addText(`Taker ${takerNumberFor(i)}  |  ${details || response.signedUser?.displayName || 'Participant'}  |  Score: ${response.score ?? 0} / ${response.scorePossible ?? response.totalQuestions ?? 0}`, { size: 11 });
     }
 
     const totalPages = doc.getNumberOfPages();

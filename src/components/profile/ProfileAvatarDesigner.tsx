@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import React, { useState, useRef } from 'react';
 import NextImage from 'next/image';
@@ -374,8 +375,8 @@ export default function ProfileAvatarDesigner({
                 <span>Position Offset (Y)</span>
                 <span className='font-mono text-white'>{mockY}px</span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min='-50'
                 max='50'
                 value={mockY}
@@ -387,8 +388,8 @@ export default function ProfileAvatarDesigner({
                 <span>Scale Size</span>
                 <span className='font-mono text-white'>{mockScale.toFixed(2)}x</span>
               </div>
-              <input
-                type='range'
+              <ThemedSlider
+
                 min='0.5'
                 max='2'
                 step='0.05'

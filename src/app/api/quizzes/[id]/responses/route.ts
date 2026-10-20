@@ -112,12 +112,7 @@ export async function GET(
     if (quiz.user_id !== user.id)
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
 
-    const [
-      { data: rows, error },
-      { data: attempts, error: attemptError },
-      { count: totalCount, error: countError },
-      { count: attemptCount, error: attemptCountError },
-    ] = await Promise.all([
+    const [responseResult, attemptResult, responseCountResult, attemptCountResult] = await Promise.all([
       admin
         .from('quiz_responses')
         .select('id,timestamp,score,total_questions,user_data,answers')
@@ -143,7 +138,30 @@ export async function GET(
         .eq('quiz_id', id)
         .eq('status', 'in_progress'),
     ]);
-    if (error || countError) throw error || countError;
+    let { data: rows, error } = responseResult;
+    const { data: attempts, error: attemptError } = attemptResult;
+    const { count: totalCount, error: countError } = responseCountResult;
+    const { count: attemptCount, error: attemptCountError } = attemptCountResult;
+    if (error) {
+      // Be tolerant of an older database schema that has extra/missing
+      // response columns while still returning the saved rows it can read.
+      const fallback = await admin
+        .from('quiz_responses')
+        .select('*')
+        .eq('quiz_id', id)
+        .order('timestamp', { ascending: false })
+        .range(0, windowEnd - 1);
+      if (!fallback.error) {
+        rows = fallback.data;
+        error = null;
+      } else {
+        console.error('[api/quiz-responses/list] Response query failed:', error.code || 'unknown', fallback.error.code || 'fallback-failed');
+        throw fallback.error;
+      }
+    }
+    if (countError) {
+      console.warn('[api/quiz-responses/list] Submitted response count unavailable; using fetched page size.', countError.code || 'unknown');
+    }
     // A schema/configuration problem with in-progress attempts must not make
     // already-submitted feedback unavailable. Degrade this page to submitted
     // responses and let the next refresh retry the attempt query.
@@ -484,7 +502,7 @@ export async function GET(
       {
         responses: signedPage,
         nextOffset,
-        totalCount: (totalCount || 0) + (attemptCount || 0),
+        totalCount: (totalCount ?? rows?.length ?? 0) + (attemptCount ?? attempts?.length ?? 0),
         responsesPublicId:
           typeof quiz.settings?.publicResponsesId === 'string' ?
             quiz.settings.publicResponsesId
@@ -493,10 +511,7 @@ export async function GET(
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {
-    console.error(
-      '[api/quiz-responses/list] Load failed:',
-      error instanceof Error ? error.message : 'unknown',
-    );
+    console.error('[api/quiz-responses/list] Load failed:', error instanceof Error ? error.message : 'unknown');
     return NextResponse.json(
       { error: 'Could not load assessment responses.' },
       { status: 503 },

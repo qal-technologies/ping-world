@@ -1,4 +1,5 @@
 'use client';
+import { ThemedSlider } from '@/components/ui/themed-slider';
 
 import { useState, useRef } from 'react';
 import { Play, Square, Volume2, Music, Download, Upload, Sliders, AudioLines, Info } from 'lucide-react';
@@ -149,8 +150,8 @@ export default function AudioVisualizer() {
             <label className='text-xs font-bold uppercase text-pw-muted mb-2 block'>
               Frequency: {freq} Hz
             </label>
-            <input
-              type='range'
+            <ThemedSlider
+
               min='100'
               max='2000'
               step='10'
@@ -250,8 +251,8 @@ export default function AudioVisualizer() {
                 <div className="flex gap-4">
                   <div className="flex-1">
                     <label className="text-[10px] text-pw-muted font-bold block mb-1">Start Cut</label>
-                    <input
-                      type="range"
+                    <ThemedSlider
+
                       min="0"
                       max={audioMetadata.duration}
                       step="0.1"
@@ -262,8 +263,8 @@ export default function AudioVisualizer() {
                   </div>
                   <div className="flex-1">
                     <label className="text-[10px] text-pw-muted font-bold block mb-1">End Cut</label>
-                    <input
-                      type="range"
+                    <ThemedSlider
+
                       min="0"
                       max={audioMetadata.duration}
                       step="0.1"

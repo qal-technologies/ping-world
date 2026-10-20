@@ -143,6 +143,7 @@ export interface Quiz {
   correctOptionDes?: 'in-question' | 'in-result';
   createdAt: number;
   responses?: QuizTakerResponse[];
+  responsesTotalCount?: number;
   responsesNextOffset?: number | null;
   responsesLoadingMore?: boolean;
   allowEarlySubmit?: boolean;
