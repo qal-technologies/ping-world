@@ -2,7 +2,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
-import { getRequestUser, readJsonWithinLimit } from '@/lib/api-auth';
+import {
+  getRequestUser,
+  getRequestUserFromToken,
+  readJsonWithinLimit,
+} from '@/lib/api-auth';
 import { verifyQuizAccessToken } from '@/lib/quiz/private-access-token';
 
 export const dynamic = 'force-dynamic';
@@ -51,26 +55,39 @@ const RESERVED_ATTEMPT_KEYS = new Set([
 
 function sanitizeSnapshotValue(value: unknown, depth = 0): unknown {
   if (depth > 8) return undefined;
-  if (typeof value === 'string') return /^data:/i.test(value) ? undefined : value.slice(0, 10_000);
-  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
-  if (Array.isArray(value)) return value.slice(0, 500).map((entry) => sanitizeSnapshotValue(entry, depth + 1));
+  if (typeof value === 'string')
+    return /^data:/i.test(value) ? undefined : value.slice(0, 10_000);
+  if (value === null || typeof value === 'number' || typeof value === 'boolean')
+    return value;
+  if (Array.isArray(value))
+    return value
+      .slice(0, 500)
+      .map((entry) => sanitizeSnapshotValue(entry, depth + 1));
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => !/(?:base64|dataurl|bloburl|rawbytes)/i.test(key))
-      .slice(0, 200)
-      .flatMap(([key, entry]) => {
-        const sanitized = sanitizeSnapshotValue(entry, depth + 1);
-        return sanitized === undefined ? [] : [[key.slice(0, 120), sanitized]];
-      }));
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => !/(?:base64|dataurl|bloburl|rawbytes)/i.test(key))
+        .slice(0, 200)
+        .flatMap(([key, entry]) => {
+          const sanitized = sanitizeSnapshotValue(entry, depth + 1);
+          return sanitized === undefined ?
+              []
+            : [[key.slice(0, 120), sanitized]];
+        }),
+    );
   }
   return undefined;
 }
 
 function snapshotQuestion(question: Record<string, any>) {
   const snapshot = sanitizeSnapshotValue(question);
-  return snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
-    ? { ...(snapshot as Record<string, unknown>), id: String(question.id) }
-    : { id: String(question.id), text: String(question.text ?? ''), type: String(question.type ?? '') };
+  return snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ?
+      { ...(snapshot as Record<string, unknown>), id: String(question.id) }
+    : {
+        id: String(question.id),
+        text: String(question.text ?? ''),
+        type: String(question.type ?? ''),
+      };
 }
 
 function validIds(values: unknown, knownIds: Set<string>) {
@@ -127,7 +144,10 @@ async function clearAttemptMedia(
   const storage = admin.storage.from('quiz-response-media');
   const prefix = `${quizId}/${attemptId}`;
   for (let page = 0; page < 100; page += 1) {
-    const { data, error } = await storage.list(prefix, { limit: 100, offset: 0 });
+    const { data, error } = await storage.list(prefix, {
+      limit: 100,
+      offset: 0,
+    });
     if (error) throw error;
     if (!data?.length) break;
     const paths = data
@@ -143,7 +163,10 @@ async function clearAttemptMedia(
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  if (isRateLimited(ip, 'api:quiz-attempt', 60, 60_000).limited) {
+  // Progress snapshots may be sent every few hundred milliseconds while a
+  // taker edits answers. Keep abuse protection, but do not rate-limit normal
+  // live autosave below the client's legitimate update cadence.
+  if (isRateLimited(ip, 'api:quiz-attempt', 300, 60_000).limited) {
     return NextResponse.json(
       { error: 'Too many attempt saves. Try again shortly.' },
       { status: 429 },
@@ -151,10 +174,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await readJsonWithinLimit(request, 5 * 1024 * 1024)) as Record<
-      string,
-      any
-    >;
+    const body = (await readJsonWithinLimit(
+      request,
+      5 * 1024 * 1024,
+    )) as Record<string, any>;
     const quizId = typeof body.quizId === 'string' ? body.quizId : '';
     const attemptId = typeof body.attemptId === 'string' ? body.attemptId : '';
     if (!uuidPattern.test(quizId) || !uuidPattern.test(attemptId)) {
@@ -298,12 +321,17 @@ export async function POST(request: NextRequest) {
             ),
           );
           if (
-            submittedOrder.some((id: unknown) => typeof id !== 'string' || !(attempt.question_order || []).includes(id)) ||
+            submittedOrder.some(
+              (id: unknown) =>
+                typeof id !== 'string' ||
+                !(attempt.question_order || []).includes(id),
+            ) ||
             new Set(submittedOrder).size !== submittedOrder.length ||
             Object.entries(answers).length > questionIds.size ||
             Object.entries(answers).some(
               ([id, value]) =>
-                !questionIds.has(id) || JSON.stringify(value).length > 4 * 1024 * 1024,
+                !questionIds.has(id) ||
+                JSON.stringify(value).length > 4 * 1024 * 1024,
             )
           ) {
             return NextResponse.json(
@@ -357,16 +385,20 @@ export async function POST(request: NextRequest) {
             );
           const questionSnapshots = {
             ...Object.fromEntries(
-            questionList
-              .filter((question: any) => snapshotIds.has(String(question.id)))
-              .map((question: any) => [
-                String(question.id),
-                snapshotQuestion(question),
-              ]),
+              questionList
+                .filter((question: any) => snapshotIds.has(String(question.id)))
+                .map((question: any) => [
+                  String(question.id),
+                  snapshotQuestion(question),
+                ]),
             ),
             ...oldSnapshots,
           };
-          const attemptKnownIds = new Set([...questionIds, ...(attempt.question_order || []), ...Object.keys(oldSnapshots)]);
+          const attemptKnownIds = new Set([
+            ...questionIds,
+            ...(attempt.question_order || []),
+            ...Object.keys(oldSnapshots),
+          ]);
           const mergedAnswers = {
             ...prior,
             ...answers,
@@ -378,9 +410,12 @@ export async function POST(request: NextRequest) {
               attemptKnownIds,
             ),
             __branchHistory:
-              normalizeBranchHistory(body.branchHistory, attemptKnownIds).length ? normalizeBranchHistory(body.branchHistory, attemptKnownIds) : (
-                prior.__branchHistory || []
-              ),
+              (
+                normalizeBranchHistory(body.branchHistory, attemptKnownIds)
+                  .length
+              ) ?
+                normalizeBranchHistory(body.branchHistory, attemptKnownIds)
+              : prior.__branchHistory || [],
             __questionSnapshots: questionSnapshots,
             __calculateAllBranches: calculateAllBranches,
             __attemptSettings: prior.__attemptSettings || quiz.settings || {},
@@ -401,7 +436,9 @@ export async function POST(request: NextRequest) {
           attempt.current_question_index = currentQuestionIndex;
         }
         const visibleAnswers = Object.fromEntries(
-          Object.entries(attempt.answers || {}).filter(([key]) => !RESERVED_ATTEMPT_KEYS.has(key)),
+          Object.entries(attempt.answers || {}).filter(
+            ([key]) => !RESERVED_ATTEMPT_KEYS.has(key),
+          ),
         );
         return NextResponse.json(
           {
@@ -461,10 +498,18 @@ export async function POST(request: NextRequest) {
             { status: 409 },
           );
         const { data: priorResponse, error: responseCheckError } = await admin
-          .from('quiz_responses').select('id').eq('quiz_id', quizId)
-          .eq('user_data->>deviceKeyHash', deviceKeyHash).limit(1).maybeSingle();
+          .from('quiz_responses')
+          .select('id')
+          .eq('quiz_id', quizId)
+          .eq('user_data->>deviceKeyHash', deviceKeyHash)
+          .limit(1)
+          .maybeSingle();
         if (responseCheckError) throw responseCheckError;
-        if (priorResponse) return NextResponse.json({ error: 'This device has already used its attempt.' }, { status: 409 });
+        if (priorResponse)
+          return NextResponse.json(
+            { error: 'This device has already used its attempt.' },
+            { status: 409 },
+          );
       }
       const suppliedToken =
         typeof body.attemptToken === 'string' ? body.attemptToken : '';
@@ -513,7 +558,8 @@ export async function POST(request: NextRequest) {
         answerEntries.length > questionIds.size ||
         answerEntries.some(
           ([id, value]) =>
-            !questionIds.has(id) || JSON.stringify(value).length > 4 * 1024 * 1024,
+            !questionIds.has(id) ||
+            JSON.stringify(value).length > 4 * 1024 * 1024,
         )
       ) {
         return NextResponse.json(
@@ -540,7 +586,9 @@ export async function POST(request: NextRequest) {
       const calculateAllBranches = Boolean(
         body.calculateAllBranches || settings.calculateAllBranches,
       );
-      const snapshotIds = new Set(questionList.map((question: any) => String(question.id)));
+      const snapshotIds = new Set(
+        questionList.map((question: any) => String(question.id)),
+      );
       const questionSnapshots = Object.fromEntries(
         questionList
           .filter((question: any) => snapshotIds.has(String(question.id)))
@@ -549,7 +597,10 @@ export async function POST(request: NextRequest) {
             snapshotQuestion(question),
           ]),
       );
-      const signedUser = await getRequestUser(request);
+      const signedUser =
+        (await getRequestUserFromToken(
+          typeof body.accessToken === 'string' ? body.accessToken : undefined,
+        )) || (await getRequestUser(request));
       let signedIdentity: Record<string, unknown> | null = null;
       if (signedUser?.id) {
         const { data: profile } = await admin
@@ -617,8 +668,16 @@ export async function POST(request: NextRequest) {
 
     const token =
       typeof body.attemptToken === 'string' ? body.attemptToken : '';
+    if (!attempt) {
+      return NextResponse.json(
+        {
+          error:
+            'This attempt expired and was removed after 24 hours. Start a new attempt to continue.',
+        },
+        { status: 410 },
+      );
+    }
     if (
-      !attempt ||
       attempt.quiz_id !== quizId ||
       !token ||
       hashToken(token) !== attempt.attempt_token_hash
@@ -639,9 +698,22 @@ export async function POST(request: NextRequest) {
     const questionIds = new Set(
       questionList.map((question: any) => String(question.id)),
     );
-    const prior = attempt.answers && typeof attempt.answers === 'object' ? attempt.answers : {};
-    const oldSnapshots = prior.__questionSnapshots && typeof prior.__questionSnapshots === 'object' ? prior.__questionSnapshots : {};
-    const attemptKnownIds = new Set([...questionIds, ...(attempt.question_order || []), ...Object.keys(oldSnapshots)]);
+    const prior =
+      attempt.answers && typeof attempt.answers === 'object' ?
+        attempt.answers
+      : {};
+    const oldSnapshots =
+      (
+        prior.__questionSnapshots &&
+        typeof prior.__questionSnapshots === 'object'
+      ) ?
+        prior.__questionSnapshots
+      : {};
+    const attemptKnownIds = new Set([
+      ...questionIds,
+      ...(attempt.question_order || []),
+      ...Object.keys(oldSnapshots),
+    ]);
     const answersInput =
       (
         body.answers &&
@@ -660,7 +732,8 @@ export async function POST(request: NextRequest) {
       answerEntries.length > attemptKnownIds.size ||
       answerEntries.some(
         ([id, value]) =>
-          !attemptKnownIds.has(id) || JSON.stringify(value).length > 4 * 1024 * 1024,
+          !attemptKnownIds.has(id) ||
+          JSON.stringify(value).length > 4 * 1024 * 1024,
       )
     ) {
       return NextResponse.json(
@@ -678,7 +751,12 @@ export async function POST(request: NextRequest) {
         (id: unknown) => typeof id !== 'string' || !questionOrder.includes(id),
       ) ||
       new Set(submittedOrder).size !== submittedOrder.length ||
-      submittedOrder.some((id: string, index: number) => index > 0 && questionOrder.indexOf(id) <= questionOrder.indexOf(submittedOrder[index - 1]))
+      submittedOrder.some(
+        (id: string, index: number) =>
+          index > 0 &&
+          questionOrder.indexOf(id) <=
+            questionOrder.indexOf(submittedOrder[index - 1]),
+      )
     ) {
       return NextResponse.json(
         { error: 'Invalid question order.' },
@@ -732,12 +810,12 @@ export async function POST(request: NextRequest) {
       );
     const questionSnapshots = {
       ...Object.fromEntries(
-      questionList
-        .filter((question: any) => snapshotIds.has(String(question.id)))
-        .map((question: any) => [
-          String(question.id),
-          snapshotQuestion(question),
-        ]),
+        questionList
+          .filter((question: any) => snapshotIds.has(String(question.id)))
+          .map((question: any) => [
+            String(question.id),
+            snapshotQuestion(question),
+          ]),
       ),
       ...oldSnapshots,
     };
@@ -745,11 +823,16 @@ export async function POST(request: NextRequest) {
       ...prior,
       ...answers,
       __visitedQuestionIds: validIds(
-        [...validIds(prior.__visitedQuestionIds, attemptKnownIds), ...validIds(body.visitedQuestionIds, attemptKnownIds)],
+        [
+          ...validIds(prior.__visitedQuestionIds, attemptKnownIds),
+          ...validIds(body.visitedQuestionIds, attemptKnownIds),
+        ],
         attemptKnownIds,
       ),
       __branchHistory:
-        normalizeBranchHistory(body.branchHistory, attemptKnownIds).length ? normalizeBranchHistory(body.branchHistory, attemptKnownIds) : prior.__branchHistory || [],
+        normalizeBranchHistory(body.branchHistory, attemptKnownIds).length ?
+          normalizeBranchHistory(body.branchHistory, attemptKnownIds)
+        : prior.__branchHistory || [],
       __questionSnapshots: questionSnapshots,
       __calculateAllBranches: calculateAllBranches,
       __attemptSettings: prior.__attemptSettings || quiz.settings || {},

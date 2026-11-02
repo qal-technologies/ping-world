@@ -22,7 +22,12 @@ export async function POST(req: NextRequest) {
       );
     }
     const requestUser = await getRequestUser(req);
-    if (!requestUser) {
+    if (
+      !requestUser ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        requestUser.id,
+      )
+    ) {
       return NextResponse.json(
         { success: false, error: 'Sign in to start checkout.' },
         { status: 401 },
@@ -54,6 +59,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Invalid plan selection.' },
         { status: 400 },
+      );
+    }
+    const currentMetadata = requestUser.app_metadata || {};
+    const currentTier = String(currentMetadata.tier || 'free');
+    const currentExpiry = Date.parse(String(currentMetadata.tier_expires_at || ''));
+    if (
+      ['flexible', 'standard', 'pro'].includes(currentTier) &&
+      Number.isFinite(currentExpiry) && currentExpiry > Date.now()
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'Cancel your current plan before selecting another plan.' },
+        { status: 409 },
       );
     }
     const checkoutToolId = tier === 'flexible' ? selectedFlexibleToolId as string : '';
@@ -93,16 +110,17 @@ export async function POST(req: NextRequest) {
 
     if (stripeSecretKey) {
       // Live Stripe Checkout Session Creation via direct HTTP API
+      const safeOrigin = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin;
       const params = new URLSearchParams();
       params.append('payment_method_types[]', 'card');
       params.append('mode', 'subscription');
       params.append(
         'success_url',
-        `${req.nextUrl.origin}/pricing?checkout_success=true&tier=${tier}`,
+        `${safeOrigin}/pricing?checkout_success=true&tier=${encodeURIComponent(tier)}`,
       );
       params.append(
         'cancel_url',
-        `${req.nextUrl.origin}/pricing?checkout_canceled=true`,
+        `${safeOrigin}/pricing?checkout_canceled=true`,
       );
       params.append('client_reference_id', requestUser.id);
       params.append(
@@ -173,9 +191,13 @@ export async function POST(req: NextRequest) {
         { status: 413 },
       );
     }
-    console.error('[/api/checkout/session] Request failed.');
+    console.error('[/api/checkout/session] Request failed:', err);
+    const message =
+      process.env.NODE_ENV !== 'production' && err instanceof Error
+        ? err.message
+        : 'Failed to initialize payment gateway.';
     return NextResponse.json(
-      { success: false, error: 'Failed to initialize payment gateway.' },
+      { success: false, error: message },
       { status: 500 },
     );
   }

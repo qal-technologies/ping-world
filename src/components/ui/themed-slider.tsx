@@ -98,7 +98,7 @@ export function ThemedSlider({
       onPointerEnter={() => growOnHover && setActive(true)}
       onPointerLeave={() => setActive(false)}
     >
-      <span aria-hidden='true' className={cn('pw-themed-range__track', shimmer && 'pw-themed-range__track--shimmer')}>
+      <span aria-hidden='true' className={cn('pw-themed-range__track', shimmer && 'pw-themed-range__track--shimmer rounded-full')}>
         <span className='pw-themed-range__fill' />
       </span>
       <input

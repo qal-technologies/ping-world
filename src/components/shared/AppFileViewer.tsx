@@ -82,6 +82,7 @@ type EpubChapter = { title: string; html: string; assetUrls: string[] };
 interface AppFileViewerContextValue {
   openFile: (file: AppFileDescriptor) => void;
   closeFile: () => void;
+  isFileOpen: boolean;
 }
 
 const AppFileViewerContext = createContext<AppFileViewerContextValue | null>(
@@ -234,6 +235,13 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const closeFile = useCallback(() => {
     const marker = viewerHistoryMarkerRef.current;
+    if (typeof window !== 'undefined') {
+      (window as any).__pwFileViewerClosing = true;
+      (window as any).__pwFileViewerOpen = false;
+      setTimeout(() => {
+        (window as any).__pwFileViewerClosing = false;
+      }, 500);
+    }
     if (marker && window.history.state?.appFileViewer === marker) {
       // The viewer adds a same-URL entry so a hardware/browser Back gesture
       // dismisses the overlay instead of leaving the underlying page.
@@ -292,6 +300,9 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
   const isFileOpen = file !== null;
   const markMediaLoaded = useCallback(() => setMediaLoading(false), []);
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__pwFileViewerOpen = isFileOpen;
+    }
     if (!isFileOpen || viewerHistoryMarkerRef.current) return;
     const marker = `pw-file-viewer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     viewerHistoryMarkerRef.current = marker;
@@ -302,6 +313,13 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
     );
     const onPopState = () => {
       viewerHistoryMarkerRef.current = null;
+      if (typeof window !== 'undefined') {
+        (window as any).__pwFileViewerOpen = false;
+        (window as any).__pwFileViewerClosing = true;
+        setTimeout(() => {
+          (window as any).__pwFileViewerClosing = false;
+        }, 500);
+      }
       setFile((current) => {
         if (current?.src.startsWith('blob:')) URL.revokeObjectURL(current.src);
         return null;
@@ -1112,8 +1130,8 @@ export function AppFileViewerProvider({ children }: { children: ReactNode }) {
   }, [file, closeFile]);
 
   const contextValue = useMemo(
-    () => ({ openFile, closeFile }),
-    [openFile, closeFile],
+    () => ({ openFile, closeFile, isFileOpen }),
+    [openFile, closeFile, isFileOpen],
   );
 
   return (

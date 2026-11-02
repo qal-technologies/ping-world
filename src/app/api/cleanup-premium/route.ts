@@ -79,7 +79,6 @@ export async function GET(request: NextRequest) {
             const nextAppMetadata = { ...metadata, tier: 'free', purchased_tools: [], tier_expired_at: expiry };
             const { error: updateError } = await admin.auth.admin.updateUserById(user.id, {
               app_metadata: nextAppMetadata,
-              user_metadata: { ...(user.user_metadata || {}), tier: 'free', purchased_tools: [], tier_expires_at: expiry },
             });
             if (updateError) throw updateError;
             const { error: profileError } = await admin.from('profiles').upsert({ id: user.id, tier: 'free', updated_at: new Date().toISOString() });

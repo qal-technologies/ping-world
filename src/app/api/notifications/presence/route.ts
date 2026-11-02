@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
   }
   try {
-    const body = await readJsonWithinLimit(request, 8 * 1024) as { active?: unknown; accessToken?: unknown };
+    const body = await readJsonWithinLimit(request, 256 * 1024) as { active?: unknown; accessToken?: unknown };
     const token = typeof body.accessToken === 'string' ? body.accessToken : '';
     const user = await getRequestUserFromToken(token);
     if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });

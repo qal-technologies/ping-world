@@ -59,7 +59,6 @@ export const metadata: Metadata = {
     'ping wrld',
     'ping world tools',
     'ping world api',
-    'free tools',
     'quiz builder',
     'pdf tool',
     'image editing tool',
@@ -75,6 +74,10 @@ export const metadata: Metadata = {
     'creator hub',
     'ping platform',
     'ping',
+    'calculator for finance',
+    'currency converter',
+    'paid tools',
+    'free tools',
   ],
   manifest: '/manifest.json',
   alternates: {

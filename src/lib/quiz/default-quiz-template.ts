@@ -37,17 +37,18 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
   type: 'quiz',
   quizLayout: 'single',
   quizScroll: false,
-  isTemplate:true,
+  isTemplate: true,
   showScore: true,
   allowRetry: true,
   randomizeQuestions: false,
   createdAt: Date.now(),
-  disclaimer:
+  info:
     'Preview mode: try every feature. Your answers stay in this session and are never submitted or saved.',
   branding: {
-    image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1920&q=80',
+    image:
+      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1920&q=80',
     opacity: 0.12,
-    shadeColor: '#050814',
+    shadeColor: '#970095ff',
     blur: 6,
   },
   askDetails: [
@@ -92,7 +93,8 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
           id: 'opt-composer',
           text: 'Social Post Composer & Text-to-Slide Canvas',
           uploadUrl: SAMPLE_SLIDE_ICON,
-          explanation: 'The Social Post Composer lets you compose, AI-enhance, and format multi-slide carousels across Instagram, X, Facebook, and LinkedIn.',
+          explanation:
+            'The Social Post Composer lets you compose, AI-enhance, and format multi-slide carousels across Instagram, X, Facebook, and LinkedIn.',
         },
         {
           id: 'opt-pdf',
@@ -117,9 +119,15 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
       type: 'checkbox',
       category: 'Dynamic Piping & Mentions',
       options: [
-        { id: 'opt-age', text: '@DOB:age (Calculates exact current age in years)' },
+        {
+          id: 'opt-age',
+          text: '@DOB:age (Calculates exact current age in years)',
+        },
         { id: 'opt-year', text: '@DOB:year (Extracts the 4-digit birth year)' },
-        { id: 'opt-month', text: '@DOB:month (Extracts full birth month name, e.g. March)' },
+        {
+          id: 'opt-month',
+          text: '@DOB:month (Extracts full birth month name, e.g. March)',
+        },
         { id: 'opt-day', text: '@DOB:day (Extracts numeric day of birth)' },
       ],
       correctIndex: ['opt-age', 'opt-year', 'opt-month', 'opt-day'],
@@ -170,7 +178,8 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
       max: 10,
       step: 1,
       correctIndex: 10,
-      correctExplanation: 'PingWorld enables full live variable substitution in every text field!',
+      correctExplanation:
+        'PingWorld enables full live variable substitution in every text field!',
     },
     {
       id: 'showcase-q6',
@@ -179,7 +188,8 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
       category: 'User Experience',
       options: [],
       correctIndex: 5,
-      correctExplanation: 'PingWorld synthesizes audio frequencies via the Web Audio API without external assets.',
+      correctExplanation:
+        'PingWorld synthesizes audio frequencies via the Web Audio API without external assets.',
     },
     {
       id: 'showcase-q7',
@@ -193,7 +203,8 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
         { id: 'opt-150', text: '150' },
       ],
       correctIndex: 'opt-100',
-      correctExplanation: 'PingWorld dynamically evaluates arithmetic inside @eval expressions (10 * 5 = 50, + 50 = 100).',
+      correctExplanation:
+        'PingWorld dynamically evaluates arithmetic inside @eval expressions (10 * 5 = 50, + 50 = 100).',
     },
     {
       id: 'showcase-q8',
@@ -204,7 +215,8 @@ export const DEFAULT_PINGWORLD_SHOWCASE_QUIZ: Quiz = {
       allowedTypes: 'images/*',
       maxFileSize: 10,
       correctIndex: null,
-      correctExplanation: 'Uploaded files are packaged with secure envelope tagging and displayed in the completion review.',
+      correctExplanation:
+        'Uploaded files are packaged with secure envelope tagging and displayed in the completion review.',
     },
   ],
   endScreen: {

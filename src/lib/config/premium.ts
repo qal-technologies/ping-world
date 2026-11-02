@@ -3,7 +3,7 @@
  * All tier checks, limits, and feature gates should reference this file.
  */
 
-// jules edit: Define flexible plan features & pricing configuration
+// Define flexible plan features & pricing configuration
 export interface FlexibleFeature {
   id: string;
   label: string;
@@ -11,7 +11,7 @@ export interface FlexibleFeature {
   yearly: number;
 }
 
-// jules edit: Modular and easily tweakable individual pricing rules for the flexible plan
+// Modular and easily tweakable individual pricing rules for the flexible plan
 export const FLEXIBLE_FEATURES: FlexibleFeature[] = [
   { id: 'composer', label: 'Creator Hub', monthly: 2.99, yearly: 29.99 },
   { id: 'quizzable', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
@@ -103,12 +103,13 @@ export const PREMIUM_TIERS: Record<PremiumTier, TierConfig> = {
  * Compute expiry date based on user tier and requested days.
  * Enforces tier caps silently - clamps to min/max.
  */
-export function computeExpiry(tier: PremiumTier, requestedDays: number): Date {
+export function computeExpiry (tier: PremiumTier, requestedDays: number, isTemplate?: boolean): Date {
+  if(isTemplate) return new Date();
   const config = PREMIUM_TIERS[tier];
-  const clamped = Math.max(
-    config.minExpiryDays,
-    Math.min(requestedDays, config.maxExpiryDays),
-  );
+  // A tier's minimum is the shortest *extended* lifespan it unlocks, not a
+  // lower bound for the free choices (1–2 days). Preserve every valid user
+  // selection and only cap it at the active tier's maximum.
+  const clamped = Math.max(1, Math.min(requestedDays, config.maxExpiryDays));
   const date = new Date();
   date.setDate(date.getDate() + clamped);
   return date;

@@ -70,11 +70,33 @@ export async function fetchQuizFeedback(quizId: string, options: FeedbackFilterO
   }
 }
 
-export async function submitQuizFeedback(quizId: string, payload: { comment: string; rating?: number; authorName?: string }) {
+export async function submitQuizFeedback(
+  quizId: string,
+  payload: { comment: string; rating?: number; authorName?: string },
+) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new Error('You are currently offline. Please reconnect to submit your feedback.');
+  }
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(quizId)) {
+    throw new Error('Invalid assessment identifier.');
+  }
+
+  const comment = (payload.comment || '').trim();
+  if (comment.length < 2 || comment.length > 2000) {
+    throw new Error('Feedback comment must be between 2 and 2000 characters.');
+  }
+
+  const rating =
+    typeof payload.rating === 'number'
+      ? Math.max(1, Math.min(5, Math.round(payload.rating)))
+      : 5;
+  const authorName = (payload.authorName || '').trim().slice(0, 80);
+
   const res = await fetch(`/api/quizzes/${encodeURIComponent(quizId)}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ comment, rating, authorName }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => null);

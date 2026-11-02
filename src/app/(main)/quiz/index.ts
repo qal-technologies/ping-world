@@ -163,9 +163,7 @@ export interface Quiz {
   isCustom?: boolean;
   customUrl?: string;
   responsesPublicId?: string;
-  disclaimer?: string;
-  customDisclaimer?: string; // Pro: replaces default PingWorld disclaimer
-  hidePingWorldDisclaimer?: boolean; // Pro: hide PingWorld branding disclaimer
+  info?: string; // Setter-provided assessment information shown before questions and at the top while answering
   showRealtimeScore?: boolean; // Pro: show live score badge during quiz
   nextButtonText?: string; // Pro: custom Next button label
   prevButtonText?: string; // Pro: custom Previous button label

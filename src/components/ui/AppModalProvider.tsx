@@ -144,7 +144,7 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
       {children}
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()} > 
-        <DialogContent className="max-w-md w-[95%] bg-pw-surface/40 bkblur border border-white/4 text-pw-text rounded-3xl shadow-2xl pt-5 overflow-hidden">
+        <DialogContent className="max-w-md w-[95%] bg-pw-surface/40 bkblur border border-white/4 text-pw-text rounded-[25px] shadow-2xl pt-5 overflow-hidden">
           <DialogHeader className="space-y-3 py-4 p-2 sm:p-3 sm:py-6">
             <div className="flex items-center gap-3">
               <div className={`p-2.5 rounded-xl bg-white/5 border border-white/10 ${iconColor}`}>
@@ -154,7 +154,7 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
                 <DialogTitle className="text-lg font-bold font-display text-white">
                   {options.title}
                 </DialogTitle>
-                <DialogDescription className="text-xs text-pw-muted mt-1 leading-relaxed" dangerouslySetInnerHTML={{__html: options.message}}/>
+                <DialogDescription className="text-xs text-white/80 mt-2 leading-tight" dangerouslySetInnerHTML={{__html: options.message}}/>
               </div>
             </div>
           </DialogHeader>

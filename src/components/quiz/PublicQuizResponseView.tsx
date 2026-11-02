@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
-import { LoaderCircle, LockKeyhole } from 'lucide-react';
+import { LoaderCircle, LockKeyhole, RotateCw, WifiOff } from 'lucide-react';
 import Image from 'next/image';
 import { useAppFileViewer } from '@/components/shared/AppFileViewer';
 
@@ -11,6 +11,7 @@ type PublicOption = { id?: string; text?: string; explanation?: string };
 type PublicQuestion = {
   id: string;
   text?: string;
+  category?: string;
   imageUrl?: string;
   options?: PublicOption[];
   correctExplanation?: string;
@@ -48,35 +49,100 @@ export default function PublicQuizResponseView({
   const [response, setResponse] = useState<PublicResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
+  const [isCached, setIsCached] = useState(false);
+  const [isNetworkFailure, setIsNetworkFailure] = useState(false);
   const { openFile } = useAppFileViewer();
-  useEffect(() => {
-    let alive = true;
-    void fetch(
-      `/api/public/quiz-response/${encodeURIComponent(publicId)}?responseId=${encodeURIComponent(responseId)}`,
-      { cache: 'no-store' },
-    )
-      .then(async (result) => {
-        const body = await result.json().catch(() => null);
-        if (!result.ok)
-          throw new Error(
-            body?.error || 'This response is private or unavailable.',
-          );
-        if (alive) setResponse(body.response);
-      })
-      .catch(
-        (reason) =>
-          alive &&
+
+  const cacheKey = `pingwrld_response_${publicId}_${responseId}`;
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setIsNetworkFailure(false);
+
+    const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    setIsOffline(!online);
+
+    let cachedData: PublicResponse | null = null;
+    try {
+      const stored = sessionStorage.getItem(cacheKey);
+      if (stored) {
+        cachedData = JSON.parse(stored);
+      }
+    } catch {}
+
+    if (!online && cachedData) {
+      setResponse(cachedData);
+      setIsCached(true);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const result = await fetch(
+        `/api/public/quiz-response/${encodeURIComponent(publicId)}?responseId=${encodeURIComponent(responseId)}`,
+        { cache: 'no-store' },
+      );
+      const body = await result.json().catch(() => null);
+      if (!result.ok) {
+        throw new Error(
+          body?.error || 'This response is private or unavailable.',
+        );
+      }
+      setResponse(body.response);
+      setIsCached(false);
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(body.response));
+      } catch {}
+    } catch (reason: any) {
+      const isNet =
+        !navigator.onLine ||
+        reason instanceof TypeError ||
+        reason?.message?.includes('fetch') ||
+        reason?.message?.includes('network');
+
+      if (isNet) {
+        setIsNetworkFailure(true);
+        if (cachedData) {
+          setResponse(cachedData);
+          setIsCached(true);
+        } else {
           setError(
-            reason instanceof Error ?
-              reason.message
-            : 'Response could not be loaded.',
-          ),
-      )
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
+            'Unable to connect to PingWorld. Please check your internet connection.',
+          );
+        }
+      } else {
+        setError(
+          reason instanceof Error ?
+            reason.message
+          : 'Response could not be loaded.',
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [publicId, responseId, cacheKey]);
+
+  useEffect(() => {
+    loadData();
+
+    const handleOnline = () => {
+      setIsOffline(false);
+      loadData();
     };
-  }, [publicId, responseId]);
+    const handleOffline = () => {
+      setIsOffline(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [loadData]);
 
   if (loading)
     return (
@@ -85,18 +151,42 @@ export default function PublicQuizResponseView({
         Loading response…
       </main>
     );
-  if (!response)
+
+  if (!response) {
+    if (isOffline || isNetworkFailure) {
+      return (
+        <main className='mx-auto flex min-h-[100dvh] max-w-xl items-center justify-center px-4'>
+          <Card className='w-full border-amber-500/30 bg-pw-surface/90 p-6 text-center'>
+            <WifiOff className='mx-auto mb-3 h-8 w-8 text-amber-400' />
+            <h1 className='text-lg font-bold text-pw-text'>Network Connection Lost</h1>
+            <p className='mt-2 text-sm text-pw-muted'>
+              {error || 'Unable to load this assessment response because you are currently offline.'}
+            </p>
+            <button
+              type='button'
+              onClick={() => loadData()}
+              className='mt-4 inline-flex items-center gap-2 rounded-xl bg-pw-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-pw-primary/90'
+            >
+              <RotateCw className='h-4 w-4' />
+              Try Again
+            </button>
+          </Card>
+        </main>
+      );
+    }
     return (
-      <main className='mx-auto flex min-h-[100dvh] max-w-xl items-center justify-center px-2'>
-        <Card className='w-full p-6 text-center'>
-          <LockKeyhole className='mx-auto mb-3 h-7 w-7 text-pw-muted' />
-          <h1 className='font-bold'>Response unavailable</h1>
-          <p className='mt-2 text-sm text-pw-muted'>
-            {error || 'This response link is no longer public.'}
+      <main className='mx-auto flex min-h-[100dvh] max-w-xl items-center justify-center px-4'>
+        <Card className='w-full p-6 py-10 text-center'>
+          <LockKeyhole className='mx-auto mb-4 h-10 w-10 text-pw-primary' />
+          <h1 className='font-bold mt-2'>Responses unavailable</h1>
+          <p className='text-sm text-pw-muted'>
+            {error || 'This link may have been disabled.'}
           </p>
         </Card>
       </main>
     );
+  }
+
 
   const answers = new Map<string, PublicAnswer>(
     (response.answers || []).map((answer) => [
@@ -132,13 +222,36 @@ export default function PublicQuizResponseView({
     );
   };
   return (
-    <main className='mx-auto min-h-[70dvh] w-full max-w-4xl space-y-1 px-2 py-8'>
+    <main className='mx-auto min-h-[70dvh] w-full max-w-4xl space-y-3 px-2 py-8'>
+      {(isOffline || isCached) && (
+        <div className='flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200'>
+          <div className='flex items-center gap-2'>
+            <WifiOff className='h-4 w-4 shrink-0 text-amber-400' />
+            <span>
+              {isOffline
+                ? 'You are offline. Showing locally saved response data.'
+                : 'Showing locally cached response data.'}
+            </span>
+          </div>
+          <button
+            type='button'
+            onClick={() => loadData()}
+            className='inline-flex items-center gap-1.5 font-semibold text-amber-300 underline hover:text-amber-100'
+          >
+            <RotateCw className='h-3.5 w-3.5' />
+            Refresh
+          </button>
+        </div>
+      )}
       <Card className='border-white/10 bg-pw-surface/70 gap-1 p-2 sm:p-4'>
         <p className='text-xs font-bold uppercase tracking-widest text-pw-primary'>
           PingWorld · shared response
         </p>
         <h1 className='mt-2 text-2xl font-extrabold'>Assessment response</h1>
-        {response.signedUser && (
+        {response.signedUser && !Object.entries(response.userData || {}).some(([key, value]) =>
+          !['categoryScores','submissionReason','assessmentType','isSignedUser','signedUser','currentPathQuestionIds','pathQuestionSnapshots','branchHistory','attemptTokenHash','deviceKeyHash','attemptId','attemptToken','deviceKey'].includes(key) &&
+          (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') && String(value).trim().length > 0
+        ) && (
           <p className='text-sm text-pw-muted'>
             {response.signedUser.displayName || response.signedUser.username} ·
             signed user
@@ -171,6 +284,7 @@ export default function PublicQuizResponseView({
               className='space-y-1 border-white/10 bg-white/[0.03] ml-1 gap-1 p-2 sm:p-4'>
               <h2 className='text-sm font-bold mb-1'>
                 {index + 1}. {question.text || 'Question'}
+                {question.category ? <span className='ml-1 font-normal text-pw-muted'>({question.category})</span> : null}
               </h2>
               {question.imageUrl && (
                 <Image

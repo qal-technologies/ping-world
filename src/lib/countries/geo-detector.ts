@@ -113,9 +113,21 @@ const TIMEZONE_GEO_MAP: Record<string, { country: string; continent: string; cod
 /**
  * Accurately resolve client country and continent from browser environment
  */
-export function detectClientGeo(): GeoLocationInfo {
+export async function detectClientGeo(): Promise <GeoLocationInfo> {
   let tz = '';
   try {
+    //use geo api instead for accuracy or map more locations and countries
+    /*const data = fetch('countries.api/current/');
+    if((await data).ok) {
+      const resp = (await data).json();
+      return {
+        continent: resp?.continent,
+        country: resp.country,
+        timezone: resp.timezone,
+        countryCode: resp.countryCode,
+      }
+    }*/
+    
     tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
   } catch {
     tz = '';

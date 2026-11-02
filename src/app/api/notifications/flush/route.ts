@@ -66,3 +66,5 @@ export async function GET(request: NextRequest) {
   }
   return NextResponse.json({ processed: delivered }, { headers: { 'Cache-Control': 'no-store' } });
 }
+
+export const POST = GET;

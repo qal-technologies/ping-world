@@ -41,22 +41,25 @@ export default function Wrapper({
 
   return (
     <Card
-      className='w-full flex flex-col gap-0 overflow-hidden border-white/4 bg-white/[0.02] p-0 bkblur rounded-2xl'
+      className='w-full flex flex-col gap-0 bg-transparent overflow-hidden ring-0 sm:ring-1 border-none sm:border-white/4 sm:bg-white/[0.02] p-0 sm:bkblur rounded-2xl'
       key={title + '-pw-quiz-wrapper'}>
       <div
         onClick={() => setOpen(!open)}
-        className='w-full cursor-pointer flex items-center justify-between p-2 sm:p-4 hover:bg-white/4 transition-colors group flex-1'>
+        className={cn(
+          'w-full cursor-pointer flex items-center justify-between p-2 sm:p-3 bg-white/4 sm:bg-white/[0.02] sm:hover:bg-white/4 transition-colors group flex-1 border border-white/4 ',
+          !open && 'rounded-2xl',
+        )}>
         <div className='flex items-center gap-3 flex-1'>
           {icon && (
             <div
               className={cn(
-                'h-8 w-8 rounded-lg flex items-center justify-center transition-all text-xl shink-0',
+                'h-8 w-8 rounded-lg inline-flex items-center justify-center transition-all text-xl',
                 `bg-${activeColor}/10 text-${activeColor} group-hover:scale-110`,
               )}>
               {icon}
             </div>
           )}
-          <div>
+          <div className='max-w-[90%]'>
             <p className='text-sm font-bold tracking-tight'>{headerText}</p>
             {description && (
               <p className='text-[10px] text-pw-muted leading-tight mt-0.5'>
@@ -108,7 +111,7 @@ export default function Wrapper({
             )}
             <div
               className={cn(
-                'p-1 sm:p-2 pt-0 border-t border-white/5 relative',
+                'p-1 sm:p-2 pt-0 relative',
                 premium &&
                   'select-none pointer-events-none opacity-50 blur-[2px]',
               )}

@@ -115,8 +115,33 @@ export async function POST(request: NextRequest) {
         { status: 403, headers: { 'Cache-Control': 'no-store' } },
       );
     }
+    let session = data.session;
+    const metadata = data.user?.user_metadata || {};
+    const hasInlineAvatar = ['avatar_url', 'picture'].some(
+      (key) => typeof metadata[key] === 'string' && /^data:image\//i.test(metadata[key]),
+    );
+    if (hasInlineAvatar && data.user) {
+      // Inline profile images inflate auth JWTs and can exceed local proxy
+      // header limits. Profile images belong in storage/profile records, not
+      // JWT claims. Refresh once so the returned session has compact claims.
+      const cleanedMetadata = { ...metadata };
+      if (typeof cleanedMetadata.avatar_url === 'string' && /^data:image\//i.test(cleanedMetadata.avatar_url)) cleanedMetadata.avatar_url = null;
+      if (typeof cleanedMetadata.picture === 'string' && /^data:image\//i.test(cleanedMetadata.picture)) cleanedMetadata.picture = null;
+      const admin = getSupabaseAdmin();
+      const { error: cleanupError } = await admin.auth.admin.updateUserById(data.user.id, {
+        user_metadata: cleanedMetadata,
+      });
+      if (cleanupError) {
+        console.warn('[api/auth/login] Could not remove inline avatar claims.');
+      } else {
+        const { data: refreshed } = await authClient.auth.refreshSession({
+          refresh_token: data.session.refresh_token,
+        });
+        if (refreshed.session) session = refreshed.session;
+      }
+    }
     return NextResponse.json(
-      { session: data.session },
+      { session },
       { headers: { 'Cache-Control': 'no-store, private', Pragma: 'no-cache' } },
     );
   } catch (error) {

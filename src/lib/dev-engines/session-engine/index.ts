@@ -178,22 +178,26 @@ export class SessionEngine {
     return Math.random().toString(36).substring(2, 8);
   }
 
+  private _getCrypto(): Crypto | null {
+    if (typeof window !== 'undefined' && window.crypto) return window.crypto;
+    if (typeof globalThis !== 'undefined' && (globalThis as any).crypto)
+      return (globalThis as any).crypto;
+    return null;
+  }
+
   private async _signHmac(data: string, secret: string): Promise<string> {
-    if (
-      typeof window !== 'undefined' &&
-      window.crypto &&
-      window.crypto.subtle
-    ) {
+    const crypto = this._getCrypto();
+    if (crypto && crypto.subtle) {
       try {
         const enc = new TextEncoder();
-        const key = await window.crypto.subtle.importKey(
+        const key = await crypto.subtle.importKey(
           'raw',
           enc.encode(secret),
           { name: 'HMAC', hash: 'SHA-256' },
           false,
           ['sign'],
         );
-        const sig = await window.crypto.subtle.sign(
+        const sig = await crypto.subtle.sign(
           'HMAC',
           key,
           enc.encode(data),

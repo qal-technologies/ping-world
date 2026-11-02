@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { data: quiz, error } = await admin.from('quizzes').select('id,title,type,description,settings').eq('settings->>publicResponsesId', publicId).maybeSingle();
     if (error || !quiz) return NextResponse.json({ error: 'Responses not found.' }, { status: 404 });
     const offset = Math.max(0, Math.min(Number(request.nextUrl.searchParams.get('offset')) || 0, 4_950));
-    const { data: rows, error: responseError, count } = await admin.from('quiz_responses').select('id,timestamp,score,total_questions,user_data,answers', { count: 'exact' }).eq('quiz_id', quiz.id).order('timestamp', { ascending: false }).range(offset, offset + 49);
+    const { data: rows, error: responseError, count } = await admin.from('quiz_responses').select('id,timestamp,score,total_questions,user_data,answers', { count: 'exact' }).eq('quiz_id', quiz.id).order('timestamp', { ascending: true }).range(offset, offset + 49);
     if (responseError) throw responseError;
     const sanitizeQuestion = (question: unknown) => {
       if (!question || typeof question !== 'object') return question;

@@ -9,6 +9,10 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/cleanup-quiz-attempts",
+      "schedule": "30 0 * * *"
+    },
+    {
       "path": "/api/cleanup-premium",
       "schedule": "0 0 * * *"
     },

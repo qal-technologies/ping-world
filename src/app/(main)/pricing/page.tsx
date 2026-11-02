@@ -99,6 +99,44 @@ const FEATURES: {
 
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 
+function remainingPlanLabel(
+  expiresAt: unknown,
+  billingCycle: unknown,
+  autoRenew?: boolean,
+) {
+  const end = typeof expiresAt === 'string' ? new Date(expiresAt) : null;
+  if (!end || !Number.isFinite(end.getTime())) return '';
+  const now = new Date();
+  if (end <= now) return 'Plan expired';
+  if (billingCycle !== 'yearly') {
+    const days = Math.max(
+      1,
+      Math.ceil((end.getTime() - now.getTime()) / 86_400_000),
+    );
+    return `${days} ${days === 1 ? 'day' : 'days'} remaining till ${autoRenew ? 'renewal' : 'expiry'}.`;
+  }
+  let months = Math.max(
+    0,
+    (end.getFullYear() - now.getFullYear()) * 12 +
+      end.getMonth() -
+      now.getMonth(),
+  );
+  const monthAnchor = new Date(now);
+  monthAnchor.setMonth(monthAnchor.getMonth() + months);
+  if (monthAnchor > end) months -= 1;
+  const remainderAnchor = new Date(now);
+  remainderAnchor.setMonth(remainderAnchor.getMonth() + months);
+  const days = Math.max(
+    0,
+    Math.ceil((end.getTime() - remainderAnchor.getTime()) / 86_400_000),
+  );
+  const parts = [
+    months > 0 ? `${months} ${months === 1 ? 'month' : 'months'}` : '',
+    days > 0 ? `${days} ${days === 1 ? 'day' : 'days'}` : '',
+  ].filter(Boolean);
+  return `${parts.join(', ') || 'Less than a day'} remaining till ${autoRenew ? 'renewal' : 'expiry'}.`;
+}
+
 const TOOL_BENEFITS = [
   {
     id: 'quizzable',
@@ -139,7 +177,7 @@ const TOOL_BENEFITS = [
 ];
 
 export default function PricingPage() {
-  const { premiumTier, refresh, user } = useAppContext();
+  const { premiumTier, refresh, user, isLoggedIn } = useAppContext();
   const { showConfirm } = useAppModal();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -158,6 +196,23 @@ export default function PricingPage() {
   const [currency, setCurrency] = useState('USD');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
+  const tierExpiresAt = user?.app_metadata?.tier_expires_at;
+  const currentPlanExpiry =
+    typeof tierExpiresAt === 'string' ? Date.parse(tierExpiresAt) : Number.NaN;
+  const currentPlanActive =
+    premiumTier !== 'free' &&
+    Number.isFinite(currentPlanExpiry) &&
+    currentPlanExpiry > Date.now();
+  const currentPlanRemaining = remainingPlanLabel(
+    tierExpiresAt,
+    user?.app_metadata?.billing_cycle,
+    user?.app_metadata?.auto_renew,
+  );
+
+  const isBlockedByActivePlan = (currentPlan: PremiumTier) => {
+    const current = premiumTier === currentPlan;
+    return currentPlanActive && !current && currentPlan !== 'free';
+  };
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -253,19 +308,6 @@ export default function PricingPage() {
   }, []);
 
   const selectedTier = selectedTierId ? PREMIUM_TIERS[selectedTierId] : null;
-  const selectedFlexTool = FLEXIBLE_FEATURES.find(
-    (f: any) => f.id === selectedFlexibleToolId,
-  );
-
-  const displayMonthly =
-    selectedTierId === 'flexible' && selectedFlexTool ?
-      selectedFlexTool.monthly
-    : selectedTier?.price.monthly;
-
-  const displayYearly =
-    selectedTierId === 'flexible' && selectedFlexTool ?
-      selectedFlexTool.yearly
-    : selectedTier?.price.yearly;
 
   const activeFlexFeature =
     FLEXIBLE_FEATURES.find((f: any) => f.id === selectedFlexibleToolId) ||
@@ -298,12 +340,16 @@ export default function PricingPage() {
         billingCycle === 'monthly' ? displayMonthlyPrice : displayYearlyPrice;
 
       // Invoke server-side checkout session creation
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       const res = await fetch('/api/checkout/session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          ...(session?.access_token ?
+            { Authorization: `Bearer ${session.access_token}` }
+          : {}),
         },
         body: JSON.stringify({
           tier: selectedTierId,
@@ -316,7 +362,11 @@ export default function PricingPage() {
       });
 
       const sessionData = await res.json().catch(() => null);
-      if (!res.ok || !sessionData) throw new Error(sessionData?.error || `Could not start checkout (HTTP ${res.status}).`);
+      if (!res.ok || !sessionData)
+        throw new Error(
+          sessionData?.error ||
+            `Could not start checkout (HTTP ${res.status}).`,
+        );
 
       if (sessionData.url) {
         toast.dismiss();
@@ -334,11 +384,26 @@ export default function PricingPage() {
 
       const sandboxResponse = await fetch('/api/checkout/sandbox', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-        body: JSON.stringify({ tier: selectedTierId, billingCycle, autoRenew, selectedFlexibleToolId: selectedTierId === 'flexible' ? selectedFlexibleToolId : undefined }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ?
+            { Authorization: `Bearer ${session.access_token}` }
+          : {}),
+        },
+        body: JSON.stringify({
+          tier: selectedTierId,
+          billingCycle,
+          autoRenew,
+          selectedFlexibleToolId:
+            selectedTierId === 'flexible' ? selectedFlexibleToolId : undefined,
+        }),
       });
       const sandboxResult = await sandboxResponse.json().catch(() => null);
-      if (!sandboxResponse.ok || sandboxResult?.success !== true) throw new Error(sandboxResult?.error || `Sandbox upgrade failed (HTTP ${sandboxResponse.status}).`);
+      if (!sandboxResponse.ok || sandboxResult?.success !== true)
+        throw new Error(
+          sandboxResult?.error ||
+            `Sandbox upgrade failed (HTTP ${sandboxResponse.status}).`,
+        );
 
       // Force instant refresh of the global app context auth state
       await refresh();
@@ -362,10 +427,10 @@ export default function PricingPage() {
       return;
     }
     const confirmed = await showConfirm(
-      `Are you sure you want to downgrade to the free plan? \n\n This will remove all your premium features and customizations. You will lose access to all your premium settings and templates.`,
+      `Cancelling current plan would remove all benefits and features linked to this plan. This cannot be undone.`,
       {
-        title: 'Confirm Downgrade',
-        confirmText: 'Yes, Downgrade',
+        title: `Cancel ${PREMIUM_TIERS[premiumTier].label} plan?`,
+        confirmText: 'Cancel plan',
         cancelText: 'Cancel',
         type: 'danger',
       },
@@ -373,17 +438,33 @@ export default function PricingPage() {
 
     if (confirmed) {
       try {
-        toast.loading('Switching to Free Plan...');
-        const { data: { session } } = await supabase.auth.getSession();
-        const downgrade = await fetch('/api/checkout/sandbox', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-          body: JSON.stringify({ tier: 'free' }),
+        toast.loading(
+          'Removing plan access and cleaning up plan-only features…',
+        );
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token)
+          throw new Error('Sign in again to manage your plan.');
+        const downgrade = await fetch('/api/subscription/cancel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ?
+              { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+          },
         });
-        const downgradeResult = await downgrade.json();
-        if (!downgrade.ok || downgradeResult.success !== true) throw new Error(downgradeResult.error || 'Could not downgrade.');
+        const downgradeResult = await downgrade.json().catch(() => null);
+        if (!downgrade.ok || downgradeResult.success !== true)
+          throw new Error(downgradeResult.error || 'Could not downgrade.');
         await refresh();
         toast.dismiss();
-        toast.success('Switched to Free plan successfully.');
+        toast.success(
+          downgradeResult.billingCancellationPending ?
+            'Plan access and plan-only settings were removed. Billing status will be reconciled when the connection is available.'
+          : 'Plan canceled and plan-only settings removed.',
+        );
       } catch (err: any) {
         toast.dismiss();
         toast.error(
@@ -438,7 +519,7 @@ export default function PricingPage() {
                 transition={{ delay: i * 0.08 }}>
                 <Card
                   className={cn(
-                    'relative p-6 flex flex-col h-full transition-all hover:scale-[1.02] border bg-card/40 bkblur',
+                    'relative p-6 flex flex-col h-full transition-all hover:scale-[1.02] border bg-card/40 bkblur rounded-2xl',
                     isPopular &&
                       'bg-pw-primary/5 shadow-2xl shadow-pw-primary/10 border-pw-primary',
                     isPro &&
@@ -712,8 +793,8 @@ export default function PricingPage() {
                                       ).includes(feat.id),
                                   ).length === 0
                               ) ?
-                                'bg-white/10 text-pw-muted cursor-none opacity-80':'btn-primary'
-                              ,
+                                'bg-white/10 text-pw-muted cursor-none opacity-80'
+                              : 'btn-primary',
                             )}>
                             Buy
                           </Button>
@@ -724,10 +805,14 @@ export default function PricingPage() {
 
                   {/* CTA */}
                   <Button
-                    disabled={isCurrent}
+                    disabled={isCurrent && tierId === 'free'}
                     onClick={() => {
+                      if (isCurrent && tierId !== 'free') {
+                        void handleDowngradeToFree();
+                        return;
+                      }
                       if (tierId === 'free' && premiumTier !== 'free') {
-                        handleDowngradeToFree();
+                        void handleDowngradeToFree();
                         return;
                       }
                       setSelectedTierId(tierId);
@@ -735,13 +820,19 @@ export default function PricingPage() {
                     }}
                     className={cn(
                       'w-full h-11 font-bold text-sm gap-2 transition-all relative mt-auto',
-                      isCurrent ?
+                      isCurrent && tierId === 'free' ?
                         'bg-white/10 text-pw-muted cursor-default border border-white/10'
                       : isPopular ? 'btn-primary shadow-xl shadow-pw-primary/20'
                       : 'bg-white/5 border border-white/10 hover:bg-white/10 text-pw-text',
                       isPro && 'btn-premium',
                     )}>
-                    {isCurrent ?
+                    {isCurrent && tierId !== 'free' ?
+                      'Cancel Plan'
+                    : (
+                      premiumTier !== 'free' && !isCurrent && tierId !== 'free'
+                    ) ?
+                      'View Plan'
+                    : isCurrent ?
                       'Current Plan'
                     : tierId === 'free' ?
                       'Go Free'
@@ -755,6 +846,12 @@ export default function PricingPage() {
                       </>
                     }
                   </Button>
+
+                  {isCurrent && currentPlanActive && currentPlanRemaining && (
+                    <p className='mt-[-6px] px-2  w-full text-[11px] font-medium text-pw-muted gap-1 items-center justify-center flex text-center'>
+                      {currentPlanRemaining}
+                    </p>
+                  )}
                 </Card>
               </motion.div>
             );
@@ -874,15 +971,16 @@ export default function PricingPage() {
       <Dialog
         open={isModalOpen}
         onOpenChange={setIsModalOpen}>
-        <DialogContent className='w-[90%] bg-[#0c0d1c] border border-white/10 rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar text-pw-text pt-1'>
+        <DialogContent className='w-[95%] bg-[#0c0d1c]/65 bkblur border border-white/5 rounded-[25px] shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar text-pw-text pt-0'>
           {selectedTier && (
-            <div className='space-y-6'>
+            <div className='space-y-5'>
               <DialogHeader>
                 <div className='flex items-center gap-3 pt-6'>
                   <div
-                    className='h-12 w-12 rounded-xl flex items-center justify-center border'
+                    className='h-12 w-12 rounded-xl flex items-center justify-center border shadow-xl'
                     style={{
                       backgroundColor: `${selectedTier.color}15`,
+                      boxShadow: `0px 1px 15px ${selectedTier.color}15`,
                       borderColor: `${selectedTier.color}30`,
                       color: selectedTier.color,
                     }}>
@@ -943,7 +1041,7 @@ export default function PricingPage() {
               )}
 
               {/* Price Calculation Card */}
-              <div className='p-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col items-center justify-center text-center'>
+              <div className='p-2 pt-4 flex flex-col items-center justify-center text-center'>
                 <div>
                   <span className='text-xs text-pw-muted uppercase font-bold tracking-widest block'>
                     Total Checkout Price
@@ -970,11 +1068,12 @@ export default function PricingPage() {
                     </div>
                   )}
               </div>
+              <div className='divider m-0 mb-4' />
 
               {selectedTierId === 'flexible' && (
-                <div className='space-y-2 p-4 rounded-xl bg-white/[0.02] border border-white/5'>
-                  <label className='text-xs font-bold text-pw-muted uppercase block'>
-                    Choose Flexible Tool to License
+                <div className='space-y-1'>
+                  <label className='text-xs font-bold text-pw-muted uppercase block px-1 mt-1'>
+                    Flexible Tools
                   </label>
                   <select
                     value={selectedFlexibleToolId}
@@ -1003,14 +1102,13 @@ export default function PricingPage() {
                       <option
                         value='all'
                         className='bg-[#0c0d1c]'>
-                        All Flexible Tools Already Unlocked
+                        All Tools Already Unlocked
                       </option>
                     )}
                   </select>
-                  <p className='text-[10px] text-pw-muted leading-relaxed mt-1'>
+                  <p className='px-1 text-[10px] text-pw-muted leading-relaxed mt-[-2px]'>
                     The flexible plan allows you to pay only for the tools you
-                    use. Select your desired feature from the dropdown to adjust
-                    your subscription price.
+                    need.
                   </p>
                 </div>
               )}
@@ -1021,30 +1119,75 @@ export default function PricingPage() {
                 </p>
               )}
 
-              <label className='flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3'>
-                <input type='checkbox' checked={autoRenew} onChange={(event) => setAutoRenew(event.target.checked)} className='mt-0.5 h-4 w-4 accent-pw-primary' />
+              <label className='flex cursor-pointer items-start gap-3 px-2'>
                 <span className='min-w-0'>
-                  <span className='block text-xs font-bold text-pw-text'>Automatically renew this plan</span>
-                  <span className='mt-0.5 block text-[10px] leading-relaxed text-pw-muted'>
-                    {autoRenew ? 'Your subscription will renew at the end of each billing period until you cancel.' : 'Your access will end after the period you pay for. The subscription will not renew.'}
+                  <span className='flex gap-2 items-center text-xs font-bold text-pw-text'>
+                    <input
+                      type='checkbox'
+                      checked={autoRenew}
+                      onChange={(event) => setAutoRenew(event.target.checked)}
+                      className='h-4 w-4 accent-pw-primary rounded-[20px]'
+                      style={{
+                        accentColor: selectedTier.color,
+                      }}
+                    />
+                    Automatically renew plan
+                  </span>
+                  <span className='mt-1 block text-[10px] leading-relaxed text-pw-muted'>
+                    {autoRenew ?
+                      `Subscription will renew ${billingCycle || 'monthly'}, until you cancel.`
+                    : `Subscription will not renew after this ${billingCycle === 'monthly' ? 'month' : 'year'}.`
+                    }
                   </span>
                 </span>
               </label>
 
               {/* Checkout Controls */}
-              <DialogFooter className='pt-4 flex flex-col sm:flex-row gap-2'>
+              <DialogFooter className='pt-5 grid sm:grid gap-2 rounded-[25px] min-w-full flex 1 grid-col-1'>
                 <button
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSimulating}
                   className='flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all'>
-                  Cancel
+                  {isBlockedByActivePlan(selectedTierId || 'free') ? 'Close' : 'Cancel'}
                 </button>
-                <button
-                  onClick={handleCheckout}
-                  disabled={selectedTierId === 'flexible' && !selectedFlexibleToolId.trim() ||isSimulating}
-                  className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-80'>
-                  {isSimulating ? 'Processing...' : `Subscribe`}
-                </button>
+                {!isBlockedByActivePlan(selectedTierId || 'free') && (
+                  <button
+                    onClick={handleCheckout}
+                    disabled={
+                      (isLoggedIn &&
+                        selectedTierId === 'flexible' &&
+                        !selectedFlexibleToolId.trim()) ||
+                      isSimulating ||
+                      isBlockedByActivePlan(selectedTierId || 'free')
+                    }
+                    className='flex-1 py-2.5 rounded-xl btn-primary text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-80'
+                    style={{
+                      background: selectedTier.color,
+                      color:
+                        (
+                          selectedTierId === 'flexible' ||
+                          selectedTierId === 'pro'
+                        ) ?
+                          'black'
+                        : undefined,
+                    }}>
+                    {isSimulating ? 'Processing...' : `Subscribe`}
+                  </button>
+                )}
+
+                {isBlockedByActivePlan(selectedTierId || 'free') && (
+                  <p className='text-pw-muted text-xs px-1 text-center w-full'>
+                    <button
+                      className='hover:underline cursor-pointer font-bold text-white tracking-wide bg-transparent'
+                      style={{
+                        color: selectedTier.color,
+                      }}
+                      onClick={() => void handleDowngradeToFree()}>
+                      Cancel
+                    </button>{' '}
+                    current plan to be able to subscribe for a new plan.
+                  </p>
+                )}
               </DialogFooter>
             </div>
           )}

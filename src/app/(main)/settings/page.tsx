@@ -26,7 +26,11 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
 import AccountTab from '@/components/settings/AccountTab';
 import SecurityTab from '@/components/settings/SecurityTab';
-import { requestWebNotificationPermission, subscribeToWebPush, unsubscribeFromWebPush } from '@/lib/notifications/web-push';
+import {
+  requestWebNotificationPermission,
+  subscribeToWebPush,
+  unsubscribeFromWebPush,
+} from '@/lib/notifications/web-push';
 
 function SettingsContent() {
   const { user, username, refresh, isPremium } = useAppContext();
@@ -39,7 +43,10 @@ function SettingsContent() {
   const [activeTab, setActiveTab] = useState<string>(tabParam);
 
   useEffect(() => {
-    if (tabParam && ['account', 'security', 'storage', 'preferences'].includes(tabParam)) {
+    if (
+      tabParam &&
+      ['account', 'security', 'storage', 'preferences'].includes(tabParam)
+    ) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -69,7 +76,8 @@ function SettingsContent() {
 
   // Preferences & Push Notification states
   const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifyAssessmentResponses, setNotifyAssessmentResponses] = useState(true);
+  const [notifyAssessmentResponses, setNotifyAssessmentResponses] =
+    useState(true);
   const [notifyWebPush, setNotifyWebPush] = useState(false);
   const [inAppPosition, setInAppPosition] = useState<'top' | 'bottom'>('top');
   const [inAppSound, setInAppSound] = useState(true);
@@ -103,40 +111,92 @@ function SettingsContent() {
     }
     if (key === 'webPush') return;
     const { error } = await supabase.auth.updateUser({
-      data: { notification_preferences: { ...(user.user_metadata?.notification_preferences || {}), [key]: value } },
+      data: {
+        notification_preferences: {
+          ...(user.user_metadata?.notification_preferences || {}),
+          [key]: value,
+        },
+      },
     });
-    if (error) console.warn('[Settings] Preference remains saved locally:', error.message);
+    if (error)
+      console.warn(
+        '[Settings] Preference remains saved locally:',
+        error.message,
+      );
   };
 
   const persistInAppPosition = async (value: 'top' | 'bottom') => {
     if (!user?.id) return;
     setInAppPosition(value);
     try {
-      const current = JSON.parse(localStorage.getItem(notificationStorageKey) || '{}');
-      localStorage.setItem(notificationStorageKey, JSON.stringify({ ...current, inAppPosition: value }));
-    } catch { toast.error('Could not save notification placement on this device.'); return; }
-    const { error } = await supabase.auth.updateUser({ data: { notification_preferences: { ...(user.user_metadata?.notification_preferences || {}), inAppPosition: value } } });
-    if (error) console.warn('[Settings] Notification placement remains saved locally:', error.message);
+      const current = JSON.parse(
+        localStorage.getItem(notificationStorageKey) || '{}',
+      );
+      localStorage.setItem(
+        notificationStorageKey,
+        JSON.stringify({ ...current, inAppPosition: value }),
+      );
+    } catch {
+      toast.error('Could not save notification placement on this device.');
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        notification_preferences: {
+          ...(user.user_metadata?.notification_preferences || {}),
+          inAppPosition: value,
+        },
+      },
+    });
+    if (error)
+      console.warn(
+        '[Settings] Notification placement remains saved locally:',
+        error.message,
+      );
     window.dispatchEvent(new Event('pw_notification_preferences'));
   };
 
-  const persistInAppEffect = async (key: 'inAppSound' | 'inAppHaptics', value: boolean) => {
+  const persistInAppEffect = async (
+    key: 'inAppSound' | 'inAppHaptics',
+    value: boolean,
+  ) => {
     if (!user?.id) return;
     if (key === 'inAppSound') setInAppSound(value);
     else setInAppHaptics(value);
     try {
-      const current = JSON.parse(localStorage.getItem(notificationStorageKey) || '{}');
-      localStorage.setItem(notificationStorageKey, JSON.stringify({ ...current, [key]: value }));
-    } catch { toast.error('Could not save the alert preference on this device.'); return; }
-    const { error } = await supabase.auth.updateUser({ data: { notification_preferences: { ...(user.user_metadata?.notification_preferences || {}), [key]: value } } });
-    if (error) console.warn('[Settings] Alert preference remains saved locally:', error.message);
+      const current = JSON.parse(
+        localStorage.getItem(notificationStorageKey) || '{}',
+      );
+      localStorage.setItem(
+        notificationStorageKey,
+        JSON.stringify({ ...current, [key]: value }),
+      );
+    } catch {
+      toast.error('Could not save the alert preference on this device.');
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        notification_preferences: {
+          ...(user.user_metadata?.notification_preferences || {}),
+          [key]: value,
+        },
+      },
+    });
+    if (error)
+      console.warn(
+        '[Settings] Alert preference remains saved locally:',
+        error.message,
+      );
     window.dispatchEvent(new Event('pw_notification_preferences'));
   };
 
   // jules edit: Safe Auth Guard check using Supabase session to prevent redirect loops
   useEffect(() => {
     const verifyUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/login');
       }
@@ -151,18 +211,35 @@ function SettingsContent() {
     if (!user?.id) return;
     let localPreferences: Record<string, unknown> = {};
     try {
-      localPreferences = JSON.parse(localStorage.getItem(`pw_settings_${user.id}`) || '{}');
+      localPreferences = JSON.parse(
+        localStorage.getItem(`pw_settings_${user.id}`) || '{}',
+      );
     } catch {
       localPreferences = {};
     }
-    const preferences = { ...(user.user_metadata?.notification_preferences || {}), ...localPreferences };
-    setNotifyEmail(typeof preferences.email === 'boolean' ? preferences.email : true);
-    setNotifyAssessmentResponses(typeof preferences.assessmentResponses === 'boolean' ? preferences.assessmentResponses : true);
+    const preferences = {
+      ...(user.user_metadata?.notification_preferences || {}),
+      ...localPreferences,
+    };
+    setNotifyEmail(
+      typeof preferences.email === 'boolean' ? preferences.email : true,
+    );
+    setNotifyAssessmentResponses(
+      typeof preferences.assessmentResponses === 'boolean' ?
+        preferences.assessmentResponses
+      : true,
+    );
     setNotifyWebPush(localPreferences.webPush === true);
-    const placement = localPreferences.inAppPosition ?? preferences.inAppPosition;
+    const placement =
+      localPreferences.inAppPosition ?? preferences.inAppPosition;
     setInAppPosition(placement === 'bottom' ? 'bottom' : 'top');
-    setInAppSound(localPreferences.inAppSound !== false && preferences.inAppSound !== false);
-    setInAppHaptics(localPreferences.inAppHaptics !== false && preferences.inAppHaptics !== false);
+    setInAppSound(
+      localPreferences.inAppSound !== false && preferences.inAppSound !== false,
+    );
+    setInAppHaptics(
+      localPreferences.inAppHaptics !== false &&
+        preferences.inAppHaptics !== false,
+    );
   }, [user]);
 
   const handleToggleWebPush = async () => {
@@ -180,9 +257,17 @@ function SettingsContent() {
         else await unsubscribeFromWebPush();
         setNotifyWebPush(nextValue);
         await persistNotificationPreference('webPush', nextValue);
-        toast.success(nextValue ? 'Push notifications enabled on this device.' : 'Push notifications disabled on this device.');
+        toast.success(
+          nextValue ?
+            'Push notifications enabled on this device.'
+          : 'Push notifications disabled on this device.',
+        );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not update push notifications.');
+        toast.error(
+          error instanceof Error ?
+            error.message
+          : 'Could not update push notifications.',
+        );
       } finally {
         setIsUpdatingPush(false);
       }
@@ -203,7 +288,11 @@ function SettingsContent() {
         await persistNotificationPreference('webPush', true);
         toast.success('Push notifications enabled on this device.');
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not enable push notifications.');
+        toast.error(
+          error instanceof Error ?
+            error.message
+          : 'Could not enable push notifications.',
+        );
       } finally {
         setIsUpdatingPush(false);
       }
@@ -218,10 +307,18 @@ function SettingsContent() {
     if (user) {
       setEmail(user.email || '');
       if (!displayName) {
-        setDisplayName(user.user_metadata?.display_name || username || user.user_metadata?.username || user.email?.split('@')[0] || 'user');
+        setDisplayName(
+          user.user_metadata?.display_name ||
+            username ||
+            user.user_metadata?.username ||
+            user.email?.split('@')[0] ||
+            'user',
+        );
       }
     }
-    void HybridStorage.getCacheCounts().then(setCacheCounts).catch(() => {});
+    void HybridStorage.getCacheCounts()
+      .then(setCacheCounts)
+      .catch(() => {});
   }, [user, username]);
 
   const handleClearCache = async () => {
@@ -288,14 +385,20 @@ function SettingsContent() {
       try {
         const { auth, db } = await import('@/lib/firebase');
         const { deleteUser } = await import('firebase/auth');
-        const { doc, deleteDoc, collection, getDocs, query, where } = await import('firebase/firestore');
+        const { doc, deleteDoc, collection, getDocs, query, where } =
+          await import('firebase/firestore');
 
         if (user?.id) {
-          const q = query(collection(db, 'tournaments'), where('user_id', '==', user.id));
+          const q = query(
+            collection(db, 'tournaments'),
+            where('user_id', '==', user.id),
+          );
           const querySnapshot = await getDocs(q);
           const deletePromises: Promise<void>[] = [];
           querySnapshot.forEach((docSnapshot) => {
-            deletePromises.push(deleteDoc(doc(db, 'tournaments', docSnapshot.id)));
+            deletePromises.push(
+              deleteDoc(doc(db, 'tournaments', docSnapshot.id)),
+            );
           });
           await Promise.all(deletePromises);
         }
@@ -326,16 +429,17 @@ function SettingsContent() {
 
       await supabase.auth.signOut();
       await refresh();
-      toast.success('Your account and associated data have been deleted across all platforms.');
+      toast.success(
+        'Your account and associated data have been deleted across all platforms.',
+      );
       router.push('/');
     } catch (err: any) {
       toast.error(
         'Failed to delete account: ' +
-        (err?.message || 'Please contact support.'),
+          (err?.message || 'Please contact support.'),
       );
     } finally {
       toast.dismiss();
-      
     }
   };
 
@@ -358,7 +462,11 @@ function SettingsContent() {
       toast.success('Changes synchronized. Logged out successfully.');
       router.push('/');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not safely sync before logging out. Your session is still active.');
+      toast.error(
+        error instanceof Error ?
+          error.message
+        : 'Could not safely sync before logging out. Your session is still active.',
+      );
     }
   };
 
@@ -446,7 +554,9 @@ function SettingsContent() {
         </TabsContent>
 
         {/* TAB 3: STORAGE & SYNC */}
-        <TabsContent value='storage' className='space-y-6'>
+        <TabsContent
+          value='storage'
+          className='space-y-6'>
           <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
             <Card className='p-3 sm:p-5 bg-[#0c0d1c]/70 bkblur border border-white/5 rounded-2xl space-y-2'>
               <span className='text-xs text-pw-muted font-bold uppercase'>
@@ -532,7 +642,9 @@ function SettingsContent() {
         </TabsContent>
 
         {/* TAB 4: PREFERENCES */}
-        <TabsContent value='preferences' className='sm:space-y-4 self-center'>
+        <TabsContent
+          value='preferences'
+          className='sm:space-y-4 self-center'>
           <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-6 sm:shadow-xl max-w-2xl'>
             <div>
               <h3 className='text-lg font-bold font-display text-white'>
@@ -546,32 +658,101 @@ function SettingsContent() {
 
             <div className='space-y-4'>
               <div className='flex flex-wrap items-center justify-between gap-3 p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
-                <div className='flex items-center gap-3'><Smartphone className='h-4 w-4 text-pw-primary' /><div><span className='text-xs font-bold text-white block'>In-app notification position</span><span className='text-[10px] text-pw-muted'>Choose where actionable alerts appear while you use Pingwrld.</span></div></div>
-                <select aria-label='In-app notification position' value={inAppPosition} onChange={(event) => void persistInAppPosition(event.target.value === 'bottom' ? 'bottom' : 'top')} className='rounded-lg border border-white/10 bg-pw-surface px-3 py-2 text-xs text-pw-text'><option value='top'>Top</option><option value='bottom'>Bottom</option></select>
+                <div className='flex items-center gap-3'>
+                  <Smartphone className='h-4 w-4 text-pw-primary' />
+                  <div>
+                    <span className='text-xs font-bold text-white block'>
+                      In-app notification position
+                    </span>
+                    <span className='text-[10px] text-pw-muted'>
+                      Choose where actionable alerts appear while you use
+                      Pingwrld.
+                    </span>
+                  </div>
+                </div>
+                <select
+                  aria-label='In-app notification position'
+                  value={inAppPosition}
+                  onChange={(event) =>
+                    void persistInAppPosition(
+                      event.target.value === 'bottom' ? 'bottom' : 'top',
+                    )
+                  }
+                  className='rounded-lg border border-white/10 bg-pw-surface px-3 py-2 text-xs text-pw-text'>
+                  <option value='top'>Top</option>
+                  <option value='bottom'>Bottom</option>
+                </select>
               </div>
               <div className='grid gap-3 sm:grid-cols-2'>
                 <label className='flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/3 px-3 py-3'>
-                  <span><span className='block text-xs font-bold text-white'>Pingwrld alert motif</span><span className='text-[10px] text-pw-muted'>A short, locally generated notification chime.</span></span>
-                  <input type='checkbox' checked={inAppSound} onChange={(event) => void persistInAppEffect('inAppSound', event.target.checked)} className='h-4 w-4 shrink-0 accent-pw-primary' />
+                  <span>
+                    <span className='block text-xs font-bold text-white'>
+                      Pingwrld alert motif
+                    </span>
+                    <span className='text-[10px] text-pw-muted'>
+                      A short, locally generated notification chime.
+                    </span>
+                  </span>
+                  <input
+                    type='checkbox'
+                    checked={inAppSound}
+                    onChange={(event) =>
+                      void persistInAppEffect(
+                        'inAppSound',
+                        event.target.checked,
+                      )
+                    }
+                    className='h-4 w-4 shrink-0 accent-pw-primary'
+                  />
                 </label>
                 <label className='flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/3 px-3 py-3'>
-                  <span><span className='block text-xs font-bold text-white'>Haptic alert</span><span className='text-[10px] text-pw-muted'>Vibration where the device and browser support it.</span></span>
-                  <input type='checkbox' checked={inAppHaptics} onChange={(event) => void persistInAppEffect('inAppHaptics', event.target.checked)} className='h-4 w-4 shrink-0 accent-pw-primary' />
+                  <span>
+                    <span className='block text-xs font-bold text-white'>
+                      Haptic alert
+                    </span>
+                    <span className='text-[10px] text-pw-muted'>
+                      Vibration where the device and browser support it.
+                    </span>
+                  </span>
+                  <input
+                    type='checkbox'
+                    checked={inAppHaptics}
+                    onChange={(event) =>
+                      void persistInAppEffect(
+                        'inAppHaptics',
+                        event.target.checked,
+                      )
+                    }
+                    className='h-4 w-4 shrink-0 accent-pw-primary'
+                  />
                 </label>
               </div>
               <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
                   <Bell className='h-4 w-4 text-pw-primary' />
                   <div>
-                    <span className='text-xs font-bold text-white block'>Assessment response alerts</span>
-                    <span className='text-[10px] text-pw-muted'>Combine assessment activity; active sessions use in-app alerts instead of browser push.</span>
+                    <span className='text-xs font-bold text-white block'>
+                      Assessment response alerts
+                    </span>
+                    <span className='text-[10px] text-pw-muted'>
+                      Combine assessment activity; active sessions use in-app
+                      alerts instead of browser push.
+                    </span>
                   </div>
                 </div>
-                <input type='checkbox' checked={notifyAssessmentResponses} onChange={(event) => {
-                  const value = event.target.checked;
-                  setNotifyAssessmentResponses(value);
-                  void persistNotificationPreference('assessmentResponses', value);
-                }} className='h-4 w-4 rounded accent-pw-primary cursor-pointer' />
+                <input
+                  type='checkbox'
+                  checked={notifyAssessmentResponses}
+                  onChange={(event) => {
+                    const value = event.target.checked;
+                    setNotifyAssessmentResponses(value);
+                    void persistNotificationPreference(
+                      'assessmentResponses',
+                      value,
+                    );
+                  }}
+                  className='h-4 w-4 rounded accent-pw-primary cursor-pointer'
+                />
               </div>
               <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
@@ -581,7 +762,8 @@ function SettingsContent() {
                       Email Notifications
                     </span>
                     <span className='text-[10px] text-pw-muted'>
-                      Allow requested export emails; account confirmation emails are required
+                      Allow requested export emails; account confirmation emails
+                      are required
                     </span>
                   </div>
                 </div>
@@ -590,7 +772,10 @@ function SettingsContent() {
                   checked={notifyEmail}
                   onChange={(e) => {
                     setNotifyEmail(e.target.checked);
-                    void persistNotificationPreference('email', e.target.checked);
+                    void persistNotificationPreference(
+                      'email',
+                      e.target.checked,
+                    );
                   }}
                   className='h-4 w-4 rounded-full accent-pw-primary cursor-pointer'
                 />
@@ -608,8 +793,7 @@ function SettingsContent() {
                         'Permission granted on this device'
                       : pushPermission === 'denied' ?
                         'Blocked by the browser. Allow notifications in site settings.'
-                      : 'Click to request notification permission'
-                      }
+                      : 'Click to request notification permission'}
                     </span>
                   </div>
                 </div>
@@ -634,7 +818,9 @@ function SettingsContent() {
                     </span>
                   </div>
                 </div>
-                <span className='rounded-full border border-pw-success/20 bg-pw-success/10 px-2.5 py-1 text-[10px] font-bold text-pw-success'>Always on</span>
+                <span className='rounded-full border border-pw-success/20 bg-pw-success/10 px-2.5 py-1 text-[10px] font-bold text-pw-success'>
+                  Always on
+                </span>
               </div>
             </div>
           </Card>
@@ -646,11 +832,12 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="h-8 w-8 rounded-full border-2 border-pw-primary border-t-transparent animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className='flex items-center justify-center min-h-[50vh]'>
+          <div className='h-8 w-8 rounded-full border-2 border-pw-primary border-t-transparent animate-spin' />
+        </div>
+      }>
       <SettingsContent />
     </Suspense>
   );

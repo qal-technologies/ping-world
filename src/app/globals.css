@@ -174,7 +174,7 @@
 }
 .pw-themed-range__track--shimmer .pw-themed-range__fill {
   background-size: 200% 100%;
-  animation: pw-range-shimmer 2.2s linear infinite;
+  animation: pw-range-shimmer 4s linear infinite;
 }
 .pw-themed-range__input {
   position: absolute;

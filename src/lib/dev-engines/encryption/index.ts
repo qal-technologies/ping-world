@@ -33,11 +33,11 @@ export class EncryptionEngine {
         return { encrypted: encoded, algorithm: 'base64' };
       }
 
+      const crypto = this._getCrypto();
       if (
         algorithm === 'xor' ||
-        typeof window === 'undefined' ||
-        !window.crypto ||
-        !window.crypto.subtle
+        !crypto ||
+        !crypto.subtle
       ) {
         return this._encryptXor(textData, key, salt);
       }
@@ -77,10 +77,10 @@ export class EncryptionEngine {
         return this._xorCodec(raw, key + salt);
       }
 
+      const crypto = this._getCrypto();
       if (
-        typeof window !== 'undefined' &&
-        window.crypto &&
-        window.crypto.subtle &&
+        crypto &&
+        crypto.subtle &&
         iv
       ) {
         return await this._decryptAesGcm(encryptedData, key, iv);
@@ -112,23 +112,20 @@ export class EncryptionEngine {
 
   /** Generate an HMAC-SHA256 signature (requires Web Crypto API) */
   public async hmacSign(data: string, key: string): Promise<string> {
-    if (
-      typeof window === 'undefined' ||
-      !window.crypto ||
-      !window.crypto.subtle
-    ) {
+    const crypto = this._getCrypto();
+    if (!crypto || !crypto.subtle) {
       return this._mockHmac(data, key);
     }
     try {
       const enc = new TextEncoder();
-      const cryptoKey = await window.crypto.subtle.importKey(
+      const cryptoKey = await crypto.subtle.importKey(
         'raw',
         enc.encode(key),
         { name: 'HMAC', hash: 'SHA-256' },
         false,
         ['sign'],
       );
-      const signature = await window.crypto.subtle.sign(
+      const signature = await crypto.subtle.sign(
         'HMAC',
         cryptoKey,
         enc.encode(data),
@@ -151,10 +148,21 @@ export class EncryptionEngine {
 
   // ---- Private Helpers ----
 
-  private _generateSalt(length: number): string {
+  private _getCrypto(): Crypto | null {
     if (typeof window !== 'undefined' && window.crypto) {
+      return window.crypto;
+    }
+    if (typeof globalThis !== 'undefined' && (globalThis as any).crypto) {
+      return (globalThis as any).crypto;
+    }
+    return null;
+  }
+
+  private _generateSalt(length: number): string {
+    const crypto = this._getCrypto();
+    if (crypto) {
       const arr = new Uint8Array(Math.ceil(length / 2));
-      window.crypto.getRandomValues(arr);
+      crypto.getRandomValues(arr);
       return Array.from(arr, (v) => v.toString(16).padStart(2, '0'))
         .join('')
         .substring(0, length);
@@ -188,8 +196,12 @@ export class EncryptionEngine {
   }
 
   private async _getKeyMaterial(password: string): Promise<CryptoKey> {
+    const crypto = this._getCrypto();
+    if (!crypto?.subtle) {
+      throw new Error('Web Crypto API not available.');
+    }
     const enc = new TextEncoder();
-    return window.crypto.subtle.importKey(
+    return crypto.subtle.importKey(
       'raw',
       enc.encode(password),
       { name: 'PBKDF2' },
@@ -202,8 +214,12 @@ export class EncryptionEngine {
     password: string,
     salt: Uint8Array,
   ): Promise<CryptoKey> {
+    const crypto = this._getCrypto();
+    if (!crypto?.subtle) {
+      throw new Error('Web Crypto API not available.');
+    }
     const keyMaterial = await this._getKeyMaterial(password);
-    return window.crypto.subtle.deriveKey(
+    return crypto.subtle.deriveKey(
       { name: 'PBKDF2', salt: salt as any, iterations: 100000, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
@@ -216,12 +232,16 @@ export class EncryptionEngine {
     text: string,
     key: string,
   ): Promise<EncryptionResult> {
+    const crypto = this._getCrypto();
+    if (!crypto?.subtle) {
+      throw new Error('Web Crypto API not available.');
+    }
     const enc = new TextEncoder();
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const saltBytes = crypto.getRandomValues(new Uint8Array(16));
     const cryptoKey = await this._deriveCryptoKey(key, saltBytes);
 
-    const encryptedBuffer = await window.crypto.subtle.encrypt(
+    const encryptedBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       cryptoKey,
       enc.encode(text),

@@ -240,7 +240,11 @@ export default function AccountTab({
               if (profileError) throw profileError;
             }
             const { error: authError } = await supabase.auth.updateUser({
-              data: { avatar_url: avatarDataUrl },
+              // A base64 avatar in user metadata is copied into every auth JWT.
+              // Large JWTs exceed localhost's request-header limit (431) and
+              // also make ordinary authenticated API calls unnecessarily huge.
+              // Keep the image in the profile record; metadata should stay small.
+              data: { avatar_url: null },
             });
             if (authError) throw authError;
             await refresh();

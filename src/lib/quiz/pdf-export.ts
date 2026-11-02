@@ -24,6 +24,9 @@ const stripMarkup = (value: unknown) =>
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    // Core jsPDF fonts do not contain emoji glyphs; substitute spacing so
+    // wrapped lines and tables keep their intended alignment.
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27FF}\u{FE0F}\u{200D}]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -369,7 +372,7 @@ export async function exportQuizFeedbackPdf (
         const triggerIndex = (input.quiz.questions || []).findIndex((question: any) => String(question.id) === String(branch.fromQuestionId));
         const branchLabel = `Question ${triggerIndex >= 0 ? triggerIndex + 1 : 'in flow'} → ${branch.category ? `Group: ${branch.category}` : 'General flow'}`;
         addText(
-          `${branchLabel} || ${branch.questionIds?.length || 0} questions || ${branchAnswers.filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length} attempted || ${branchAnswers.filter((answer: any) => answer.correct === false).length} failed || ${branchAnswers.filter((answer: any) => answer.passed).length} skipped`,
+          `${branchLabel} || ${branch.questionIds?.length || 0} questions || ${branchAnswers.filter((answer: any) => !answer.passed && (answer.fileUrl || answer.answer !== undefined && answer.answer !== '' && (!Array.isArray(answer.answer) || answer.answer.length > 0))).length} attempted || ${branchAnswers.filter((answer: any) => answer.correct === false).length} failed || ${branchAnswers.filter((answer: any) => answer.passed).length} skipped`,
           {size: 12, indent: 5},
         );
       }
@@ -480,17 +483,21 @@ export async function exportQuizFeedbackPdf (
       }
     }
 
-    // Compact participant score rundown for quick marking.
-    doc.addPage();
-    y = margin;
-    heading('Assessment score rundown');
-    for (let i = 0; i < responseList.length; i++) {
-      const response = responseList[i];
-      const details = Object.entries(response.userData || {})
-        .filter(([key]) => !['answeredQuestions', 'scorePossible', 'currentPathQuestionIds', 'pathQuestionSnapshots', 'branchHistory', 'submissionReason', 'startedAt', 'durationSeconds'].includes(key))
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(' · ');
-      addText(`Taker ${takerNumberFor(i)}  |  ${details || response.signedUser?.displayName || 'Participant'}  |  Score: ${response.score ?? 0} / ${response.scorePossible ?? response.totalQuestions ?? 0}`, { size: 11 });
+    // The compact score rundown is useful for assessment-wide exports. A
+    // single participant export already has their score in its header and
+    // should not append a redundant assessment-wide section.
+    if (input.responseIndex === undefined) {
+      doc.addPage();
+      y = margin;
+      heading('Assessment score rundown');
+      for (let i = 0; i < responseList.length; i++) {
+        const response = responseList[i];
+        const details = Object.entries(response.userData || {})
+          .filter(([key]) => !['answeredQuestions', 'scorePossible', 'currentPathQuestionIds', 'pathQuestionSnapshots', 'branchHistory', 'submissionReason', 'startedAt', 'durationSeconds'].includes(key))
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(' · ');
+        addText(`Taker ${takerNumberFor(i)}  |  ${details || response.signedUser?.displayName || 'Participant'}  |  Score: ${response.score ?? 0} / ${response.scorePossible ?? response.totalQuestions ?? 0}`, { size: 12 });
+      }
     }
 
     const totalPages = doc.getNumberOfPages();
@@ -523,7 +530,7 @@ export async function exportQuizFeedbackPdf (
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(105, 110, 126);
-      doc.text(`Made with PingWorld · ${COMPANY.domain} · ${PINGWORLD_ATTRIBUTION_MARKER}`, margin, pageHeight - 22);
+      doc.text(`Made with PingWorld`, margin, pageHeight - 22);
       doc.textWithLink(COMPANY.domain, pageWidth - margin, pageHeight - 22, {
         align: 'right',
       });

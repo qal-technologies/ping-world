@@ -1,10 +1,7 @@
 import type { Quiz } from '@/app/(main)/quiz/';
 import { supabase, supabaseStorage } from './supabase';
 import { optimizeImageForStorage } from './media-optimization';
-import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
-interface BaseQuiz {
-  user_id: string;
-}
+import {unpackPingWorldMediaUrl} from '@/lib/quiz/quiz-piping';
 
 // Add composer_history to StorageItem type
 export type StorageItem = {
@@ -30,16 +27,27 @@ type StorageName = { bucket: string; table?: string };
 const isOnline = (): boolean =>
   typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-function reportSyncFailure(type: StorageItem['type'], id: string, error: unknown, title?: string) {
+function reportSyncFailure(
+  type: StorageItem['type'],
+  id: string,
+  error: unknown,
+  title?: string,
+) {
   if (typeof window === 'undefined') return;
-  const message = error instanceof Error ? error.message : 'Remote save failed.';
-  window.dispatchEvent(new CustomEvent('pw_sync_error', { detail: { type, id, title, message } }));
+  const message =
+    error instanceof Error ? error.message : 'Remote save failed.';
+  window.dispatchEvent(
+    new CustomEvent('pw_sync_error', { detail: { type, id, title, message } }),
+  );
 }
 
 function reportResponseSyncFailure(error: unknown) {
   if (typeof window === 'undefined') return;
-  const message = error instanceof Error ? error.message : 'Response media upload failed.';
-  window.dispatchEvent(new CustomEvent('pw_quiz_response_sync_error', { detail: { message } }));
+  const message =
+    error instanceof Error ? error.message : 'Response media upload failed.';
+  window.dispatchEvent(
+    new CustomEvent('pw_quiz_response_sync_error', { detail: { message } }),
+  );
 }
 
 const storageNames: Record<StorageItem['type'], StorageName> = {
@@ -53,11 +61,19 @@ const storageNames: Record<StorageItem['type'], StorageName> = {
   draft: { bucket: 'quiz_drafts' },
 };
 
-const LOCAL_ONLY_TYPES: StorageItem['type'][] = ['post', 'document', 'composer_history', 'draft'];
+const LOCAL_ONLY_TYPES: StorageItem['type'][] = [
+  'post',
+  'document',
+  'composer_history',
+  'draft',
+];
 
 const tableName = (type: StorageItem['type']) => {
   const table = storageNames[type].table;
-  if (!table) throw new Error(`Storage type "${type}" is local-only and has no Supabase table`);
+  if (!table)
+    throw new Error(
+      `Storage type "${type}" is local-only and has no Supabase table`,
+    );
   return table;
 };
 
@@ -90,15 +106,30 @@ function removeLocalDurableCopies() {
   if (typeof localStorage === 'undefined' || localDurableCopiesCleaned) return;
   localDurableCopiesCleaned = true;
   const durablePrefixes = [
-    'pw_quizzes_', 'pw_messages_', 'pw_links_', 'pw_games_', 'pw_posts_',
-    'pw_documents_', 'pw_composer_history_', 'pw_quiz_drafts_',
-    'pw_quiz_attempt:', 'pw_quiz_submission:', 'pw_quiz_responses:',
-    'pw_quiz_feedback:', 'pw_queue:', 'pw_quiz_response_queue_',
+    'pw_quizzes_',
+    'pw_messages_',
+    'pw_links_',
+    'pw_games_',
+    'pw_posts_',
+    'pw_documents_',
+    'pw_composer_history_',
+    'pw_quiz_drafts_',
+    'pw_quiz_attempt:',
+    'pw_quiz_submission:',
+    'pw_quiz_responses:',
+    'pw_quiz_feedback:',
+    'pw_queue:',
+    'pw_quiz_response_queue_',
   ];
   for (const key of Object.keys(localStorage)) {
-    if (durablePrefixes.some((prefix) => key.startsWith(prefix)) ||
-      key === 'pw_template_v1_responses' || key === 'pw_template_responses') {
-      try { localStorage.removeItem(key); } catch {}
+    if (
+      durablePrefixes.some((prefix) => key.startsWith(prefix)) ||
+      key === 'pw_template_v1_responses' ||
+      key === 'pw_template_responses'
+    ) {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
     }
   }
 }
@@ -112,26 +143,37 @@ function attachCacheDb(db: IDBDatabase) {
   if (!abandonedNamespaceCleanup) {
     abandonedNamespaceCleanup = new Promise<void>((done) => {
       try {
-        if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) { done(); return; }
+        if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+          done();
+          return;
+        }
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
         const store = transaction.objectStore(CACHE_STORE_NAME);
         const keys = store.getAllKeys();
-        keys.onsuccess = () => keys.result.forEach((key) => {
-          if (String(key).startsWith('v2:')) store.delete(key);
-        });
+        keys.onsuccess = () =>
+          keys.result.forEach((key) => {
+            if (String(key).startsWith('v2:')) store.delete(key);
+          });
         transaction.oncomplete = () => done();
         transaction.onerror = () => done();
         transaction.onabort = () => done();
-      } catch { done(); }
+      } catch {
+        done();
+      }
     });
   }
 }
 
 function openCacheDb(createStore = false): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
-  if (!cacheDbPromise && cacheStoreUpgradePromise) return cacheStoreUpgradePromise;
+  if (!cacheDbPromise && cacheStoreUpgradePromise)
+    return cacheStoreUpgradePromise;
   if (!cacheDbPromise) {
-    if (!persistenceRequested && typeof navigator !== 'undefined' && navigator.storage?.persist) {
+    if (
+      !persistenceRequested &&
+      typeof navigator !== 'undefined' &&
+      navigator.storage?.persist
+    ) {
       persistenceRequested = true;
       void navigator.storage.persist().catch(() => false);
     }
@@ -190,21 +232,31 @@ function openCacheDb(createStore = false): Promise<IDBDatabase | null> {
     });
   }
   return cacheDbPromise.then(async (db) => {
-    if (!db || !createStore || db.objectStoreNames.contains(CACHE_STORE_NAME)) return db;
+    if (!db || !createStore || db.objectStoreNames.contains(CACHE_STORE_NAME))
+      return db;
     if (cacheStoreUpgradePromise) return cacheStoreUpgradePromise;
     cacheStoreUpgradePromise = new Promise<IDBDatabase | null>((resolve) => {
       const nextVersion = Math.max(1, db.version + 1);
       db.close();
       cacheDbPromise = null;
       let request: IDBOpenDBRequest;
-      try { request = indexedDB.open(CACHE_DB_NAME, nextVersion); }
-      catch { cacheStoreUpgradePromise = null; resolve(null); return; }
+      try {
+        request = indexedDB.open(CACHE_DB_NAME, nextVersion);
+      } catch {
+        cacheStoreUpgradePromise = null;
+        resolve(null);
+        return;
+      }
       request.onupgradeneeded = () => {
         try {
           if (!request.result.objectStoreNames.contains(CACHE_STORE_NAME)) {
-            request.result.createObjectStore(CACHE_STORE_NAME, { keyPath: 'key' });
+            request.result.createObjectStore(CACHE_STORE_NAME, {
+              keyPath: 'key',
+            });
           }
-        } catch { /* surfaced as an unavailable cache below */ }
+        } catch {
+          /* surfaced as an unavailable cache below */
+        }
       };
       request.onsuccess = () => {
         const upgraded = request.result;
@@ -219,7 +271,10 @@ function openCacheDb(createStore = false): Promise<IDBDatabase | null> {
         cacheStoreUpgradePromise = null;
         resolve(upgraded);
       };
-      request.onerror = () => { cacheStoreUpgradePromise = null; resolve(null); };
+      request.onerror = () => {
+        cacheStoreUpgradePromise = null;
+        resolve(null);
+      };
       request.onblocked = () => {
         // Existing tabs close their connections on versionchange. Keep this
         // single upgrade promise pending so no competing version request starts.
@@ -238,7 +293,9 @@ async function pruneEmptyCacheStore(db: IDBDatabase) {
       request.onsuccess = () => resolve(Number(request.result) || 0);
       request.onerror = () => resolve(1);
       transaction.onerror = () => resolve(1);
-    } catch { resolve(1); }
+    } catch {
+      resolve(1);
+    }
   });
   if (count !== 0 || cacheStoreUpgradePromise) return;
 
@@ -246,8 +303,13 @@ async function pruneEmptyCacheStore(db: IDBDatabase) {
     db.close();
     cacheDbPromise = null;
     let request: IDBOpenDBRequest;
-    try { request = indexedDB.open(CACHE_DB_NAME, db.version + 1); }
-    catch { cacheStoreUpgradePromise = null; resolve(null); return; }
+    try {
+      request = indexedDB.open(CACHE_DB_NAME, db.version + 1);
+    } catch {
+      cacheStoreUpgradePromise = null;
+      resolve(null);
+      return;
+    }
     request.onupgradeneeded = () => {
       const upgradeDb = request.result;
       if (!upgradeDb.objectStoreNames.contains(CACHE_STORE_NAME)) return;
@@ -257,7 +319,10 @@ async function pruneEmptyCacheStore(db: IDBDatabase) {
       if (!transaction) return;
       const recount = transaction.objectStore(CACHE_STORE_NAME).count();
       recount.onsuccess = () => {
-        if (recount.result === 0 && upgradeDb.objectStoreNames.contains(CACHE_STORE_NAME)) {
+        if (
+          recount.result === 0 &&
+          upgradeDb.objectStoreNames.contains(CACHE_STORE_NAME)
+        ) {
           upgradeDb.deleteObjectStore(CACHE_STORE_NAME);
         }
       };
@@ -269,7 +334,10 @@ async function pruneEmptyCacheStore(db: IDBDatabase) {
       cacheStoreUpgradePromise = null;
       resolve(nextDb);
     };
-    request.onerror = () => { cacheStoreUpgradePromise = null; resolve(null); };
+    request.onerror = () => {
+      cacheStoreUpgradePromise = null;
+      resolve(null);
+    };
     request.onblocked = () => {
       // Other tabs close their connection on versionchange; the request will
       // continue when they do. Keep callers from trying to create parallel DBs.
@@ -278,8 +346,10 @@ async function pruneEmptyCacheStore(db: IDBDatabase) {
   await cacheStoreUpgradePromise;
 }
 
-const cacheRecordKey = (type: StorageItem['type'], userId = activeStorageUserId) =>
-  `${encodeURIComponent(userId)}:${type}`;
+const cacheRecordKey = (
+  type: StorageItem['type'],
+  userId = activeStorageUserId,
+) => `${encodeURIComponent(userId)}:${type}`;
 
 async function readCacheValue<T>(key: string): Promise<T | null> {
   removeLocalDurableCopies();
@@ -290,25 +360,48 @@ async function readCacheValue<T>(key: string): Promise<T | null> {
     const cached = await new Promise<T | null>((resolve) => {
       let done = false;
       const timer = setTimeout(() => {
-        if (!done) { done = true; resolve(null); }
+        if (!done) {
+          done = true;
+          resolve(null);
+        }
       }, 1000);
       try {
         const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
         const req = tx.objectStore(CACHE_STORE_NAME).get(currentKey);
         req.onsuccess = () => {
-          if (!done) { done = true; clearTimeout(timer); resolve((req.result?.value as T) ?? null); }
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve((req.result?.value as T) ?? null);
+          }
         };
         req.onerror = () => {
-          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
         };
         tx.onerror = () => {
-          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
         };
         tx.onabort = () => {
-          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
         };
       } catch {
-        if (!done) { done = true; clearTimeout(timer); resolve(null); }
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve(null);
+        }
       }
     });
     if (cached === null) await pruneEmptyCacheStore(db);
@@ -320,7 +413,11 @@ async function readCacheValue<T>(key: string): Promise<T | null> {
 
 async function writeCacheValue<T>(key: string, value: T): Promise<boolean> {
   const currentKey = key;
-  if (value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
+  if (
+    value === null ||
+    value === undefined ||
+    (Array.isArray(value) && value.length === 0)
+  ) {
     return deleteCacheValue(currentKey);
   }
   try {
@@ -328,18 +425,49 @@ async function writeCacheValue<T>(key: string, value: T): Promise<boolean> {
     if (!db || !db.objectStoreNames.contains(CACHE_STORE_NAME)) return false;
     return await new Promise<boolean>((resolve) => {
       let done = false;
-      const timer = setTimeout(() => { if (!done) { done = true; resolve(false); } }, 5000);
+      const timer = setTimeout(() => {
+        if (!done) {
+          done = true;
+          resolve(false);
+        }
+      }, 5000);
       try {
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
-        transaction.objectStore(CACHE_STORE_NAME).put({ key: currentKey, value, updatedAt: Date.now() });
-        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
-        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
-        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
+        transaction
+          .objectStore(CACHE_STORE_NAME)
+          .put({ key: currentKey, value, updatedAt: Date.now() });
+        transaction.oncomplete = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(true);
+          }
+        };
+        transaction.onerror = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(false);
+          }
+        };
+        transaction.onabort = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(false);
+          }
+        };
       } catch {
-        if (!done) { done = true; clearTimeout(timer); resolve(false); }
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve(false);
+        }
       }
     });
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 async function deleteCacheValue(key: string): Promise<boolean> {
@@ -350,32 +478,63 @@ async function deleteCacheValue(key: string): Promise<boolean> {
     const deleted = await new Promise<boolean>((resolve) => {
       let done = false;
       const timer = setTimeout(() => {
-        if (!done) { done = true; resolve(false); }
+        if (!done) {
+          done = true;
+          resolve(false);
+        }
       }, 5000);
       try {
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
         transaction.objectStore(CACHE_STORE_NAME).delete(currentKey);
-        transaction.oncomplete = () => { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
-        transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
-        transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
+        transaction.oncomplete = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(true);
+          }
+        };
+        transaction.onerror = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(false);
+          }
+        };
+        transaction.onabort = () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(false);
+          }
+        };
       } catch {
-        if (!done) { done = true; clearTimeout(timer); resolve(false); }
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve(false);
+        }
       }
     });
     if (deleted) await pruneEmptyCacheStore(db);
     return deleted;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function createUuid(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+    return crypto.randomUUID();
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const random = Math.random() * 16 | 0;
-    return (char === 'x' ? random : (random & 0x3 | 0x8)).toString(16);
+    const random = (Math.random() * 16) | 0;
+    return (char === 'x' ? random : (random & 0x3) | 0x8).toString(16);
   });
 }
 
-async function readLocal(type: StorageItem['type'], owner = activeStorageUserId): Promise<StorageItem[]> {
+async function readLocal(
+  type: StorageItem['type'],
+  owner = activeStorageUserId,
+): Promise<StorageItem[]> {
   removeLocalDurableCopies();
   try {
     const db = await openCacheDb();
@@ -384,21 +543,56 @@ async function readLocal(type: StorageItem['type'], owner = activeStorageUserId)
       const record = await new Promise<any>((resolve) => {
         let done = false;
         const timer = setTimeout(() => {
-          if (!done) { done = true; resolve(null); }
+          if (!done) {
+            done = true;
+            resolve(null);
+          }
         }, 1000);
         try {
           const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
-          const req = tx.objectStore(CACHE_STORE_NAME).get(cacheRecordKey(type, owner));
-          req.onsuccess = () => { if (!done) { done = true; clearTimeout(timer); resolve(req.result); } };
-          req.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
-          tx.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
-          tx.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
+          const req = tx
+            .objectStore(CACHE_STORE_NAME)
+            .get(cacheRecordKey(type, owner));
+          req.onsuccess = () => {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve(req.result);
+            }
+          };
+          req.onerror = () => {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve(null);
+            }
+          };
+          tx.onerror = () => {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve(null);
+            }
+          };
+          tx.onabort = () => {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve(null);
+            }
+          };
         } catch {
-          if (!done) { done = true; clearTimeout(timer); resolve(null); }
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
         }
       });
       if (Array.isArray(record?.items)) {
-        return record.items.filter((item: StorageItem) => !item.ownerId || item.ownerId === owner);
+        return record.items.filter(
+          (item: StorageItem) => !item.ownerId || item.ownerId === owner,
+        );
       }
       await pruneEmptyCacheStore(db);
     }
@@ -406,22 +600,35 @@ async function readLocal(type: StorageItem['type'], owner = activeStorageUserId)
   return [];
 }
 
-async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner = activeStorageUserId): Promise<boolean> {
-  const scopedList = list.filter((item) => !item.ownerId || item.ownerId === owner)
+async function writeLocal(
+  type: StorageItem['type'],
+  list: StorageItem[],
+  owner = activeStorageUserId,
+): Promise<boolean> {
+  const scopedList = list
+    .filter((item) => !item.ownerId || item.ownerId === owner)
     .map((item) => ({ ...item, ownerId: owner }));
   // Empty collections are represented by absence. Do not create a database
   // or object store merely because a page requested an empty list.
   if (scopedList.length === 0) {
     const existingDb = await openCacheDb();
-    if (!existingDb || !existingDb.objectStoreNames.contains(CACHE_STORE_NAME)) return true;
+    if (!existingDb || !existingDb.objectStoreNames.contains(CACHE_STORE_NAME))
+      return true;
     const removed = await new Promise<boolean>((resolve) => {
       try {
-        const transaction = existingDb.transaction(CACHE_STORE_NAME, 'readwrite');
-        transaction.objectStore(CACHE_STORE_NAME).delete(cacheRecordKey(type, owner));
+        const transaction = existingDb.transaction(
+          CACHE_STORE_NAME,
+          'readwrite',
+        );
+        transaction
+          .objectStore(CACHE_STORE_NAME)
+          .delete(cacheRecordKey(type, owner));
         transaction.oncomplete = () => resolve(true);
         transaction.onerror = () => resolve(false);
         transaction.onabort = () => resolve(false);
-      } catch { resolve(false); }
+      } catch {
+        resolve(false);
+      }
     });
     if (removed) await pruneEmptyCacheStore(existingDb);
     return removed;
@@ -432,17 +639,47 @@ async function writeLocal(type: StorageItem['type'], list: StorageItem[], owner 
     if (db) {
       await new Promise<void>((resolve) => {
         let done = false;
-        const timer = setTimeout(() => { if (!done) { done = true; resolve(); } }, 1000);
+        const timer = setTimeout(() => {
+          if (!done) {
+            done = true;
+            resolve();
+          }
+        }, 1000);
         try {
           const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
           transaction.objectStore(CACHE_STORE_NAME).put({
-            key: cacheRecordKey(type, owner), items: scopedList, updatedAt: Date.now(),
+            key: cacheRecordKey(type, owner),
+            items: scopedList,
+            updatedAt: Date.now(),
           });
-          transaction.oncomplete = () => { persisted = true; if (!done) { done = true; clearTimeout(timer); resolve(); } };
-          transaction.onerror = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
-          transaction.onabort = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+          transaction.oncomplete = () => {
+            persisted = true;
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          };
+          transaction.onerror = () => {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          };
+          transaction.onabort = () => {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          };
         } catch {
-          if (!done) { done = true; clearTimeout(timer); resolve(); }
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve();
+          }
         }
       });
     }
@@ -460,7 +697,11 @@ async function setActiveStorageUser(userId?: string | null) {
 // Local helpers
 // ---------------------------------------------------------------------------
 
-async function mergeIntoLocal(type: StorageItem['type'], remoteRows: any[], owner = activeStorageUserId) {
+async function mergeIntoLocal(
+  type: StorageItem['type'],
+  remoteRows: any[],
+  owner = activeStorageUserId,
+) {
   const local = await readLocal(type, owner);
   const map = new Map<string, StorageItem>();
   const remoteIds = new Set(remoteRows.map((row) => String(row.id)));
@@ -473,15 +714,17 @@ async function mergeIntoLocal(type: StorageItem['type'], remoteRows: any[], owne
 
   // Remote wins for synced items
   remoteRows.forEach((row) => {
-    const normalizedRow = type === 'quiz'
-      ? normalizeQuizRow(row)
-      : row;
+    const normalizedRow = type === 'quiz' ? normalizeQuizRow(row) : row;
     const existing = map.get(row.id);
     if (existing && !existing.is_synced) return;
     map.set(row.id, {
       ...(existing || {}),
       id: row.id,
-      ownerId: row.user_id || row.creator_id || row.recipient_id || activeStorageUserId,
+      ownerId:
+        row.user_id ||
+        row.creator_id ||
+        row.recipient_id ||
+        activeStorageUserId,
       type,
       content: { ...(existing?.content || {}), ...normalizedRow },
       updated_at: row.updated_at || new Date().toISOString(),
@@ -495,11 +738,15 @@ async function mergeIntoLocal(type: StorageItem['type'], remoteRows: any[], owne
 }
 
 function flattenItems(items: StorageItem[]): any[] {
-  return items.map((item) => ({ ...(item.content || item), is_synced: item.is_synced }));
+  return items.map((item) => ({
+    ...(item.content || item),
+    is_synced: item.is_synced,
+  }));
 }
 
 function normalizeQuizRow(row: any) {
-  const settings = row?.settings && typeof row.settings === 'object' ? row.settings : {};
+  const settings =
+    row?.settings && typeof row.settings === 'object' ? row.settings : {};
   return {
     ...row,
     ...settings,
@@ -508,8 +755,10 @@ function normalizeQuizRow(row: any) {
     title: row?.title || settings.title || '',
     description: row?.description ?? settings.description ?? '',
     type: row?.type || settings.type || 'quiz',
-    questions: Array.isArray(row?.questions) ? row.questions : (settings.questions || []),
-    responses: Array.isArray(row?.responses) ? row.responses : (settings.responses || []),
+    questions:
+      Array.isArray(row?.questions) ? row.questions : settings.questions || [],
+    responses:
+      Array.isArray(row?.responses) ? row.responses : settings.responses || [],
     customUrl: row?.custom_id || settings.customUrl || row?.customUrl || '',
   };
 }
@@ -525,7 +774,8 @@ async function getActiveUserId(): Promise<string | null> {
 
   try {
     const { auth } = await import('@/lib/firebase');
-    if (auth.currentUser && !auth.currentUser.isAnonymous) return auth.currentUser.uid;
+    if (auth.currentUser && !auth.currentUser.isAnonymous)
+      return auth.currentUser.uid;
   } catch {}
 
   return null;
@@ -540,9 +790,14 @@ function safeStorageSegment(value: string) {
 
 async function blobFingerprint(blob: Blob) {
   if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
-    return Array.from(new Uint8Array(digest)).slice(0, 12)
-      .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      await blob.arrayBuffer(),
+    );
+    return Array.from(new Uint8Array(digest))
+      .slice(0, 12)
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
   }
   return `${blob.size}-${blob.type.replace(/[^a-z0-9]/gi, '')}`;
 }
@@ -554,36 +809,57 @@ async function persistQuizMedia(value: any, path: string) {
   if (!source.startsWith('data:')) {
     const ownerQuizPrefix = path.split('/').slice(0, 2).join('/') + '/';
     if (!source.startsWith('http') && source.startsWith(ownerQuizPrefix)) {
-      return supabaseStorage.storage.from('quiz-media').getPublicUrl(source).data.publicUrl;
+      return supabaseStorage.storage.from('quiz-media').getPublicUrl(source)
+        .data.publicUrl;
     }
     return value;
   }
 
   const response = await fetch(source);
-  if (!response.ok) throw new Error('Could not read uploaded assessment media.');
+  if (!response.ok)
+    throw new Error('Could not read uploaded assessment media.');
   const blob = await optimizeImageForStorage(await response.blob());
-  if (blob.size > 50 * 1024 * 1024) throw new Error('Quiz images must be smaller than 50 MB to upload.');
-  const extension = (blob.type.split('/')[1] || 'bin').split(';')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'bin';
+  if (blob.size > 50 * 1024 * 1024)
+    throw new Error('Quiz images must be smaller than 50 MB to upload.');
+  const extension =
+    (blob.type.split('/')[1] || 'bin')
+      .split(';')[0]
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 12) || 'bin';
   const storagePath = `${path}-${await blobFingerprint(blob)}.${extension}`;
   const contentType = blob.type || unpacked.type || 'application/octet-stream';
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('Sign in with your Ping World account before uploading quiz images.');
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token)
+    throw new Error(
+      'Sign in with your Ping World account before uploading quiz images.',
+    );
 
   const signingResponse = await fetch('/api/quiz-media', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accessToken: session.access_token, quizId: path.split('/')[1] || '', objectPath: storagePath, contentType }),
+    body: JSON.stringify({
+      accessToken: session.access_token,
+      quizId: path.split('/')[1] || '',
+      objectPath: storagePath,
+      contentType,
+    }),
   });
   const signedUpload = await signingResponse.json().catch(() => null);
   if (!signingResponse.ok || typeof signedUpload?.token !== 'string') {
-    throw new Error(signedUpload?.error || `Could not authorize quiz image upload (HTTP ${signingResponse.status}).`);
+    throw new Error(
+      signedUpload?.error ||
+        `Could not authorize quiz image upload (HTTP ${signingResponse.status}).`,
+    );
   }
-  const { error: uploadError } = await supabaseStorage.storage.from('quiz-media').uploadToSignedUrl(
-    storagePath,
-    signedUpload.token,
-    blob,
-    { contentType, cacheControl: '3600', upsert: true },
-  );
+  const { error: uploadError } = await supabaseStorage.storage
+    .from('quiz-media')
+    .uploadToSignedUrl(storagePath, signedUpload.token, blob, {
+      contentType,
+      cacheControl: '3600',
+      upsert: true,
+    });
   if (uploadError) {
     console.error('[QuizMedia] Signed Storage upload failed:', {
       message: uploadError.message,
@@ -597,7 +873,9 @@ async function persistQuizMedia(value: any, path: string) {
     throw new Error(`Supabase image upload failed: ${uploadError.message}`);
   }
   if (typeof signedUpload.publicUrl !== 'string' || !signedUpload.publicUrl) {
-    throw new Error('Quiz image uploaded, but Supabase did not return its public URL.');
+    throw new Error(
+      'Quiz image uploaded, but Supabase did not return its public URL.',
+    );
   }
   return signedUpload.publicUrl;
 }
@@ -607,31 +885,57 @@ async function externalizeQuizMedia(quiz: any, userId: string) {
   const safeQuiz = safeStorageSegment(quiz.id || 'quiz');
   const output = { ...quiz };
   if (Array.isArray(quiz.questions)) {
-    output.questions = await Promise.all(quiz.questions.map(async (question: any, questionIndex: number) => {
-      const q = { ...question };
-      const questionPath = `${safeUser}/${safeQuiz}/${safeStorageSegment(String(q.id || `question-${questionIndex}`))}`;
-      for (const field of ['uploadUrl', 'imageUrl']) {
-        if (typeof q[field] === 'string') q[field] = await persistQuizMedia(q[field], `${questionPath}/${field}`);
-      }
-      if (Array.isArray(q.options)) {
-        q.options = await Promise.all(q.options.map(async (option: any, optionIndex: number) => {
-          if (!option || typeof option !== 'object') return option;
-          const next = { ...option };
-          const optionPath = `${questionPath}/${safeStorageSegment(String(next.id || `option-${optionIndex}`))}`;
-          for (const field of ['uploadUrl', 'imageUrl']) {
-            if (typeof next[field] === 'string') next[field] = await persistQuizMedia(next[field], `${optionPath}/${field}`);
-          }
-          return next;
-        }));
-      }
-      return q;
-    }));
+    output.questions = await Promise.all(
+      quiz.questions.map(async (question: any, questionIndex: number) => {
+        const q = { ...question };
+        const questionPath = `${safeUser}/${safeQuiz}/${safeStorageSegment(String(q.id || `question-${questionIndex}`))}`;
+        for (const field of ['uploadUrl', 'imageUrl']) {
+          if (typeof q[field] === 'string')
+            q[field] = await persistQuizMedia(
+              q[field],
+              `${questionPath}/${field}`,
+            );
+        }
+        if (Array.isArray(q.options)) {
+          q.options = await Promise.all(
+            q.options.map(async (option: any, optionIndex: number) => {
+              if (!option || typeof option !== 'object') return option;
+              const next = { ...option };
+              const optionPath = `${questionPath}/${safeStorageSegment(String(next.id || `option-${optionIndex}`))}`;
+              for (const field of ['uploadUrl', 'imageUrl']) {
+                if (typeof next[field] === 'string')
+                  next[field] = await persistQuizMedia(
+                    next[field],
+                    `${optionPath}/${field}`,
+                  );
+              }
+              return next;
+            }),
+          );
+        }
+        return q;
+      }),
+    );
   }
   if (quiz.branding && typeof quiz.branding === 'object') {
     output.branding = {
       ...quiz.branding,
-      ...(typeof quiz.branding?.image === 'string' ? { image: await persistQuizMedia(quiz.branding.image, `${safeUser}/${safeQuiz}/branding/image`) } : {}),
-      ...(typeof quiz.branding?.icon === 'string' ? { icon: await persistQuizMedia(quiz.branding.icon, `${safeUser}/${safeQuiz}/branding/icon`) } : {}),
+      ...(typeof quiz.branding?.image === 'string' ?
+        {
+          image: await persistQuizMedia(
+            quiz.branding.image,
+            `${safeUser}/${safeQuiz}/branding/image`,
+          ),
+        }
+      : {}),
+      ...(typeof quiz.branding?.icon === 'string' ?
+        {
+          icon: await persistQuizMedia(
+            quiz.branding.icon,
+            `${safeUser}/${safeQuiz}/branding/icon`,
+          ),
+        }
+      : {}),
     };
   }
   return output;
@@ -651,7 +955,12 @@ async function buildSupabasePayload(
     // Moderation state is server-owned and survives ordinary quiz edits. Never
     // let a stale local draft accidentally unpause an assessment under review.
     try {
-      const { data: existing } = await supabase.from('quizzes').select('settings').eq('id', baseId).eq('user_id', userId).maybeSingle();
+      const { data: existing } = await supabase
+        .from('quizzes')
+        .select('settings')
+        .eq('id', baseId)
+        .eq('user_id', userId)
+        .maybeSingle();
       if (existing?.settings?.moderationStatus === 'under_review') {
         settings.moderationStatus = 'under_review';
         settings.moderationPausedAt = existing.settings.moderationPausedAt;
@@ -661,11 +970,31 @@ async function buildSupabasePayload(
       // normal owner RLS and server report route still control public access.
     }
     [
-      'id', 'user_id', 'userId', 'ownerId', 'title', 'description', 'type',
-      'questions', 'responses', 'canGoBack', 'showScore', 'hasTimer',
-      'correctOption', 'correctOptionDes', 'randomizeOptions', 'randomizeQuestions',
-      'allowRetry', 'enforceSecurity', 'enforceIdentity', 'endScreen', 'expires_at',
-      'customUrl', 'custom_id', 'settings', 'is_synced',
+      'id',
+      'user_id',
+      'userId',
+      'ownerId',
+      'title',
+      'description',
+      'type',
+      'questions',
+      'responses',
+      'canGoBack',
+      'showScore',
+      'hasTimer',
+      'correctOption',
+      'correctOptionDes',
+      'randomizeOptions',
+      'randomizeQuestions',
+      'allowRetry',
+      'enforceSecurity',
+      'enforceIdentity',
+      'endScreen',
+      'expires_at',
+      'customUrl',
+      'custom_id',
+      'settings',
+      'is_synced',
     ].forEach((field) => delete settings[field]);
 
     // This affects only response scoring; keep it with the server-owned
@@ -682,8 +1011,9 @@ async function buildSupabasePayload(
       responses: remoteContent.responses,
       canGoBack: remoteContent.canGoBack,
       showScore: remoteContent.showScore,
-      hasTimer: typeof remoteContent.hasTimer === 'boolean'
-        ? remoteContent.hasTimer
+      hasTimer:
+        typeof remoteContent.hasTimer === 'boolean' ?
+          remoteContent.hasTimer
         : Boolean(remoteContent.timer?.hasTimer),
       correctOption: remoteContent.correctOption,
       correctOptionDes: remoteContent.correctOptionDes,
@@ -783,19 +1113,25 @@ async function syncFromRemote(
     if (activeStorageUserId !== cacheOwner) return;
 
     // Prevent anonymous full-table scans for private data
-    if (type !== 'quiz' && !session) return;
+    if (!session) return;
 
     const rows: any[] = [];
     let offset = 0;
     let remoteReadComplete = false;
     while (true) {
-      const orderColumn = type === 'message' || type === 'link' ? 'created_at' : 'updated_at';
-      let query = supabase.from(tableName(type)).select('*')
+      const orderColumn =
+        type === 'message' || type === 'link' || type === 'quiz' ? 'created_at' : 'updated_at';
+      let query = supabase
+        .from(tableName(type))
+        .select('*')
         .order(orderColumn, { ascending: false })
         .range(offset, offset + 999);
       if (session) {
         if (!session.user.email_confirmed_at) return;
-        const userCol = type === 'link' ? 'creator_id' : type === 'message' ? 'recipient_id' : 'user_id';
+        const userCol =
+          type === 'link' ? 'creator_id'
+          : type === 'message' ? 'recipient_id'
+          : 'user_id';
         query = query.eq(userCol, session.user.id) as any;
       }
       const { data, error } = await query;
@@ -860,7 +1196,11 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
 
           item.is_synced = true;
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+            window.dispatchEvent(
+              new CustomEvent('pw_sync_status', {
+                detail: { type, id: item.id, is_synced: true },
+              }),
+            );
           }
         } else {
           const payload = await buildSupabasePayload(
@@ -887,17 +1227,27 @@ async function pushUnsyncedItems(type: StorageItem['type']) {
           if (!error) {
             item.is_synced = true;
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+              window.dispatchEvent(
+                new CustomEvent('pw_sync_status', {
+                  detail: { type, id: item.id, is_synced: true },
+                }),
+              );
             }
           } else throw error;
         }
       } catch (e) {
-        reportSyncFailure(type, item.id, e, item.content?.title || item.content?.name);
+        reportSyncFailure(
+          type,
+          item.id,
+          e,
+          item.content?.title || item.content?.name,
+        );
         console.error(`[HybridStorage] Failed to push item ${item.id}:`, e);
       }
     }
 
-    if (activeStorageUserId === syncOwner) await writeLocal(type, local, syncOwner);
+    if (activeStorageUserId === syncOwner)
+      await writeLocal(type, local, syncOwner);
   } catch (e) {
     console.warn('[HybridStorage] Push failed:', e);
   }
@@ -914,11 +1264,16 @@ const pendingResponsesKey = () =>
 const pendingAttemptQuitsKey = () =>
   `quiz_attempt_quits:${encodeURIComponent(activeStorageUserId)}`;
 
-async function clearQuizScopedCache(quizId: string, removeCompletionMarker = false) {
-  if (typeof window === 'undefined' || !quizId) return;
-  const encodedId = encodeURIComponent(quizId);
+async function clearScopedCache(
+  scopeId: string,
+  removeCompletionMarker = false,
+  type?:StorageItem['type'],
+) {
+  if (typeof window === 'undefined' || !scopeId) return;
+  const encodedId = encodeURIComponent(scopeId);
   const encodedOwnerId = encodeURIComponent(activeStorageUserId);
   const db = await openCacheDb();
+  const dbType = type || 'quiz';
   if (db) {
     await new Promise<void>((resolve) => {
       try {
@@ -926,84 +1281,144 @@ async function clearQuizScopedCache(quizId: string, removeCompletionMarker = fal
         const store = tx.objectStore(CACHE_STORE_NAME);
         const keysRequest = store.getAllKeys();
         keysRequest.onsuccess = () => {
-          for (const rawKey of keysRequest.result) {
-            const key = String(rawKey);
-            const isCurrentOwnerData = key.includes(encodedOwnerId);
-            const scopedAttemptOrResponse =
-              (key.includes('quiz_attempt:') || key.includes('quiz_submission:') || key.includes('quiz_responses:')) &&
-              (key.includes(quizId) || key.includes(encodedId)) && (removeCompletionMarker || isCurrentOwnerData);
-            if (scopedAttemptOrResponse) store.delete(rawKey);
-            if ((key.endsWith(':draft') || key === 'draft') && (removeCompletionMarker || isCurrentOwnerData)) {
-              const draftRequest = store.get(rawKey);
-              draftRequest.onsuccess = () => {
-                const record = draftRequest.result;
-                if (!Array.isArray(record?.items)) return;
-                const items = record.items.filter((item: StorageItem) => item.id !== `draft-${quizId}`);
-                if (items.length !== record.items.length) store.put({ ...record, items, updatedAt: Date.now() });
-              };
-            }
-            if (key.startsWith('queue:') && (removeCompletionMarker || key === pendingResponsesKey())) {
-              const queueRequest = store.get(rawKey);
-              queueRequest.onsuccess = () => {
-                const record = queueRequest.result;
-                const queue = Array.isArray(record?.value) ? record.value : [];
-                const filtered = queue.filter((entry: any) => entry?.quizId !== quizId);
-                if (filtered.length === queue.length) return;
-                if (filtered.length) store.put({ ...record, value: filtered, updatedAt: Date.now() });
-                else store.delete(rawKey);
-              };
-            }
-            if (removeCompletionMarker && key.endsWith(':quiz')) {
-              const quizRequest = store.get(rawKey);
-              quizRequest.onsuccess = () => {
-                const record = quizRequest.result;
-                if (!Array.isArray(record?.items)) return;
-                const items = record.items.filter((item: StorageItem) => item.id !== quizId);
-                if (items.length !== record.items.length) store.put({ ...record, items, updatedAt: Date.now() });
-              };
+            for(const rawKey of keysRequest.result) {
+          if(dbType === 'quiz') {
+              const key = String(rawKey);
+              const isCurrentOwnerData = key.includes(encodedOwnerId);
+              const scopedData =
+                (key.includes('quiz_attempt:') ||
+                  key.includes('quiz_submission:') ||
+                  key.includes('quiz_responses:')) &&
+                (key.includes(scopeId) || key.includes(encodedId)) &&
+                (removeCompletionMarker || isCurrentOwnerData);
+              if(scopedData) store.delete(rawKey);
+              if(
+                removeCompletionMarker &&
+                (key.endsWith(':draft') || key === 'draft') &&
+                (removeCompletionMarker || isCurrentOwnerData)
+              ) {
+                const draftRequest = store.get(rawKey);
+                draftRequest.onsuccess = () => {
+                  const record = draftRequest.result;
+                  if(!Array.isArray(record?.items)) return;
+                  const items = record.items.filter(
+                    (item: StorageItem) => item.id !== `draft-${scopeId}`,
+                  );
+                  if(items.length !== record.items.length)
+                    store.put({...record, items, updatedAt: Date.now()});
+                };
+              }
+              if(
+                key.startsWith('queue:') &&
+                (removeCompletionMarker || key === pendingResponsesKey())
+              ) {
+                const queueRequest = store.get(rawKey);
+                queueRequest.onsuccess = () => {
+                  const record = queueRequest.result;
+                  const queue = Array.isArray(record?.value) ? record.value : [];
+                  const filtered = queue.filter(
+                    (entry: any) => entry?.quizId !== scopeId,
+                  );
+                  if(filtered.length === queue.length) return;
+                  if(filtered.length)
+                    store.put({
+                      ...record,
+                      value: filtered,
+                      updatedAt: Date.now(),
+                    });
+                  else store.delete(rawKey);
+                };
+              }
+              if(removeCompletionMarker && key.endsWith(':quiz')) {
+                const quizRequest = store.get(rawKey);
+                quizRequest.onsuccess = () => {
+                  const record = quizRequest.result;
+                  if(!Array.isArray(record?.items)) return;
+                  const items = record.items.filter(
+                    (item: StorageItem) => item.id !== scopeId,
+                  );
+                  if(items.length !== record.items.length)
+                    store.put({...record, items, updatedAt: Date.now()});
+                };
+              }
             }
           }
         };
         tx.oncomplete = () => resolve();
         tx.onerror = () => resolve();
         tx.onabort = () => resolve();
-      } catch { resolve(); }
+      } catch {
+        resolve();
+      }
     });
   }
 
   for (const type of ['attempt', 'submission', 'responses'] as const) {
     for (const key of Object.keys(localStorage)) {
-      if (key.includes(encodedId) && key.includes(`quiz_${type}:`) && (removeCompletionMarker || key.includes(encodedOwnerId))) {
+      if (
+        key.includes(encodedId) &&
+        key.includes(`quiz_${type}:`) &&
+        (removeCompletionMarker || key.includes(encodedOwnerId))
+      ) {
         localStorage.removeItem(key);
       }
     }
   }
 
-  // Remove this assessment's queued response from every account namespace on
-  // this device. A deleted assessment must not be resurrected by a later sync.
-  {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('pw_queue:') || key.startsWith('pw_quiz_response_queue_')) localStorage.removeItem(key);
+  if(dbType === 'quiz') {
+    // Remove only queued submissions for this assessment. Other assessment
+    // queues must survive a successful save or response cleanup.
+    for(const key of Object.keys(localStorage)) {
+      if(!key.startsWith('pw_queue:') && !key.startsWith('pw_quiz_response_queue_')) continue;
+      if(!removeCompletionMarker && !key.includes(encodedOwnerId)) continue;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        const queue = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.value) ? parsed.value : null;
+        if(!queue) continue;
+        const filtered = queue.filter((entry: any) => entry?.quizId !== scopeId);
+        if(filtered.length === queue.length) continue;
+        if(Array.isArray(parsed)) {
+          if(filtered.length) localStorage.setItem(key, JSON.stringify(filtered));
+          else localStorage.removeItem(key);
+        } else if(filtered.length) {
+          localStorage.setItem(key, JSON.stringify({...parsed, value: filtered}));
+        } else localStorage.removeItem(key);
+      } catch { /* Keep an unreadable queue; cleanup must not destroy unrelated data. */}
     }
-  }
 
-  // Remove the local assessment draft record across cached owners, without
-  // touching the assessment itself or its one-time completion marker.
-  try {
-    const draftKey = `draft-${quizId}`;
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('pw_quiz_drafts_')) localStorage.removeItem(key);
+    // Assessment deletion clears its builder draft too. A submitted response
+    // only clears taker attempt/submission data and must not erase setter edits.
+    if(removeCompletionMarker) {
+      try {
+        const draftKey = `draft-${scopeId}`;
+        const draftRows = await readLocal('draft', activeStorageUserId);
+        if(draftRows.some((row) => row.id === draftKey)) {
+          await writeLocal(
+            'draft',
+            draftRows.filter((row) => row.id !== draftKey),
+            activeStorageUserId,
+          );
+        }
+        // Legacy draft snapshots are keyed by assessment id; remove only matching
+        // serialized values and preserve unrelated drafts in the same browser.
+        for(const key of Object.keys(localStorage)) {
+          if(!key.startsWith('pw_quiz_drafts_')) continue;
+          try {
+            const raw = localStorage.getItem(key) || '';
+            const parsed = JSON.parse(raw);
+            if(parsed?.id === scopeId || parsed?.quizId === scopeId || parsed?.id === `draft-${scopeId}`) localStorage.removeItem(key);
+          } catch { /* Leave malformed legacy storage untouched. */}
+        }
+      } catch { }
     }
-    const draftRows = await readLocal('draft', activeStorageUserId);
-    if (draftRows.some((row) => row.id === draftKey)) {
-      await writeLocal('draft', draftRows.filter((row) => row.id !== draftKey), activeStorageUserId);
+    if(removeCompletionMarker) {
+      for(const key of Object.keys(localStorage)) {
+        if(key.startsWith('pw_quizzes_')) localStorage.removeItem(key);
+      }
+      try {
+        localStorage.removeItem(`completed_quiz_${scopeId}`);
+      } catch { }
     }
-  } catch {}
-  if (removeCompletionMarker) {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('pw_quizzes_')) localStorage.removeItem(key);
-    }
-    try { localStorage.removeItem(`completed_quiz_${quizId}`); } catch {}
   }
   if (db) await pruneEmptyCacheStore(db);
 }
@@ -1021,17 +1436,27 @@ async function clearQuizResponsePageCache(quizId: string) {
         request.onsuccess = () => {
           for (const rawKey of request.result) {
             const key = String(rawKey);
-            if (key.includes('quiz_responses:') && (key.includes(quizId) || key.includes(encodedQuizId))) store.delete(rawKey);
+            if (
+              key.includes('quiz_responses:') &&
+              (key.includes(quizId) || key.includes(encodedQuizId))
+            )
+              store.delete(rawKey);
           }
         };
         tx.oncomplete = () => resolve();
         tx.onerror = () => resolve();
         tx.onabort = () => resolve();
-      } catch { resolve(); }
+      } catch {
+        resolve();
+      }
     });
   }
   for (const key of Object.keys(localStorage)) {
-    if (key.includes('quiz_responses:') && (key.includes(quizId) || key.includes(encodedQuizId))) localStorage.removeItem(key);
+    if (
+      key.includes('quiz_responses:') &&
+      (key.includes(quizId) || key.includes(encodedQuizId))
+    )
+      localStorage.removeItem(key);
   }
 
   // Remove response snapshots from local quiz objects while retaining the
@@ -1040,7 +1465,8 @@ async function clearQuizResponsePageCache(quizId: string) {
     const quizzes = await readLocal('quiz', owner);
     let changed = false;
     const updated = quizzes.map((item) => {
-      if (item.id !== quizId || !Array.isArray(item.content?.responses)) return item;
+      if (item.id !== quizId || !Array.isArray(item.content?.responses))
+        return item;
       const responses: any[] = [];
       if (responses.length === item.content.responses.length) return item;
       changed = true;
@@ -1052,31 +1478,77 @@ async function clearQuizResponsePageCache(quizId: string) {
 }
 
 async function insertQuizResponse(quizId: string, response: any) {
-  const persistedResponse = response.attemptId
-    ? (await HybridStorage.getAttemptResponseDraft(quizId, response.attemptId)) || response
+  // A previous request may have committed the response even if the browser
+  // lost its confirmation. Check the attempt's idempotency key before trying
+  // to re-upload files, since the successful save removes upload authorization.
+  if (response.attemptId && response.attemptToken && response.submissionId) {
+    const check = await fetch('/api/quiz-responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quizId,
+        response: {
+          submissionId: response.submissionId,
+          attemptToken: response.attemptToken,
+          idempotencyCheck: true,
+        },
+      }),
+      cache: 'no-store',
+    }).catch(() => null);
+    if (check?.ok) {
+      const prior = await check.json().catch(() => null);
+      if (prior?.success === true && prior?.responseId) return prior;
+    }
+  }
+  const persistedResponse =
+    response.attemptId ?
+      (await HybridStorage.getAttemptResponseDraft(
+        quizId,
+        response.attemptId,
+      )) || response
     : response;
-  const answers = persistedResponse.responseMediaExternalized
-    ? (persistedResponse.answers || [])
+  const answers =
+    persistedResponse.responseMediaExternalized ?
+      persistedResponse.answers || []
     : await externalizeResponseMedia(quizId, persistedResponse);
   if (response.attemptId && response.attemptToken) {
     const draft = await HybridStorage.getQuizAttemptDraft(quizId);
-    if (!draft || draft.attemptId !== response.attemptId || !Array.isArray(draft.questionOrder)) return false;
-    const attemptAnswers = Object.fromEntries((answers || []).filter((answer: any) => answer?.questionId).map((answer: any) => [String(answer.questionId), answer]));
+    if (
+      !draft ||
+      draft.attemptId !== response.attemptId ||
+      !Array.isArray(draft.questionOrder)
+    )
+      return false;
+    const attemptAnswers = Object.fromEntries(
+      (answers || [])
+        .filter((answer: any) => answer?.questionId)
+        .map((answer: any) => [String(answer.questionId), answer]),
+    );
     const attemptSync = await fetch('/api/quiz-attempts', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: draft.remoteStarted ? 'save' : 'start', quizId, attemptId: response.attemptId,
-        attemptToken: response.attemptToken, answers: attemptAnswers, questionOrder: draft.questionOrder,
+        action: draft.remoteStarted ? 'save' : 'start',
+        quizId,
+        attemptId: response.attemptId,
+        attemptToken: response.attemptToken,
+        answers: attemptAnswers,
+        questionOrder: draft.questionOrder,
         deviceKey: draft.deviceKey,
-        userData: response.userData || draft.userData || {}, currentQuestionIndex: draft.currentQuestionIndex || 0,
-        visitedQuestionIds: response.visitedQuestionIds || draft.visitedQuestionIds || [],
+        userData: response.userData || draft.userData || {},
+        currentQuestionIndex: draft.currentQuestionIndex || 0,
+        visitedQuestionIds:
+          response.visitedQuestionIds || draft.visitedQuestionIds || [],
         branchHistory: response.branchHistory || draft.branchHistory || [],
       }),
     });
     // A previously submitted attempt is safe to retry through the idempotent response endpoint.
     if (!attemptSync.ok && attemptSync.status !== 409) {
       const failure = await attemptSync.json().catch(() => null);
-      throw new Error(failure?.error || `Could not synchronize answers (HTTP ${attemptSync.status}).`);
+      throw new Error(
+        failure?.error ||
+          `Could not synchronize answers (HTTP ${attemptSync.status}).`,
+      );
     }
     draft.answers = attemptAnswers;
     draft.remoteStarted = true;
@@ -1085,81 +1557,128 @@ async function insertQuizResponse(quizId: string, response: any) {
   const { data: authSession } = await supabase.auth.getSession();
   const result = await fetch('/api/quiz-responses', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authSession.session?.access_token ? { Authorization: `Bearer ${authSession.session.access_token}` } : {}),
-    },
-    body: JSON.stringify({ quizId, response: {
-      ...response,
-      answers,
-      userData: {
-      ...(persistedResponse.userData || {}),
-      country: persistedResponse.country || null,
-      continent: persistedResponse.continent || null,
-      timezone: persistedResponse.timezone || null,
-      submissionReason: persistedResponse.submissionReason || 'completion',
-      assessmentType: persistedResponse.assessmentType || 'quiz',
-      categoryScores: persistedResponse.categoryScores || null,
-      branchHistory: persistedResponse.branchHistory || [],
-      startedAt: persistedResponse.startedAt || null,
-      answeredQuestions: persistedResponse.answeredQuestions ?? answers.length,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      quizId,
+      accessToken: authSession.session?.access_token || '',
+      response: {
+        ...response,
+        answers,
+        userData: {
+          ...(persistedResponse.userData || {}),
+          country: persistedResponse.country || null,
+          continent: persistedResponse.continent || null,
+          timezone: persistedResponse.timezone || null,
+          submissionReason: persistedResponse.submissionReason || 'completion',
+          assessmentType: persistedResponse.assessmentType || 'quiz',
+          categoryScores: persistedResponse.categoryScores || null,
+          branchHistory: persistedResponse.branchHistory || [],
+          startedAt: persistedResponse.startedAt || null,
+          answeredQuestions:
+            persistedResponse.answeredQuestions ?? answers.length,
+        },
       },
-    } }),
+    }),
   });
   const payload = await result.json().catch(() => null);
-  if (!result.ok) throw new Error(payload?.error || `The server could not save this response (HTTP ${result.status}).`);
-  return payload as { success: true; responseId: string; score: number; totalQuestions: number; answeredQuestions?: number; scorePossible?: number; categoryScores?: Record<string, { correct: number; total: number }> };
+  if (!result.ok)
+    throw new Error(
+      payload?.error ||
+        `The server could not save this response (HTTP ${result.status}).`,
+    );
+  return payload as {
+    success: true;
+    responseId: string;
+    score: number;
+    totalQuestions: number;
+    answeredQuestions?: number;
+    scorePossible?: number;
+    categoryScores?: Record<string, { correct: number; total: number }>;
+  };
 }
 
 async function externalizeResponseMedia(quizId: string, response: any) {
   const answers = Array.isArray(response.answers) ? response.answers : [];
-  return Promise.all(answers.map(async (answer: any, index: number) => {
-    if (!answer || typeof answer.fileUrl !== 'string') return answer;
-    const unpacked = unpackPingWorldMediaUrl(answer.fileUrl);
-    const source = unpacked.url || answer.fileUrl;
-    if (!source.startsWith('data:')) return answer;
-    const media = await fetch(source);
-    if (!media.ok) throw new Error('Could not read uploaded response file.');
-    const blob = await optimizeImageForStorage(await media.blob());
-    if (blob.size > 50 * 1024 * 1024) throw new Error('Response files must be smaller than 50 MB to upload.');
-    const mimeType = (blob.type || unpacked.type || '').toLowerCase().split(';')[0];
-    const knownExtensions: Record<string, string> = {
-      'application/pdf': 'pdf', 'application/json': 'json', 'application/zip': 'zip',
-      'application/msword': 'doc',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-      'text/plain': 'txt', 'text/csv': 'csv', 'image/jpeg': 'jpg', 'image/png': 'png',
-      'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif', 'image/bmp': 'bmp',
-    };
-    const extension = knownExtensions[mimeType] || mimeType.split('/')[1]?.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'bin';
-    const path = `${safeStorageSegment(quizId)}/${safeStorageSegment(String(response.submissionId || response.attemptId || 'pending'))}/${safeStorageSegment(String(answer.questionId || index))}-${await blobFingerprint(blob)}.${extension}`;
-    if (!response.attemptId || !response.attemptToken) {
-      throw new Error('This response upload has no active attempt authorization. Keep the response saved locally and retry from the assessment.');
-    }
-    const contentType = blob.type || unpacked.type || 'application/octet-stream';
-    const signingResponse = await fetch('/api/quiz-response-media', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        quizId,
-        attemptId: response.attemptId,
-        attemptToken: response.attemptToken,
-        questionId: String(answer.questionId || ''),
-        objectPath: path,
-        contentType,
-      }),
-    });
-    const signed = await signingResponse.json().catch(() => null);
-    if (!signingResponse.ok || typeof signed?.token !== 'string') {
-      throw new Error(signed?.error || `Could not authorize response file upload (HTTP ${signingResponse.status}).`);
-    }
-    const { error: uploadError } = await supabaseStorage.storage.from('quiz-response-media').uploadToSignedUrl(
-      path, signed.token, blob, { contentType, cacheControl: '3600', upsert: true },
-    );
-    if (uploadError) throw new Error(`Response file upload failed: ${uploadError.message}`);
-    return { ...answer, fileUrl: path, fileType: blob.type || unpacked.type };
-  }));
+  return Promise.all(
+    answers.map(async (answer: any, index: number) => {
+      if (!answer || typeof answer.fileUrl !== 'string') return answer;
+      const unpacked = unpackPingWorldMediaUrl(answer.fileUrl);
+      const source = unpacked.url || answer.fileUrl;
+      if (!source.startsWith('data:')) return answer;
+      const media = await fetch(source);
+      if (!media.ok) throw new Error('Could not read uploaded response file.');
+      const blob = await optimizeImageForStorage(await media.blob());
+      if (blob.size > 50 * 1024 * 1024)
+        throw new Error('Response files must be smaller than 50 MB to upload.');
+      const mimeType = (blob.type || unpacked.type || '')
+        .toLowerCase()
+        .split(';')[0];
+      const knownExtensions: Record<string, string> = {
+        'application/pdf': 'pdf',
+        'application/json': 'json',
+        'application/zip': 'zip',
+        'application/msword': 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+          'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+          'xlsx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+          'pptx',
+        'text/plain': 'txt',
+        'text/csv': 'csv',
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+        'image/avif': 'avif',
+        'image/bmp': 'bmp',
+      };
+      const extension =
+        knownExtensions[mimeType] ||
+        mimeType
+          .split('/')[1]
+          ?.replace(/[^a-zA-Z0-9]/g, '')
+          .slice(0, 12) ||
+        'bin';
+      const path = `${safeStorageSegment(quizId)}/${safeStorageSegment(String(response.submissionId || response.attemptId || 'pending'))}/${safeStorageSegment(String(answer.questionId || index))}-${await blobFingerprint(blob)}.${extension}`;
+      if (!response.attemptId || !response.attemptToken) {
+        throw new Error(
+          'This response upload has no active attempt authorization. Keep the response saved locally and retry from the assessment.',
+        );
+      }
+      const contentType =
+        blob.type || unpacked.type || 'application/octet-stream';
+      const signingResponse = await fetch('/api/quiz-response-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quizId,
+          attemptId: response.attemptId,
+          attemptToken: response.attemptToken,
+          questionId: String(answer.questionId || ''),
+          objectPath: path,
+          contentType,
+        }),
+      });
+      const signed = await signingResponse.json().catch(() => null);
+      if (!signingResponse.ok || typeof signed?.token !== 'string') {
+        throw new Error(
+          signed?.error ||
+            `Could not authorize response file upload (HTTP ${signingResponse.status}).`,
+        );
+      }
+      const { error: uploadError } = await supabaseStorage.storage
+        .from('quiz-response-media')
+        .uploadToSignedUrl(path, signed.token, blob, {
+          contentType,
+          cacheControl: '3600',
+          upsert: true,
+        });
+      if (uploadError)
+        throw new Error(`Response file upload failed: ${uploadError.message}`);
+      return { ...answer, fileUrl: path, fileType: blob.type || unpacked.type };
+    }),
+  );
 }
 
 async function flushPendingResponses() {
@@ -1167,7 +1686,10 @@ async function flushPendingResponses() {
   const queueKey = pendingResponsesKey();
   let pending: Array<{ quizId: string; response: any }>;
   try {
-    pending = (await readCacheValue<Array<{ quizId: string; response: any }>>(queueKey)) || [];
+    pending =
+      (await readCacheValue<Array<{ quizId: string; response: any }>>(
+        queueKey,
+      )) || [];
     if (!Array.isArray(pending) || pending.length === 0) return;
   } catch {
     return;
@@ -1178,7 +1700,8 @@ async function flushPendingResponses() {
     try {
       const saved = await insertQuizResponse(item.quizId, item.response);
       if (!saved || typeof saved !== 'object' || saved.success !== true) break;
-      if (item.response?.attemptId) await HybridStorage.deleteQuizAttemptDraft(item.quizId).catch(() => {});
+      if (item.response?.attemptId)
+        await HybridStorage.deleteQuizAttemptDraft(item.quizId).catch(() => {});
       pending.splice(index, 1);
       index--;
       if (queueKey !== pendingResponsesKey()) return;
@@ -1193,13 +1716,22 @@ async function flushPendingResponses() {
 async function flushPendingAttemptQuits() {
   if (!isOnline() || typeof window === 'undefined') return;
   const queueKey = pendingAttemptQuitsKey();
-  const pending = (await readCacheValue<Array<{ quizId: string; attemptId: string; attemptToken: string }>>(queueKey)) || [];
+  const pending =
+    (await readCacheValue<
+      Array<{ quizId: string; attemptId: string; attemptToken: string }>
+    >(queueKey)) || [];
   for (let index = 0; index < pending.length; index++) {
     const item = pending[index];
     try {
       const response = await fetch('/api/quiz-attempts', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'quit', quizId: item.quizId, attemptId: item.attemptId, attemptToken: item.attemptToken }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'quit',
+          quizId: item.quizId,
+          attemptId: item.attemptId,
+          attemptToken: item.attemptToken,
+        }),
       });
       if (!response.ok) break;
       pending.splice(index, 1);
@@ -1242,50 +1774,90 @@ if (typeof window !== 'undefined') {
 export const HybridStorage = {
   async getOfflineValue<T>(key: string): Promise<T | null> {
     const currentUserId = await getActiveUserId();
-    if (currentUserId && currentUserId !== activeStorageUserId) await setActiveStorageUser(currentUserId);
-    return readCacheValue<T>(`app:${encodeURIComponent(activeStorageUserId)}:${key}`);
+    if (currentUserId && currentUserId !== activeStorageUserId)
+      await setActiveStorageUser(currentUserId);
+    return readCacheValue<T>(
+      `app:${encodeURIComponent(activeStorageUserId)}:${key}`,
+    );
   },
   async setOfflineValue<T>(key: string, value: T): Promise<void> {
     const currentUserId = await getActiveUserId();
-    if (currentUserId && currentUserId !== activeStorageUserId) await setActiveStorageUser(currentUserId);
-    if (!await writeCacheValue(`app:${encodeURIComponent(activeStorageUserId)}:${key}`, value)) throw new Error('Could not save data to IndexedDB on this device.');
+    if (currentUserId && currentUserId !== activeStorageUserId)
+      await setActiveStorageUser(currentUserId);
+    if (
+      !(await writeCacheValue(
+        `app:${encodeURIComponent(activeStorageUserId)}:${key}`,
+        value,
+      ))
+    )
+      throw new Error('Could not save data to IndexedDB on this device.');
   },
   async removeOfflineValue(key: string): Promise<void> {
     const currentUserId = await getActiveUserId();
-    if (currentUserId && currentUserId !== activeStorageUserId) await setActiveStorageUser(currentUserId);
-    if (!await deleteCacheValue(`app:${encodeURIComponent(activeStorageUserId)}:${key}`)) throw new Error('Could not remove data from IndexedDB on this device.');
+    if (currentUserId && currentUserId !== activeStorageUserId)
+      await setActiveStorageUser(currentUserId);
+    if (
+      !(await deleteCacheValue(
+        `app:${encodeURIComponent(activeStorageUserId)}:${key}`,
+      ))
+    )
+      throw new Error('Could not remove data from IndexedDB on this device.');
   },
   /** Select the isolated browser cache for the active account. */
   setUserId(userId?: string | null) {
     return setActiveStorageUser(userId);
   },
 
-  async flushPendingResponses () {
+  async flushPendingResponses() {
     return flushPendingResponses();
   },
-  async quitQuizAttempt(quizId: string, attemptId: string, attemptToken: string) {
+  async quitQuizAttempt(
+    quizId: string,
+    attemptId: string,
+    attemptToken: string,
+  ) {
     const queueKey = pendingAttemptQuitsKey();
     if (!isOnline()) {
-      const pending = (await readCacheValue<Array<{ quizId: string; attemptId: string; attemptToken: string }>>(queueKey)) || [];
-      if (!await writeCacheValue(queueKey, [...pending, { quizId, attemptId, attemptToken }])) throw new Error('The quit request could not be saved for later cleanup.');
+      const pending =
+        (await readCacheValue<
+          Array<{ quizId: string; attemptId: string; attemptToken: string }>
+        >(queueKey)) || [];
+      if (
+        !(await writeCacheValue(queueKey, [
+          ...pending,
+          { quizId, attemptId, attemptToken },
+        ]))
+      )
+        throw new Error(
+          'The quit request could not be saved for later cleanup.',
+        );
       await this.deleteQuizAttemptDraft(quizId);
       return { success: true, queued: true };
     }
     const response = await fetch('/api/quiz-attempts', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'quit', quizId, attemptId, attemptToken }),
       signal: AbortSignal.timeout(8000),
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || payload?.success !== true) throw new Error(payload?.error || 'The attempt could not be closed. Please retry.');
+    if (!response.ok || payload?.success !== true)
+      throw new Error(
+        payload?.error || 'The attempt could not be closed. Please retry.',
+      );
     await this.deleteQuizAttemptDraft(quizId);
     return payload as { success: true; completed?: boolean };
   },
   async getCacheCounts() {
-    const [quizzes, drafts, messages, documents, links, history] = await Promise.all([
-      readLocal('quiz'), readLocal('draft'), readLocal('message'), readLocal('document'),
-      readLocal('link'), readLocal('composer_history'),
-    ]);
+    const [quizzes, drafts, messages, documents, links, history] =
+      await Promise.all([
+        readLocal('quiz'),
+        readLocal('draft'),
+        readLocal('message'),
+        readLocal('document'),
+        readLocal('link'),
+        readLocal('composer_history'),
+      ]);
     return {
       quizzes: quizzes.length + drafts.length,
       messages: messages.length,
@@ -1308,19 +1880,44 @@ export const HybridStorage = {
       await pruneEmptyCacheStore(db);
     }
     const cachePrefixes = [
-      'pw_quizzes', 'pw_messages', 'pw_posts', 'pw_links', 'pw_games',
-      'pw_documents', 'pw_composer_history', 'pw_quiz_drafts', 'pw2_', 'pw_v2:',
-      'pw_queue:', 'pw_quiz_responses_pending_', 'pw_storage_legacy_migrated_v1_', 'pw_quiz_seed_template_',
-      'pw_quiz_attempt:', 'pw_quiz_submission:', 'pw_quiz_feedback:',
-      'pw_quiz_response_queue_v2:', 'pw2_', 'pw_v2:',
+      'pw_quizzes',
+      'pw_messages',
+      'pw_posts',
+      'pw_links',
+      'pw_games',
+      'pw_documents',
+      'pw_composer_history',
+      'pw_quiz_drafts',
+      'pw2_',
+      'pw_v2:',
+      'pw_queue:',
+      'pw_quiz_responses_pending_',
+      'pw_storage_legacy_migrated_v1_',
+      'pw_quiz_seed_template_',
+      'pw_quiz_attempt:',
+      'pw_quiz_submission:',
+      'pw_quiz_feedback:',
+      'pw_quiz_response_queue_v2:',
+      'pw2_',
+      'pw_v2:',
       'completed_quiz_',
     ];
     Object.keys(localStorage).forEach((key) => {
-      if (key !== 'pw_quiz_template_v1' && cachePrefixes.some((prefix) => key.startsWith(prefix))) localStorage.removeItem(key);
+      if (
+        key !== 'pw_quiz_template_v1' &&
+        cachePrefixes.some((prefix) => key.startsWith(prefix))
+      )
+        localStorage.removeItem(key);
     });
   },
-  async clearQuizLocalData(quizId: string, options?: { removeCompletionMarker?: boolean }) {
-    await clearQuizScopedCache(quizId, Boolean(options?.removeCompletionMarker));
+  async clearQuizLocalData(
+    quizId: string,
+    options?: { removeCompletionMarker?: boolean },
+  ) {
+    await clearScopedCache(
+      quizId,
+      Boolean(options?.removeCompletionMarker),
+    );
   },
   async clearQuizResponseCache(quizId: string) {
     await clearQuizResponsePageCache(quizId);
@@ -1342,76 +1939,146 @@ export const HybridStorage = {
     return this.save(`draft-${quizId}`, content, 'draft');
   },
 
-  async saveTemplatePreviewResponse(quizId: string, response: Record<string, any>) {
+  async saveTemplatePreviewResponse(
+    quizId: string,
+    response: Record<string, any>,
+  ) {
     const key = `template_responses:${encodeURIComponent(quizId)}`;
-    const existing = await readCacheValue<any[]>(key) || [];
-    const responseId = String(response.id || response.timestamp || createUuid());
-    const next = [response, ...existing.filter((item) => String(item?.id || item?.timestamp || '') !== responseId)].slice(0, 100);
-    if (!await writeCacheValue(key, next)) {
+    const existing = (await readCacheValue<any[]>(key)) || [];
+    const responseId = String(
+      response.id || response.timestamp || createUuid(),
+    );
+    const next = [
+      response,
+      ...existing.filter(
+        (item) => String(item?.id || item?.timestamp || '') !== responseId,
+      ),
+    ].slice(0, 100);
+    if (!(await writeCacheValue(key, next))) {
       throw new Error('Preview response could not be saved in IndexedDB.');
     }
   },
 
-  async getTemplatePreviewResponse (quizId: string) {
+  async getTemplatePreviewResponse(quizId: string) {
     const key = `template_responses:${encodeURIComponent(quizId)}`;
-    const existing = await readCacheValue<any[]>(key) || [];
+    const existing = (await readCacheValue<any[]>(key)) || [];
 
-    if(existing) return existing;
-    else throw new Error('Preview response could not be fetched from the IndexedDB.');
+    if (existing) return existing;
+    else
+      throw new Error(
+        'Preview response could not be fetched from the IndexedDB.',
+      );
   },
 
   async clearTemplatePreviewResponses(quizId: string) {
-    if (!await deleteCacheValue(`template_responses:${encodeURIComponent(quizId)}`)) {
-      throw new Error('Could not clear template preview responses from IndexedDB.');
+    if (
+      !(await deleteCacheValue(
+        `template_responses:${encodeURIComponent(quizId)}`,
+      ))
+    ) {
+      throw new Error(
+        'Could not clear template preview responses from IndexedDB.',
+      );
     }
     await clearQuizResponsePageCache(quizId);
   },
 
   async getQuizDraft(quizId: string): Promise<Quiz | null> {
     const drafts = await readLocal('draft');
-    return (drafts.find((item) => item.id === `draft-${quizId}`)?.content as Quiz) || null;
+    return (
+      (drafts.find((item) => item.id === `draft-${quizId}`)?.content as Quiz) ||
+      null
+    );
   },
 
   async deleteQuizDraft(quizId: string) {
-    return this.delete(`draft-${quizId}`, 'draft');
+    const removed = await this.delete(`draft-${quizId}`, 'draft');
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith('pw_quiz_drafts_')) continue;
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+          if (parsed?.id === quizId || parsed?.quizId === quizId || parsed?.id === `draft-${quizId}`) localStorage.removeItem(key);
+        } catch { /* Keep unreadable legacy data rather than risk deleting another draft. */ }
+      }
+    } catch {}
+    return removed;
   },
 
   async saveQuizAttemptDraft(quizId: string, draft: Record<string, unknown>) {
     const key = `quiz_attempt:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}`;
-    if (!await writeCacheValue(key, { ...draft, updatedAt: Date.now() })) {
-      throw new Error('Assessment progress could not be saved to IndexedDB on this device.');
+    if (!(await writeCacheValue(key, { ...draft, updatedAt: Date.now() }))) {
+      throw new Error(
+        'Assessment progress could not be saved to IndexedDB on this device.',
+      );
     }
   },
 
-  async getQuizAttemptDraft(quizId: string): Promise<Record<string, any> | null> {
+  async getQuizAttemptDraft(
+    quizId: string,
+  ): Promise<Record<string, any> | null> {
     const key = `quiz_attempt:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}`;
     return readCacheValue<Record<string, any>>(key);
   },
 
   async deleteQuizAttemptDraft(quizId: string) {
     const key = `quiz_attempt:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}`;
-    if (!await deleteCacheValue(key)) throw new Error('Assessment attempt cache could not be cleared from IndexedDB.');
+    if (!(await deleteCacheValue(key)))
+      throw new Error(
+        'Assessment attempt cache could not be cleared from IndexedDB.',
+      );
   },
 
-  async prepareQuizAttemptSnapshot(quizId: string, snapshot: Record<string, any>) {
-    const answers = snapshot.answers && typeof snapshot.answers === 'object' ? snapshot.answers : {};
+  async prepareQuizAttemptSnapshot(
+    quizId: string,
+    snapshot: Record<string, any>,
+  ) {
+    const answers =
+      snapshot.answers && typeof snapshot.answers === 'object' ?
+        snapshot.answers
+      : {};
     const items = Object.values(answers);
-    if (!items.some((answer: any) => typeof answer?.fileUrl === 'string' && (unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl).startsWith('data:'))) return snapshot;
+    if (
+      !items.some(
+        (answer: any) =>
+          typeof answer?.fileUrl === 'string' &&
+          (
+            unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl
+          ).startsWith('data:'),
+      )
+    )
+      return snapshot;
     const externalized = await externalizeResponseMedia(quizId, {
       submissionId: snapshot.attemptId,
       attemptId: snapshot.attemptId,
       attemptToken: snapshot.attemptToken,
       answers: items,
     });
-    return { ...snapshot, answers: Object.fromEntries(externalized.filter((answer: any) => answer?.questionId).map((answer: any) => [String(answer.questionId), answer])) };
+    return {
+      ...snapshot,
+      answers: Object.fromEntries(
+        externalized
+          .filter((answer: any) => answer?.questionId)
+          .map((answer: any) => [String(answer.questionId), answer]),
+      ),
+    };
   },
 
-  async storeAttemptResponseDraft(quizId: string, response: Record<string, any>) {
+  async storeAttemptResponseDraft(
+    quizId: string,
+    response: Record<string, any>,
+  ) {
     const answers = await externalizeResponseMedia(quizId, response);
-    const compactResponse = { ...response, answers, responseMediaExternalized: true };
+    const compactResponse = {
+      ...response,
+      answers,
+      responseMediaExternalized: true,
+    };
     const key = `quiz_submission:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}:${encodeURIComponent(String(response.attemptId || response.submissionId || 'pending'))}`;
-    if (!await writeCacheValue(key, compactResponse)) {
-      throw new Error('The response could not be cached in IndexedDB on this device.');
+    if (!(await writeCacheValue(key, compactResponse))) {
+      throw new Error(
+        'The response could not be cached in IndexedDB on this device.',
+      );
     }
     return compactResponse;
   },
@@ -1423,72 +2090,160 @@ export const HybridStorage = {
 
   async deleteAttemptResponseDraft(quizId: string, attemptId: string) {
     const key = `quiz_submission:${encodeURIComponent(activeStorageUserId)}:${getAttemptSessionId()}:${encodeURIComponent(quizId)}:${encodeURIComponent(attemptId)}`;
-    if (!await deleteCacheValue(key)) throw new Error('Assessment response cache could not be cleared from IndexedDB.');
+    if (!(await deleteCacheValue(key)))
+      throw new Error(
+        'Assessment response cache could not be cleared from IndexedDB.',
+      );
   },
 
-  async getQuizResponses(quizId: string, offset = 0): Promise<{ responses: any[]; nextOffset: number | null; totalCount?: number; responsesPublicId?: string | null; isLocalOnly?: boolean, isCached?:boolean }> {
+  async getQuizResponses(
+    quizId: string,
+    offset = 0,
+    fallbackQuiz?: any,
+  ): Promise<{
+    responses: any[];
+    nextOffset: number | null;
+    totalCount?: number;
+    responsesPublicId?: string | null;
+    isLocalOnly?: boolean;
+    isCached?: boolean;
+  }> {
     let session = null;
     try {
       const { data } = await supabase.auth.getSession();
       session = data?.session;
+      if (!session?.access_token) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (refreshed?.session) session = refreshed.session;
+      }
     } catch {}
 
     const responseCacheKey = `quiz_responses:${encodeURIComponent(activeStorageUserId)}:${encodeURIComponent(quizId)}:${Math.max(0, Math.floor(offset))}`;
-    const readCachedPage = () => readCacheValue<{ responses: any[]; nextOffset: number | null; totalCount?: number }>(responseCacheKey);
+    const readCachedPage = () =>
+      readCacheValue<{
+        responses: any[];
+        nextOffset: number | null;
+        totalCount?: number;
+      }>(responseCacheKey);
 
     const loadLocalResponses = async () => {
-      const cachedPage = await readCacheValue<{ responses: any[]; nextOffset: number | null; totalCount?: number }>(responseCacheKey);
+      const cachedPage = await readCacheValue<{
+        responses: any[];
+        nextOffset: number | null;
+        totalCount?: number;
+      }>(responseCacheKey);
       if (cachedPage && Array.isArray(cachedPage.responses)) {
         return { ...cachedPage, isLocalOnly: true, isCached: true };
       }
 
       const localQuizzes = await readLocal('quiz', activeStorageUserId);
-      const guestQuizzes = activeStorageUserId !== 'guest' ? await readLocal('quiz', 'guest') : [];
-      const allLocal = [...flattenItems(localQuizzes), ...flattenItems(guestQuizzes)];
-      const targetQuiz = allLocal.find((q) => q.id === quizId);
-      let localResponses = Array.isArray(targetQuiz?.responses) ? [...targetQuiz.responses] : [];
+      const guestQuizzes =
+        activeStorageUserId !== 'guest' ? await readLocal('quiz', 'guest') : [];
+      const allLocal = [
+        ...flattenItems(localQuizzes),
+        ...flattenItems(guestQuizzes),
+      ];
+      const targetQuiz = fallbackQuiz || allLocal.find((q) => q.id === quizId);
+      let localResponses =
+        Array.isArray(targetQuiz?.responses) ? [...targetQuiz.responses] : [];
 
-      if (quizId === 'pingworld-mastery-showcase' || quizId === 'pingworld-showcase-assessment') {
-        try {
-          const templateStored = await readCacheValue<any[]>(`template_responses:${encodeURIComponent(quizId)}`) || [];
-          if (Array.isArray(templateStored) && templateStored.length > 0) {
-            localResponses = [...templateStored, ...localResponses];
-          }
-        } catch {}
+      if (
+        quizId === 'pingworld-mastery-showcase' ||
+        quizId === 'pingworld-showcase-assessment'
+      ) {
+      try {
+        const templateStored =
+          (await readCacheValue<any[]>(
+            `template_responses:${encodeURIComponent(quizId)}`,
+          )) || [];
+        if (Array.isArray(templateStored) && templateStored.length > 0) {
+          localResponses = [...templateStored, ...localResponses];
+        }
+      } catch {}
       }
 
       try {
         const queueKey = pendingResponsesKey();
-        const pending = (await readCacheValue<Array<{ quizId: string; response: any }>>(queueKey)) || [];
-        const matchingPending = pending.filter((item) => item.quizId === quizId).map((item) => item.response);
+        const pending =
+          (await readCacheValue<Array<{ quizId: string; response: any }>>(
+            queueKey,
+          )) || [];
+        const matchingPending = pending
+          .filter((item) => item.quizId === quizId)
+          .map((item) => item.response);
         if (matchingPending.length > 0) {
           localResponses = [...matchingPending, ...localResponses];
         }
       } catch {}
 
-      localResponses.sort((a, b) => new Date(b?.timestamp || 0).getTime() - new Date(a?.timestamp || 0).getTime());
-      return { responses: localResponses, nextOffset: null, totalCount: localResponses.length, isLocalOnly: true };
+      // Deduplicate responses by id
+      const seenIds = new Set<string>();
+      localResponses = localResponses.filter((item) => {
+        const key = item?.id || `${item?.timestamp}-${item?.score}`;
+        if (seenIds.has(key)) return false;
+        seenIds.add(key);
+        return true;
+      });
+
+      localResponses.sort(
+        (a, b) =>
+          new Date(a?.timestamp || 0).getTime() -
+          new Date(b?.timestamp || 0).getTime(),
+      );
+      return {
+        responses: localResponses,
+        nextOffset: null,
+        totalCount: localResponses.length,
+        isLocalOnly: true,
+      };
     };
 
     const cachedPage = await readCachedPage();
-    if (quizId === 'pingworld-mastery-showcase' || quizId === 'pingworld-showcase-assessment') return loadLocalResponses();
+
     if (!session?.access_token || !isOnline()) {
-      return cachedPage && Array.isArray(cachedPage.responses)
-        ? { ...cachedPage, isLocalOnly: true, isCached: true }
-        : loadLocalResponses();
+      const local = await loadLocalResponses();
+      if (local.responses.length > 0) return local;
+      return cachedPage && Array.isArray(cachedPage.responses) ?
+          { ...cachedPage, isLocalOnly: true, isCached: true }
+        : local;
     }
 
     try {
-      const responseResult = await fetch(`/api/quizzes/${encodeURIComponent(quizId)}/responses?offset=${Math.max(0, Math.floor(offset))}&limit=100`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: 'no-store',
-      });
+      const responseResult = await fetch(
+        `/api/quizzes/${encodeURIComponent(quizId)}/responses?offset=${Math.max(0, Math.floor(offset))}&limit=100`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: session.access_token }),
+          cache: 'no-store',
+        },
+      );
       if (!responseResult.ok) {
-        return cachedPage && Array.isArray(cachedPage.responses)
-          ? { ...cachedPage, isLocalOnly: true, isCached: true }
-          : loadLocalResponses();
+        const failure = await responseResult.json().catch(() => ({}));
+        console.error('[Quiz feedback] Cloud response refresh failed:', {
+          status: responseResult.status,
+          error: typeof failure?.error === 'string' ? failure.error : 'Unknown response loading error.',
+          diagnostic: process.env.NODE_ENV !== 'production' && typeof failure?.diagnostic === 'string'
+            ? failure.diagnostic
+            : undefined,
+        });
+        const local = await loadLocalResponses();
+        if (local.responses.length > 0) return local;
+        return cachedPage && Array.isArray(cachedPage.responses) ?
+            { ...cachedPage, isLocalOnly: true, isCached: true }
+          : local;
       }
-      const { responses: data = [], nextOffset = null, totalCount, responsesPublicId } = await responseResult.json() as { responses?: any[]; nextOffset?: number | null; totalCount?: number; responsesPublicId?: string | null };
+      const {
+        responses: data = [],
+        nextOffset = null,
+        totalCount,
+        responsesPublicId,
+      } = (await responseResult.json()) as {
+        responses?: any[];
+        nextOffset?: number | null;
+        totalCount?: number;
+        responsesPublicId?: string | null;
+      };
       const mapped = (data || []).map((row: any) => {
         const metadata = row.userData || {};
         const userData = { ...metadata };
@@ -1524,43 +2279,69 @@ export const HybridStorage = {
           ...(row.status ? { status: row.status } : {}),
           startedAt: metadata.startedAt || row.startedAt || null,
           submittedAt: row.timestamp,
-          durationSeconds: metadata.durationSeconds ?? row.durationSeconds ?? null,
+          durationSeconds:
+            metadata.durationSeconds ?? row.durationSeconds ?? null,
           country: metadata.country,
           continent: metadata.continent,
           submissionReason: metadata.submissionReason || row.submissionReason,
           assessmentType: metadata.assessmentType,
           categoryScores: metadata.categoryScores,
-          answeredQuestions: metadata.answeredQuestions ?? row.answeredQuestions,
+          answeredQuestions:
+            metadata.answeredQuestions ?? row.answeredQuestions,
           scorePossible: metadata.scorePossible ?? row.scorePossible,
-          currentPathQuestionIds: metadata.currentPathQuestionIds ?? row.currentPathQuestionIds,
-          pathQuestionSnapshots: metadata.pathQuestionSnapshots ?? row.pathQuestionSnapshots,
+          currentPathQuestionIds:
+            metadata.currentPathQuestionIds ?? row.currentPathQuestionIds,
+          pathQuestionSnapshots:
+            metadata.pathQuestionSnapshots ?? row.pathQuestionSnapshots,
           branchHistory: metadata.branchHistory || row.branchHistory || [],
           isSignedUser: Boolean(metadata.isSignedUser ?? row.isSignedUser),
           signedUser: metadata.signedUser || row.signedUser || null,
         };
       });
 
+      if (mapped.length === 0) {
+        const local = await loadLocalResponses();
+        if (local.responses.length > 0) {
+          return local;
+        }
+      }
+
       await writeCacheValue(responseCacheKey, {
         responses: mapped,
         nextOffset,
         totalCount,
       });
-      return { responses: mapped, nextOffset, totalCount, responsesPublicId, isLocalOnly: false };
+      return {
+        responses: mapped,
+        nextOffset,
+        totalCount,
+        responsesPublicId,
+        isLocalOnly: false,
+      };
     } catch {
-      return cachedPage && Array.isArray(cachedPage.responses)
-        ? { ...cachedPage, isLocalOnly: true, isCached: true }
+      return cachedPage && Array.isArray(cachedPage.responses) ?
+          { ...cachedPage, isLocalOnly: true, isCached: true }
         : loadLocalResponses();
     }
   },
 
   async clearQuizResponses(quizId: string) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Sign in to clear assessment responses.');
-    const result = await fetch(`/api/quizzes/${encodeURIComponent(quizId)}/responses?all=1`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store',
-    });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token)
+      throw new Error('Sign in to clear assessment responses.');
+    const result = await fetch(
+      `/api/quizzes/${encodeURIComponent(quizId)}/responses?all=1`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      },
+    );
     const payload = await result.json();
-    if (!result.ok || payload.success !== true) throw new Error(payload.error || 'Could not clear assessment responses.');
+    if (!result.ok || payload.success !== true)
+      throw new Error(payload.error || 'Could not clear assessment responses.');
     await clearQuizResponsePageCache(quizId);
   },
 
@@ -1569,12 +2350,17 @@ export const HybridStorage = {
    * 1. Writes to local cache IMMEDIATELY (no network wait).
    * 2. Pushes to Supabase in the background if online.
    */
-  async save(key: string, content: any, type: StorageItem['type'], options: { requireRemote?: boolean } = {}) {
+  async save(
+    key: string,
+    content: any,
+    type: StorageItem['type'],
+    options: { requireRemote?: boolean } = {},
+  ) {
     const timestamp = new Date().toISOString();
     const saveOwner = activeStorageUserId;
 
     const item: StorageItem = {
-      id: type === 'draft' ? key : (content.id || key || createUuid()),
+      id: type === 'draft' ? key : content.id || key || createUuid(),
       ownerId: saveOwner,
       type,
       content,
@@ -1589,49 +2375,106 @@ export const HybridStorage = {
     if (idx >= 0) local[idx] = item;
     else local.unshift(item);
     const savedLocally = await writeLocal(type, local, saveOwner);
-    if (!savedLocally) throw new Error('Could not save this item on this device. Free up storage and try again.');
+    if (!savedLocally)
+      throw new Error(
+        'Could not save this item on this device. Free up storage and try again.',
+      );
 
     // 2. Push to remote in background (non-blocking)
-    const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id);
-    if (options.requireRemote && saveOwner !== 'guest' && !LOCAL_ONLY_TYPES.includes(type) && (type !== 'quiz' || validQuizUuid) && isOnline()) {
+    const validQuizUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        item.id,
+      );
+    if (
+      options.requireRemote &&
+      saveOwner !== 'guest' &&
+      !LOCAL_ONLY_TYPES.includes(type) &&
+      (type !== 'quiz' || validQuizUuid) &&
+      isOnline()
+    ) {
       try {
         const userId = await getActiveUserId();
-        if (!userId || userId !== saveOwner || activeStorageUserId !== saveOwner) {
-          throw new Error('Your sign-in session changed before the save completed. Sign in again and retry.');
+        if (
+          !userId ||
+          userId !== saveOwner ||
+          activeStorageUserId !== saveOwner
+        ) {
+          throw new Error(
+            'Your sign-in session changed before the save completed. Sign in again and retry.',
+          );
         }
         if (type === 'games') {
           const { db } = await import('@/lib/firebase');
           const { doc, setDoc } = await import('firebase/firestore');
           await setDoc(doc(db, 'tournaments', item.id), {
-            id: item.id, user_id: userId, name: content.name || 'Tournament Standings',
-            teams: content.teams || [], updated_at: timestamp,
+            id: item.id,
+            user_id: userId,
+            name: content.name || 'Tournament Standings',
+            teams: content.teams || [],
+            updated_at: timestamp,
           });
         } else {
-          const payload = await buildSupabasePayload(type, content, userId, timestamp);
+          const payload = await buildSupabasePayload(
+            type,
+            content,
+            userId,
+            timestamp,
+          );
           let { error } = await supabase.from(tableName(type)).upsert(payload);
           if (error?.code === '23503' && error.message.includes('profiles')) {
-            await supabase.from('profiles').upsert({ id: userId, username: 'user_' + userId.substring(0, 8), display_name: 'User' });
-            error = (await supabase.from(tableName(type)).upsert(payload)).error;
+            await supabase
+              .from('profiles')
+              .upsert({
+                id: userId,
+                username: 'user_' + userId.substring(0, 8),
+                display_name: 'User',
+              });
+            error = (await supabase.from(tableName(type)).upsert(payload))
+              .error;
           }
           if (error) throw error;
         }
-        if (activeStorageUserId !== saveOwner) throw new Error('The active account changed before the save completed.');
+        if (activeStorageUserId !== saveOwner)
+          throw new Error(
+            'The active account changed before the save completed.',
+          );
         const refreshed = await readLocal(type, saveOwner);
         const savedItem = refreshed.find((entry) => entry.id === item.id);
         if (savedItem) savedItem.is_synced = true;
         await writeLocal(type, refreshed, saveOwner);
         item.is_synced = true;
-        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+        if (typeof window !== 'undefined')
+          window.dispatchEvent(
+            new CustomEvent('pw_sync_status', {
+              detail: { type, id: item.id, is_synced: true },
+            }),
+          );
       } catch (error) {
-        reportSyncFailure(type, item.id, error, content?.title || content?.name);
+        reportSyncFailure(
+          type,
+          item.id,
+          error,
+          content?.title || content?.name,
+        );
         throw error;
       }
     }
-    if (!options.requireRemote && isOnline() && saveOwner !== 'guest' && !LOCAL_ONLY_TYPES.includes(type) && (type !== 'quiz' || validQuizUuid)) {
+    if (
+      !options.requireRemote &&
+      isOnline() &&
+      saveOwner !== 'guest' &&
+      !LOCAL_ONLY_TYPES.includes(type) &&
+      (type !== 'quiz' || validQuizUuid)
+    ) {
       (async () => {
         try {
           const userId = await getActiveUserId();
-          if (!userId || userId !== saveOwner || activeStorageUserId !== saveOwner) return;
+          if (
+            !userId ||
+            userId !== saveOwner ||
+            activeStorageUserId !== saveOwner
+          )
+            return;
 
           // Route 'games' (Tournament Standings) background save to Firebase Firestore
           if (type === 'games') {
@@ -1653,7 +2496,11 @@ export const HybridStorage = {
             if (i >= 0) refreshed[i].is_synced = true;
             await writeLocal(type, refreshed, saveOwner);
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+              window.dispatchEvent(
+                new CustomEvent('pw_sync_status', {
+                  detail: { type, id: item.id, is_synced: true },
+                }),
+              );
             }
           } else {
             const payload = await buildSupabasePayload(
@@ -1691,7 +2538,11 @@ export const HybridStorage = {
               if (i >= 0) refreshed[i].is_synced = true;
               await writeLocal(type, refreshed, saveOwner);
               if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('pw_sync_status', { detail: { type, id: item.id, is_synced: true } }));
+                window.dispatchEvent(
+                  new CustomEvent('pw_sync_status', {
+                    detail: { type, id: item.id, is_synced: true },
+                  }),
+                );
               }
             } else throw error;
           }
@@ -1734,10 +2585,10 @@ export const HybridStorage = {
     const local = await readLocal(type, cacheOwner);
     const localFlat = flattenItems(local);
 
-    if(!isOnline() && localFlat) {
+    if (!isOnline() && localFlat) {
       return localFlat;
     } else if (isOnline() && !LOCAL_ONLY_TYPES.includes(type)) {
-    // 2. Background sync if online
+      // 2. Background sync if online
       syncFromRemote(type, onUpdate);
     }
 
@@ -1745,7 +2596,11 @@ export const HybridStorage = {
   },
 
   /* A way to get an exact quiz by it's id without reading an entire collection from it */
-  async getQuiz(id?: string, columns?: string, ownerUsername?: string): Promise<Quiz | null> {
+  async getQuiz(
+    id?: string,
+    columns?: string,
+    ownerUsername?: string,
+  ): Promise<Quiz | null> {
     if (!id) return null;
     const currentUserId = await getActiveUserId();
     if (currentUserId && currentUserId !== activeStorageUserId) {
@@ -1754,15 +2609,19 @@ export const HybridStorage = {
     const cacheOwner = activeStorageUserId;
     const local = await readLocal('quiz', cacheOwner);
     const localFlat = flattenItems(local);
-    let exactQuiz = localFlat.find((i) =>
-      i.id === id || (!ownerUsername && (i.customUrl === id || i.custom_id === id)),
+    let exactQuiz = localFlat.find(
+      (i) =>
+        i.id === id ||
+        (!ownerUsername && (i.customUrl === id || i.custom_id === id)),
     );
 
     // If not found in active user's cache, check 'guest' cache
     if (!exactQuiz && cacheOwner !== 'guest') {
       const guestLocal = await readLocal('quiz', 'guest');
-      exactQuiz = flattenItems(guestLocal).find((i) =>
-        i.id === id || (!ownerUsername && (i.customUrl === id || i.custom_id === id)),
+      exactQuiz = flattenItems(guestLocal).find(
+        (i) =>
+          i.id === id ||
+          (!ownerUsername && (i.customUrl === id || i.custom_id === id)),
       );
     }
 
@@ -1772,7 +2631,11 @@ export const HybridStorage = {
         const seedStr = localStorage.getItem('pw_quiz_template_v1');
         if (seedStr) {
           const seedQuiz = JSON.parse(seedStr);
-          if (seedQuiz?.id === id || seedQuiz?.customUrl === id || seedQuiz?.custom_id === id) {
+          if (
+            seedQuiz?.id === id ||
+            seedQuiz?.customUrl === id ||
+            seedQuiz?.custom_id === id
+          ) {
             exactQuiz = seedQuiz;
           }
         }
@@ -1785,21 +2648,38 @@ export const HybridStorage = {
       const headers: Record<string, string> = {};
       // Public quiz reads are intentionally unauthenticated; omitting the session
       // avoids sending a large Supabase JWT in a request header.
-      const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}${ownerUsername ? `?owner=${encodeURIComponent(ownerUsername)}` : ''}`, {
-        headers, cache: 'no-store', signal: AbortSignal.timeout(5000),
-      });
+        const response = await fetch(
+        `/api/quizzes/${encodeURIComponent(id)}${ownerUsername ? `?owner=${encodeURIComponent(ownerUsername)}` : ''}`,
+        {
+          headers,
+          cache: 'no-store',
+          signal: AbortSignal.timeout(5000),
+        },
+      );
       if (!response.ok) return exactQuiz ?? null;
-      const payload = await response.json() as { quiz?: any };
+      const payload = (await response.json()) as { quiz?: any };
       if (!payload.quiz) return exactQuiz ?? null;
       const remoteQuiz = normalizeQuizRow(payload.quiz) as Quiz;
       if (!ownerUsername && remoteQuiz.id) {
         const owner = activeStorageUserId;
         const rows = await readLocal('quiz', owner);
         if (activeStorageUserId === owner) {
-          await writeLocal('quiz', [...rows.filter((item) => item.id !== remoteQuiz.id), {
-            id: remoteQuiz.id, ownerId: owner, type: 'quiz', content: remoteQuiz,
-            updated_at: (remoteQuiz as any).updated_at || new Date().toISOString(), is_synced: true,
-          }], owner);
+          await writeLocal(
+            'quiz',
+            [
+              ...rows.filter((item) => item.id !== remoteQuiz.id),
+              {
+                id: remoteQuiz.id,
+                ownerId: owner,
+                type: 'quiz',
+                content: remoteQuiz,
+                updated_at:
+                  (remoteQuiz as any).updated_at || new Date().toISOString(),
+                is_synced: true,
+              },
+            ],
+            owner,
+          );
         }
       }
       return remoteQuiz;
@@ -1808,12 +2688,22 @@ export const HybridStorage = {
     }
   },
 
-  async saveResponse(quizId: string, response: any, options?: { requireRemote?: boolean }) {
+  async saveResponse(
+    quizId: string,
+    response: any,
+    options?: { requireRemote?: boolean },
+  ) {
     if (options?.requireRemote && !isOnline()) {
-      throw new Error('You are offline. Reconnect to the internet and try submitting again.');
+      throw new Error(
+        'You are offline. Reconnect to the internet and try submitting again.',
+      );
     }
-    const submissionId = typeof response.submissionId === 'string' && /^[0-9a-f-]{36}$/i.test(response.submissionId)
-      ? response.submissionId
+    const submissionId =
+      (
+        typeof response.submissionId === 'string' &&
+        /^[0-9a-f-]{36}$/i.test(response.submissionId)
+      ) ?
+        response.submissionId
       : createUuid();
     let responseToSave: any = {
       ...response,
@@ -1830,27 +2720,56 @@ export const HybridStorage = {
         };
         const saved = await insertQuizResponse(quizId, responseToSave);
         if (saved) {
-          if (responseToSave.attemptId) await this.deleteAttemptResponseDraft(quizId, responseToSave.attemptId).catch(() => {});
-          await clearQuizScopedCache(quizId, false);
+          if (responseToSave.attemptId)
+            await this.deleteAttemptResponseDraft(
+              quizId,
+              responseToSave.attemptId,
+            ).catch(() => {});
+          await clearScopedCache(quizId, false, 'quiz');
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('pw_responses_updated', { detail: { quizId } }),
+            );
+          }
           return saved;
         }
-        if (options?.requireRemote) throw new Error('The assessment response was not confirmed by the server. Please retry submission.');
+        if (options?.requireRemote)
+          throw new Error(
+            'The assessment response was not confirmed by the server. Please retry submission.',
+          );
       } catch (error) {
         reportResponseSyncFailure(error);
         if (options?.requireRemote) throw error;
-        console.warn('[HybridStorage] Response insert failed; queueing locally:', error);
+        console.warn(
+          '[HybridStorage] Response insert failed; queueing locally:',
+          error,
+        );
       }
     }
     if (options?.requireRemote) {
-      throw new Error('You are offline. Reconnect to the internet and try submitting again.');
+      throw new Error(
+        'You are offline. Reconnect to the internet and try submitting again.',
+      );
     }
     const queued = { quizId, response: responseToSave };
     try {
       const queueKey = pendingResponsesKey();
-      let current = (await readCacheValue<Array<{ quizId: string; response: any }>>(queueKey)) || [];
-      if (!await writeCacheValue(queueKey, [...current, queued])) throw new Error('IndexedDB could not save the pending response.');
+      let current =
+        (await readCacheValue<Array<{ quizId: string; response: any }>>(
+          queueKey,
+        )) || [];
+      if (!(await writeCacheValue(queueKey, [...current, queued])))
+        throw new Error('IndexedDB could not save the pending response.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('pw_responses_updated', { detail: { quizId } }),
+        );
+      }
     } catch (error) {
-      console.error('[HybridStorage] Could not queue quiz response locally:', error);
+      console.error(
+        '[HybridStorage] Could not queue quiz response locally:',
+        error,
+      );
       return null;
     }
     return { success: true, queued: true, attemptId: responseToSave.attemptId };
@@ -1865,11 +2784,18 @@ export const HybridStorage = {
     const local = (await readLocal(type, owner)).filter((i) => i.id !== id);
     if (activeStorageUserId !== owner) return false;
     await writeLocal(type, local, owner);
-    if (type === 'quiz') await clearQuizScopedCache(id, true);
+    if (type === 'quiz') await clearScopedCache(id, true, type);
 
     // 2. Background remote delete
-    const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-    if (isOnline() && !LOCAL_ONLY_TYPES.includes(type) && (type !== 'quiz' || validQuizUuid)) {
+    const validQuizUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+    if (
+      isOnline() &&
+      !LOCAL_ONLY_TYPES.includes(type) &&
+      (type !== 'quiz' || validQuizUuid)
+    ) {
       (async () => {
         try {
           // Route 'games' (Tournament Standings) remote delete to Firebase Firestore
@@ -1878,13 +2804,19 @@ export const HybridStorage = {
             const { doc, deleteDoc } = await import('firebase/firestore');
             await deleteDoc(doc(db, 'tournaments', id));
           } else if (type === 'quiz') {
-            const { data: { session } } = await supabase.auth.getSession();
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
             if (!session?.access_token) return;
-            const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
-            if (!response.ok) throw new Error('Cloud assessment delete failed.');
+            const response = await fetch(
+              `/api/quizzes/${encodeURIComponent(id)}`,
+              {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              },
+            );
+            if (!response.ok)
+              throw new Error('Cloud assessment delete failed.');
           } else {
             const {
               data: { session },
@@ -1906,11 +2838,20 @@ export const HybridStorage = {
    */
   async syncPending() {
     const types: StorageItem['type'][] = ['quiz', 'message', 'link', 'games'];
-    if (!isOnline()) throw new Error('Connect to the internet before syncing your offline changes.');
+    if (!isOnline())
+      throw new Error(
+        'Connect to the internet before syncing your offline changes.',
+      );
     const syncOwner = activeStorageUserId;
     await flushPendingResponses();
-    const pendingResponses = (await readCacheValue<Array<{ quizId: string; response: any }>>(pendingResponsesKey())) || [];
-    if (pendingResponses.length) throw new Error(`${pendingResponses.length} assessment response(s) are still waiting to sync. Your data remains saved on this device.`);
+    const pendingResponses =
+      (await readCacheValue<Array<{ quizId: string; response: any }>>(
+        pendingResponsesKey(),
+      )) || [];
+    if (pendingResponses.length)
+      throw new Error(
+        `${pendingResponses.length} assessment response(s) are still waiting to sync. Your data remains saved on this device.`,
+      );
     for (const t of types) {
       try {
         await pushUnsyncedItems(t);
@@ -1918,10 +2859,18 @@ export const HybridStorage = {
         console.warn(`[HybridStorage] Sync failed for type ${t}:`, err);
       }
     }
-    if (activeStorageUserId !== syncOwner) throw new Error('The signed-in account changed during sync. Sign in again before syncing.');
+    if (activeStorageUserId !== syncOwner)
+      throw new Error(
+        'The signed-in account changed during sync. Sign in again before syncing.',
+      );
     for (const type of types) {
-      const remaining = (await readLocal(type, syncOwner)).filter((item) => !item.is_synced);
-      if (remaining.length) throw new Error(`${remaining.length} ${type} item(s) are still waiting to sync. Your data remains saved on this device.`);
+      const remaining = (await readLocal(type, syncOwner)).filter(
+        (item) => !item.is_synced,
+      );
+      if (remaining.length)
+        throw new Error(
+          `${remaining.length} ${type} item(s) are still waiting to sync. Your data remains saved on this device.`,
+        );
     }
   },
 
@@ -1944,7 +2893,8 @@ export const HybridStorage = {
       for (const t of types) {
         const list = await readLocal(t, owner);
         const filtered = list.filter((item) => {
-          const expiresAt = item.content?.expires_at || (item as any).expires_at;
+          const expiresAt =
+            item.content?.expires_at || (item as any).expires_at;
           if (!expiresAt) return true;
           const gracePeriod = t === 'quiz' ? 48 * 60 * 60 * 1000 : 0;
           return new Date(expiresAt).getTime() + gracePeriod > Date.now();

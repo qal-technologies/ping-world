@@ -3,7 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { getRequestUser } from '@/lib/api-auth';
 import { verifyQuizAccessToken } from '@/lib/quiz/private-access-token';
-import { readQuizTierEntitlements, resolveQuizPrivacySettings } from '@/lib/quiz/quiz-privacy';
+import {
+  readQuizTierEntitlements,
+  resolveQuizPrivacySettings,
+} from '@/lib/quiz/quiz-privacy';
 import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 
 export const dynamic = 'force-dynamic';
@@ -19,14 +22,18 @@ export async function GET(
   try {
     const { id } = await context.params;
     const ownerUsername = request.nextUrl.searchParams.get('owner');
-    const isQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-    if (!isQuizUuid && !ownerUsername) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
+    const isQuizUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+    if (!isQuizUuid && !ownerUsername)
+      return NextResponse.json(
+        { error: 'Assessment not found.' },
+        { status: 404 },
+      );
     const admin = getSupabaseAdmin();
     let query = admin.from('quizzes').select('*');
-    if (
-      isQuizUuid &&
-      !ownerUsername
-    ) {
+    if (isQuizUuid && !ownerUsername) {
       query = query.eq('id', id);
     } else {
       query = query.eq('custom_id', id);
@@ -55,13 +62,24 @@ export async function GET(
         { status: 404 },
       );
     }
-    const ownerEntitlements = await readQuizTierEntitlements(admin, row.user_id);
+    const ownerEntitlements = await readQuizTierEntitlements(
+      admin,
+      row.user_id,
+    );
     if (!isQuizUuid && !ownerEntitlements.pro) {
-      return NextResponse.json({ error: 'This custom assessment URL is no longer active.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+      return NextResponse.json(
+        { error: 'This custom assessment URL is no longer active.' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
     let settings =
       row.settings && typeof row.settings === 'object' ? row.settings : {};
-    settings = await resolveQuizPrivacySettings(admin, { id: row.id, user_id: row.user_id }, settings, ownerEntitlements);
+    settings = await resolveQuizPrivacySettings(
+      admin,
+      { id: row.id, user_id: row.user_id },
+      settings,
+      ownerEntitlements,
+    );
     if (settings.moderationStatus === 'under_review') {
       return NextResponse.json(
         { error: 'This assessment is paused while it is reviewed.' },
@@ -70,26 +88,59 @@ export async function GET(
     }
     const isPrivate = Boolean(settings.isPrivate);
     const accessToken = request.headers.get('x-quiz-access-token');
-    const accessGranted = !isPrivate || Boolean(verifyQuizAccessToken(accessToken, row.id));
+    const accessGranted =
+      !isPrivate || Boolean(verifyQuizAccessToken(accessToken, row.id));
     if (isPrivate && !accessGranted) {
-      return NextResponse.json({
-        code: 'PRIVATE_ACCESS_REQUIRED',
-        error: 'Private assessment access is required.',
-        quiz: { id: row.id, title: row.title || settings.title || 'Assessment', description: row.description || settings.description || '', type: row.type || settings.type || 'quiz', questions: [], isPrivate: true },
-      }, { status: 423, headers: { 'Cache-Control': 'private, no-store' } });
+      return NextResponse.json(
+        {
+          code: 'PRIVATE_ACCESS_REQUIRED',
+          error: 'Private assessment access is required.',
+          quiz: {
+            id: row.id,
+            title: row.title || settings.title || 'Assessment',
+            description: row.description || settings.description || '',
+            type: row.type || settings.type || 'quiz',
+            questions: [],
+            isPrivate: true,
+          },
+        },
+        { status: 423, headers: { 'Cache-Control': 'private, no-store' } },
+      );
     }
     const questions = Array.isArray(row.questions) ? row.questions : [];
     const sanitizedQuestions = questions.map(
       (question: Record<string, unknown>) => {
-        const maxSize = ownerEntitlements.pro ? 50 : ownerEntitlements.quiz ? 15 : 5;
+        const maxSize =
+          ownerEntitlements.pro ? 50
+          : ownerEntitlements.quiz ? 15
+          : 5;
         const configuredSize = Number(question.maxFileSize);
-        const safeTypes = !ownerEntitlements.quiz
-          ? (typeof question.allowedTypes === 'string' ? question.allowedTypes.split(',').map((type) => type.trim()).filter((type) => type && type !== '.' && !type.toLowerCase().endsWith('.zip') && !type.toLowerCase().startsWith('video/') && !type.toLowerCase().startsWith('audio/')).join(',') : '') || 'image/*,.pdf,.doc,.docx,.txt,.json,application/json'
+        const safeTypes =
+          !ownerEntitlements.quiz ?
+            (typeof question.allowedTypes === 'string' ?
+              question.allowedTypes
+                .split(',')
+                .map((type) => type.trim())
+                .filter(
+                  (type) =>
+                    type &&
+                    type !== '.' &&
+                    !type.toLowerCase().endsWith('.zip') &&
+                    !type.toLowerCase().startsWith('video/') &&
+                    !type.toLowerCase().startsWith('audio/'),
+                )
+                .join(',')
+            : '') || 'image/*,.pdf,.doc,.docx,.txt,.json,application/json'
           : question.allowedTypes;
         return {
           ...question,
           ...(typeof safeTypes === 'string' ? { allowedTypes: safeTypes } : {}),
-          maxFileSize: Math.min(Number.isFinite(configuredSize) && configuredSize > 0 ? configuredSize : maxSize, maxSize),
+          maxFileSize: Math.min(
+            Number.isFinite(configuredSize) && configuredSize > 0 ?
+              configuredSize
+            : maxSize,
+            maxSize,
+          ),
           correctIndex: null,
         };
       },
@@ -117,8 +168,14 @@ export async function GET(
       type: row.type || settings.type || 'quiz',
       questions: sanitizedQuestions,
       endScreen: row.endScreen || settings.endScreen,
-      customUrl: ownerEntitlements.pro ? String(row.custom_id || settings.customUrl || '') : '',
-      responsesPublicId: typeof settings.publicResponsesId === 'string' ? settings.publicResponsesId : '',
+      customUrl:
+        ownerEntitlements.pro ?
+          String(row.custom_id || settings.customUrl || '')
+        : '',
+      responsesPublicId:
+        typeof settings.publicResponsesId === 'string' ?
+          settings.publicResponsesId
+        : '',
       isPrivate,
       accessGranted,
       fromPremium: ownerEntitlements.quiz,
@@ -137,18 +194,44 @@ export async function GET(
   }
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
   const user = await getRequestUser(request);
-  if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  if (!user)
+    return NextResponse.json(
+      { error: 'Authentication required.' },
+      { status: 401 },
+    );
   try {
     const { id } = await context.params;
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
-      return NextResponse.json({ error: 'Invalid assessment.' }, { status: 400 });
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid assessment.' },
+        { status: 400 },
+      );
     }
     const admin = getSupabaseAdmin();
-    const { data: quiz, error: readError } = await admin.from('quizzes').select('id,questions,settings').eq('id', id).eq('user_id', user.id).maybeSingle();
-    if (readError || !quiz) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
-    const [{ data: responses, error: responsesError }, { data: attempts, error: attemptsError }] = await Promise.all([
+    const { data: quiz, error: readError } = await admin
+      .from('quizzes')
+      .select('id,questions,settings')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (readError || !quiz)
+      return NextResponse.json(
+        { error: 'Assessment not found.' },
+        { status: 404 },
+      );
+    const [
+      { data: responses, error: responsesError },
+      { data: attempts, error: attemptsError },
+    ] = await Promise.all([
       admin.from('quiz_responses').select('answers').eq('quiz_id', id),
       admin.from('quiz_attempts').select('answers').eq('quiz_id', id),
     ]);
@@ -156,34 +239,57 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const answerMediaPaths = (value: unknown): unknown[] => {
       if (!value || typeof value !== 'object') return [];
       const answer = value as { fileUrl?: unknown; answerHistory?: unknown };
-      const history = Array.isArray(answer.answerHistory) ? answer.answerHistory : [];
-      return [answer.fileUrl, ...history.flatMap((revision) =>
-        revision && typeof revision === 'object'
-          ? [(revision as { fileUrl?: unknown }).fileUrl]
+      const history =
+        Array.isArray(answer.answerHistory) ? answer.answerHistory : [];
+      return [
+        answer.fileUrl,
+        ...history.flatMap((revision) =>
+          revision && typeof revision === 'object' ?
+            [(revision as { fileUrl?: unknown }).fileUrl]
           : [],
-      )];
+        ),
+      ];
     };
-    const responsePaths = (responses || []).flatMap((row: { answers?: unknown }) =>
-      Array.isArray(row.answers) ? row.answers.flatMap(answerMediaPaths) : [],
+    const responsePaths = (responses || []).flatMap(
+      (row: { answers?: unknown }) =>
+        Array.isArray(row.answers) ? row.answers.flatMap(answerMediaPaths) : [],
     );
-    const attemptPaths = (attempts || []).flatMap((row: { answers?: unknown }) =>
-      row.answers && typeof row.answers === 'object'
-        ? Object.entries(row.answers as Record<string, unknown>)
+    const attemptPaths = (attempts || []).flatMap(
+      (row: { answers?: unknown }) =>
+        row.answers && typeof row.answers === 'object' ?
+          Object.entries(row.answers as Record<string, unknown>)
             .filter(([key]) => !key.startsWith('__'))
             .flatMap(([, answer]) => answerMediaPaths(answer))
         : [],
     );
-    const questionPaths = (Array.isArray(quiz.questions) ? quiz.questions : []).flatMap((value: unknown) => {
+    const questionPaths = (
+      Array.isArray(quiz.questions) ?
+        quiz.questions
+      : []).flatMap((value: unknown) => {
       if (!value || typeof value !== 'object') return [];
-      const question = value as { imageUrl?: unknown; uploadUrl?: unknown; options?: unknown };
+      const question = value as {
+        imageUrl?: unknown;
+        uploadUrl?: unknown;
+        options?: unknown;
+      };
       const options = Array.isArray(question.options) ? question.options : [];
-      return [question.imageUrl, question.uploadUrl, ...options.flatMap((option) =>
-        option && typeof option === 'object'
-          ? [(option as { imageUrl?: unknown }).imageUrl, (option as { uploadUrl?: unknown }).uploadUrl]
+      return [
+        question.imageUrl,
+        question.uploadUrl,
+        ...options.flatMap((option) =>
+          option && typeof option === 'object' ?
+            [
+              (option as { imageUrl?: unknown }).imageUrl,
+              (option as { uploadUrl?: unknown }).uploadUrl,
+            ]
           : [],
-      )];
+        ),
+      ];
     });
-    const brandingPaths = [quiz.settings?.branding?.image, quiz.settings?.branding?.icon];
+    const brandingPaths = [
+      quiz.settings?.branding?.image,
+      quiz.settings?.branding?.icon,
+    ];
     const objectPath = (value: unknown, bucket: string) => {
       if (typeof value !== 'string' || value.startsWith('data:')) return null;
       const unpacked = unpackPingWorldMediaUrl(value).url || value;
@@ -192,31 +298,77 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
         const path = new URL(unpacked).pathname;
         const marker = `/object/public/${bucket}/`;
         const signedMarker = `/object/sign/${bucket}/`;
-        const index = Math.max(path.indexOf(marker), path.indexOf(signedMarker));
-        return index < 0 ? null : decodeURIComponent(path.slice(index + (path.startsWith(marker, index) ? marker.length : signedMarker.length)));
-      } catch { return null; }
+        const index = Math.max(
+          path.indexOf(marker),
+          path.indexOf(signedMarker),
+        );
+        return index < 0 ? null : (
+            decodeURIComponent(
+              path.slice(
+                index +
+                  (path.startsWith(marker, index) ?
+                    marker.length
+                  : signedMarker.length),
+              ),
+            )
+          );
+      } catch {
+        return null;
+      }
     };
-    const responseMedia = [...responsePaths, ...attemptPaths].map((path) => objectPath(path, 'quiz-response-media')).filter((path): path is string => Boolean(path?.startsWith(`${id}/`)));
-    const setterMedia = [...questionPaths, ...brandingPaths].map((path) => objectPath(path, 'quiz-media')).filter((path): path is string => Boolean(path?.startsWith(`${user.id}/${id}/`)));
+    const responseMedia = [...responsePaths, ...attemptPaths]
+      .map((path) => objectPath(path, 'quiz-response-media'))
+      .filter((path): path is string => Boolean(path?.startsWith(`${id}/`)));
+    const setterMedia = [...questionPaths, ...brandingPaths]
+      .map((path) => objectPath(path, 'quiz-media'))
+      .filter((path): path is string =>
+        Boolean(path?.startsWith(`${user.id}/${id}/`)),
+      );
     if (responseMedia.length) {
-      const { error } = await admin.storage.from('quiz-response-media').remove([...new Set(responseMedia)]);
+      const { error } = await admin.storage
+        .from('quiz-response-media')
+        .remove([...new Set(responseMedia)]);
       if (error) throw error;
     }
     if (setterMedia.length) {
-      const { error } = await admin.storage.from('quiz-media').remove([...new Set(setterMedia)]);
+      const { error } = await admin.storage
+        .from('quiz-media')
+        .remove([...new Set(setterMedia)]);
       if (error) throw error;
     }
-    const { error: notificationError } = await admin.from('notification_batches').delete().eq('resource_id', id);
+    const { error: notificationError } = await admin
+      .from('notification_batches')
+      .delete()
+      .eq('resource_id', id);
     if (notificationError) throw notificationError;
-    const { error: attemptDeleteError } = await admin.from('quiz_attempts').delete().eq('quiz_id', id);
+    const { error: attemptDeleteError } = await admin
+      .from('quiz_attempts')
+      .delete()
+      .eq('quiz_id', id);
     if (attemptDeleteError) throw attemptDeleteError;
-    const { error: responseDeleteError } = await admin.from('quiz_responses').delete().eq('quiz_id', id);
+    const { error: responseDeleteError } = await admin
+      .from('quiz_responses')
+      .delete()
+      .eq('quiz_id', id);
     if (responseDeleteError) throw responseDeleteError;
-    const { error } = await admin.from('quizzes').delete().eq('id', id).eq('user_id', user.id);
+    const { error } = await admin
+      .from('quizzes')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
     if (error) throw error;
-    return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(
+      { success: true },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error) {
-    console.error('[api/quizzes] Delete failed:', error instanceof Error ? error.message : 'unknown');
-    return NextResponse.json({ error: 'Could not delete assessment.' }, { status: 503 });
+    console.error(
+      '[api/quizzes] Delete failed:',
+      error instanceof Error ? error.message : 'unknown',
+    );
+    return NextResponse.json(
+      { error: 'Could not delete assessment.' },
+      { status: 503 },
+    );
   }
 }

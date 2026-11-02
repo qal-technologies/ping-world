@@ -21,8 +21,8 @@ export async function hasActiveQuizEntitlement(admin: SupabaseClient, userId: st
   return (await readQuizTierEntitlements(admin, userId)).quiz;
 }
 
-/** Remove expired branding immediately at read time; the daily cron removes
- * its stored media. Other assessment settings stay intact. */
+/** Remove tier-gated assessment settings immediately at read time; the daily
+ * cleanup also removes associated stored media and persisted settings. */
 export async function resolveQuizPrivacySettings(
   admin: SupabaseClient,
   quiz: { id: string; user_id: string | null },
@@ -37,12 +37,13 @@ export async function resolveQuizPrivacySettings(
   if (!activeQuiz) {
     delete settings.branding;
     delete settings.allowPass;
+    delete settings.info;
     settings.fromPremium = false;
   } else {
     settings.fromPremium = true;
   }
   if (!entitlements.pro) {
-    for (const key of ['customUrl', 'isCustom', 'customDisclaimer', 'hidePingWorldDisclaimer', 'privateKey', 'privateKeyHash', 'allowedParticipantUsernames']) delete settings[key];
+    for (const key of ['customUrl', 'isCustom', 'privateKey', 'privateKeyHash', 'allowedParticipantUsernames']) delete settings[key];
     settings.isPrivate = false;
   }
   if (settings.isPrivate !== true) {

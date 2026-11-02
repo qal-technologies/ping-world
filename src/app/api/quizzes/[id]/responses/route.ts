@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestUser } from '@/lib/api-auth';
+import { getRequestUser, getRequestUserFromToken, readJsonWithinLimit } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
@@ -75,13 +75,38 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  return listQuizResponses(request, params, () => getRequestUser(request));
+}
+
+// The access token is carried in the bounded body for local development too:
+// large legacy JWT claims can exceed Node's request-header limit and yield 431.
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  let token = '';
+  try {
+    const body = await readJsonWithinLimit(request, 256 * 1024) as { accessToken?: unknown };
+    token = typeof body.accessToken === 'string' ? body.accessToken : '';
+  } catch {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+  }
+  if (!token || token.length > 240 * 1024) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  return listQuizResponses(request, params, () => getRequestUserFromToken(token));
+}
+
+async function listQuizResponses(
+  request: NextRequest,
+  params: Promise<{ id: string }>,
+  resolveUser: () => ReturnType<typeof getRequestUser>,
+) {
   if (
     isRateLimited(getClientIp(request), 'api:quiz-response-list', 30, 60_000)
       .limited
   ) {
     return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
   }
-  const user = await getRequestUser(request);
+  const user = await resolveUser();
   if (!user)
     return NextResponse.json(
       { error: 'Authentication required.' },
@@ -89,6 +114,12 @@ export async function GET(
     );
   try {
     const { id } = await params;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const isValidId = isUuid || /^[a-z0-9_-]{1,64}$/i.test(id);
+    if (!isValidId) {
+      return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
+    }
+
     const offset = Math.max(
       0,
       Math.min(Number(request.nextUrl.searchParams.get('offset')) || 0, 4900),
@@ -99,77 +130,141 @@ export async function GET(
     );
     const windowEnd = Math.min(5000, offset + limit + 1);
     const admin = getSupabaseAdmin();
-    const { data: quiz, error: quizError } = await admin
-      .from('quizzes')
-      .select('id,user_id,type,questions,settings')
-      .eq('id', id)
-      .maybeSingle();
-    if (quizError || !quiz)
+
+    let quiz: any = null;
+    if (isUuid) {
+      const { data, error: qErr } = await admin
+        .from('quizzes')
+        .select('id,user_id,type,questions,settings')
+        .eq('id', id)
+        .maybeSingle();
+      if (qErr) throw qErr;
+      if (data) quiz = data;
+    }
+    if (!quiz) {
+      const { data, error: qErr } = await admin
+        .from('quizzes')
+        .select('id,user_id,type,questions,settings')
+        .eq('custom_id', id)
+        .maybeSingle();
+      if (qErr) throw qErr;
+      if (data) quiz = data;
+    }
+
+    if (!quiz) {
       return NextResponse.json(
         { error: 'Assessment not found.' },
         { status: 404 },
       );
-    if (quiz.user_id !== user.id)
+    }
+    if (quiz.user_id !== user.id) {
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+    }
 
-    const [responseResult, attemptResult, responseCountResult, attemptCountResult] = await Promise.all([
-      admin
-        .from('quiz_responses')
-        .select('id,timestamp,score,total_questions,user_data,answers')
-        .eq('quiz_id', id)
-        .order('timestamp', { ascending: false })
-        .range(0, windowEnd - 1),
-      admin
-        .from('quiz_attempts')
-        .select(
-          'id,started_at,updated_at,status,answers,user_data,current_question_index,question_order',
-        )
-        .eq('quiz_id', id)
-        .eq('status', 'in_progress')
-        .order('updated_at', { ascending: false })
-        .range(0, windowEnd - 1),
-      admin
-        .from('quiz_responses')
-        .select('id', { count: 'exact', head: true })
-        .eq('quiz_id', id),
-      admin
-        .from('quiz_attempts')
-        .select('id', { count: 'exact', head: true })
-        .eq('quiz_id', id)
-        .eq('status', 'in_progress'),
-    ]);
-    let { data: rows, error } = responseResult;
-    const { data: attempts, error: attemptError } = attemptResult;
-    const { count: totalCount, error: countError } = responseCountResult;
-    const { count: attemptCount, error: attemptCountError } = attemptCountResult;
-    if (error) {
-      // Be tolerant of an older database schema that has extra/missing
-      // response columns while still returning the saved rows it can read.
-      const fallback = await admin
-        .from('quiz_responses')
-        .select('*')
-        .eq('quiz_id', id)
-        .order('timestamp', { ascending: false })
-        .range(0, windowEnd - 1);
-      if (!fallback.error) {
-        rows = fallback.data;
-        error = null;
+    let rows: any[] = [];
+    let attempts: any[] = [];
+    let totalCount: number | null = null;
+    let attemptCount: number | null = null;
+
+    try {
+      // Keep the response and live-attempt reads independent. A schema/cache
+      // problem in one projection must not hide attempts that were saved in
+      // the other table (or turn a usable partial feedback page into a 503).
+      const [responseSettled, attemptSettled, responseCountSettled, attemptCountSettled] = await Promise.allSettled([
+        admin
+          .from('quiz_responses')
+          .select('id,timestamp,score,total_questions,user_data,answers')
+          .eq('quiz_id', quiz.id)
+          .order('timestamp', { ascending: true })
+          .range(0, windowEnd - 1),
+        admin
+          .from('quiz_attempts')
+          .select(
+            'id,started_at,updated_at,status,answers,user_data,current_question_index,question_order',
+          )
+          .eq('quiz_id', quiz.id)
+          .eq('status', 'in_progress')
+          .order('started_at', { ascending: true })
+          .range(0, windowEnd - 1),
+        admin
+          .from('quiz_responses')
+          .select('id', { count: 'exact', head: true })
+          .eq('quiz_id', quiz.id),
+        admin
+          .from('quiz_attempts')
+          .select('id', { count: 'exact', head: true })
+          .eq('quiz_id', quiz.id)
+          .eq('status', 'in_progress'),
+      ]);
+
+      const responseResult = responseSettled.status === 'fulfilled' ? responseSettled.value : null;
+      const attemptResult = attemptSettled.status === 'fulfilled' ? attemptSettled.value : null;
+      const responseCountResult = responseCountSettled.status === 'fulfilled' ? responseCountSettled.value : null;
+      const attemptCountResult = attemptCountSettled.status === 'fulfilled' ? attemptCountSettled.value : null;
+
+      if (responseResult && !responseResult.error && Array.isArray(responseResult.data)) {
+        rows = responseResult.data;
       } else {
-        console.error('[api/quiz-responses/list] Response query failed:', error.code || 'unknown', fallback.error.code || 'fallback-failed');
-        throw fallback.error;
+        if (responseResult?.error) console.error('[api/quiz-responses/list] Response query failed:', responseResult.error.code, responseResult.error.message);
+        try {
+          const fallback = await admin
+            .from('quiz_responses')
+            .select('*')
+            .eq('quiz_id', quiz.id)
+            .order('timestamp', { ascending: true })
+            .range(0, windowEnd - 1);
+          if (Array.isArray(fallback.data)) rows = fallback.data;
+        } catch (fallbackError) {
+          console.error('[api/quiz-responses/list] Response fallback failed:', fallbackError instanceof Error ? fallbackError.message : 'unknown');
+        }
       }
+
+      if (attemptResult && !attemptResult.error && Array.isArray(attemptResult.data)) {
+        attempts = attemptResult.data;
+      } else {
+        if (attemptResult?.error) console.error('[api/quiz-responses/list] Attempt query failed:', attemptResult.error.code, attemptResult.error.message);
+        try {
+          const attemptFallback = await admin
+            .from('quiz_attempts')
+            .select('*')
+            .eq('quiz_id', quiz.id)
+            .eq('status', 'in_progress')
+            .order('started_at', { ascending: true })
+            .range(0, windowEnd - 1);
+          if (Array.isArray(attemptFallback.data)) attempts = attemptFallback.data;
+        } catch (fallbackError) {
+          console.error('[api/quiz-responses/list] Attempt fallback failed:', fallbackError instanceof Error ? fallbackError.message : 'unknown');
+        }
+      }
+
+      totalCount = responseCountResult?.count ?? null;
+      attemptCount = attemptCountResult?.count ?? null;
+    } catch (queryErr) {
+      console.warn('[api/quiz-responses/list] Direct table queries degraded:', queryErr);
     }
-    if (countError) {
-      console.warn('[api/quiz-responses/list] Submitted response count unavailable; using fetched page size.', countError.code || 'unknown');
-    }
-    // A schema/configuration problem with in-progress attempts must not make
-    // already-submitted feedback unavailable. Degrade this page to submitted
-    // responses and let the next refresh retry the attempt query.
-    if (attemptError || attemptCountError) {
-      console.warn(
-        '[api/quiz-responses/list] Attempt snapshots unavailable; returning submitted responses only:',
-        (attemptError || attemptCountError)?.code || 'unknown',
-      );
+
+    // Legacy responses may still live on the assessment JSONB column. Fetch
+    // that potentially large field only when the normalized response table is
+    // empty, so every routine attempt poll stays small and quick.
+    if (rows.length === 0) {
+      try {
+        const { data: legacy } = await admin.from('quizzes').select('responses').eq('id', quiz.id).maybeSingle();
+        const legacyResponses = Array.isArray(legacy?.responses) ? legacy.responses : [];
+        rows = legacyResponses.map((r: any, idx: number) => ({
+        id: r.id || `resp_${idx}`,
+        timestamp: r.timestamp || r.submittedAt || new Date().toISOString(),
+        score: r.score ?? 0,
+        total_questions:
+          r.totalQuestions ??
+          r.total_questions ??
+          (Array.isArray(quiz.questions) ? quiz.questions.length : 0),
+        user_data: r.userData || r.user_data || {},
+        answers: Array.isArray(r.answers) ? r.answers : [],
+        }));
+        if (totalCount === null || totalCount === 0) totalCount = rows.length;
+      } catch (legacyError) {
+        console.warn('[api/quiz-responses/list] Legacy response fallback unavailable:', legacyError instanceof Error ? legacyError.message : 'unknown');
+      }
     }
 
     const responses: any[] = (rows || []).map((row: any) => {
@@ -184,6 +279,7 @@ export async function GET(
         delete userData[key];
       return {
         id: row.id,
+        status: 'submitted',
         timestamp: row.timestamp,
         score: row.score || 0,
         totalQuestions: row.total_questions || 0,
@@ -218,6 +314,7 @@ export async function GET(
       ]),
     );
     for (const attempt of attempts || []) {
+      try {
       const snapshot =
         attempt.answers && typeof attempt.answers === 'object' ?
           attempt.answers
@@ -263,8 +360,17 @@ export async function GET(
               value && typeof value === 'object' && 'answer' in value ?
                 value.answer
               : value;
-            const correct =
-              quiz.type === 'quiz' ? correctFor(question, answer) : undefined;
+            let correct: boolean | undefined;
+            try {
+              // A skipped question remains part of the reached path and total,
+              // but it has no submitted value and must never earn points.
+              correct = quiz.type === 'quiz' && !(value && typeof value === 'object' && value.passed === true)
+                ? correctFor(question, answer)
+                : undefined;
+            } catch {
+              // Malformed or legacy answer data must not take down the entire response page.
+              correct = undefined;
+            }
             const result = {
               ...(value && typeof value === 'object' ? value : {}),
               questionId,
@@ -276,10 +382,14 @@ export async function GET(
               !result.fileUrl.startsWith('http') &&
               !result.fileUrl.startsWith('data:')
             ) {
-              const { data: signed } = await admin.storage
-                .from('quiz-response-media')
-                .createSignedUrl(result.fileUrl, 3600);
-              if (signed?.signedUrl) result.fileUrl = signed.signedUrl;
+              try {
+                const { data: signed } = await admin.storage
+                  .from('quiz-response-media')
+                  .createSignedUrl(result.fileUrl, 3600);
+                if (signed?.signedUrl) result.fileUrl = signed.signedUrl;
+              } catch {
+                // An unavailable attachment preview should not hide the live attempt.
+              }
             }
             return result;
           },
@@ -321,11 +431,14 @@ export async function GET(
         ]),
       );
       answers = answers.sort(
-        (left: any, right: any) =>
-          (answerOrder.get(String(left?.questionId)) ??
-            Number.MAX_SAFE_INTEGER) -
-          (answerOrder.get(String(right?.questionId)) ??
-            Number.MAX_SAFE_INTEGER),
+        (left: any, right: any) => {
+          const leftIndex = answerOrder.get(String(left?.questionId)) as number | undefined;
+          const rightIndex = answerOrder.get(String(right?.questionId)) as number | undefined;
+          if (leftIndex === rightIndex) {
+            return String(left?.questionId) < String(right?.questionId) ? -1 : 1;
+          }
+          return (leftIndex ?? Number.MAX_SAFE_INTEGER) - (rightIndex ?? Number.MAX_SAFE_INTEGER);
+        }
       );
       const totals = new Map<string, { correct: number; total: number }>();
       for (const answer of answers as any[]) {
@@ -345,11 +458,11 @@ export async function GET(
         const question: any = attemptQuestionMap.get(questionId);
         if (!question || quiz.type !== 'quiz') continue;
         const answer = answeredById.get(questionId);
-        if (answer && typeof answer.pointsPossible === 'number') {
+        if (answer && answer.passed !== true && typeof answer.pointsPossible === 'number') {
           scorePossible += Math.max(0, answer.pointsPossible);
           continue;
         }
-        if (answer && typeof answer.correct === 'boolean') {
+        if (answer && answer.passed !== true && typeof answer.correct === 'boolean') {
           scorePossible += 1;
           continue;
         }
@@ -359,8 +472,12 @@ export async function GET(
           key === undefined ||
           key === '' ||
           (Array.isArray(key) && !key.length)
-        )
+        ) {
+          // Unkeyed questions can still earn one point when answered; a skip
+          // therefore contributes one possible point, but zero earned points.
+          scorePossible += 1;
           continue;
+        }
         const options = Array.isArray(question.options) ? question.options : [];
         const keys = (Array.isArray(key) ? key : [key]).map((value: any) => {
           if (
@@ -399,12 +516,13 @@ export async function GET(
         score:
           quiz.type === 'quiz' ?
             answers.reduce(
-              (sum: number, answer: any) =>
-                sum +
-                (answer.pointsEarned !== undefined ?
+              (sum: number, answer: any) => {
+                if (answer.passed === true) return sum;
+                return sum + (answer.pointsEarned !== undefined ?
                   Math.max(0, Number(answer.pointsEarned) || 0)
                 : answer.correct ? 1
-                : 0),
+                : 0);
+              },
               0,
             )
           : 0,
@@ -453,12 +571,7 @@ export async function GET(
               : null;
           })
           .filter(Boolean),
-        answeredQuestions: answers.filter(
-          (answer: any) =>
-            !answer.passed &&
-            answer.answer !== undefined &&
-            answer.answer !== '',
-        ).length,
+        answeredQuestions: answers.filter(isAttemptedAnswer).length,
         durationSeconds: Math.max(
           0,
           Math.floor(
@@ -469,11 +582,22 @@ export async function GET(
         answers,
         categoryScores: Object.fromEntries(totals),
       });
+      } catch (attemptShapeError) {
+        // A malformed legacy snapshot must not turn the full feedback request
+        // into a 503 or suppress other participants' saved submissions.
+        console.error('[api/quiz-responses/list] Could not shape one live attempt:', attemptShapeError instanceof Error ? attemptShapeError.message : 'unknown');
+      }
     }
-    responses.sort(
-      (a: any, b: any) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    // Stable oldest-first ordering makes the response labels deterministic:
+    // the first participant remains Taker 1 as newer submissions arrive.
+    /*responses.sort((a: any, b: any) => {
+      // Keep one stable ordinal sequence across submitted responses and live
+      // attempts. A newly started attempt must not become Taker 1 merely
+      // because it is still in progress.
+      const timeA = new Date(a.startedAt || a.submittedAt || a.timestamp || 0).getTime() || 0;
+      const timeB = new Date(b.startedAt || b.submittedAt || b.timestamp || 0).getTime() || 0;
+      return timeA - timeB || String(a.id).localeCompare(String(b.id));
+    });*/
     const hasMore = responses.length > offset + limit;
     const page = responses.slice(offset, offset + limit);
     const signedPage = await Promise.all(
@@ -487,12 +611,17 @@ export async function GET(
               answer.fileUrl.startsWith('data:')
             )
               return answer;
-            const { data: signed } = await admin.storage
-              .from('quiz-response-media')
-              .createSignedUrl(answer.fileUrl, 3600);
-            return signed?.signedUrl ?
-                { ...answer, fileUrl: signed.signedUrl }
-              : answer;
+            try {
+              const { data: signed } = await admin.storage
+                .from('quiz-response-media')
+                .createSignedUrl(answer.fileUrl, 3600);
+              return signed?.signedUrl ?
+                  { ...answer, fileUrl: signed.signedUrl }
+                : answer;
+            } catch {
+              // Keep response and attempt data visible when private media is unavailable.
+              return answer;
+            }
           }),
         ),
       })),
@@ -511,9 +640,14 @@ export async function GET(
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {
-    console.error('[api/quiz-responses/list] Load failed:', error instanceof Error ? error.message : 'unknown');
+    console.error('[api/quiz-responses/list] Load failed:', error instanceof Error ? error.stack || error.message : error);
     return NextResponse.json(
-      { error: 'Could not load assessment responses.' },
+      {
+        error: 'Could not load assessment responses.',
+        ...(process.env.NODE_ENV !== 'production' ? {
+          diagnostic: error instanceof Error ? error.message.slice(0, 300) : 'Unknown response loading error.',
+        } : {}),
+      },
       { status: 503 },
     );
   }

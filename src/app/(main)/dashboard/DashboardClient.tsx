@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -24,13 +24,13 @@ import { HybridStorage } from '@/lib/storage-utils';
 import { useAppContext } from '@/context/AppContext';
 import { PREMIUM_TIERS } from '@/lib/config/premium';
 import { SITE } from '@/lib/config/site';
-import {useRouter} from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import InAppNotificationCenter from '@/components/notifications/InAppNotificationCenter';
 
 export default function GeneralDashboard() {
-  const {premiumTier, username, user} = useAppContext();
-    const router = useRouter();
-  
+  const { premiumTier, username, user } = useAppContext();
+  const router = useRouter();
+
   const tierConfig = PREMIUM_TIERS[premiumTier];
   const [stats, setStats] = useState({
     quizzes: 0,
@@ -43,14 +43,16 @@ export default function GeneralDashboard() {
   useEffect(() => {
     const verifyUser = async () => {
       const { supabase } = await import('@/lib/supabase');
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/login');
       }
     };
     verifyUser();
   }, [router]);
-  
+
   useEffect(() => {
     const loadStats = async () => {
       const q = await HybridStorage.getAll('quiz');
@@ -84,7 +86,10 @@ export default function GeneralDashboard() {
       <div className='flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12'>
         <div>
           <h1 className='text-4xl font-extrabold font-display leading-tight'>
-            Welcome back, <span className='gradient-text'>{user?.user_metadata?.display_name || username || 'User'}</span>
+            Welcome back,{' '}
+            <span className='gradient-text'>
+              {user?.user_metadata?.display_name || username || 'User'}
+            </span>
           </h1>
           <p className='text-pw-muted mt-2'>
             Manage your creative ecosystem and track your tool performance.
@@ -94,19 +99,19 @@ export default function GeneralDashboard() {
           <Link href='/settings'>
             <Button
               variant='outline'
-              className='border-white/10 hover:bg-white/5 h-11 px-6'>
+              className='border-white/10 hover:bg-white/5 h-10 px-6'>
               <Settings2 className='h-4 w-4 mr-2' /> Settings
             </Button>
           </Link>
           <Link href='/tools'>
-            <Button className='btn-primary h-11 px-8'>
+            <Button className='btn-primary h-10 px-8'>
               <Plus className='h-4 w-4 mr-2' /> Launch Tool
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mb-12'>
+      <div className='grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6 mb-10'>
         {[
           {
             label: 'Total Quizzes',
@@ -133,7 +138,7 @@ export default function GeneralDashboard() {
           <Link
             href={stat.href}
             key={stat.label}>
-            <Card className='card-glow p-8 group cursor-pointer hover:border-pw-primary/30 transition-all'>
+            <Card className='card-glow p-4 sm:p-8 group cursor-pointer hover:border-pw-primary/30 transition-all'>
               <div className='flex justify-between items-start'>
                 <div className='p-3 rounded-xl bg-white/5 border border-white/5 group-hover:scale-110 transition-transform'>
                   <stat.icon
@@ -154,20 +159,19 @@ export default function GeneralDashboard() {
         ))}
       </div>
 
-      <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
+      <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
         {/* Recent Activity */}
-        <div className='lg:col-span-8 space-y-6'>
+        <div className='lg:col-span-8 space-y-4'>
           <div className='flex items-center justify-between mb-4'>
             <h3 className='text-xl font-bold flex items-center gap-2'>
               <BarChart3 className='h-5 w-5 text-pw-primary' /> Recent Activity
             </h3>
             <div className='flex items-center gap-2'>
               <InAppNotificationCenter />
-              <Button variant='link' onClick={() => router.push('/quiz')} className='text-pw-primary text-xs'>View all</Button>
             </div>
           </div>
 
-          <div className='space-y-4'>
+          <div className='space-y-2'>
             {recentActivity.length > 0 ?
               recentActivity.map((item, i) => (
                 <motion.div
@@ -175,8 +179,8 @@ export default function GeneralDashboard() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.1 }}>
-                  <Card className='p-5 flex items-center justify-between bg-pw-surface/50 border-white/5 hover:bg-white/[0.03] transition-colors'>
-                    <div className='flex items-center gap-4'>
+                  <Card className='p-2 sm:p-4 flex items-center flex-row justify-between bg-pw-surface/60 bkblur border-white/5 rounded-xl hover:bg-pw-surface/60 transition-colors gap-4'>
+                    <div className='flex items-center gap-2'>
                       <div className='w-10 h-10 rounded-full bg-pw-primary/10 flex items-center justify-center'>
                         {item.type === 'quiz' ?
                           <Puzzle className='h-5 w-5 text-pw-primary' />
@@ -194,7 +198,7 @@ export default function GeneralDashboard() {
                     <Button
                       variant='ghost'
                       size='icon'
-                      className='h-8 w-8 text-pw-muted'>
+                      className='h-8 w-8 text-pw-muted hover:bg-transparent'>
                       <ChevronRight className='h-4 w-4' />
                     </Button>
                   </Card>
@@ -211,25 +215,24 @@ export default function GeneralDashboard() {
 
         {/* Sidebar Mini Profile */}
         <div className='lg:col-span-4 space-y-6'>
-          <Card className='card-glow p-8'>
-            <div className='flex flex-col items-center text-center mb-8'>
+          <Card className='card-glow p-3 sm:p-6 rounded-2xl'>
+            <div className='flex flex-col items-center text-center mb-4 mt-3'>
               <div className='w-20 h-20 rounded-2xl gradient-brand flex items-center justify-center mb-4 shadow-xl'>
                 <User className='h-10 w-10 text-white' />
               </div>
-              <h4 className='text-xl font-bold font-display'>
-                Creator Profile
-              </h4>
+              <h4 className='text-xl font-bold font-display'>User Profile</h4>
               <p
-                className='text-xs text-pw-muted mt-1 uppercase tracking-widest font-bold'
+                className='text-xs text-pw-muted uppercase tracking-widest font-bold'
                 style={{ color: tierConfig.color }}>
-                {tierConfig.badge} - {tierConfig.label}
+                {' '}
+                {tierConfig.label}
               </p>
             </div>
 
-            <div className='space-y-4 mb-8'>
-              <div className='p-3 bg-white/5 border border-white/10 rounded-xl'>
-                <label className='text-[10px] font-bold text-pw-muted uppercase mb-1 block'>
-                  Public Inbox Link
+            <div className='space-y-4'>
+              <div className='p-2 bg-white/5 border border-white/5 rounded-lg'>
+                <label className='text-[10px] font-bold text-pw-muted uppercase block'>
+                  Public Link
                 </label>
                 <div className='flex items-center justify-between'>
                   <span className='text-xs truncate text-pw-primary font-medium'>
@@ -248,8 +251,8 @@ export default function GeneralDashboard() {
               </div>
 
               {stats.messages > 0 && (
-                <Link href='/message'>
-                  <div className='p-3 bg-pw-primary/10 border border-pw-primary/20 rounded-xl flex items-center justify-between hover:bg-pw-primary/20 transition-colors cursor-pointer'>
+                <Link href='/message mt-4'>
+                  <div className='p-2 bg-pw-primary/10 border border-pw-primary/20 rounded-xl flex items-center justify-between hover:bg-pw-primary/20 transition-colors cursor-pointer bkblur'>
                     <div className='flex items-center gap-2'>
                       <BellDot className='h-4 w-4 text-pw-primary' />
                       <span className='text-xs font-bold text-pw-primary'>
@@ -263,26 +266,28 @@ export default function GeneralDashboard() {
                 </Link>
               )}
             </div>
-
-            <Button className='w-full btn-primary h-11 gap-2'>
-              <ArrowUpRight className='h-4 w-4' /> Share All Assets
-            </Button>
           </Card>
 
-          <Card className='p-6 bg-gradient-to-br from-pw-primary/10 via-pw-surface/50 to-pw-secondary/10 border border-pw-primary/20 hover:border-pw-primary/40 transition-all rounded-2xl relative overflow-hidden group shadow-xl'>
+          <Card className='p-3 sm:p-6 bg-gradient-to-br from-pw-primary/10 via-pw-surface/50 to-pw-secondary/10 border border-pw-primary/20 hover:border-pw-primary/40 transition-all rounded-2xl relative overflow-hidden group shadow-xl bkblur'>
             <div className='absolute -top-10 -right-10 w-28 h-28 bg-pw-primary/10 rounded-full blur-2xl group-hover:scale-110 transition-transform' />
-            <h4 className='text-sm font-bold mb-2 text-white flex items-center gap-2'>
-              <Layers className='h-4 w-4 text-pw-primary' /> Pricing & Payments
+            <h4 className='text-sm font-bold mb-1 text-white flex items-center gap-2 mt-2'>
+              <Layers className='h-4 w-4 text-pw-primary' /> Subscriptions
             </h4>
             <p className='text-[11px] text-pw-muted leading-relaxed mb-4'>
-              Current Plan: <span className='text-pw-primary font-bold uppercase tracking-wider'>{tierConfig.label}</span>
+              Current Plan:{' '}
+              <span className='text-pw-primary font-bold uppercase tracking-wider'>
+                {tierConfig.label}
+              </span>
               <br />
-              Unlock extended assessment lifespan up to 30 days, custom link routing, public message boards, and pro-level tools with flexible, standard or pro premium billing plans.
+              Unlock extended lifespan, features, designs and pro-level tools
+              with flexible, standard or pro premium plans.
             </p>
-            <div className="flex gap-2">
-              <Link href='/pricing' className="w-full">
+            <div className='flex gap-2'>
+              <Link
+                href='/pricing'
+                className='w-full'>
                 <Button className='w-full btn-primary h-10 text-xs font-bold gap-1.5 cursor-pointer'>
-                  Upgrade Plan <ArrowUpRight className="h-3.5 w-3.5" />
+                  View Pricing <ArrowUpRight className='h-3.5 w-3.5' />
                 </Button>
               </Link>
             </div>

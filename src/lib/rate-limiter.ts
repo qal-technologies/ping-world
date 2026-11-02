@@ -49,6 +49,18 @@ export function isRateLimited(
   limit: number,
   windowMs: number
 ): { limited: boolean; remaining: number; reset: number } {
+  // In development on localhost, grant elevated quota so rapid local testing/reloads never hit 429 errors
+  const isLocalDev =
+    process.env.NODE_ENV !== 'production' &&
+    (ip === '127.0.0.1' ||
+      ip === '::1' ||
+      ip === 'localhost' ||
+      ip === '::ffff:127.0.0.1' ||
+      ip.startsWith('192.168.') ||
+      ip.startsWith('10.'));
+
+  const effectiveLimit = isLocalDev ? Math.max(limit * 50, 1000) : limit;
+
   const now = Date.now();
   const key = `${ip}:${route}`;
   const info = rateLimitStore.get(key);
@@ -56,13 +68,13 @@ export function isRateLimited(
   if (!info || now > info.resetTime) {
     const resetTime = now + windowMs;
     rateLimitStore.set(key, { count: 1, resetTime });
-    return { limited: false, remaining: limit - 1, reset: resetTime };
+    return { limited: false, remaining: effectiveLimit - 1, reset: resetTime };
   }
 
-  if (info.count >= limit) {
-    return { limited: true, remaining: 0, reset: info.resetTime };
+  if (info.count >= effectiveLimit) {
+    return { limited: !isLocalDev, remaining: 0, reset: info.resetTime };
   }
 
   info.count += 1;
-  return { limited: false, remaining: limit - info.count, reset: info.resetTime };
+  return { limited: false, remaining: effectiveLimit - info.count, reset: info.resetTime };
 }

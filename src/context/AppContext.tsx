@@ -103,15 +103,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadSession = useCallback(async () => {
     if (!hasLoadedSession.current) setIsLoading(true);
     try {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
+      let {
+        data: { session: authSession },
+      } = await supabase.auth.getSession();
       let authUser = authSession?.user || null;
       // Auth JWT claims can lag behind a completed Stripe webhook. Refresh the
       // account record online so app_metadata reflects the server's latest tier.
-      if (authSession && typeof navigator !== 'undefined' && navigator.onLine) {
+      if (
+        authSession &&
+        typeof navigator !== 'undefined' &&
+        navigator.onLine &&
+        isOnline
+      ) {
         try {
           const { data, error } = await supabase.auth.getUser();
           if (!error && data.user) authUser = data.user;
-        } catch { /* retain the locally cached session while offline */ }
+        } catch {
+          /* retain the locally cached session while offline */
+        }
       }
       if (authUser) {
         if (!authUser.email_confirmed_at) {
@@ -124,17 +133,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setPurchasedTools([]);
           return;
         }
+        // Older accounts may have a base64 avatar stored in user_metadata,
+        // which is embedded in Supabase JWTs and can make local API requests
+        // fail with 431. Remove the oversized claim once, then refresh the
+        // user object/session before the app starts making authenticated calls.
+        const metadataAvatar = authUser.user_metadata?.avatar_url;
+        const metadataPicture = authUser.user_metadata?.picture;
+        if ([metadataAvatar, metadataPicture].some((value) => typeof value === 'string' && /^data:image\//i.test(value))) {
+          try {
+            const { data: updated, error } = await supabase.auth.updateUser({
+              data: {
+                ...(typeof metadataAvatar === 'string' && /^data:image\//i.test(metadataAvatar) ? { avatar_url: null } : {}),
+                ...(typeof metadataPicture === 'string' && /^data:image\//i.test(metadataPicture) ? { picture: null } : {}),
+              },
+            });
+            if (!error && updated.user) authUser = updated.user;
+            if (!error) {
+              const { data: refreshedSession } = await supabase.auth.getSession();
+              if (refreshedSession.session) authSession = refreshedSession.session;
+            }
+          } catch {
+            // Keep loading the account; routes will show actionable auth errors.
+          }
+        }
         await HybridStorage.setUserId(authUser.id);
         setUser(authUser);
         const meta = authUser.user_metadata ?? {};
         setUsername(meta.username || 'user');
-        setDp(meta.avatar_url || '');
+        let profileAvatar = typeof meta.avatar_url === 'string' && !/^data:image\//i.test(meta.avatar_url) ? meta.avatar_url : '';
+        if (!profileAvatar && isOnline) {
+          try {
+            const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', authUser.id).maybeSingle();
+            if (typeof profile?.avatar_url === 'string') profileAvatar = profile.avatar_url;
+          } catch { /* Avatar display must not block session initialization. */ }
+        }
+        setDp(profileAvatar);
         // Billing tier is server-managed app metadata. User metadata is editable
         // by the account holder and must not grant paid-only controls.
         const accessMeta = authUser.app_metadata ?? {};
         const resolved = resolveTier(accessMeta.tier);
-        const expiry = typeof accessMeta.tier_expires_at === 'string'
-          ? Date.parse(accessMeta.tier_expires_at)
+        const expiry =
+          typeof accessMeta.tier_expires_at === 'string' ?
+            Date.parse(accessMeta.tier_expires_at)
           : Number.NaN;
         const tierIsActive = Number.isFinite(expiry) && expiry > Date.now();
         setPremiumTier(tierIsActive ? resolved : 'free');
@@ -144,23 +184,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           // Firebase is an optional bridge. Avoid requests that can only fail
           // when the client-side Firebase app is not configured in this deploy.
-          if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || !process.env.NEXT_PUBLIC_FIREBASE_APP_ID) throw new Error('Firebase client is not configured.');
-          if (!authSession?.access_token) throw new Error('No Supabase access token is available.');
+          if (
+            !process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+            !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+            !process.env.NEXT_PUBLIC_FIREBASE_APP_ID ||
+            !isOnline
+          )
+            throw new Error(
+              'Firebase client is not configured or no internet connection.',
+            );
+          if (!authSession?.access_token)
+            throw new Error('No Supabase access token is available.');
           const res = await fetch('/api/auth/firebase-token', {
             method: 'POST',
             headers: { Authorization: `Bearer ${authSession.access_token}` },
             credentials: 'omit',
           });
-          if (!res.ok) throw new Error(`Firebase bridge returned ${res.status}.`);
+          if (!res.ok)
+            throw new Error(`Firebase bridge returned ${res.status}.`);
           const data = await res.json();
           if (data.firebaseToken) {
             const { signInWithCustomToken } = await import('firebase/auth');
             const { auth: firebaseAuth } = await import('@/lib/firebase');
             await signInWithCustomToken(firebaseAuth, data.firebaseToken);
-            console.log('[Firebase Auth Bridge] Signed into Firebase with Supabase UID successfully!');
+            console.log(
+              '[Firebase Auth Bridge] Signed into Firebase with Supabase UID successfully!',
+            );
           }
         } catch (firebaseErr) {
-          if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) console.warn('[Firebase Auth Bridge] Session bridging was bypassed or failed:', firebaseErr);
+          if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY)
+            console.warn(
+              '[Firebase Auth Bridge] Session bridging was bypassed or failed:',
+              firebaseErr,
+            );
         }
       } else {
         await HybridStorage.setUserId('guest');
@@ -171,16 +227,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPurchasedTools([]);
 
         try {
-          if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || !process.env.NEXT_PUBLIC_FIREBASE_APP_ID) throw new Error('Firebase client is not configured.');
+          if (
+            !process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+            !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+            !process.env.NEXT_PUBLIC_FIREBASE_APP_ID ||
+            !isOnline
+          )
+            throw new Error(
+              'Firebase client is not configured or no internet connection.',
+            );
           const { signInAnonymously } = await import('firebase/auth');
           const { auth: firebaseAuth } = await import('@/lib/firebase');
           await signInAnonymously(firebaseAuth);
         } catch (firebaseErr) {
-          if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) console.warn('[Firebase Auth Bridge] Anonymous authentication fallback was bypassed or failed:', firebaseErr);
+          if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY)
+            console.warn(
+              '[Firebase Auth Bridge] Anonymous authentication fallback was bypassed or failed:',
+              firebaseErr,
+            );
         }
       }
     } catch (err) {
-      console.error('[loadSession] Error occurred during auth initialization:', err);
+      console.error(
+        '[loadSession] Error occurred during auth initialization:',
+        err,
+      );
       await HybridStorage.setUserId('guest');
       setUser(null);
     } finally {
@@ -190,27 +261,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const isFeatureUnlocked = useCallback((featureId: string): boolean => {
-    if (premiumTier === 'pro' || premiumTier === 'standard') return true;
-    if (premiumTier === 'flexible') {
+  const isFeatureUnlocked = useCallback(
+    (featureId: string): boolean => {
+      if (premiumTier === 'pro' || premiumTier === 'standard') return true;
+      if (premiumTier === 'flexible') {
+        // Normalize feature aliases
+        const normalizedMap: Record<string, string[]> = {
+          quizzable: ['quizzable', 'quiz', 'quiz-builder'],
+          quiz: ['quizzable', 'quiz', 'quiz-builder'],
+          composer: ['composer', 'creator-hub', 'social-composer'],
+          'creator-hub': ['composer', 'creator-hub'],
+          anonlink: ['anonlink', 'message', 'anonymous-messages'],
+          message: ['anonlink', 'message'],
+          'pdf-tools': ['pdf-tools', 'pdf', 'book-creator'],
+          pdf: ['pdf-tools', 'pdf'],
+        };
 
-      // Normalize feature aliases
-      const normalizedMap: Record<string, string[]> = {
-        'quizzable': ['quizzable', 'quiz', 'quiz-builder'],
-        'quiz': ['quizzable', 'quiz', 'quiz-builder'],
-        'composer': ['composer', 'creator-hub', 'social-composer'],
-        'creator-hub': ['composer', 'creator-hub'],
-        'anonlink': ['anonlink', 'message', 'anonymous-messages'],
-        'message': ['anonlink', 'message'],
-        'pdf-tools': ['pdf-tools', 'pdf', 'book-creator'],
-        'pdf': ['pdf-tools', 'pdf'],
-      };
-
-      const validAliases = normalizedMap[featureId] || [featureId];
-      return purchasedTools.some((p) => validAliases.includes(p));
-    }
-    return false;
-  }, [premiumTier, purchasedTools]);
+        const validAliases = normalizedMap[featureId] || [featureId];
+        return purchasedTools.some((p) => validAliases.includes(p));
+      }
+      return false;
+    },
+    [premiumTier, purchasedTools],
+  );
 
   useEffect(() => {
     // Session bootstrap must begin when the provider mounts.
@@ -220,7 +293,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void checkCache();
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       loadSession();
     });
     return () => subscription.unsubscribe();

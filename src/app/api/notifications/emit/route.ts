@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many notification requests.' }, { status: 429 });
   }
   try {
-    const body = await readJsonWithinLimit(request, 12 * 1024) as Record<string, unknown>;
+    const body = await readJsonWithinLimit(request, 256 * 1024) as Record<string, unknown>;
     const token = typeof body.accessToken === 'string' ? body.accessToken : '';
-    if (!token || token.length > 16 * 1024) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    if (!token || token.length > 240 * 1024) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     const user = await getRequestUserFromToken(token);
     if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     if (isRateLimited(user.id, 'api:notification-emit:user', 30, 60_000).limited) {

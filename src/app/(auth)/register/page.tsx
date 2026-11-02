@@ -190,7 +190,7 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          <div className='w-8 h-8 p-1 rounded-full bg-white text-black flex items-center justify-center shadow-sm absolute right-2 top-2' />
+          <div className='w-8 h-8 p-1 rounded-full bg-pw-cyan text-black flex items-center justify-center shadow-sm shadow-pw-primary/80 absolute right-2 top-2' />
 
           <Link
             href='/'
@@ -204,13 +204,13 @@ export default function RegisterPage() {
           className='form p-8 md:p-12 gap-2 md:gap-5 w-full md:col-span-2 grid backdrop-blur-xl'>
           <div className='space-y-4'>
             <div className='form-group'>
-              <label className='form-label mb-1.5'>
+              <label className='form-label mb-1.5 text-sm'>
                 <User size={18} /> Username
               </label>
               <input
                 className={cn(
                   'form-input',
-                  'border-white/10 hover:border-pw-primary/30'
+                  'border-white/10 hover:border-pw-primary/30 text-sm'
                 )}
                 placeholder='JohnDoe'
                 value={formData.name}
@@ -244,11 +244,11 @@ export default function RegisterPage() {
             </div>
 
             <div className='form-group'>
-              <label className='form-label mb-1.5'>
+              <label className='form-label mb-1.5 text-sm'>
                 <Mail size={18} /> Email
               </label>
               <input
-                className='form-input border-white/10 hover:border-pw-primary/30'
+                className='form-input border-white/10 hover:border-pw-primary/30 text-sm'
                 type='email'
                 placeholder='name@example.com'
                 value={formData.email}
@@ -259,12 +259,12 @@ export default function RegisterPage() {
             </div>
 
             <div className='form-group'>
-              <label className='form-label mb-1.5'>
+              <label className='form-label mb-1.5 text-sm'>
                 <Key size={18} /> Password
               </label>
               <div className='flex gap-2 w-full'>
                 <input
-                  className='form-input border-white/10 hover:border-pw-primary/30'
+                  className='form-input border-white/10 hover:border-pw-primary/30 text-sm'
                   type={secure ? 'password' : 'text'}
                   placeholder='••••••••'
                   value={formData.password}
@@ -321,7 +321,7 @@ export default function RegisterPage() {
             </Button>
             {registrationCountdown && <p role='status' className='text-center text-sm text-pw-warning'>{registrationCountdown}</p>}
 
-            <div className='flex justify-center items-center gap-2 text-sm text-pw-muted'>
+            <div className='flex justify-center items-center gap-2 text-sm text-pw-muted mt-[-20px]'>
               Have an account?{' '}
               <Link
                 href='/login'

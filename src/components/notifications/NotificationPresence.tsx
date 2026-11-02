@@ -13,20 +13,31 @@ export default function NotificationPresence() {
     let stopped = false;
     const report = async () => {
       if (stopped || document.visibilityState !== 'visible') return;
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (stopped || !session?.access_token) return;
       await fetch('/api/notifications/presence', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
-        body: JSON.stringify({ active: true, accessToken: session.access_token }), keepalive: true,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({
+          active: true,
+          accessToken: session.access_token,
+        }),
+        keepalive: true,
       }).catch(() => undefined);
     };
     void report();
     const timer = window.setInterval(() => void report(), 30_000);
-    const wake = () => { if (document.visibilityState === 'visible') void report(); };
+    const wake = () => {
+      if (document.visibilityState === 'visible') void report();
+    };
     window.addEventListener('focus', wake);
     document.addEventListener('visibilitychange', wake);
     return () => {
-      stopped = true; window.clearInterval(timer);
+      stopped = true;
+      window.clearInterval(timer);
       window.removeEventListener('focus', wake);
       document.removeEventListener('visibilitychange', wake);
     };

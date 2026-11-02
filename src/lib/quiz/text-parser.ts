@@ -11,6 +11,15 @@ import { tagTextExport } from '@/lib/pingworld-attribution';
 
 const ALLOWED_TAGS_REGEX = /<\/?(b|strong|i|em|code|pre|u|mark|a|sub|sup|br)\b[^>]*>/gi;
 
+const isAnsweredResponse = (answer: any) => Boolean(
+  answer && !answer.passed && (
+    answer.fileUrl ||
+    (Array.isArray(answer.answer) ? answer.answer.length > 0 :
+      typeof answer.answer === 'string' ? answer.answer.trim().length > 0 :
+        answer.answer !== undefined && answer.answer !== null)
+  ),
+);
+
 /**
  * Strips unallowed HTML tags from text while preserving allowed formatting tags and line breaks.
  * Explicitly excludes <p> and <span> as requested.
@@ -176,7 +185,7 @@ export function exportResponsesToCSV(quiz: any, responses: any[]): string {
     return [
       quiz.id,
       r.timestamp || '',
-      ...(isQuiz ? [score, total, r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length, possible, pct] : [r.submissionReason || 'completion']),
+      ...(isQuiz ? [score, total, r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter(isAnsweredResponse).length, possible, pct] : [r.submissionReason || 'completion']),
       JSON.stringify(responsePathQuestions(r, quiz).map((question: any) => {
         const answer = (r.answers || []).find((item: any) => String(item.questionId) === String(question.id));
         return { questionId: question.id, questionText: question.text, category: question.category || null, answer: answer ? formatAnswerForExport(answer.answer, question, 'json') : null, passed: Boolean(answer?.passed), isCorrect: answer?.correct ?? null, mediaUrl: typeof answer?.fileUrl === 'string' ? (unpackPingWorldMediaUrl(answer.fileUrl).url || answer.fileUrl) : null };
@@ -205,7 +214,7 @@ export function exportResponsesToJSON(quiz: any, responses: any[]): string {
       score: quiz.type === 'quiz' ? (r.score ?? 0) : null,
       responseId: r.id || null,
       totalQuestions: r.totalQuestions ?? quiz.questions?.length ?? 0,
-      attemptedQuestions: r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length,
+      attemptedQuestions: r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter(isAnsweredResponse).length,
       scorePossible: r.scorePossible !== undefined ? Math.max(0, Number(r.scorePossible) || 0) : r.userData?.scorePossible !== undefined ? Math.max(0, Number(r.userData.scorePossible) || 0) : null,
       currentPathQuestionIds: r.currentPathQuestionIds || r.userData?.currentPathQuestionIds || (r.answers || []).map((answer: any) => answer.questionId),
       pathQuestions: responsePathQuestions(r, quiz).map((question: any) => {
@@ -268,7 +277,7 @@ export function exportResponsesToText(quiz: any, responses: any[]): string {
     lines.push(`- Submission Date: ${r.timestamp || 'N/A'}`);
     if (quiz.type === 'quiz') {
       const possible = r.scorePossible ?? r.userData?.scorePossible ?? r.totalQuestions ?? 0;
-      const attempted = r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter((answer: any) => !answer.passed && answer.answer !== undefined && answer.answer !== '').length;
+      const attempted = r.answeredQuestions ?? r.userData?.answeredQuestions ?? (r.answers || []).filter(isAnsweredResponse).length;
       lines.push(`- Score: ${r.score ?? 0} / ${possible} points`);
       lines.push(`- Questions: ${attempted} attempted / ${r.totalQuestions ?? 0} total`);
       lines.push(`- Submission reason: ${r.submissionReason || 'completion'}`);

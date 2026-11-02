@@ -147,6 +147,56 @@ export function formatDobToWords(dateStr: string | null | undefined): string {
 /**
  * Extracts a specific getter from a date string: age, month, year, day
  */
+export function calculateDobAgeYears(dateStr: string | null | undefined, referenceDate = new Date()): number | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const match = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const dob = new Date(Date.UTC(year, month - 1, day));
+  if (dob.getUTCFullYear() !== year || dob.getUTCMonth() !== month - 1 || dob.getUTCDate() !== day) return null;
+  const todayYear = referenceDate.getUTCFullYear();
+  const todayMonth = referenceDate.getUTCMonth() + 1;
+  const todayDay = referenceDate.getUTCDate();
+  if (year > todayYear || (year === todayYear && (month > todayMonth || (month === todayMonth && day > todayDay)))) return null;
+  let age = todayYear - year;
+  if (todayMonth < month || (todayMonth === month && todayDay < day)) age--;
+  return age;
+}
+
+/** Whole elapsed days since a date-only birth date, using UTC calendar dates. */
+export function calculateDobAgeDays(dateStr: string | null | undefined, referenceDate = new Date()): number | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const match = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const birthDate = new Date(Date.UTC(year, month - 1, day));
+  if (birthDate.getUTCFullYear() !== year || birthDate.getUTCMonth() !== month - 1 || birthDate.getUTCDate() !== day) return null;
+  const today = Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate());
+  const elapsed = today - birthDate.getTime();
+  return elapsed < 0 ? null : Math.floor(elapsed / 86_400_000);
+}
+
+/** Friendly single-unit DOB age for display: years, months, or days. */
+export function formatDobAge(dateStr: string | null | undefined, referenceDate = new Date()): string {
+  const days = calculateDobAgeDays(dateStr, referenceDate);
+  const years = calculateDobAgeYears(dateStr, referenceDate);
+  if (days === null || years === null) return '';
+  if (years > 0) return `${years} year${years === 1 ? '' : 's'}`;
+  const parts = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!parts) return '';
+  const birthMonth = Number(parts[2]) - 1;
+  const birthDay = Number(parts[3]);
+  let months = (referenceDate.getUTCFullYear() - Number(parts[1])) * 12 + (referenceDate.getUTCMonth() - birthMonth);
+  if (referenceDate.getUTCDate() < birthDay) months--;
+  if (months > 0) return `${months} month${months === 1 ? '' : 's'}`;
+  if (days === 0) return 'less than 1 day';
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 export function getDobGetter(dateStr: string | null | undefined, getter: string): string {
   if (!dateStr || typeof dateStr !== 'string') return '';
   const trimmed = dateStr.trim();
@@ -184,7 +234,12 @@ export function getDobGetter(dateStr: string | null | undefined, getter: string)
     if (mDiff < 0 || (mDiff === 0 && today.getDate() < d)) {
       age--;
     }
-    return String(Math.max(0, age));
+    if (age < 1) {
+      let months = (today.getFullYear() - y) * 12 + (today.getMonth() - m);
+      if (today.getDate() < d) months--;
+      return `${Math.max(0, months)} month${Math.max(0, months) === 1 ? '' : 's'}`;
+    }
+    return String(age);
   }
   if (g === 'month') {
     return MONTH_NAMES[m] || '';

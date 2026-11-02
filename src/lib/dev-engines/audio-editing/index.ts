@@ -804,6 +804,9 @@ export class AudioEditingEngine {
   // ---- Low-level helpers ----
 
   private _getCtx(): AudioContext {
+    if (typeof window === 'undefined') {
+      throw new Error('Web Audio synthesis requires a browser environment.');
+    }
     if (!this.audioCtx || this.audioCtx.state === 'closed') {
       const Ctx = window.AudioContext || (window as any).webkitAudioContext;
       this.audioCtx = new Ctx();
