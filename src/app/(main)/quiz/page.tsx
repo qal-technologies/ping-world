@@ -2044,23 +2044,16 @@ export default function QuizPage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         {user?.email_confirmed_at &&
-                          premiumTier === 'free' &&
-                          viewingResponses.id ===
+                          premiumTier !== 'free' &&
+                          viewingResponses.id !==
                             DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id && (
                             <Button
                               variant='outline'
                               size='sm'
                               disabled={
-                                isEmailingExport ||
-                                !user?.email_confirmed_at ||
-                                premiumTier === 'free' ||
-                                viewingResponses.id ===
-                                  DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id
+                                isEmailingExport
                               }
-                              title={
-                                premiumTier === 'free' ?
-                                  'Email export is available to active paid subscribers'
-                                : 'Email the full export to your verified account email'
+                              title={'Email the full export to your verified account email'
                               }
                               onClick={() =>
                                 void emailResponseExport(

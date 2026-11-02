@@ -226,7 +226,7 @@ export default function InAppNotificationCenter() {
           <>
             <button
               aria-label='Close notifications'
-              className='fixed inset-0 z-[70] cursor-default'
+              className='fixed inset-0 z-[70] cursor-default backdrop-blur-md sm:backdrop-blur-none'
               onClick={() => setOpen(false)}
             />
             <motion.section
