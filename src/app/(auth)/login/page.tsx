@@ -119,7 +119,7 @@ export default function LoginPage() {
       if (error) throw error;
       await refresh();
 
-      toast.success('Welcome back!');
+      toast.success(`${user?.user_metadata?.display_name ?? 'Hello'}, Welcome back!`);
       router.replace('/dashboard');
     } catch (err: any) {
       if (!navigator.onLine) toast.error('No internet connection, Try again!');

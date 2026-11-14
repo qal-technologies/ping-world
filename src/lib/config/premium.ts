@@ -3,22 +3,136 @@
  * All tier checks, limits, and feature gates should reference this file.
  */
 
+export interface FlexibleIds {
+  id: 'composer' | 'quiz' | 'pdf' | 'anonlink' | 'text-editor' | 'images' | string;
+}
 // Define flexible plan features & pricing configuration
 export interface FlexibleFeature {
-  id: string;
+  id: FlexibleIds['id'];
   label: string;
   monthly: number;
   yearly: number;
 }
 
+export interface FlexibleToolEntitlement {
+  toolId: string;
+  subscriptionId: string | null;
+  startsAt: string;
+  expiresAt: string;
+  billingCycle: 'monthly' | 'yearly';
+  autoRenew: boolean;
+}
+
+
 // Modular and easily tweakable individual pricing rules for the flexible plan
 export const FLEXIBLE_FEATURES: FlexibleFeature[] = [
   { id: 'composer', label: 'Creator Hub', monthly: 2.99, yearly: 29.99 },
   { id: 'quizzable', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
-  {id: 'pdf-studio', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99},
-  {id: 'anonlink', label: 'AnonLink Pro', monthly: 0.99, yearly: 9.99},
-  { id: 'editor', label: 'Rich Notes & Editor Pro', monthly: 0.99, yearly: 9.99 },
+  { id: 'pdf-studio', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99 },
+  { id: 'anonlink', label: 'AnonLink Pro', monthly: 0.99, yearly: 9.99 },
+  {
+    id: 'editor',
+    label: 'Rich Notes & Editor Pro',
+    monthly: 0.99,
+    yearly: 9.99,
+  },
+  {
+    id: 'images',
+    label: 'Media Editor & Bizzcard Pro',
+    monthly: 1.99,
+    yearly: 19.99,
+  },
 ];
+
+/** Read only explicitly purchased flexible tools from trusted account metadata. */
+export function readFlexibleTools(metadata: Record<string, any> | null | undefined): string[] {
+  if (!metadata) return [];
+  const raw: unknown = metadata.flexibleTools ?? metadata.purchased_tools;
+  let values: unknown[];
+  if (Array.isArray(raw)) {
+    values = raw;
+  } else if (typeof raw === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      values = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      values = raw.split(',').map((value) => value.trim()).filter(Boolean);
+    }
+  } else {
+    values = metadata.selectedFlexibleToolId ? [metadata.selectedFlexibleToolId] : [];
+  }
+  return Array.from(new Set(values
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => FLEXIBLE_FEATURES.some((feature) => feature.id === value))));
+}
+
+/** Per-tool paid periods. Legacy flexible accounts are mapped to their existing
+ * shared period until each tool is next renewed or separately purchased. */
+export function readFlexibleEntitlements(
+  metadata: Record<string, any> | null | undefined,
+): FlexibleToolEntitlement[] {
+  if (!metadata) return [];
+  let raw: unknown = metadata.flexible_entitlements;
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch { raw = []; }
+  }
+  if (Array.isArray(raw)) {
+    const seen = new Set<string>();
+    return raw.flatMap((entry): FlexibleToolEntitlement[] => {
+      if (!entry || typeof entry !== 'object') return [];
+      const item = entry as Record<string, unknown>;
+      const toolId = typeof item.toolId === 'string' ? item.toolId : '';
+      const startsAt = typeof item.startsAt === 'string' ? item.startsAt : '';
+      const expiresAt = typeof item.expiresAt === 'string' ? item.expiresAt : '';
+      const billingCycle = item.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+      if (!FLEXIBLE_FEATURES.some((feature) => feature.id === toolId) ||
+        !Number.isFinite(Date.parse(startsAt)) || !Number.isFinite(Date.parse(expiresAt)) || seen.has(toolId)) return [];
+      seen.add(toolId);
+      return [{
+        toolId,
+        subscriptionId: typeof item.subscriptionId === 'string' ? item.subscriptionId : null,
+        startsAt,
+        expiresAt,
+        billingCycle,
+        autoRenew: item.autoRenew === true,
+      }];
+    });
+  }
+  const expiresAt = typeof metadata.tier_expires_at === 'string' ? metadata.tier_expires_at : '';
+  if (!Number.isFinite(Date.parse(expiresAt))) return [];
+  const startsAt = typeof metadata.tier_started_at === 'string' && Number.isFinite(Date.parse(metadata.tier_started_at))
+    ? metadata.tier_started_at
+    : new Date(0).toISOString();
+  const billingCycle = metadata.billing_cycle === 'yearly' ? 'yearly' : 'monthly';
+  return readFlexibleTools(metadata).map((toolId) => ({
+    toolId,
+    subscriptionId: typeof metadata.stripe_subscription_id === 'string' ? metadata.stripe_subscription_id : null,
+    startsAt,
+    expiresAt,
+    billingCycle,
+    autoRenew: metadata.auto_renew === true,
+  }));
+}
+
+export function activeFlexibleEntitlements(
+  metadata: Record<string, any> | null | undefined,
+  now = Date.now(),
+): FlexibleToolEntitlement[] {
+  return readFlexibleEntitlements(metadata).filter((entry) => Date.parse(entry.expiresAt) > now);
+}
+
+export function flexibleEntitlementSummary(entries: FlexibleToolEntitlement[], now = Date.now()) {
+  const active = entries.filter((entry) => Date.parse(entry.expiresAt) > now);
+  return {
+    active,
+    tools: Array.from(new Set(active.map((entry) => entry.toolId))),
+    expiresAt: active.reduce<string | null>((latest, entry) =>
+      !latest || Date.parse(entry.expiresAt) > Date.parse(latest) ? entry.expiresAt : latest, null),
+    autoRenew: active.some((entry) => entry.autoRenew),
+    subscriptionId: active.find((entry) => entry.subscriptionId)?.subscriptionId || null,
+  };
+}
 
 export type PremiumTier = 'free' | 'flexible' | 'standard' | 'pro';
 

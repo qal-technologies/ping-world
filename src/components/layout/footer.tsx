@@ -7,9 +7,7 @@ import {
   Instagram,
   Linkedin,
   Mail,
-  Twitter,
   Youtube,
-  Zap,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -110,7 +108,7 @@ export const Footer = () => {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
+                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px] hover:translate-x-2'>
                     {link.label}
                   </Link>
                 </li>
@@ -126,7 +124,7 @@ export const Footer = () => {
                 <li key={tool.href}>
                   <Link
                     href={tool.href}
-                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
+                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px] hover:translate-x-2'>
                     {tool.title}
                   </Link>
                 </li>
@@ -153,7 +151,7 @@ export const Footer = () => {
                           key={tool.href}
                           href={tool.href}
                           onClick={() => setIsOpen(false)}
-                          className='text-xs text-pw-muted hover:text-pw-primary transition-colors px-3 py-1 rounded hover:bg-white/5'>
+                          className='text-xs text-pw-muted hover:text-pw-primary transition-colors px-3 py-1 rounded hover:bg-white/5 hover:translate-x-2'>
                           {tool.title}
                         </Link>
                       ))}
@@ -175,7 +173,7 @@ export const Footer = () => {
                   className='truncate'>
                   <Link
                     href={devTool.href}
-                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px]'>
+                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px] hover:translate-x-2'>
                     {devTool.label}
                   </Link>
                 </li>
@@ -198,7 +196,7 @@ export const Footer = () => {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors'>
+                    className='text-sm text-pw-muted hover:text-pw-primary transition-colors block truncate max-w-[180px] hover:translate-x-2'>
                     {link.label}
                   </Link>
                 </li>
@@ -218,7 +216,7 @@ export const Footer = () => {
               target='_blank'
               rel='noopener noreferrer'
               aria-label={`Follow ${COMPANY.name} on ${s.name}`}
-              className='text-pw-muted hover:text-pw-primary hover:scale-110 transition-all'>
+              className='text-pw-muted hover:text-pw-primary hover:scale-110 transition-all hover:-translate-y-2'>
               <s.icon className='w-5 h-5' />
             </Link>
           ))}

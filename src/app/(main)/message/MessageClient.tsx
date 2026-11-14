@@ -36,10 +36,11 @@ interface MessageRow {
 }
 
 import { useAppContext } from '@/context/AppContext';
+import { cn } from '@/lib/utils';
 
 export default function MessageLandingPage() {
-  const {premiumTier, user, isFeatureUnlocked, username} = useAppContext();
-  
+  const { premiumTier, user, isFeatureUnlocked, username } = useAppContext();
+
   const isPremium = isFeatureUnlocked('anonlink');
   const [activeTab, setActiveTab] = useState<'inbox' | 'settings'>('inbox');
 
@@ -57,7 +58,6 @@ export default function MessageLandingPage() {
   //   "👀 Say more. I'm listening.",
   // ]);
 
-
   const [messageTitle, setMessageTitle] = useState('');
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [copiedLink, setCopiedLink] = useState<'inbox' | 'public' | null>(null);
@@ -69,7 +69,6 @@ export default function MessageLandingPage() {
     const fetchUserAndMessages = async () => {
       setLoading(true);
       try {
-
         let userId = '';
         if (user) {
           userId = user.id;
@@ -78,13 +77,14 @@ export default function MessageLandingPage() {
 
           const { data: profile } = await supabase
             .from('profiles')
-            .select(
-              'is_public_inbox, custom_question, message_expiry_days',
-            )
+            .select('is_public_inbox, custom_question, message_expiry_days')
             .eq('id', user.id)
             .single();
 
-          const cachedLinkId = user.user_metadata?.custom_link_id || localStorage.getItem('pw_anon_custom_link_id') || '';
+          const cachedLinkId =
+            user.user_metadata?.custom_link_id ||
+            localStorage.getItem('pw_anon_custom_link_id') ||
+            '';
           setLinkId(cachedLinkId);
 
           if (profile) {
@@ -93,7 +93,7 @@ export default function MessageLandingPage() {
             if (profile.message_expiry_days) {
               setExpiryDays(profile.message_expiry_days);
             }
-          } 
+          }
         }
 
         if (!userId) return;
@@ -148,13 +148,17 @@ export default function MessageLandingPage() {
       if (!user) throw new Error('Not authenticated');
 
       // 1. Update profiles table with verified columns
-      await HybridStorage.save('message', {
-        custom_question: messageTitle.trim() || null,
-        message_expiry_days: expiryDays,
-        is_public_inbox: isPublicInbox,
-        custom_link_id: linkId.trim() || null,
-        is_anonymous: true,
-      }, 'message');
+      await HybridStorage.save(
+        'message',
+        {
+          custom_question: messageTitle.trim() || null,
+          message_expiry_days: expiryDays,
+          is_public_inbox: isPublicInbox,
+          custom_link_id: linkId.trim() || null,
+          is_anonymous: true,
+        },
+        'message',
+      );
 
       toast.success('Inbox configurations saved successfully!');
     } catch (err: any) {
@@ -273,7 +277,7 @@ export default function MessageLandingPage() {
                     ))}
                   </div>
                 : messages.length === 0 ?
-                  <Card className='card-glow p-12 text-center flex flex-col items-center justify-center min-h-[300px]'>
+                  <Card className='card-glow p-10 text-center flex flex-col items-center justify-center min-h-[300px]'>
                     <div className='w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6'>
                       <Inbox className='h-8 w-8 text-pw-muted animate-pulse' />
                     </div>
@@ -292,25 +296,29 @@ export default function MessageLandingPage() {
                     {messages.map((msg) => (
                       <Card
                         key={msg.id}
-                        className='p-6 bg-pw-surface/40 hover:bg-pw-surface/75 border-white/5 transition-all relative overflow-hidden group'>
+                        className='p-2 bg-pw-surface/40 hover:bg-pw-surface/75 border-white/5 transition-all relative overflow-hidden group bkblur'>
                         {/* Meta Row */}
                         <div className='flex items-center justify-between gap-4 text-[10px] text-pw-muted font-mono mb-4 border-b border-white/5 pb-3'>
                           <div className='flex flex-wrap items-center gap-3'>
                             <span className='flex items-center gap-1.5 font-bold text-pw-primary border border-pw-primary/20 bg-pw-primary/10 rounded px-2 py-1'>
-                              {msg.sender_country &&
-                                msg.sender_country !== 'Unknown' ? (
-                                  <Image
-                                    src={`https://flagcdn.com/w20/${msg.sender_country.toLowerCase()}.png`}
-                                    alt={msg.sender_country}
-                                    width={16}
-                                    height={12}
-                                    className="w-4 h-3 object-cover rounded-sm border border-white/10 shrink-0"
-                                    unoptimized
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                                    }}
-                                  />
-                                ) : null}
+                              {(
+                                msg.sender_country &&
+                                msg.sender_country !== 'Unknown'
+                              ) ?
+                                <Image
+                                  src={`https://flagcdn.com/w20/${msg.sender_country.toLowerCase()}.png`}
+                                  alt={msg.sender_country}
+                                  width={16}
+                                  height={12}
+                                  className='w-4 h-3 object-cover rounded-sm border border-white/10 shrink-0'
+                                  unoptimized
+                                  onError={(e) => {
+                                    (
+                                      e.currentTarget as HTMLImageElement
+                                    ).style.display = 'none';
+                                  }}
+                                />
+                              : null}
                               {msg.sender_country || 'Unknown'}
                             </span>
                             <span className='flex items-center gap-1'>
@@ -371,7 +379,7 @@ export default function MessageLandingPage() {
 
               {/* Sidebar stats/links preview */}
               <div className='lg:col-span-4 flex flex-col gap-6'>
-                <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 space-y-4 sm:bkblur'>
+                <Card className='bg-transparent ring-0 sm:ring-1 sm:p-4 space-y-2 sm:bkblur'>
                   <h4 className='text-xs font-bold uppercase tracking-widest text-pw-muted flex items-center gap-2'>
                     <Sparkles className='h-4 w-4 text-pw-primary' /> Active
                     Statistics
@@ -396,12 +404,12 @@ export default function MessageLandingPage() {
                   </div>
                 </Card>
 
-                <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 space-y-4 sm:bkblur'>
+                <Card className='bg-transparent ring-0 sm:ring-1 sm:p-4 space-y-2 sm:bkblur'>
                   <h4 className='text-xs font-bold uppercase tracking-widest text-pw-muted'>
                     Interactive Links
                   </h4>
                   <div className='space-y-3'>
-                    <div className='p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between'>
+                    <div className='p-1.5 px-2 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between'>
                       <div className='truncate'>
                         <span className='text-[10px] block font-bold text-pw-muted uppercase'>
                           Send Message Link
@@ -421,28 +429,40 @@ export default function MessageLandingPage() {
                       </Button>
                     </div>
 
-                    <div className='p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between'>
-                      <div className='truncate'>
-                        <span className='text-[10px] block font-bold text-pw-muted uppercase flex items-center gap-1.5'>
-                          Public Board Link
-                          <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1 scale-90'>
-                            PRO
+                    {isPremium && (
+                      <div className='p-1.5 px-2 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between'>
+                        <div className='truncate'>
+                          <span className='text-[10px] block font-bold text-pw-muted uppercase flex items-center gap-1.5'>
+                            Public Board Link
+                            {!isPremium && (
+                              <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1 scale-90'>
+                                PRO
+                              </span>
+                            )}
                           </span>
-                        </span>
-                        <span className='text-xs font-medium text-pw-secondary truncate'>
-                          /u/{username}/messages
-                        </span>
+                          <span
+                            className={cn(
+                              'text-xs font-medium text-pw-secondary truncate',
+                              !isPremium && 'slection-none opacity-90',
+                            )}>
+                            /u/{username}/messages
+                          </span>
+                        </div>
+                        <Button
+                          disabled={!isPremium}
+                          size='icon'
+                          variant='ghost'
+                          onClick={() => {
+                            if (!isPremium) return;
+                            handleCopy('public');
+                          }}
+                          className='h-8 w-8 text-pw-muted hover:text-pw-secondary'>
+                          {copiedLink === 'public' ?
+                            <Check className='h-4 w-4 text-pw-success' />
+                          : <Copy className='h-4 w-4' />}
+                        </Button>
                       </div>
-                      <Button
-                        size='icon'
-                        variant='ghost'
-                        onClick={() => handleCopy('public')}
-                        className='h-8 w-8 text-pw-muted hover:text-pw-secondary'>
-                        {copiedLink === 'public' ?
-                          <Check className='h-4 w-4 text-pw-success' />
-                        : <Copy className='h-4 w-4' />}
-                      </Button>
-                    </div>
+                    )}
                   </div>
                 </Card>
               </div>
@@ -468,8 +488,16 @@ export default function MessageLandingPage() {
 
                   <div className='grid grid-cols-2 md:grid-cols-3 sm:grid-cols-5 gap-3'>
                     {[
-                      { l: '24 Hours', v: 1, minTier: ['free', 'flexible','standard', 'pro'] },
-                      { l: '3 Days', v: 3, minTier: ['flexible','standard', 'pro'] },
+                      {
+                        l: '24 Hours',
+                        v: 1,
+                        minTier: ['free', 'flexible', 'standard', 'pro'],
+                      },
+                      {
+                        l: '3 Days',
+                        v: 3,
+                        minTier: ['flexible', 'standard', 'pro'],
+                      },
                       { l: '7 Days', v: 7, minTier: ['standard', 'pro'] },
                       { l: '30 Days', v: 30, minTier: ['pro'] },
                     ].map((item) => {
@@ -479,21 +507,25 @@ export default function MessageLandingPage() {
                           key={item.v}
                           onClick={() => {
                             if (isLocked) {
-                              toast.info('⭐ Extended message lifespan (> 2 days) is restricted to flexible/premium subscribers.');
+                              toast.info(
+                                '⭐ Extended message lifespan (> 2 days) is restricted to flexible/premium subscribers.',
+                              );
                               return;
                             }
                             setExpiryDays(item.v);
-                            toast.success(`Expiry length selection updated to ${item.l}!`);
+                            toast.success(
+                              `Expiry length selection updated to ${item.l}!`,
+                            );
                           }}
                           className={`h-11 px-3 text-xs font-bold rounded-lg border transition-all flex items-center justify-between bkblur ${
-                            expiryDays === item.v
-                              ? 'bg-pw-primary/10 border-pw-primary text-pw-primary'
-                              : 'border-white/10 hover:bg-white/5 text-pw-muted'
+                            expiryDays === item.v ?
+                              'bg-pw-primary/10 border-pw-primary text-pw-primary'
+                            : 'border-white/10 hover:bg-white/5 text-pw-muted'
                           } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           <span>{item.l}</span>
                           {isLocked && (
                             <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1 ml-1 flex items-center gap-1'>
-                              <LockIcon size={14}/>
+                              <LockIcon size={14} />
                               <span>PRO</span>
                             </span>
                           )}
@@ -510,7 +542,8 @@ export default function MessageLandingPage() {
                       Inbox Personalization Configurations
                     </h3>
                     <p className='text-xs text-pw-muted'>
-                      Customize your anonymous inbox fields, custom questions, and customized URL structures.
+                      Customize your anonymous inbox fields, custom questions,
+                      and customized URL structures.
                     </p>
                   </div>
 
@@ -551,24 +584,24 @@ export default function MessageLandingPage() {
                         onChange={(e) => setMessageTitle(e.target.value)}
                         placeholder='Say something...'
                         className='bg-white/5 border-white/10 h-10 text-xs'
-                        onKeyDown={(e) => e.key === 'Enter' && saveInboxSettings()}
+                        onKeyDown={(e) =>
+                          e.key === 'Enter' && saveInboxSettings()
+                        }
                       />
                     </div>
                   </div>
 
-                  <div className="pt-4 flex justify-end">
+                  <div className='pt-4 flex justify-end'>
                     <Button
                       onClick={saveInboxSettings}
                       disabled={savingSettings}
-                      className="btn-primary h-9 px-6 text-xs font-bold gap-2">
-                      {savingSettings ? (
+                      className='btn-primary h-9 px-6 text-xs font-bold gap-2'>
+                      {savingSettings ?
                         <>
-                          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          <span className='h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin' />
                           Creating...
                         </>
-                      ) : (
-                        'Create Link'
-                      )}
+                      : 'Create Link'}
                     </Button>
                   </div>
                 </Card>
@@ -576,20 +609,22 @@ export default function MessageLandingPage() {
 
               {/* Sidebar premium control */}
               <div className='lg:col-span-4 flex flex-col gap-6'>
-                <Card className='card-glow p-6 space-y-6'>
+                <Card className='card-glow p-4 space-y-2'>
                   <div className='flex justify-between items-start'>
                     <div>
                       <h4 className='text-sm font-bold uppercase tracking-wider'>
                         Public Board
                       </h4>
                       <p className='text-[11px] text-pw-muted mt-1'>
-                        Allows anyone to view a directory page of all messages
-                        sent to you.
+                        Allows anyone to view a page of all messages sent to
+                        you.
                       </p>
                     </div>
-                    <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1.5 py-0.5'>
-                      PRO
-                    </span>
+                    {!isPremium && (
+                      <span className='text-[8px] bg-amber-500/20 text-amber-500 font-bold border border-amber-500/20 rounded px-1.5 py-0.5 flex gap-1 items-center'>
+                        <Lock className='h-4 w-4' /> PRO
+                      </span>
+                    )}
                   </div>
 
                   <div className='pt-2 border-t border-white/5 flex items-center justify-between'>
@@ -598,13 +633,14 @@ export default function MessageLandingPage() {
                         <Unlock className='h-4 w-4 text-amber-500' />
                       : <Lock className='h-4 w-4' />}
                       {isPublicInbox ?
-                        'GUEST READ ALLOWED'
+                        'PUBLIC READ ALLOWED'
                       : 'LOCKED (PRIVATE)'}
                     </span>
                     <button
+                      disabled={!isPremium}
                       onClick={handleStaticTogglePremium}
                       className={`w-12 h-6 px-1 rounded-full flex items-center transition-all ${isPublicInbox ? 'bg-amber-500 justify-end' : 'bg-white/10 justify-start'}`}>
-                      <span className='w-4 h-4 rounded-full bg-white shadow' />
+                      <span className='w-4 h-4 rounded-full bg-white shadow-xl' />
                     </button>
                   </div>
                 </Card>

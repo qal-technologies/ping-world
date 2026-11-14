@@ -59,8 +59,9 @@ export function NetworkStatusBar() {
           animate={{ y: 0, width: '100%', opacity: 1 }}
           exit={{ y: -40, width: '10%', opacity: 0 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
-          className='fixed top-0 left-0 right-0 z-[100000] flex justify-center items-center overflow-hidden transition-all pointer-events-none'
-          style={{ placeSelf: 'center', alignSelf: 'center' }}>
+          className='fixed top-0 left-0 right-0 z-[100000] flex justify-center items-center overflow-hidden transition-all pointer-events-none place-self-center items-self-center'
+          // style={{placeSelf: 'center', alignSelf: 'center'}}
+        >
           <div
             className={cn(
               'px-3 py-1 mt-1.5 rounded-full text-xs font-semibold flex items-center gap-2 shadow-xl bkblur truncate border transition-all',
@@ -75,15 +76,9 @@ export function NetworkStatusBar() {
               </>
             : <>
                 <WifiOff className='h-3.5 w-3.5 text-amber-400 shrink-0' />
-                <span>Working offline · Using local cache</span>
+                <span>You're offline · Using local cache</span>
               </>
             }
-
-            {/* <button
-              className='p-1 cursor-pointer bg-none border-none ring-0'
-              onClick={() => setShowBar(false)}>
-              <X className='h-3.5 w-3.5' />
-            </button> */}
           </div>
         </motion.div>
       )}

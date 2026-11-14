@@ -226,7 +226,7 @@ function renderQuestionCard({
           'quiz-taker-font p-0 bg-transparent sm:p-6 ring-0 flex flex-col w-full max-w-[600px] rounded-[0px] mb-8 transition-all duration-300 space-y-0 self-center',
           !isActive && !isScrollLayout && 'opacity-65 pointer-events-none',
           !isScrollLayout &&
-            'sm:bkblur sm:glass sm:rounded-3xl sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl sm:ring-1 ',
+            'sm:bkblur sm:glass sm:rounded-3xl sm:bg-pw-surface/40 sm:border-white/5 sm:shadow-2xl sm:ring-1 sm:backdrop-blur-sm',
         )}
         style={{ placeSelf: 'center' }}>
         {/* Show Question Category tag if enabled or set */}
@@ -243,9 +243,10 @@ function renderQuestionCard({
             <div className='flex items-baseline gap-2'>
               <span className='text-pw-primary font-black text-xl select-none shrink-0 quiz-taker-font '>
                 {(() => {
+                  if (quest.type === 'logic') return 'Logic';
                   const targetCat = quest.category?.trim() || '';
                   const inStack = activeQuestions.filter(
-                    (item) => (item.category?.trim() || '') === targetCat,
+                    (item) => item.type !== 'logic' && (item.category?.trim() || '') === targetCat,
                   );
                   const posInStack = inStack.findIndex(
                     (item) => item.id === quest.id,
@@ -254,7 +255,7 @@ function renderQuestionCard({
                       quiz?.quizLayout === 'scroll' ||
                         quiz?.surveyType === 'form'
                     ) ?
-                      index + 1
+                      activeQuestions.slice(0, index + 1).filter((item) => item.type !== 'logic').length
                     : Math.max(0, posInStack) + 1;
                 })()}
                 .
@@ -286,19 +287,23 @@ function renderQuestionCard({
 
               <div>
                   <span className='text-[9px] font-black text-pw-muted uppercase block tracking-wider'>
-                    {(() => {
+                    {quest.type === 'logic' ? 'Logic checkpoint' : (() => {
                       const targetCat = quest.category?.trim() || '';
                       const inStack = activeQuestions.filter(
-                        (item) => (item.category?.trim() || '') === targetCat,
+                        (item) => item.type !== 'logic' && (item.category?.trim() || '') === targetCat,
                       );
                       const posInStack = inStack.findIndex(
                         (item) => item.id === quest.id,
                       );
-                      const stackTotal =
-                      inStack.length || activeQuestions.length;
+                      const stackTotal = inStack.length || activeQuestions.filter((item) => item.type !== 'logic').length;
                       return `Question ${Math.max(0, posInStack) + 1} of ${stackTotal}${quest.category ? ` · ${quest.category}` : ''}`;
                     })()}
                   </span>
+                  {quest.required && (
+                    <span className='mt-1 inline-flex rounded-full border border-pw-danger/20 bg-pw-danger/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pw-danger'>
+                      Required
+                    </span>
+                  )}
                     {quest.imageUrl && (
                       <button
                         type='button'
@@ -335,7 +340,12 @@ function renderQuestionCard({
         </div>
 
         <div className='space-y-2'>
-          {quest.type === 'input' ?
+          {quest.type === 'logic' ?
+            <div className='flex min-h-20 items-center justify-center gap-2 rounded-xl border border-pw-primary/15 bg-pw-primary/5 px-4 py-6 text-xs text-pw-muted' role='status'>
+              <LoaderCircle className='h-4 w-4 animate-spin text-pw-primary' />
+              Evaluating this checkpoint…
+            </div>
+          : quest.type === 'input' ?
             <textarea
               key={quest.type + 'input' + quest.id}
               value={activeText}
@@ -567,7 +577,7 @@ function renderQuestionCard({
                 Expected file type:{' '}
                 {describeAcceptedFiles(
                   quest.allowedTypes ||
-                    'image/*,.pdf,.doc,.docx,.txt,.zip,.json,video/*,audio/*',
+                    'image/*',
                 )}
               </p>
 
@@ -580,7 +590,7 @@ function renderQuestionCard({
                   }}
                   accept={
                     quest?.allowedTypes ||
-                    'image/*,.pdf,.doc,.docx,.txt,.zip,.json,/application/json,video/*,audio/*,'
+                    'image/*'
                   }
                   onChange={(e) => {
                     uploadPickerOpenRef.current = false;
@@ -1235,7 +1245,7 @@ export default function QuestionSection({
           <div ref={bottomRef} />
 
           <div className='flex items-center gap-3 mt-4'>
-            {quiz?.allowPass && (
+            {quiz?.allowPass && !q?.required && (
               <Button
                 onClick={handlePass}
                 variant='outline'
@@ -1273,22 +1283,21 @@ export default function QuestionSection({
             <Button
               onClick={() => {
                 const missing = activeQuestions.find((question) => {
+                  if (question.type === 'logic' || !question.required) return false;
                   const saved = userAnswers.find(
                     (answer) => answer.questionId === question.id,
                   );
-                  const value = scrollAnswers[question.id] ?? saved?.answer;
+                  const value = Object.prototype.hasOwnProperty.call(scrollAnswers, question.id)
+                    ? scrollAnswers[question.id]
+                    : saved?.passed ? undefined
+                    : question.type === 'upload' ? saved
+                    : saved?.answer;
                   if (question.type === 'upload') return !saved?.fileUrl;
-                  if (question.type === 'checkbox')
-                    return !Array.isArray(value) || value.length === 0;
-                  if (question.type === 'input')
-                    return !String(value ?? '').trim();
-                  if (question.type === 'rating')
-                    return (
-                      !Number.isFinite(Number(value)) || Number(value) < 1
-                    );
-                  return (
-                    value === null || value === undefined || value === ''
-                  );
+                  if (question.type === 'checkbox') return !Array.isArray(value) || value.length === 0;
+                  if (question.type === 'input') return !String(value ?? '').trim();
+                  if (question.type === 'rating') return !Number.isFinite(Number(value)) || Number(value) < 1;
+                  if (question.type === 'range') return value === undefined || value === null || value === '' || !Number.isFinite(Number(value));
+                  return value === null || value === undefined || value === '';
                 });
                 if (missing) {
                   toast.error(
@@ -1373,7 +1382,7 @@ export default function QuestionSection({
                       )}
 
                       <div className='flex items-center gap-3 ml-auto'>
-                        {quiz?.allowPass && (
+                        {quiz?.allowPass && !q?.required && (
                           <Button
                             onClick={handlePass}
                             variant='outline'

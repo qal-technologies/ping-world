@@ -21,6 +21,7 @@ import {
   PREMIUM_TIERS,
   type PremiumTier,
   FLEXIBLE_FEATURES,
+  activeFlexibleEntitlements,
 } from '@/lib/config/premium';
 import { useAppContext } from '@/context/AppContext';
 import { COMPANY } from '@/lib/config/company';
@@ -99,7 +100,7 @@ const FEATURES: {
 
 const TIER_ORDER: PremiumTier[] = ['free', 'flexible', 'standard', 'pro'];
 
-function remainingPlanLabel(
+export function remainingPlanLabel(
   expiresAt: unknown,
   billingCycle: unknown,
   autoRenew?: boolean,
@@ -199,16 +200,19 @@ export default function PricingPage() {
   const tierExpiresAt = user?.app_metadata?.tier_expires_at;
   const currentPlanExpiry =
     typeof tierExpiresAt === 'string' ? Date.parse(tierExpiresAt) : Number.NaN;
+  const activeFlexible = activeFlexibleEntitlements(user?.app_metadata);
+  const activeFlexibleIds = activeFlexible.map((entry) => entry.toolId);
   const currentPlanActive =
-    premiumTier !== 'free' &&
-    Number.isFinite(currentPlanExpiry) &&
-    currentPlanExpiry > Date.now();
+    premiumTier === 'flexible' ?
+      activeFlexible.length > 0
+    : premiumTier !== 'free' &&
+      Number.isFinite(currentPlanExpiry) &&
+      currentPlanExpiry > Date.now();
   const currentPlanRemaining = remainingPlanLabel(
     tierExpiresAt,
     user?.app_metadata?.billing_cycle,
     user?.app_metadata?.auto_renew,
   );
-
   const isBlockedByActivePlan = (currentPlan: PremiumTier) => {
     const current = premiumTier === currentPlan;
     return currentPlanActive && !current && currentPlan !== 'free';
@@ -375,6 +379,16 @@ export default function PricingPage() {
         return;
       }
 
+      if (sessionData.updated === true) {
+        await refresh();
+        toast.dismiss();
+        toast.success(
+          `${activeFlexFeature.label} was added to your flexible plan.`,
+        );
+        setIsModalOpen(false);
+        return;
+      }
+
       // If Stripe secret key is not set, fall back to simulated sandbox upgrade
       toast.dismiss();
       toast.loading(
@@ -431,7 +445,7 @@ export default function PricingPage() {
       {
         title: `Cancel ${PREMIUM_TIERS[premiumTier].label} plan?`,
         confirmText: 'Cancel plan',
-        cancelText: 'Cancel',
+        cancelText: 'Close',
         type: 'danger',
       },
     );
@@ -471,6 +485,50 @@ export default function PricingPage() {
           'Failed to change plan: ' + (err?.message || 'Please try again.'),
         );
       }
+    }
+  };
+
+  const cancelFlexibleTool = async (toolId: string) => {
+    const feature = FLEXIBLE_FEATURES.find((item) => item.id === toolId);
+    if (!feature) return;
+    const confirmed = await showConfirm(
+      `Cancel ${feature.label}? Access will be removed immediately. Any unused time is not refunded.`,
+      {
+        title: `Cancel ${feature.label}?`,
+        confirmText: 'Cancel tool',
+        cancelText: 'Keep tool',
+        type: 'danger',
+      },
+    );
+    if (!confirmed) return;
+    try {
+      toast.loading(`Canceling ${feature.label}…`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token)
+        throw new Error('Sign in again to manage your plan.');
+      const response = await fetch('/api/subscription/flexible-tool/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ toolId }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.success !== true)
+        throw new Error(result?.error || 'Could not cancel this tool.');
+      await refresh();
+      toast.dismiss();
+      toast.success(
+        `${feature.label} was canceled and its access has been removed.`,
+      );
+    } catch (error) {
+      toast.dismiss();
+      toast.error(
+        error instanceof Error ? error.message : 'Could not cancel this tool.',
+      );
     }
   };
 
@@ -703,27 +761,41 @@ export default function PricingPage() {
                   {tierId === 'flexible' && isCurrent && (
                     <div className='pt-3 border-t border-white/5 space-y-2.5'>
                       {/* Purchased Tools List */}
-                      {(user?.app_metadata?.purchased_tools || []).length >
-                        0 && (
+                      {activeFlexible.length > 0 && (
                         <div className='space-y-1'>
                           <span className='text-[10px] font-bold uppercase tracking-wider text-pw-success block'>
                             Purchased Tools:
                           </span>
-                          <div className='flex flex-wrap gap-1'>
-                            {(user?.app_metadata?.purchased_tools || []).map(
-                              (tId: string) => {
-                                const feat = FLEXIBLE_FEATURES.find(
-                                  (f) => f.id === tId,
-                                );
-                                return (
-                                  <span
-                                    key={tId}
-                                    className='text-[9px] font-bold px-2 py-0.5 rounded-md bg-pw-success/15 text-pw-success border border-pw-success/20'>
+                          <div className='flex gap-2 flex-wrap'>
+                            {activeFlexible.map((entitlement) => {
+                              const tId = entitlement.toolId;
+                              const feat = FLEXIBLE_FEATURES.find(
+                                (f) => f.id === tId,
+                              );
+                              return (
+                                <div
+                                  key={tId}
+                                  className='flex items-center gap-2 rounded-xl border border-pw-success/10 bg-pw-success/6 pl-2 py-1'>
+                                  <span className='min-w-0 flex-1 text-[9px] font-bold text-pw-success'>
                                     ✓ {feat ? feat.label : tId}
+                                    <span className='ml-1 font-medium text-pw-muted'>
+                                      / {entitlement.billingCycle}  ·  ends{' '}
+                                      {new Date(
+                                        entitlement?.expiresAt,
+                                      ).toLocaleDateString()}
+                                    </span>
                                   </span>
-                                );
-                              },
-                            )}
+                                  <button
+                                    type='button'
+                                    onClick={() => void cancelFlexibleTool(tId)}
+                                    className='grid h-6 w-6 shrink-0 place-items-center rounded-md text-pw-muted transition hover:bg-pw-danger/10 hover:text-pw-danger'
+                                    aria-label={`Cancel ${feat?.label || tId}`}
+                                    title={`Cancel ${feat?.label || tId}`}>
+                                    <X className='h-3.5 w-3.5' />
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -742,9 +814,7 @@ export default function PricingPage() {
                             <option value=''>Select Tool</option>
                             {FLEXIBLE_FEATURES.filter(
                               (feat: any) =>
-                                !(
-                                  user?.app_metadata?.purchased_tools || []
-                                ).includes(feat.id),
+                                !activeFlexibleIds.includes(feat.id),
                             ).map((feat: any) => (
                               <option
                                 key={feat.id}
@@ -755,9 +825,7 @@ export default function PricingPage() {
                             ))}
                             {FLEXIBLE_FEATURES.filter(
                               (feat: any) =>
-                                !(
-                                  user?.app_metadata?.purchased_tools || []
-                                ).includes(feat.id),
+                                !activeFlexibleIds.includes(feat.id),
                             ).length === 0 && (
                               <option
                                 value=''
@@ -776,9 +844,7 @@ export default function PricingPage() {
                               !selectedFlexibleToolId ||
                               FLEXIBLE_FEATURES.filter(
                                 (feat: any) =>
-                                  !(
-                                    user?.app_metadata?.purchased_tools || []
-                                  ).includes(feat.id),
+                                  !activeFlexibleIds.includes(feat.id),
                               ).length === 0
                             }
                             className={cn(
@@ -787,10 +853,7 @@ export default function PricingPage() {
                                 !selectedFlexibleToolId ||
                                   FLEXIBLE_FEATURES.filter(
                                     (feat: any) =>
-                                      !(
-                                        user?.app_metadata?.purchased_tools ||
-                                        []
-                                      ).includes(feat.id),
+                                      !activeFlexibleIds.includes(feat.id),
                                   ).length === 0
                               ) ?
                                 'bg-white/10 text-pw-muted cursor-none opacity-80'
@@ -975,7 +1038,7 @@ export default function PricingPage() {
           {selectedTier && (
             <div className='space-y-5'>
               <DialogHeader>
-                <div className='flex items-center gap-3 pt-6'>
+                <div className='flex items-center gap-3 pt-6 flex-wrap'>
                   <div
                     className='h-12 w-12 rounded-xl flex items-center justify-center border shadow-xl'
                     style={{
@@ -986,11 +1049,11 @@ export default function PricingPage() {
                     }}>
                     {TIER_ICONS[selectedTierId as PremiumTier]}
                   </div>
-                  <div>
-                    <DialogTitle className='text-2xl font-extrabold font-display'>
+                  <div className='max-w-[90%]'>
+                    <DialogTitle className='text-xl font-extrabold font-display'>
                       Unlock {selectedTier.label}
                     </DialogTitle>
-                    <DialogDescription className='text-pw-muted text-xs'>
+                    <DialogDescription className='text-pw-muted text-xs leading-tight'>
                       Gain instant access to premium features & elevated limits
                     </DialogDescription>
                   </div>
@@ -998,12 +1061,12 @@ export default function PricingPage() {
               </DialogHeader>
 
               {/* Billing Cycle Selector */}
-              {(selectedTierId === 'flexible' || selectedTier.price.yearly) && (
-                <div className='bg-white/5 nav-glass rounded-full flex items-center justify-between h-9'>
+              {selectedTier.price.yearly && (
+                <div className='bg-white/5 nav-glass rounded-full flex items-center justify-between h-9 flex-wrap shadow-sm'>
                   <button
                     onClick={() => setBillingCycle('monthly')}
                     className={cn(
-                      'flex-1 py-2 text-center text-xs font-semibold rounded-full transition-all h-10 text-base',
+                      'flex-1 py-2 text-center text-xs font-semibold rounded-full transition-all h-10 text-base shadow-lg',
                       billingCycle === 'monthly' ? `text-black shadow-xl` : (
                         'text-pw-muted hover:text-pw-text'
                       ),
@@ -1016,7 +1079,7 @@ export default function PricingPage() {
                   <button
                     onClick={() => setBillingCycle('yearly')}
                     className={cn(
-                      'flex-1 py-2 text-center text-base font-semibold rounded-full transition-all flex items-center h-10 justify-center gap-1.5',
+                      'flex-1 py-2 text-center text-base font-semibold rounded-full transition-all flex items-center h-10 justify-center gap-1.5 shadow-lg',
                       billingCycle === 'yearly' ? `text-black shadow-xl` : (
                         'text-pw-muted hover:text-pw-text'
                       ),
@@ -1025,7 +1088,7 @@ export default function PricingPage() {
                       backgroundColor: `${billingCycle === 'yearly' ? selectedTier.color : ''}`,
                     }}>
                     Yearly
-                    <span className='px-1.5 py-0.5 rounded bg-pw-success text-[8px] font-black uppercase tracking-wider text-black'>
+                    <span className='px-1.5 py-0.5 rounded-lg bg-pw-success text-[8px] font-black uppercase tracking-wider text-black'>
                       Save{' '}
                       {selectedTierId === 'flexible' ?
                         Math.round(
@@ -1046,11 +1109,20 @@ export default function PricingPage() {
                   <span className='text-xs text-pw-muted uppercase font-bold tracking-widest block'>
                     Total Checkout Price
                   </span>
-                  <span className='text-3xl font-extrabold font-display text-white block'>
+                  <p className='text-3xl font-extrabold font-display text-white block flex items-center'>
                     {billingCycle === 'monthly' ?
-                      `$${formatCurrencyAmount(displayMonthlyPrice)}/mo`
-                    : `$${formatCurrencyAmount(displayYearlyPrice)}/yr`}
-                  </span>
+                      <>
+                        <span>
+                          ${formatCurrencyAmount(displayMonthlyPrice)}
+                        </span>
+                        <span className='text-sm'>/mo</span>
+                      </>
+                    : <>
+                        <span>${formatCurrencyAmount(displayYearlyPrice)}</span>
+                        <span className='text-sm'>/yr</span>
+                      </>
+                    }
+                  </p>
                 </div>
 
                 {isOnline &&
@@ -1081,32 +1153,28 @@ export default function PricingPage() {
                     className='w-full h-11 px-3 bg-[#0c0d1c] border border-white/10 rounded-xl text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer'>
                     <option value=''>Select Tool</option>
                     {FLEXIBLE_FEATURES.filter(
-                      (feat: any) =>
-                        !(user?.app_metadata?.purchased_tools || []).includes(
-                          feat.id,
-                        ),
+                      (feat: any) => !activeFlexibleIds.includes(feat.id),
                     ).map((feat: any) => (
                       <option
                         key={feat.id}
                         value={feat.id}
                         className='bg-[#0c0d1c] py-2'>
-                        {feat.label} (${formatCurrencyAmount(feat.monthly)}/mo)
+                        {feat.label} ($
+                        {formatCurrencyAmount(feat[billingCycle])}/
+                        {billingCycle === 'monthly' ? 'mo' : 'yr'})
                       </option>
                     ))}
                     {FLEXIBLE_FEATURES.filter(
-                      (feat: any) =>
-                        !(user?.app_metadata?.purchased_tools || []).includes(
-                          feat.id,
-                        ),
+                      (feat: any) => !activeFlexibleIds.includes(feat.id),
                     ).length === 0 && (
                       <option
-                        value='all'
+                        value=''
                         className='bg-[#0c0d1c]'>
                         All Tools Already Unlocked
                       </option>
                     )}
                   </select>
-                  <p className='px-1 text-[10px] text-pw-muted leading-relaxed mt-[-2px]'>
+                  <p className='px-1 text-[10px] text-white/75 leading-relaxed mt-[-2px]'>
                     The flexible plan allows you to pay only for the tools you
                     need.
                   </p>
@@ -1114,7 +1182,7 @@ export default function PricingPage() {
               )}
 
               {selectedTierId !== 'flexible' && (
-                <p className='text-[10px] text-pw-muted leading-relaxed mt-1'>
+                <p className='text-[10px] text-white/75 leading-relaxed mt-1'>
                   {selectedTier.description}
                 </p>
               )}
@@ -1143,12 +1211,14 @@ export default function PricingPage() {
               </label>
 
               {/* Checkout Controls */}
-              <DialogFooter className='pt-5 grid sm:grid gap-2 rounded-[25px] min-w-full flex 1 grid-col-1'>
+              <DialogFooter className='pt-5 gap-2 rounded-[25px] min-w-full flex flex-wrap'>
                 <button
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSimulating}
                   className='flex-1 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-pw-muted hover:text-pw-text transition-all'>
-                  {isBlockedByActivePlan(selectedTierId || 'free') ? 'Close' : 'Cancel'}
+                  {isBlockedByActivePlan(selectedTierId || 'free') ?
+                    'Close'
+                  : 'Cancel'}
                 </button>
                 {!isBlockedByActivePlan(selectedTierId || 'free') && (
                   <button
@@ -1176,7 +1246,7 @@ export default function PricingPage() {
                 )}
 
                 {isBlockedByActivePlan(selectedTierId || 'free') && (
-                  <p className='text-pw-muted text-xs px-1 text-center w-full'>
+                  <p className='text-pw-muted text-xs px-1 text-center w-full min-w-full'>
                     <button
                       className='hover:underline cursor-pointer font-bold text-white tracking-wide bg-transparent'
                       style={{

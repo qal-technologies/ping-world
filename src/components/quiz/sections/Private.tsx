@@ -73,7 +73,11 @@ export default function Private({
     }
   };
   return (
-    <div className='flex min-h-screen items-center justify-center bg-[#0A0C1B] p-4 text-white'>
+    <div className='flex min-h-screen items-center justify-center bg-[#0A0C1B]/60 bkblur p-4 text-white relative backdrop-blur-md overflow-hidden'>
+      <div className='orb orb-primary w-[500px] h-[500px] -bottom-40 -right-40 blur-lg opacity-30 animate-float' />
+      <div className='orb bg-pw-orange-50 w-[600px] h-[300px] -top-0 -right-40 blur-lg opacity-40 animate-float rotate-[40deg]' />
+      <div className='orb orb-secondary w-[400px] h-[400px] top-0 blur-lg -left-20 animate-float opacity-25' />
+
       <Card className='w-full max-w-md space-y-5 border-white/10 bg-pw-surface/90 p-6 shadow-2xl backdrop-blur-xl'>
         <div className='flex items-center gap-3'>
           <Lock className='text-pw-primary' />

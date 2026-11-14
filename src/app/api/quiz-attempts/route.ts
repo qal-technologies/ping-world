@@ -860,9 +860,13 @@ export async function POST(request: NextRequest) {
         { status: 413 },
       );
     }
-    console.error('[api/quiz-attempts] Attempt persistence failed.');
+    const diagnostic = error instanceof Error ? error.message : 'Unknown attempt persistence error.';
+    console.error('[api/quiz-attempts] Attempt persistence failed:', diagnostic.slice(0, 400));
     return NextResponse.json(
-      { error: 'Attempt could not be synchronized.' },
+      {
+        error: 'Attempt could not be synchronized.',
+        ...(process.env.NODE_ENV !== 'production' ? { diagnostic: diagnostic.slice(0, 400) } : {}),
+      },
       { status: 503 },
     );
   }

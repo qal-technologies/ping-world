@@ -38,7 +38,8 @@ export async function GET(
       userAgent,
     };
 
-    const currentClicksData = Array.isArray(link.clicks_data) ? link.clicks_data : [];
+    const currentClicksData =
+      Array.isArray(link.clicks_data) ? link.clicks_data : [];
     const updatedClicksData = [...currentClicksData, newClick];
     const newClicksCount = (link.clicks || 0) + 1;
 

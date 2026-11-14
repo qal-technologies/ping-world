@@ -40,20 +40,7 @@ export default function IntroSection({
       key='inner-intro-view'
       className='container mx-auto px-6 py-20 max-w-2xl text-center flex-1 flex flex-col justify-center relative z-10'>
       <div className='relative z-10'>
-        {(quiz?.fromPremium && quiz?.info && !dismissedQuizInfo) && (
-          <div className='flex items-start justify-between gap-2.5 p-3 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-xs text-pw-text/90 mb-6 text-left w-full max-w-sm mx-auto'>
-            <Info className='w-4 h-4 text-pw-primary shrink-0 mt-0.5' />
-            <span
-              className='flex-1 whitespace-pre-wrap'
-              dangerouslySetInnerHTML={{
-                __html: formatDetailVarsAction(quiz.info || ''),
-              }}
-            />
-            <button type='button' aria-label='Dismiss information' onClick={() => setDismissedQuizInfo(true)} className='p-1 text-pw-muted hover:text-white' title='Dismiss information'>
-              <X className='w-4 h-4' />
-            </button>
-          </div>
-        )}
+
         {/* Show clear foreground image/logo if configured */}
         {quiz?.fromPremium && quiz?.branding?.icon ?
           <Image
@@ -67,7 +54,7 @@ export default function IntroSection({
             alt='Intro Logo'
             className='h-20 w-20 object-contain rounded-2xl mb-4 mx-auto border-1 border-white/10 shadow-2xl bg-black/40 bkblur'
           />
-        : <div className='flex justify-center mb-6 text-pw-primary'>
+        : <div className='flex justify-center mb-6 text-pw-primary w-fit place-self-center '>
             {quiz?.type === 'quiz' ?
               <Brain size={60} />
             : <MessageCircle size={60} />}

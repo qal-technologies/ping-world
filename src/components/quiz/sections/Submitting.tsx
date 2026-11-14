@@ -48,6 +48,7 @@ export default function SubmittingPage({
   return (
     <main className='relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-pw-bg px-4 py-8 text-white'>
       <div className='pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-pw-primary/20 blur-[10px]' />
+      <div className='pointer-events-none absolute -right-10 top-0 h-60 w-60 rounded-full bg-orange-500/20 blur-[12px]' />
       <div className='pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-pw-cyan/10 blur-[12px]' />
       <Card className='relative w-full max-w-xl overflow-hidden border-white/10 bg-pw-surface/50 p-0 rounded-xl shadow-2xl shadow-black/30 bkblur backdrop-blur-xl'>
         <div className='h-1 w-full bg-gradient-to-r from-pw-primary via-pw-cyan to-pw-primary' />
@@ -82,7 +83,9 @@ export default function SubmittingPage({
               }
             </p>
             {submissionFailed && submissionError && (
-              <p role='status' className='mx-auto mt-2 max-w-md text-xs text-pw-warning'>
+              <p
+                role='status'
+                className='mx-auto mt-2 max-w-md text-xs text-pw-warning'>
                 {submissionError}
               </p>
             )}
@@ -97,7 +100,10 @@ export default function SubmittingPage({
             <div className='space-y-2'>
               <Button
                 onClick={() => {
-                  void finalizeQuizAction(retrySnapshot.answers, retrySnapshot.reason);
+                  void finalizeQuizAction(
+                    retrySnapshot.answers,
+                    retrySnapshot.reason,
+                  );
                 }}
                 disabled={isSubmitting}
                 className='btn-primary w-full rounded-xl py-5'>
@@ -108,7 +114,9 @@ export default function SubmittingPage({
                   </>
                 : 'Retry save'}
               </Button>
-              {submissionError.includes('expired and was removed after 24 hours') && (
+              {submissionError.includes(
+                'expired and was removed after 24 hours',
+              ) && (
                 <Button
                   variant='outline'
                   disabled={isSubmitting}

@@ -981,6 +981,10 @@ pre {
   background: rgba(213, 85, 255, 0.15);
 }
 
+.orb-warm {
+  background: rgba(255, 219, 111, 0.15);
+}
+
 .globe-div {
   width: 100%;
   height: 100%;

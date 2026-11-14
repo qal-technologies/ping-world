@@ -16,24 +16,42 @@ export type AppNotification = {
  * the signed-in user. The matching API resolves the recipient from the token. */
 export function useInAppNotification() {
   return useCallback(async (notification: AppNotification) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error('Sign in to create a notification.');
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token)
+      throw new Error('Sign in to create a notification.');
     const response = await fetch('/api/notifications/emit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'omit',
       cache: 'no-store',
-      body: JSON.stringify({ ...notification, accessToken: session.access_token }),
+      body: JSON.stringify({
+        ...notification,
+        accessToken: session.access_token,
+      }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(typeof result.error === 'string' ? result.error : 'Could not create notification.');
+      throw new Error(
+        typeof result.error === 'string' ?
+          result.error
+        : 'Could not create notification.',
+      );
     }
     if (result.disabled === true) return null;
-    if (typeof result.id !== 'string') throw new Error('Notification endpoint returned no ID.');
-    window.dispatchEvent(new CustomEvent('pw_in_app_notification', {
-      detail: { id: result.id, ...notification, totalCount: result.totalCount, unreadCount: result.unreadCount },
-    }));
+    if (typeof result.id !== 'string')
+      throw new Error('Notification endpoint returned no ID.');
+    window.dispatchEvent(
+      new CustomEvent('pw_in_app_notification', {
+        detail: {
+          id: result.id,
+          ...notification,
+          totalCount: result.totalCount,
+          unreadCount: result.unreadCount,
+        },
+      }),
+    );
     return result.id as string;
   }, []);
 }

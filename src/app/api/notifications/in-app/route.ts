@@ -31,12 +31,14 @@ async function listNotifications(request: NextRequest, accessToken?: string) {
   }
   try {
     const admin = getSupabaseAdmin();
+    const retentionCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data: rows, error } = await admin
       .from('notification_batches')
       .select(
         'id,resource_id,notification_type,total_count,read_count,last_event_at,payload,done_at',
       )
       .eq('recipient_id', user.id)
+      .gte('last_event_at', retentionCutoff)
       .order('last_event_at', { ascending: false })
       .limit(50);
     if (error) throw error;
@@ -163,6 +165,33 @@ export async function PATCH(request: NextRequest) {
       { error: 'Could not update notification.' },
       { status: 503 },
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  let body: { id?: unknown; all?: unknown; accessToken?: unknown };
+  try {
+    body = (await readJsonWithinLimit(request, 256 * 1024)) as typeof body;
+  } catch {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+  }
+  const token = typeof body.accessToken === 'string' ? body.accessToken : '';
+  const user = token ? await getRequestUserFromToken(token) : await getRequestUser(request);
+  if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  try {
+    const admin = getSupabaseAdmin();
+    let query = admin.from('notification_batches').delete().eq('recipient_id', user.id);
+    if (body.all !== true) {
+      const id = typeof body.id === 'string' ? body.id : '';
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'Invalid notification.' }, { status: 400 });
+      query = query.eq('id', id);
+    }
+    const { error } = await query;
+    if (error) throw error;
+    return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    console.error('[api/notifications/in-app] Delete failed:', error instanceof Error ? error.message : 'unknown');
+    return NextResponse.json({ error: 'Could not delete notification.' }, { status: 503 });
   }
 }
 

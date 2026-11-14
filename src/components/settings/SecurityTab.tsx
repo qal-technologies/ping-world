@@ -28,38 +28,67 @@ export default function SecurityTab({ email }: SecurityTabProps) {
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
 
   const [available, setAvailable] = useState('');
-  const [usernameEligibleAt, setUsernameEligibleAt] = useState<string | null>(null);
+  const [usernameEligibleAt, setUsernameEligibleAt] = useState<string | null>(
+    null,
+  );
   const [usernameCooldownLabel, setUsernameCooldownLabel] = useState('');
   const [usernameGateReady, setUsernameGateReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const loadGate = async () => {
-      if (!user?.id) { setUsernameGateReady(true); return; }
+      if (!user?.id) {
+        setUsernameGateReady(true);
+        return;
+      }
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) throw new Error('Sign in again to check username eligibility.');
-        const result = await fetch('/api/auth/change-username', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token)
+          throw new Error('Sign in again to check username eligibility.');
+        const result = await fetch('/api/auth/change-username', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        });
         const payload = await result.json();
-        if (!result.ok || typeof payload.eligibleAt !== 'string') throw new Error(payload.error || 'Could not check username change eligibility.');
+        if (!result.ok || typeof payload.eligibleAt !== 'string')
+          throw new Error(
+            payload.error || 'Could not check username change eligibility.',
+          );
         if (!cancelled) setUsernameEligibleAt(payload.eligibleAt);
         if (!cancelled) setUsernameGateReady(true);
       } catch (error) {
-        if (!cancelled) setAvailable(error instanceof Error ? error.message : 'Could not check username eligibility.');
+        if (!cancelled)
+          setAvailable(
+            error instanceof Error ?
+              error.message
+            : 'Could not check username eligibility.',
+          );
       }
     };
     void loadGate();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   useEffect(() => {
     const updateLabel = () => {
-      if (!usernameEligibleAt) { setUsernameCooldownLabel(''); return; }
+      if (!usernameEligibleAt) {
+        setUsernameCooldownLabel('');
+        return;
+      }
       const remaining = Date.parse(usernameEligibleAt) - Date.now();
-      if (remaining <= 0) { setUsernameCooldownLabel('Username change is available.'); return; }
+      if (remaining <= 0) {
+        setUsernameCooldownLabel('');
+        return;
+      }
       const days = Math.floor(remaining / 86_400_000);
       const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
-      setUsernameCooldownLabel(`You can change your username in ${days}d ${hours}h.`);
+      setUsernameCooldownLabel(
+        `You can change your username in ${days}d ${hours}h.`,
+      );
     };
     updateLabel();
     const timer = window.setInterval(updateLabel, 60_000);
@@ -85,15 +114,19 @@ export default function SecurityTab({ email }: SecurityTabProps) {
     const timeout = window.setTimeout(async () => {
       setAvailable('Verifying…');
       try {
-        const response = await fetch(`/api/auth/username-availability?username=${encodeURIComponent(candidate)}`, { cache: 'no-store' });
+        const response = await fetch(
+          `/api/auth/username-availability?username=${encodeURIComponent(candidate)}`,
+          { cache: 'no-store' },
+        );
         const result = await response.json();
         if (cancelled) return;
-        if (!response.ok || typeof result.available !== 'boolean') setAvailable(result.error || 'Could not verify username.');
+        if (!response.ok || typeof result.available !== 'boolean')
+          setAvailable(result.error || 'Could not verify username.');
         else if (!result.available) setAvailable('Username is already taken!');
         else setAvailable('Username is available!');
       } catch {
         if (!cancelled) setAvailable('Could not verify username.');
-      } 
+      }
     }, 450);
     return () => {
       cancelled = true;
@@ -114,24 +147,43 @@ export default function SecurityTab({ email }: SecurityTabProps) {
       toast.error('Choose a username different from the previous one.');
       return;
     }
-    if (!usernameGateReady || (usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))) {
-      toast.error(usernameGateReady ? usernameCooldownLabel : 'Checking username change eligibility.');
+    if (
+      !usernameGateReady ||
+      (usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))
+    ) {
+      toast.error(
+        usernameGateReady ?
+          usernameCooldownLabel
+        : 'Checking username change eligibility.',
+      );
       return;
     }
 
     setIsUpdatingUsername(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Sign in again to change your username.');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token)
+        throw new Error('Sign in again to change your username.');
       const response = await fetch('/api/auth/change-username', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ username: candidate }), cache: 'no-store',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ username: candidate }),
+        cache: 'no-store',
       });
       const result = await response.json();
-      if (!response.ok || result.success !== true) throw new Error(result.error || 'Could not update username.');
+      if (!response.ok || result.success !== true)
+        throw new Error(result.error || 'Could not update username.');
 
       setNewUsername('');
-      setUsernameEligibleAt(result.eligibleAt || new Date(Date.now() + 60 * 86_400_000).toISOString());
+      setUsernameEligibleAt(
+        result.eligibleAt ||
+          new Date(Date.now() + 60 * 86_400_000).toISOString(),
+      );
       await refresh();
       toast.success('Account username updated successfully!');
     } catch (err: any) {
@@ -145,8 +197,16 @@ export default function SecurityTab({ email }: SecurityTabProps) {
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 10 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
-      toast.error('Use at least 10 characters with lowercase, uppercase, a number, and a symbol.');
+    if (
+      newPassword.length < 10 ||
+      !/[a-z]/.test(newPassword) ||
+      !/[A-Z]/.test(newPassword) ||
+      !/[0-9]/.test(newPassword) ||
+      !/[^A-Za-z0-9]/.test(newPassword)
+    ) {
+      toast.error(
+        'Use at least 10 characters with lowercase, uppercase, a number, and a symbol.',
+      );
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -208,7 +268,7 @@ export default function SecurityTab({ email }: SecurityTabProps) {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='space-y-4'>
       <Wrapper
         title='Change Username'
         description='Create a new unique username for yourself. This would be your pingworld identifier.'
@@ -225,7 +285,8 @@ export default function SecurityTab({ email }: SecurityTabProps) {
               type='text'
               value={username}
               readOnly
-              className='h-10 bg-white/5 border-white/10 text-xs cursor-not-allowed opacity-75'
+              contentEditable={false}
+              className='h-10 bg-white/5 border-white/10 text-xs cursor-not-allowed opacity-75 selection-none'
             />
           </div>
 
@@ -237,13 +298,24 @@ export default function SecurityTab({ email }: SecurityTabProps) {
               type='text'
               value={newUsername}
               onChange={(e) =>
-                setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20))
+                setNewUsername(
+                  e.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9_]/g, '')
+                    .slice(0, 20),
+                )
               }
-              disabled={!usernameGateReady || Boolean(usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))}
+              disabled={
+                !usernameGateReady ||
+                Boolean(
+                  usernameEligibleAt &&
+                    Date.now() < Date.parse(usernameEligibleAt),
+                )
+              }
               minLength={5}
               maxLength={20}
               placeholder='JohnDoe'
-              className='h-10 bg-white/5 border-white/10 text-xs'
+              className='h-10 bg-white/5 border-white/10 text-xs disabled:cursor-not-allowed'
             />
           </div>
           {!available.trim() && (
@@ -251,9 +323,13 @@ export default function SecurityTab({ email }: SecurityTabProps) {
               Only letters, numbers & underscores (5 - 20 chars)
             </p>
           )}
-          {usernameCooldownLabel && <p className='text-[11px] text-pw-warning'>{usernameCooldownLabel}</p>}
+          {newUsername.trim() && usernameCooldownLabel && (
+            <p className='text-[11px] text-pw-warning'>
+              {usernameCooldownLabel}
+            </p>
+          )}
 
-          {available.trim() && (
+          {newUsername.trim() && available.trim() && (
             <div
               className={cn(
                 'text-[10px] opacity-80',
@@ -267,7 +343,16 @@ export default function SecurityTab({ email }: SecurityTabProps) {
 
           <Button
             type='submit'
-            disabled={isUpdatingUsername || !usernameGateReady || Boolean(usernameEligibleAt && Date.now() < Date.parse(usernameEligibleAt))}
+            disabled={
+              isUpdatingUsername ||
+              !usernameGateReady ||
+              Boolean(
+                usernameEligibleAt &&
+                  Date.now() < Date.parse(usernameEligibleAt),
+              ) ||
+              !newUsername ||
+              !/^[a-z0-9_]{5,20}$/.test(newUsername)
+            }
             className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
             <Shield className='h-3.5 w-3.5' />{' '}
             {isUpdatingUsername ? 'changing...' : 'Change Username'}
@@ -296,7 +381,7 @@ export default function SecurityTab({ email }: SecurityTabProps) {
             />
           </div>
 
-          <div className='space-y-1.5'>
+          <div className='space-y-1.5 mb-2'>
             <label className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
               Confirm New Password
             </label>
@@ -309,9 +394,35 @@ export default function SecurityTab({ email }: SecurityTabProps) {
             />
           </div>
 
+          {(
+            newPassword.length < 10 ||
+            !/[a-z]/.test(newPassword) ||
+            !/[A-Z]/.test(newPassword) ||
+            !/[0-9]/.test(newPassword) ||
+            !/[^A-Za-z0-9]/.test(newPassword)
+          ) ?
+            <p className='text-[10px] opacity-80 text-pw-warning mt-1.5'>
+              Password must contain lowercase, uppercase, number, and special
+              characters.
+            </p>
+          : confirmPassword.trim().length >= newPassword.trim().length &&
+            confirmPassword.trim() !== newPassword.trim() && (
+              <p
+                className={cn('text-[10px] opacity-80 text-pw-warning mt-1.5')}>
+                Passwords you entered don't match....
+              </p>
+            )
+          }
           <Button
             type='submit'
-            disabled={isUpdatingPassword || newPassword.length < 10 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)}
+            disabled={
+              isUpdatingPassword ||
+              newPassword.length < 10 ||
+              !/[a-z]/.test(newPassword) ||
+              !/[A-Z]/.test(newPassword) ||
+              !/[0-9]/.test(newPassword) ||
+              !/[^A-Za-z0-9]/.test(newPassword)
+            }
             className='btn-primary h-10 px-6 text-xs font-bold gap-2'>
             <Shield className='h-3.5 w-3.5' />{' '}
             {isUpdatingPassword ? 'Updating...' : 'Update Password'}

@@ -7,7 +7,6 @@ import { Card } from '@/components/ui/card';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { tools } from '@/lib/general/data';
-import Image from 'next/image';
 const stagger: Variants = {
   hidden: {},
   visible: {
@@ -109,7 +108,7 @@ export const HeroSection = () => {
             variants={fadeUp}
             className='mt-20 lg:mt-10 grid grid-cols-3 gap-15 md:gap-20 lg:gap-30'>
             {[
-              { value: '15+', label: 'Free Tools' },
+              { value: '20+', label: 'Free Tools' },
               { value: '∞', label: 'No Limits' },
               { value: '0', label: 'Cost' },
             ].map((stat) => (
@@ -164,36 +163,38 @@ export const ToolsGrid = () => {
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}>
               <Link href={tool.href}>
-                <Card className='card-glow p-5 pt-6 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden liq-glass'>
-                  <div className='absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity'>
-                    <tool.icon
-                      className='h-24 w-24'
-                      style={{ color: tool.color }}
-                    />
-                  </div>
+                <Card className='card-glow p-3 h-full flex flex-col group hover:border-pw-primary/50 transition-all cursor-pointer relative overflow-hidden rounded-2xl gap-3'>
+                  <div className='relative flex flex-wrap gap-3 items-center'>
+                    <div className='absolute top-0 right-0 opacity-5 group-hover:opacity-10 transition-opacity blur-[1px] group-hover:blur-none'>
+                      <tool.icon
+                        className='h-18 w-18'
+                        style={{ color: tool.color }}
+                      />
+                    </div>
 
-                  <div className='mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-pw-surface border border-white/5 shadow-2xl group-hover:scale-110 group-hover:shadow-pw-primary/10 transition-all duration-500'>
-                    <tool.icon
-                      className='h-8 w-8'
-                      style={{ color: tool.color }}
-                    />
-                  </div>
+                    <div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-pw-surface border border-white/5 shadow-2xl group-hover:scale-110 group-hover:shadow-pw-primary/10 transition-all duration-500'>
+                      <tool.icon
+                        className='h-8 w-8'
+                        style={{ color: tool.color }}
+                      />
+                    </div>
 
-                  <div className='flex items-center gap-3 flex-wrap'>
-                    <h3 className='text-2xl font-bold font-display group-hover:text-pw-primary transition-colors'>
-                      {tool.title}
-                    </h3>
-                    <span className='text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
-                      {tool.tag}
-                    </span>
+                    <div className='flex items-start gap-1 flex-wrap flex-col'>
+                      <h3 className='text-xl font-bold font-display group-hover:text-pw-primary transition-colors'>
+                        {tool.title}
+                      </h3>
+                      <span className='text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/2.5 border border-white/5 text-pw-muted'>
+                        {tool.tag}
+                      </span>
+                    </div>
                   </div>
 
                   <p className='text-pw-muted leading-relaxed flex-1 text-sm font-medium'>
                     {tool.description}
                   </p>
 
-                  <div className='mt-6 pt-6 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/20 transition-all'>
-                    <div className='flex items-center gap-2 text-sm font-bold text-pw-text group-hover:text-pw-cyan transition-colors'>
+                  <div className='mt-4 pt-3 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/20 transition-all'>
+                    <div className='flex items-center gap-2 text-sm font-bold text-pw-text group-hover:text-pw-cyan transition-colors px-1'>
                       Use Tool{' '}
                       <ArrowRight className='h-4 w-4 transition-transform group-hover:translate-x-2' />
                     </div>

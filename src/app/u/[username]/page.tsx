@@ -9,9 +9,13 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username } = await params;
   return {
-    title: `Send ${username} an anonymous message - Ping World`,
+    title: `Message ${username}`,
     description: `Send an anonymous message to @${username}. They won't know who you are.`,
-    alternates: { canonical: `/u/${username}` },
+    alternates: {canonical: `/u/${username}`},
+    robots: {
+      follow: false,
+      index:false,
+    }
   };
 }
 

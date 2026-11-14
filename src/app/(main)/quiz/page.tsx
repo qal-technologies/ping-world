@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -50,6 +50,7 @@ import {
 import { HybridStorage } from '@/lib/storage-utils';
 import { useAppContext } from '@/context/AppContext';
 import { computeExpiry } from '@/lib/config/premium';
+import ActivityIndicator from '@/components/ui/ActivityIndicator';
 import { DEFAULT_PINGWORLD_SHOWCASE_QUIZ } from '@/lib/quiz/default-quiz-template';
 import {
   exportResponsesToCSV,
@@ -69,7 +70,9 @@ import { supabase } from '@/lib/supabase';
 import { useInAppNotification } from '@/lib/notifications/useInAppNotification';
 import NextImage from 'next/image';
 import QuizBuilder from '@/components/quiz/Builder';
-import { cn } from '@/lib/utils';
+import { capFirst, cn } from '@/lib/utils';
+import { countQuestions } from '@/components/quiz/func';
+import { COMPANY } from '@/lib/config/company';
 
 const seedTemplateStorageKey = () => `pw_quiz_template_v1`;
 
@@ -142,7 +145,7 @@ export default function QuizPage() {
   const searchParams = useSearchParams();
   const { openFile } = useAppFileViewer();
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
-  const { showAlert, showConfirm, showPrompt } = useAppModal();
+  const { showConfirm } = useAppModal();
   const notifyInApp = useInAppNotification();
   const [filenameInput, setFilenameInput] = useState('');
   const [filenameExtension, setFilenameExtension] = useState('');
@@ -188,9 +191,13 @@ export default function QuizPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [viewingResponses, setViewingResponses] = useState<Quiz | null>(null);
+  const feedbackScrollRef = useRef<HTMLDivElement | null>(null);
+  const feedbackLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const loadingResponseOffsetRef = useRef<string | null>(null);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [expandedResponse, setExpandedResponse] = useState<number | null>(null);
   const [isSavingQuiz, setIsSavingQuiz] = useState(false);
+  const [deletingAssessmentTitle, setDeletingAssessmentTitle] = useState('');
   const [isEmailingExport, setIsEmailingExport] = useState(false);
   const [responseListSharing, setResponseListSharing] = useState(false);
   const responseCountQuizIds = useMemo(
@@ -279,7 +286,13 @@ export default function QuizPage() {
         questions: quiz.questions,
         responses: result.responses,
         responsesTotalCount: result.totalCount ?? result.responses.length,
-        responsesNextOffset: result.nextOffset,
+        responsesSubmittedCount: result.submittedCount,
+        responsesActiveCount: result.activeCount,
+        responsesAttemptsUnavailable: result.attemptsUnavailable,
+        responsesPollResults: result.pollResults,
+        responsesPollTruncated: result.pollTruncated,
+        responsesNextOffset: null,
+        responsesNextCursor: result.nextCursor,
       });
     } catch (error: unknown) {
       setViewingResponses(null);
@@ -343,7 +356,15 @@ export default function QuizPage() {
   // attempt. The response endpoint is explicitly uncached; merge only changed
   // rows so the list does not jump or discard pages already loaded.
   useEffect(() => {
-    if (!viewingResponses || viewingResponses.isTemplate || !user?.id) return;
+    // openFeedback owns the first request. Do not race it with the realtime
+    // refresh effect and overwrite the first page with an older projection.
+    if (
+      !viewingResponses ||
+      viewingResponses.isTemplate ||
+      !user?.id ||
+      isLoadingFeedback
+    )
+      return;
     let stopped = false;
     let inFlight = false;
     const refresh = async () => {
@@ -377,17 +398,58 @@ export default function QuizPage() {
           merged.sort(
             (left: any, right: any) =>
               new Date(
-                left.startedAt || left.submittedAt || left.timestamp || 0,
+                right.timestamp || right.submittedAt || right.startedAt || 0,
               ).getTime() -
-              new Date(
-                right.startedAt || right.submittedAt || right.timestamp || 0,
-              ).getTime(),
+                new Date(
+                  left.timestamp || left.submittedAt || left.startedAt || 0,
+                ).getTime() || String(left.id).localeCompare(String(right.id)),
           );
+          const existingResponses = current.responses || [];
+          const unchangedRows =
+            merged.length === existingResponses.length &&
+            merged.every((response: any, index: number) => {
+              const prior = existingResponses[index];
+              return (
+                String(response.id) === String(prior?.id) &&
+                response.status === prior?.status &&
+                String(
+                  response.timestamp ||
+                    response.submittedAt ||
+                    response.startedAt ||
+                    '',
+                ) ===
+                  String(
+                    prior?.timestamp ||
+                      prior?.submittedAt ||
+                      prior?.startedAt ||
+                      '',
+                  )
+              );
+            });
+          if (
+            unchangedRows &&
+            (page.totalCount ?? merged.length) ===
+              current.responsesTotalCount &&
+            page.submittedCount === current.responsesSubmittedCount &&
+            page.activeCount === current.responsesActiveCount &&
+            page.attemptsUnavailable === current.responsesAttemptsUnavailable &&
+            JSON.stringify(page.pollResults || null) ===
+              JSON.stringify(current.responsesPollResults || null) &&
+            Boolean(page.pollTruncated) ===
+              Boolean(current.responsesPollTruncated)
+          )
+            return current;
           return {
             ...current,
             responses: merged,
             responsesTotalCount: page.totalCount ?? merged.length,
-            responsesNextOffset: page.nextOffset,
+            responsesSubmittedCount: page.submittedCount,
+            responsesActiveCount: page.activeCount,
+            responsesAttemptsUnavailable: page.attemptsUnavailable,
+            responsesPollResults: page.pollResults,
+            responsesPollTruncated: page.pollTruncated,
+            responsesNextOffset: null,
+            responsesNextCursor: page.nextCursor,
           };
         });
       } catch (error) {
@@ -399,13 +461,127 @@ export default function QuizPage() {
     const onOnline = () => void refresh();
     window.addEventListener('online', onOnline);
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 5_000);
+    const refreshInterval =
+      viewingResponses.surveyType === 'poll' ? 15_000 : 5_000;
+    const timer = window.setInterval(() => void refresh(), refreshInterval);
     return () => {
       stopped = true;
       window.clearInterval(timer);
       window.removeEventListener('online', onOnline);
     };
-  }, [viewingResponses?.id, viewingResponses?.isTemplate, user?.id]);
+  }, [
+    viewingResponses?.id,
+    viewingResponses?.isTemplate,
+    viewingResponses?.surveyType,
+    user?.id,
+    isLoadingFeedback,
+  ]);
+
+  useEffect(() => {
+    const quizId = viewingResponses?.id;
+    const nextCursor = viewingResponses?.responsesNextCursor;
+    const root = feedbackScrollRef.current;
+    const sentinel = feedbackLoadMoreRef.current;
+    if (
+      !quizId ||
+      !root ||
+      !sentinel ||
+      nextCursor == null ||
+      viewingResponses?.isTemplate
+    )
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        const requestKey = `${quizId}:${nextCursor}`;
+        if (loadingResponseOffsetRef.current === requestKey) return;
+        loadingResponseOffsetRef.current = requestKey;
+        setViewingResponses((current) =>
+          current?.id === quizId ?
+            { ...current, responsesLoadingMore: true }
+          : current,
+        );
+        void HybridStorage.getQuizResponses(quizId, nextCursor)
+          .then((page) => {
+            setViewingResponses((current) => {
+              if (!current || current.id !== quizId) return current;
+              const merged = new Map<string, any>();
+              for (const response of [
+                ...(current.responses || []),
+                ...page.responses,
+              ]) {
+                const id = String(
+                  response.id ||
+                    `${response.startedAt || response.timestamp}-${response.status}`,
+                );
+                const existing = merged.get(id);
+                // Prefer the newest server projection, while retaining unique rows.
+                if (
+                  !existing ||
+                  new Date(response.timestamp || 0).getTime() >=
+                    new Date(existing.timestamp || 0).getTime()
+                )
+                  merged.set(id, response);
+              }
+              const responses = [...merged.values()].sort(
+                (left: any, right: any) =>
+                  new Date(
+                    right.timestamp ||
+                      right.submittedAt ||
+                      right.startedAt ||
+                      0,
+                  ).getTime() -
+                  new Date(
+                    left.timestamp || left.submittedAt || left.startedAt || 0,
+                  ).getTime(),
+              );
+              return {
+                ...current,
+                responses,
+                responsesNextOffset: null,
+                responsesNextCursor: page.nextCursor,
+                responsesTotalCount:
+                  page.totalCount ?? current.responsesTotalCount,
+                responsesSubmittedCount:
+                  page.submittedCount ?? current.responsesSubmittedCount,
+                responsesActiveCount:
+                  page.activeCount ?? current.responsesActiveCount,
+                responsesAttemptsUnavailable:
+                  page.attemptsUnavailable ??
+                  current.responsesAttemptsUnavailable,
+                responsesPollResults:
+                  page.pollResults ?? current.responsesPollResults,
+                responsesPollTruncated:
+                  page.pollTruncated ?? current.responsesPollTruncated,
+                responsesLoadingMore: false,
+              };
+            });
+          })
+          .catch(() => {
+            setViewingResponses((current) =>
+              current?.id === quizId ?
+                { ...current, responsesLoadingMore: false }
+              : current,
+            );
+            toast.error(
+              'Older responses could not be loaded. Scroll down to retry.',
+            );
+          })
+          .finally(() => {
+            loadingResponseOffsetRef.current = null;
+          });
+      },
+      { root, rootMargin: '280px 0px', threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [
+    viewingResponses?.id,
+    viewingResponses?.responsesNextCursor,
+    viewingResponses?.responses?.length,
+    viewingResponses?.responsesLoadingMore,
+    viewingResponses?.isTemplate,
+  ]);
 
   useEffect(() => {
     const onSyncError = (event: Event) => {
@@ -747,7 +923,7 @@ export default function QuizPage() {
       return;
     }
     void showConfirm(
-      'The PDF embeds resized images when the source permits. Videos and documents remain downloadable links; images that cannot be fetched are listed as links.',
+      'The PDF embeds resized images when the source permits. Videos and documents remain downloadable links; images that cannot be fetched are listed as links. A full feedback export includes up to the newest 1,000 records.',
       { confirmText: 'Create PDF', type: 'info' },
     ).then((confirmed) => {
       if (!confirmed || !viewingResponses) return;
@@ -762,22 +938,22 @@ export default function QuizPage() {
               if (
                 takerNumber === undefined &&
                 viewingResponses.id === quiz.id &&
-                viewingResponses.responsesNextOffset != null
+                viewingResponses.responsesNextCursor != null
               ) {
-                let nextOffset: number | null =
-                  viewingResponses.responsesNextOffset;
+                let nextCursor: string | null =
+                  viewingResponses.responsesNextCursor;
                 let pageCount = 0;
-                while (nextOffset !== null && pageCount++ < 50) {
+                while (nextCursor !== null && pageCount++ < 20) {
                   const page = await HybridStorage.getQuizResponses(
                     quiz.id,
-                    nextOffset,
+                    nextCursor,
                   );
                   completeResponses.push(...page.responses);
-                  nextOffset = page.nextOffset;
+                  nextCursor = page.nextCursor || null;
                 }
-                if (nextOffset !== null)
+                if (nextCursor !== null)
                   throw new Error(
-                    'The assessment has more responses than can be included in one export.',
+                    'Only the newest 1,000 submitted responses can be included in one PDF export.',
                   );
                 const byId = new Map(
                   completeResponses.map((response, index) => [
@@ -785,7 +961,9 @@ export default function QuizPage() {
                     response,
                   ]),
                 );
-                completeResponses = [...byId.values()];
+                completeResponses = [...byId.values()].filter(
+                  (response: any) => response.status !== 'in_progress',
+                );
               }
               await exportQuizFeedbackPdf(
                 {
@@ -880,6 +1058,9 @@ export default function QuizPage() {
         const isPurgeEligible = now - expiresAt > twoDaysMs;
         if (isPurgeEligible) {
           await HybridStorage.delete(quiz.id, 'quiz');
+          await HybridStorage.clearQuizLocalData(quiz.id, {
+            removeCompletionMarker: true,
+          });
           continue;
         }
         toKeep.push({ ...quiz, _isExpired: isExpired } as any);
@@ -1167,17 +1348,23 @@ export default function QuizPage() {
       'checkbox',
     ];
     const invalid = quiz.questions.some((question) => {
-      if (!question.text?.trim()) return true;
-      if (!optionQuestionTypes.includes(question.type)) return false;
-      return (
-        !question.options?.length ||
-        question.options.some(
-          (option) => !option?.id?.trim() || !option?.text?.trim(),
-        )
-      );
+      if (question.type !== 'logic') {
+        if (!question.text?.trim()) return true;
+        if (!optionQuestionTypes.includes(question.type)) return false;
+        return (
+          !question.options?.length ||
+          question.options.some(
+            (option) => !option?.id?.trim() || !option?.text?.trim(),
+          )
+        );
+      } else {
+        if (!question.logicExpression || !question.logicTrueRoute) return true;
+      }
     });
     if (invalid && !isImport)
-      return toast.error('Please fill in all questions and options.');
+      return toast.error(
+        'Please fill in all questions, options or logic expression.',
+      );
 
     // Obfuscate answer key for security
     const securedQuestions = quiz.questions.map((q) => {
@@ -1202,7 +1389,7 @@ export default function QuizPage() {
       quiz.createdAt || Date.now(),
     );
 
-    if (!expiryValidation.isValid) {
+    if (!expiryValidation.isValid && quiz.isTemplate) {
       const proceed = await showConfirm(
         `${expiryValidation.message}\n\nWould you like to auto-align this assessment's expiry to your maximum allowed plan limit (${expiryValidation.remainingTimeFormatted}) and proceed with saving?`,
         {
@@ -1313,7 +1500,7 @@ export default function QuizPage() {
         toast.info(
           'Features outside your current assessment plan were removed or adjusted before saving.',
         );
-      if (!isImport && user?.id && isSynced) {
+      if (!isImport && user?.id && isSynced && !quiz.isTemplate) {
         const sharePath =
           quizToSave.customUrl && username ?
             `/u/${encodeURIComponent(username)}/q/${encodeURIComponent(quizToSave.customUrl)}`
@@ -1328,7 +1515,7 @@ export default function QuizPage() {
         }).catch((error) =>
           console.warn('[Quiz] Saved notification could not be shown:', error),
         );
-      } else if (!isImport) {
+      } else if (!isImport && !quiz.isTemplate) {
         toast.info(
           user?.id ?
             'Saved on this device. It will sync when your connection is restored.'
@@ -1353,6 +1540,35 @@ export default function QuizPage() {
       quizHaptic(14);
     } finally {
       setIsSavingQuiz(false);
+    }
+  };
+
+  const handleQuizClose = async (quiz: Quiz) => {
+    const hasDraft = Boolean(
+      (await HybridStorage.getQuizDraft(quiz?.id)) || false,
+    );
+
+    if (hasDraft) {
+      const shouldClose = await showConfirm(
+        'Do you want to cancel? All saved draft would be cleared and changes cannot be restored.',
+        {
+          cancelText: 'Keep Editing',
+          confirmText: 'Close',
+          title: `Close ${capFirst(quiz.type)}`,
+          type: 'warning',
+        },
+      );
+
+      if (shouldClose) {
+        await HybridStorage.deleteQuizDraft(quiz?.id);
+        setIsCreating(false);
+        setActiveQuiz(null);
+      } else {
+        return;
+      }
+    } else if (!hasDraft) {
+      setIsCreating(false);
+      setActiveQuiz(null);
     }
   };
 
@@ -1384,6 +1600,7 @@ export default function QuizPage() {
       if (finalized) return;
       finalized = true;
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      setDeletingAssessmentTitle(quizToDelete.title || 'assessment');
       try {
         if (id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id) {
           localStorage.removeItem(seedTemplateStorageKey());
@@ -1417,6 +1634,8 @@ export default function QuizPage() {
             error.message
           : 'Assessment could not be deleted.',
         );
+      } finally {
+        setDeletingAssessmentTitle('');
       }
     };
     setQuizzes((current) => current.filter((item) => item.id !== id));
@@ -1475,8 +1694,8 @@ export default function QuizPage() {
         (filename) => {
           const payload = {
             __pwquiz: true,
-            app: 'PingWorldQuizStudio',
-            version: '1.0',
+            app: COMPANY.name,
+            version: COMPANY.version,
             ...trimmedQuiz,
           };
           const dataStr =
@@ -1586,9 +1805,10 @@ export default function QuizPage() {
   return (
     <div
       className={cn(
-        'w-full mx-auto px-4 py-12 max-w-8xl min-h-screen pb-20 transition-all duration-500',
+        'w-full mx-auto max-w-8xl min-h-screen transition-all duration-500',
         quizUnlocked &&
           'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
+        !isCreating && 'px-4 py-12 pb-20',
       )}>
       <AnimatePresence mode='wait'>
         {!isCreating ?
@@ -1629,7 +1849,7 @@ export default function QuizPage() {
                   disabled={isLoadingQuizzes}
                   title='Refresh Quiz'
                   onClick={loadQuizzes}
-                  className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
+                  className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-10 px-4 rounded-2xl'>
                   <RefreshCw
                     className={cn(
                       'h-4 w-4',
@@ -1641,7 +1861,7 @@ export default function QuizPage() {
                   <Button
                     variant='outline'
                     title='Import Quiz (.pwquiz or .json)'
-                    className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-11 px-6'>
+                    className='bg-white/5 border-white/10 hover:bg-white/10 gap-2 h-10 px-5 rounded-xl'>
                     <Upload className='h-4 w-4' /> Import{' '}
                     <span className='hidden sm:inline-flex'> .pwquiz</span>
                     <input
@@ -1655,7 +1875,7 @@ export default function QuizPage() {
                 <Button
                   title='Create New Quiz'
                   onClick={handleStartNew}
-                  className='btn-primary gap-2 h-11 px-8'>
+                  className='btn-primary gap-2 h-10 px-6'>
                   <Plus className='h-5 w-5' /> Create{' '}
                   <span className='hidden sm:inline-flex'> New Quiz</span>
                 </Button>
@@ -1676,14 +1896,18 @@ export default function QuizPage() {
               </div>
             : quizzes.length > 0 ?
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
-                  {quizzes.map((quiz, i) => {
-                    const isTemplate = Boolean((quiz as any).isTemplate) || Boolean((quiz as any).template) || quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
+                {quizzes.map((quiz, i) => {
+                  const isTemplate =
+                    Boolean((quiz as any).isTemplate) ||
+                    Boolean((quiz as any).template) ||
+                    quiz.id === DEFAULT_PINGWORLD_SHOWCASE_QUIZ.id;
 
-                    return <motion.div
+                  return (
+                    <motion.div
                       key={quiz.id}
-                      initial={{opacity: 0, scale: 0.8}}
-                      animate={{opacity: 1, scale: 1}}
-                      transition={{delay: i * 0.05}}>
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.05 }}>
                       <Card className='card-glow h-full flex flex-col p-5 gap-2 group'>
                         <div className='flex justify-between items-start mb-4 flex-wrap gap-2'>
                           <div
@@ -1697,46 +1921,46 @@ export default function QuizPage() {
                                   title='Synced'>
                                   <CloudCheck className='h-3 w-3' />
                                 </span>
-                                : <span
+                              : <span
                                   className='text-pw-warning flex items-center gap-1.5'
                                   title='Not synced'>
                                   <Clock className='h-3 w-3' />
                                 </span>)}
-                            {quiz?.questions?.length} Qts
+                            {countQuestions({ quiz: quiz, label: 'Qts' })}
                             {isTemplate && (
-                                <span className='rounded-full border border-pw-cyan/30 bg-pw-cyan/10 px-2 py-0.5 text-[9px] font-bold text-pw-cyan'>
-                                  TEMPLATE
-                                </span>
-                              )}
+                              <span className='rounded-full border border-pw-cyan/30 bg-pw-cyan/10 px-2 py-0.5 text-[9px] font-bold text-pw-cyan'>
+                                TEMPLATE
+                              </span>
+                            )}
                             {Math.max(
                               responseCounts[quiz.id] ??
-                              (Array.isArray(quiz.responses) ?
-                                quiz.responses.length
+                                (Array.isArray(quiz.responses) ?
+                                  quiz.responses.length
                                 : 0),
                               0,
                             ) >= 1 && (
-                                <span
-                                  className='text-pw-primary'
-                                  title='Responses available in the latest loaded data or local cache'>
-                                  {Math.max(
-                                    responseCounts[quiz.id] ??
+                              <span
+                                className='text-pw-primary'
+                                title='Responses available in the latest loaded data or local cache'>
+                                {Math.max(
+                                  responseCounts[quiz.id] ??
                                     (Array.isArray(quiz.responses) ?
                                       quiz.responses.length
-                                      : 0),
-                                    1,
-                                  )}{' '}
-                                  Ans{' '}
-                                  {newResponseCounts[quiz.id] && (
-                                    <span className='ml-1 rounded-full bg-pw-primary/15 px-1.5 py-0.5 text-[8px] text-pw-primary'>
-                                      NEW
-                                    </span>
-                                  )}
-                                </span>
-                              )}
+                                    : 0),
+                                  1,
+                                )}{' '}
+                                Ans{' '}
+                                {newResponseCounts[quiz.id] && (
+                                  <span className='ml-1 rounded-full bg-pw-primary/15 px-1.5 py-0.5 text-[8px] text-pw-primary'>
+                                    NEW
+                                  </span>
+                                )}
+                              </span>
+                            )}
                             {!isTemplate &&
                               quiz?.expires_at &&
                               (() => {
-                                const {label, urgent} = quizExpiryCountdown(
+                                const { label, urgent } = quizExpiryCountdown(
                                   quiz?.expires_at || '',
                                 );
                                 return (
@@ -1746,9 +1970,9 @@ export default function QuizPage() {
                                       'flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded-md border',
                                       label === 'Expired' ?
                                         'text-red-400 border-red-400/30 bg-red-400/10'
-                                        : urgent ?
-                                          'text-amber-400 border-amber-400/30 bg-amber-400/10 animate-pulse'
-                                          : 'text-pw-success border-pw-success/30 bg-pw-success/10',
+                                      : urgent ?
+                                        'text-amber-400 border-amber-400/30 bg-amber-400/10 animate-pulse'
+                                      : 'text-pw-success border-pw-success/30 bg-pw-success/10',
                                     )}>
                                     <Clock className='h-2.5 w-2.5 mr-1' />
                                     {label}
@@ -1784,7 +2008,7 @@ export default function QuizPage() {
                               title='Edit'
                               onClick={async () => {
                                 const expired = await isExpired(quiz);
-                                if(expired) {
+                                if (expired) {
                                   toast.warning(
                                     `This ${quiz.type || 'assessment'} has expired, adjust expiry time.`,
                                   );
@@ -1793,7 +2017,7 @@ export default function QuizPage() {
                                   quiz.id,
                                 );
                                 setActiveQuiz(
-                                  draft ? {...quiz, ...draft} : quiz,
+                                  draft ? { ...quiz, ...draft } : quiz,
                                 );
                                 setIsCreating(true);
                               }}
@@ -1815,7 +2039,7 @@ export default function QuizPage() {
                           {quiz.title}
                         </h3>
                         <p
-                          className='text-sm text-pw-muted line-clamp-2 mb-5 py-0 my-0 flex-1 whitespace-pre-wrap'
+                          className='text-xs text-pw-muted line-clamp-2 mb-5 py-0 my-0 flex-1 whitespace-pre-wrap'
                           dangerouslySetInnerHTML={{
                             __html:
                               quiz.description ?
@@ -1823,7 +2047,7 @@ export default function QuizPage() {
                                   .replace(/&/g, '&amp;')
                                   .replace(/</g, '&lt;')
                                   .replace(/>/g, '&gt;')
-                                : '<em style="opacity:0.5">No description provided.</em>',
+                              : '<em style="opacity:0.5">No description provided.</em>',
                           }}
                         />
                         <div className='flex gap-3 flex-wrap'>
@@ -1831,11 +2055,12 @@ export default function QuizPage() {
                             disabled={!isTemplate && !(quiz as any).is_synced}
                             title={
                               !isTemplate && !(quiz as any).is_synced ?
-                              `${(quiz as any).type || 'Assessment'} is not synchronized yet. ` :
-                              'Start Assessment'
+                                `${(quiz as any).type || 'Assessment'} is not synchronized yet. `
+                              : 'Start Assessment'
                             }
                             onClick={() => {
-                              if(!isTemplate && !(quiz as any).is_synced) return;
+                              if (!isTemplate && !(quiz as any).is_synced)
+                                return;
                               playQuiz(quiz.id);
                             }}
                             className='btn-primary flex-1 h-10 gap-2 min-w-[120px] disabled:opacity-50'>
@@ -1846,19 +2071,20 @@ export default function QuizPage() {
                             variant='outline'
                             title={
                               !isTemplate && !(quiz as any).is_synced ?
-                               `${(quiz as any).type || 'Assessment'} is not synchronized yet. `
-                                :'Share Link'
+                                `${(quiz as any).type || 'Assessment'} is not synchronized yet. `
+                              : 'Share Link'
                             }
                             onClick={() => {
-                              if(!isTemplate && !(quiz as any).is_synced) return;
+                              if (!isTemplate && !(quiz as any).is_synced)
+                                return;
 
-                                const route =
-                                  quiz.customUrl && username ?
-                                    `/u/${encodeURIComponent(username)}/q/${encodeURIComponent(quiz.customUrl)}`
-                                    : `/q/${encodeURIComponent(quiz.id)}`;
-                                const url = `${window.location.origin}${route}`;
-                                navigator.clipboard.writeText(url);
-                                toast.success('Short link copied to clipboard!');
+                              const route =
+                                quiz.customUrl && username ?
+                                  `/u/${encodeURIComponent(username)}/q/${encodeURIComponent(quiz.customUrl)}`
+                                : `/q/${encodeURIComponent(quiz.id)}`;
+                              const url = `${window.location.origin}${route}`;
+                              navigator.clipboard.writeText(url);
+                              toast.success('Short link copied to clipboard!');
                             }}
                             className='h-10 px-4 border-pw-primary/20 hover:bg-pw-primary/5 shrink-0 gap-2 disabled:opacity-50'>
                             <Share2 className='h-4 w-4' />
@@ -1866,6 +2092,7 @@ export default function QuizPage() {
                         </div>
                       </Card>
                     </motion.div>
+                  );
                 })}
               </div>
             : <div className='flex flex-col items-center justify-center py-24 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01]'>
@@ -1892,16 +2119,13 @@ export default function QuizPage() {
             initial={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
             animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             exit={{ opacity: 0, scale: 0.8, filter: 'blur(0px)' }}
-            className='min-w-full flex-1 flex flex-col p-0'>
+            className='min-w-[100%] h-screen flex items-start justify-center flex-1 p-0 overflow-hidden'>
             <QuizBuilder
               quiz={activeQuiz!}
               onSave={handleSaveQuiz}
               isSaving={isSavingQuiz}
               openFile={openFile}
-              onCancel={() => {
-                setIsCreating(false);
-                setActiveQuiz(null);
-              }}
+              onCancel={() => handleQuizClose(activeQuiz!)}
             />
           </motion.div>
         }
@@ -1921,6 +2145,7 @@ export default function QuizPage() {
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
+              ref={feedbackScrollRef}
               className={cn(
                 'relative h-full w-full bg-pw-surface/80 bkblur sm:border-l sm:border-white/10 p-3 sm:p-6 sm:shadow-2xl overflow-y-auto',
                 showAnalytics ? 'max-w-none' : 'max-w-2xl',
@@ -1953,6 +2178,21 @@ export default function QuizPage() {
                   <p className='text-sm text-pw-muted'>
                     {viewingResponses.title}
                   </p>
+                  {(viewingResponses.responsesActiveCount || 0) > 0 && (
+                    <p className='mt-1 inline-flex items-center gap-1.5 rounded-full bg-pw-warning/10 px-2 py-1 text-[10px] font-semibold text-pw-warning'>
+                      <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-pw-warning' />
+                      {viewingResponses.responsesActiveCount} live{' '}
+                      {viewingResponses.responsesActiveCount === 1 ?
+                        'attempt'
+                      : 'attempts'}
+                    </p>
+                  )}
+                  {viewingResponses.responsesAttemptsUnavailable && (
+                    <p className='mt-1 text-[11px] text-pw-warning'>
+                      Live progress could not be refreshed. Submitted responses
+                      are still available.
+                    </p>
+                  )}
                 </div>
 
                 <div className='flex items-center gap-2 flex-wrap px-2'>
@@ -2050,10 +2290,9 @@ export default function QuizPage() {
                             <Button
                               variant='outline'
                               size='sm'
-                              disabled={
-                                isEmailingExport
-                              }
-                              title={'Email the full export to your verified account email'
+                              disabled={isEmailingExport}
+                              title={
+                                'Email the full export to your verified account email'
                               }
                               onClick={() =>
                                 void emailResponseExport(
@@ -2122,7 +2361,7 @@ export default function QuizPage() {
                       resp: any,
                       fallbackIdx: number,
                     ) => {
-                      const takerLabel = `Taker #${Math.max(1, (viewingResponses.responsesTotalCount ?? responses.length) - fallbackIdx)}`;
+                      const takerLabel = `Taker #${Math.max(1, Number(resp.takerNumber) || (viewingResponses.responsesTotalCount ?? responses.length) - fallbackIdx)}`;
                       const ud = resp.userData;
                       if (!ud) return takerLabel;
                       if (typeof ud === 'object') {
@@ -2152,13 +2391,19 @@ export default function QuizPage() {
                     // Survey Question stats
                     const surveyStats: Record<
                       string,
-                      { text: string; attempts: number; skipped: number }
+                      {
+                        text: string;
+                        attempts: number;
+                        skipped: number;
+                        votes: Record<string, number>;
+                      }
                     > = {};
                     viewingResponses.questions.forEach((q) => {
                       surveyStats[q.id] = {
                         text: q.text,
                         attempts: 0,
                         skipped: 0,
+                        votes: {},
                       };
                     });
 
@@ -2226,6 +2471,26 @@ export default function QuizPage() {
                       });
 
                       resp.answers?.forEach((ans) => {
+                        const surveyQuestion = surveyStats[ans.questionId];
+                        if (
+                          surveyQuestion &&
+                          ans.passed !== true &&
+                          ans.answer !== undefined &&
+                          ans.answer !== ''
+                        ) {
+                          const answerText =
+                            resolveAnswerToText(
+                              viewingResponses,
+                              ans.questionId,
+                              ans.answer,
+                            ) || String(ans.answer);
+                          for (const label of answerText
+                            .split(',')
+                            .map((item: string) => item.trim())
+                            .filter(Boolean))
+                            surveyQuestion.votes[label] =
+                              (surveyQuestion.votes[label] || 0) + 1;
+                        }
                         if (typeof ans.correct !== 'boolean') return;
                         const qObj = viewingResponses.questions.find(
                           (q) => q.id === ans.questionId,
@@ -2274,6 +2539,9 @@ export default function QuizPage() {
                     )[0];
 
                     const isQuizType = viewingResponses.type === 'quiz';
+                    const isPollType =
+                      viewingResponses.type === 'survey' &&
+                      viewingResponses.surveyType === 'poll';
 
                     return (
                       <Card className='p-3 sm:p-4 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl space-y-4 shadow-xl'>
@@ -2476,6 +2744,84 @@ export default function QuizPage() {
                               </>
                             : /* Survey Specific Response Distribution & Averages */
                               <div className='space-y-3'>
+                                {isPollType && (
+                                  <div className='space-y-2 rounded-xl border border-pw-primary/20 bg-pw-primary/5 p-3'>
+                                    <div className='flex items-center justify-between'>
+                                      <span className='text-xs font-bold text-pw-primary'>
+                                        Poll results
+                                      </span>
+                                      <span className='text-[10px] text-pw-muted'>
+                                        {viewingResponses.responsesActiveCount ||
+                                          0}{' '}
+                                        live attempts excluded
+                                      </span>
+                                    </div>
+                                    {viewingResponses.responsesPollTruncated && (
+                                      <p className='text-[10px] text-pw-muted'>
+                                        Totals include the newest 1,000
+                                        submitted votes.
+                                      </p>
+                                    )}
+                                    {Object.entries(surveyStats).map(
+                                      ([questionId, stat]) => {
+                                        const serverPoll =
+                                          viewingResponses.responsesPollResults?.find(
+                                            (result) =>
+                                              result.questionId === questionId,
+                                          );
+                                        const votes =
+                                          serverPoll ?
+                                            serverPoll.options.map(
+                                              (option) =>
+                                                [
+                                                  option.label,
+                                                  option.votes,
+                                                ] as [string, number],
+                                            )
+                                          : Object.entries(stat.votes).sort(
+                                              (a, b) => b[1] - a[1],
+                                            );
+                                        const totalVotes = votes.reduce(
+                                          (sum, [, count]) => sum + count,
+                                          0,
+                                        );
+                                        return (
+                                          <div
+                                            key={questionId}
+                                            className='border-t border-white/10 pt-2'>
+                                            <p className='text-xs font-semibold'>
+                                              {stat.text}
+                                            </p>
+                                            {votes.length ?
+                                              <div className='mt-1 space-y-1'>
+                                                {votes.map(([label, count]) => (
+                                                  <div
+                                                    key={label}
+                                                    className='flex justify-between gap-2 text-[10px]'>
+                                                    <span>{label}</span>
+                                                    <span className='text-pw-muted'>
+                                                      {count} ·{' '}
+                                                      {totalVotes ?
+                                                        Math.round(
+                                                          (count / totalVotes) *
+                                                            100,
+                                                        )
+                                                      : 0}
+                                                      %
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            : <p className='mt-1 text-[10px] text-pw-muted'>
+                                                No submitted votes yet.
+                                              </p>
+                                            }
+                                          </div>
+                                        );
+                                      },
+                                    )}
+                                  </div>
+                                )}
                                 <div className='grid grid-cols-2 sm:grid-cols-5 gap-2 text-center'>
                                   <div className='p-2.5 bg-white/5 rounded-xl border border-white/5'>
                                     <span className='text-[8px] font-bold uppercase text-pw-muted block'>
@@ -2675,17 +3021,14 @@ export default function QuizPage() {
                               )}
                           </div>
                           <p className='font-bold text-pw-cyan truncate max-w-[200px]'>
-                            {resp.status === 'in_progress' ?
-                              'Live attempt'
-                            : `Taker ${
-                                (viewingResponses.responses || [])
-                                  .slice(0, idx + 1)
-                                  .filter(
-                                    (item: any) =>
-                                      item.status !== 'in_progress',
-                                  ).length
-                              }`
-                            }
+                            Taker{' '}
+                            {resp.takerNumber ??
+                              Math.max(
+                                1,
+                                (viewingResponses.responsesTotalCount ??
+                                  viewingResponses.responses?.length ??
+                                  0) - idx,
+                              )}
                           </p>
                           {resp.status !== 'in_progress' && (
                             <p className='mt-1 text-[10px] text-pw-muted italic'>
@@ -2709,7 +3052,7 @@ export default function QuizPage() {
                                 ).length) === resp.totalQuestions
                             ) ?
                               `Attempted all ${resp.totalQuestions} questions.`
-                            : `Attempted 
+                            : `Attempted
                             ${
                               resp.answeredQuestions ??
                               resp.answers.filter(
@@ -2721,8 +3064,8 @@ export default function QuizPage() {
                                       (!Array.isArray(answer.answer) ||
                                         answer.answer.length > 0))),
                               ).length
-                            }{' '}
-                          / {resp.totalQuestions} questions`
+                            }
+                          / ${resp.totalQuestions} questions`
                             }
                           </p>
                         </div>
@@ -2730,22 +3073,14 @@ export default function QuizPage() {
                         {resp.status !== 'in_progress' && (
                           <div className='flex items-center gap-1'>
                             <button
-                              title={`Export taker ${Math.max(1, (viewingResponses.responses || []).slice(0, idx + 1).filter((item: any) => item.status !== 'in_progress').length)} as PDF`}
-                              aria-label={`Export taker ${Math.max(1, (viewingResponses.responses || []).slice(0, idx + 1).filter((item: any) => item.status !== 'in_progress').length)} as PDF`}
+                              title={`Export taker ${resp.takerNumber ?? 'response'} as PDF`}
+                              aria-label={`Export taker ${resp.takerNumber ?? 'response'} as PDF`}
                               className='h-8 w-8 rounded-xl border-none flex items-center justify-center bg-transparent p-1 text-[10px] text-pw-cyan hover:bg-white/6'
                               onClick={() =>
                                 exportResponsesPdf(
                                   viewingResponses,
                                   [resp],
-                                  Math.max(
-                                    1,
-                                    (viewingResponses.responses || [])
-                                      .slice(0, idx + 1)
-                                      .filter(
-                                        (item: any) =>
-                                          item.status !== 'in_progress',
-                                      ).length,
-                                  ),
+                                  resp.takerNumber ?? 1,
                                 )
                               }>
                               <Share2 className='h-3.5 w-3.5' />
@@ -2753,8 +3088,8 @@ export default function QuizPage() {
                             {viewingResponses.responsesPublicId && (
                               <button
                                 type='button'
-                                title={`Copy taker ${Math.max(1, (viewingResponses.responses || []).slice(0, idx + 1).filter((item: any) => item.status !== 'in_progress').length)} response link`}
-                                aria-label={`Copy taker ${Math.max(1, (viewingResponses.responses || []).slice(0, idx + 1).filter((item: any) => item.status !== 'in_progress').length)} response link`}
+                                title={`Copy taker ${resp.takerNumber ?? 'response'} link`}
+                                aria-label={`Copy taker ${resp.takerNumber ?? 'response'} link`}
                                 className='h-8 w-8 rounded-xl flex items-center justify-center bg-transparent p-1 text-pw-cyan hover:bg-white/6'
                                 onClick={async () => {
                                   try {
@@ -2767,7 +3102,7 @@ export default function QuizPage() {
                                     const link = `${window.location.origin}/quiz/responses/${publicId}/taker?responseId=${encodeURIComponent(String(resp.id))}`;
                                     await navigator.clipboard.writeText(link);
                                     toast.success(
-                                      `Taker ${Math.max(1, (viewingResponses.responses || []).slice(0, idx + 1).filter((item: any) => item.status !== 'in_progress').length)} response link copied.`,
+                                      `Taker ${resp.takerNumber ?? 'response'} link copied.`,
                                     );
                                   } catch {
                                     toast.error(
@@ -2782,7 +3117,7 @@ export default function QuizPage() {
                         )}
                       </div>
 
-                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 py-2 border-y border-white/5 px-1 mb-1'>
+                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 py-2 border-y border-white/5 mb-1'>
                         {Object.entries(resp.userData).map(([key, val], i) => (
                           <div
                             key={key + i}
@@ -2941,7 +3276,7 @@ export default function QuizPage() {
 
                       {Array.isArray(resp.branchHistory) &&
                         resp.branchHistory.length > 0 && (
-                          <div className='space-y-1 mt-1'>
+                          <div className='space-y-1 mt-1 hidden'>
                             <p className='text-[10px] font-bold uppercase tracking-wide text-pw-cyan'>
                               Branches followed
                             </p>
@@ -2982,10 +3317,9 @@ export default function QuizPage() {
                                   key={`${branch.fromQuestionId}-${branchIndex}`}
                                   className='grid grid-cols-2 gap-x-3 gap-y-0.5 border-b border-white/5 py-1 text-[10px] sm:grid-cols-4'>
                                   <span className='font-semibold'>
-                                    {triggerLabel} →{' '}
-                                    {branch.category ?
-                                      `Group: ${branch.category}`
-                                    : 'General flow'}
+                                    {triggerLabel}
+                                    {branch.category &&
+                                      `→ Group: ${branch.category}`}
                                   </span>
                                   <span>
                                     Questions{' '}
@@ -3005,19 +3339,26 @@ export default function QuizPage() {
                                     }
                                   </span>
                                   <span>
-                                    Failed{' '}
-                                    {
+                                    {branchAnswers.filter(
+                                      (answer: any) => answer.correct === false,
+                                    ).length &&
+                                      `Failed
+                                    ${
                                       branchAnswers.filter(
                                         (answer: any) =>
                                           answer.correct === false,
                                       ).length
-                                    }{' '}
-                                    · Skipped{' '}
-                                    {
+                                    }`}
+                                    ·{' '}
+                                    {branchAnswers.filter(
+                                      (answer: any) => answer.passed,
+                                    ).length &&
+                                      `Skipped
+                                    ${
                                       branchAnswers.filter(
                                         (answer: any) => answer.passed,
                                       ).length
-                                    }
+                                    }`}
                                   </span>
                                 </div>
                               );
@@ -3293,54 +3634,28 @@ export default function QuizPage() {
                     </Card>
                   ))
                 }
-                {viewingResponses.responsesNextOffset !== null &&
-                  viewingResponses.responsesNextOffset !== undefined && (
-                    <div className='flex justify-center py-3'>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        disabled={viewingResponses.responsesLoadingMore}
-                        onClick={async () => {
-                          if (viewingResponses.responsesLoadingMore) return;
-                          setViewingResponses((current) =>
-                            current ?
-                              { ...current, responsesLoadingMore: true }
-                            : null,
-                          );
-                          try {
-                            const page = await HybridStorage.getQuizResponses(
-                              viewingResponses.id,
-                              viewingResponses.responsesNextOffset || 0,
-                            );
-                            setViewingResponses((current) =>
-                              current ?
-                                {
-                                  ...current,
-                                  responses: [
-                                    ...(current.responses || []),
-                                    ...page.responses,
-                                  ],
-                                  responsesNextOffset: page.nextOffset,
-                                  responsesTotalCount:
-                                    page.totalCount ??
-                                    current.responsesTotalCount,
-                                  responsesLoadingMore: false,
-                                }
-                              : null,
-                            );
-                          } catch {
-                            setViewingResponses((current) =>
-                              current ?
-                                { ...current, responsesLoadingMore: false }
-                              : null,
-                            );
-                            toast.error('More responses could not be loaded.');
-                          }
-                        }}>
-                        {viewingResponses.responsesLoadingMore ?
-                          'Loading…'
-                        : 'Load more responses'}
-                      </Button>
+                {viewingResponses.responses &&
+                  viewingResponses.responses.length > 0 && (
+                    <div
+                      ref={feedbackLoadMoreRef}
+                      className='flex min-h-12 items-center justify-center py-3'
+                      aria-live='polite'>
+                      {viewingResponses.responsesLoadingMore ?
+                        <span className='inline-flex items-center gap-2 text-xs text-pw-muted'>
+                          <LoaderCircle className='h-4 w-4 animate-spin text-pw-primary' />{' '}
+                          Loading older responses...
+                        </span>
+                      : (
+                        viewingResponses.responsesNextCursor !== null &&
+                        viewingResponses.responsesNextCursor !== undefined
+                      ) ?
+                        <span className='text-[11px] text-pw-muted'>
+                          Scroll for older responses
+                        </span>
+                      : <span className='text-[11px] text-pw-muted'>
+                          That’s all the responses.
+                        </span>
+                      }
                     </div>
                   )}
               </div>
@@ -3348,6 +3663,16 @@ export default function QuizPage() {
           </div>
         )}
       </AnimatePresence>
+
+      <ActivityIndicator
+        loading={Boolean(deletingAssessmentTitle)}
+        fullScreen
+        message={
+          deletingAssessmentTitle ?
+            `Deleting ${deletingAssessmentTitle} and linked data...`
+          : ''
+        }
+      />
 
       <Dialog
         open={isNameModalOpen}

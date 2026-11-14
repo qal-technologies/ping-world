@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   LoaderCircle,
@@ -19,6 +19,7 @@ type SharedAnswer = {
   correct?: boolean;
   fileUrl?: string;
   fileName?: string;
+  questionSnapshot?: SharedQuestion;
 };
 type SharedQuestion = {
   id: string;
@@ -45,10 +46,12 @@ type SharedResponse = {
   answers?: SharedAnswer[];
 };
 type SharedPayload = {
-  quiz?: { title?: string };
+  quiz?: { title?: string; type?: string; surveyType?: string };
   responses: SharedResponse[];
   totalCount?: number;
   nextOffset: number | null;
+  pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+  pollTruncated?: boolean;
 };
 
 export default function PublicQuizResponsesView({
@@ -63,6 +66,8 @@ export default function PublicQuizResponsesView({
   const [isOffline, setIsOffline] = useState(false);
   const [isCached, setIsCached] = useState(false);
   const [isNetworkFailure, setIsNetworkFailure] = useState(false);
+  const [showPollParticipants, setShowPollParticipants] = useState(false);
+  const pollRefreshInFlight = useRef(false);
   const { openFile } = useAppFileViewer();
 
   const cacheKey = `pingwrld_public_responses_${publicId}`;
@@ -153,6 +158,40 @@ export default function PublicQuizResponsesView({
     };
   }, [loadInitial]);
 
+  // Public polls refresh their submitted vote totals without a page reload.
+  // Keep the interval below the public read rate limit and merge by id so
+  // already loaded participant rows never duplicate.
+  useEffect(() => {
+    if (data?.quiz?.type !== 'survey' || data.quiz.surveyType !== 'poll') return;
+    const refreshPoll = async () => {
+      if (!navigator.onLine || pollRefreshInFlight.current) return;
+      pollRefreshInFlight.current = true;
+      try {
+        const response = await fetch(`/api/public/quiz-responses/${encodeURIComponent(publicId)}`, { cache: 'no-store' });
+        const page = await response.json().catch(() => null);
+        if (!response.ok || !page) return;
+        setData((current) => {
+          if (!current) return current;
+          const merged = new Map<string, SharedResponse>();
+          for (const item of [...(page.responses || []), ...current.responses]) merged.set(String(item.id), item);
+          const responses = [...merged.values()].sort((a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || ''));
+          const updated = {
+            ...current,
+            quiz: page.quiz || current.quiz,
+            responses,
+            totalCount: page.totalCount ?? current.totalCount,
+            nextOffset: responses.length < (page.totalCount ?? 0) ? responses.length : null,
+          };
+          try { sessionStorage.setItem(cacheKey, JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      } catch { /* The current poll tally remains usable while offline. */ }
+      finally { pollRefreshInFlight.current = false; }
+    };
+    const interval = window.setInterval(() => void refreshPoll(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [data?.quiz?.type, data?.quiz?.surveyType, publicId, cacheKey]);
+
   const loadMore = async () => {
     if (!data?.nextOffset || loadingMore) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -170,9 +209,12 @@ export default function PublicQuizResponsesView({
         throw new Error(page?.error || 'Could not load more responses.');
       setData((current) => {
         if (!current) return current;
+        const merged = new Map<string, SharedResponse>();
+        for (const item of [...current.responses, ...(page.responses || [])]) merged.set(String(item.id), item);
+        const uniqueResponses = [...merged.values()].sort((a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || ''));
         const updated = {
           ...current,
-          responses: [...current.responses, ...(page.responses || [])],
+          responses: uniqueResponses,
           totalCount: page.totalCount ?? current.totalCount,
           nextOffset: page.nextOffset ?? null,
         };
@@ -237,6 +279,36 @@ export default function PublicQuizResponsesView({
     );
   }
 
+  const isPoll = data.quiz?.type === 'survey' && data.quiz.surveyType === 'poll';
+  const pollQuestions = new Map<string, { text: string; category: string; votes: Map<string, number> }>();
+  if (isPoll && Array.isArray(data.pollResults)) {
+    for (const poll of data.pollResults) pollQuestions.set(poll.questionId, {
+      text: poll.text,
+      category: poll.category,
+      votes: new Map(poll.options.map((option) => [option.label, option.votes])),
+    });
+  } else if (isPoll) {
+    for (const response of data.responses) {
+      for (const answer of response.answers || []) {
+        if (answer.passed || answer.answer === undefined || answer.answer === null || answer.answer === '') continue;
+        const question = response.pathQuestionSnapshots?.find((item) => item.id === answer.questionId) || answer.questionSnapshot;
+        if (!question) continue;
+        const tally = pollQuestions.get(answer.questionId) || {
+          text: question.text || 'Question',
+          category: question.category || 'General',
+          votes: new Map<string, number>(),
+        };
+        const selections = Array.isArray(answer.answer) ? answer.answer : [answer.answer];
+        for (const selection of selections) {
+          const option = question.options?.find((item, index) => String(item.id ?? index) === String(selection)) || question.options?.[Number(selection)];
+          const label = String(option?.text ?? selection).trim();
+          if (label) tally.votes.set(label, (tally.votes.get(label) || 0) + 1);
+        }
+        pollQuestions.set(answer.questionId, tally);
+      }
+    }
+  }
+
   return (
     <main className='mx-auto min-h-[70dvh] w-full max-w-4xl space-y-3 px-3 py-8'>
       {(isOffline || isCached) && (
@@ -261,7 +333,7 @@ export default function PublicQuizResponsesView({
 
       <Card className='bg-transparent ring-0 p-1 gap-1 sm:p-2 mb-2'>
         <p className='text-xs font-bold uppercase tracking-widest text-pw-primary'>
-          PingWorld · shared assessment responses
+          {isPoll ? 'PingWorld · live poll results' : 'PingWorld · shared assessment responses'}
         </p>
         <h1 className='mt-2 text-2xl font-extrabold'>
           {data.quiz?.title || 'Assessment responses'}
@@ -272,11 +344,39 @@ export default function PublicQuizResponsesView({
           by the setter.
         </p>
       </Card>
+      {isPoll && (
+        <Card className='space-y-4 border-pw-primary/20 bg-pw-surface/60 p-4 sm:p-5'>
+          <div className='flex items-center justify-between gap-2'>
+            <h2 className='font-bold text-pw-text'>Live results</h2>
+            <span className='inline-flex items-center gap-1.5 text-[10px] font-semibold text-pw-success'><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-pw-success' />Updates automatically</span>
+          </div>
+          {data.pollTruncated && <p className='text-[11px] text-pw-muted'>Live totals include the newest 1,000 submitted votes.</p>}
+          {[...pollQuestions.entries()].map(([questionId, poll]) => {
+            const options = [...poll.votes.entries()].sort((a, b) => b[1] - a[1]);
+            const count = options.reduce((sum, [, votes]) => sum + votes, 0);
+            const top = options[0];
+            return <div key={questionId} className='space-y-2 border-t border-white/10 pt-3'>
+              <p className='text-[10px] font-semibold uppercase tracking-wide text-pw-primary'>{poll.category}</p>
+              <h3 className='text-sm font-semibold text-pw-text'>{poll.text}</h3>
+              {top && <p className='text-xs text-pw-success'>Leading choice: <strong>{top[0]}</strong> ({top[1]} of {count})</p>}
+              <div className='space-y-2'>
+                {options.map(([label, votes]) => <div key={label}>
+                  <div className='mb-1 flex justify-between gap-2 text-xs'><span>{label}</span><span className='text-pw-muted'>{votes} · {count ? Math.round(votes / count * 100) : 0}%</span></div>
+                  <div className='h-1.5 overflow-hidden rounded-full bg-white/10'><div className='h-full rounded-full bg-gradient-to-r from-pw-cyan to-pw-primary transition-all' style={{ width: `${count ? votes / count * 100 : 0}%` }} /></div>
+                </div>)}
+              </div>
+            </div>;
+          })}
+          <button type='button' onClick={() => setShowPollParticipants((value) => !value)} className='inline-flex items-center gap-1 text-xs font-semibold text-pw-cyan'>
+            {showPollParticipants ? 'Hide participants' : 'View participants'} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showPollParticipants ? 'rotate-180' : ''}`} />
+          </button>
+        </Card>
+      )}
       {data.responses.length === 0 ?
         <Card className='p-6 text-sm text-pw-muted'>
           No responses have been shared yet.
         </Card>
-      : data.responses.map((response, index) => (
+      : (!isPoll || showPollParticipants) && data.responses.map((response, index) => (
           <Card
             key={response.id}
             className='space-y-3 border-white/10 bg-white/[0.03] gap-2 p-4 sm:p-5'>

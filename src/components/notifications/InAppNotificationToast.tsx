@@ -143,24 +143,23 @@ export default function InAppNotificationToast() {
                 duration: reduceMotion ? 0.12 : 0.28,
                 ease: [0.22, 1, 0.36, 1],
               }}
-              className='group relative w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-pw-primary/20 bg-pw-surface/60 p-2 text-pw-text shadow-[0_20px_70px_rgba(0,0,0,.48),0_0_28px_rgba(152,92,255,.13)] bkblur backdrop-blur-2xl'>
+              className='group relative w-[min(96vw,450px)] overflow-hidden rounded-[20px] border border-pw-primary/10 bg-pw-surface/60 p-2 text-pw-text shadow-[0_20px_70px_rgba(0,0,0,.48),0_0_28px_rgba(152,92,255,.13)] bkblur backdrop-blur-2xl'>
               <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(152,92,255,.16),transparent_55%),linear-gradient(130deg,rgba(255,255,255,.05),transparent_50%)]' />
-              <div className='relative flex items-start gap-3'>
-                <div className='grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-pw-primary/25 bg-pw-primary/15 text-pw-primary shadow-[0_0_22px_rgba(152,92,255,.2)]'>
-                  <BellRing className='h-5 w-5' />
-                </div>
+              <div className='relative w-full flex'>
                 <div className='min-w-0 flex-1'>
-                  <div className='mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.2em] text-pw-primary'>
+                  <div className='flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.2em] text-pw-primary'>
                     <span className='inline-block h-1 w-1 animate-pulse rounded-full bg-pw-cyan' />
                     Pingwrld · Update
                   </div>
-                  <p className='font-semibold leading-snug text-md'>{item.title}</p>
+                  <p className='font-semibold leading-snug text-md mb-1'>
+                    {item.title}
+                  </p>
                   {item.body && (
                     <p className='mt-1 text-[12px] leading-relaxed text-pw-muted'>
                       {item.body}
                     </p>
                   )}
-                  <div className='mt-3 flex flex-wrap items-center gap-2'>
+                  <div className='mt-2 flex flex-wrap items-center gap-2 w-full'>
                     {item.action && (
                       <button
                         onClick={() => {
@@ -177,7 +176,7 @@ export default function InAppNotificationToast() {
                         void markRead();
                         toast.dismiss(id);
                       }}
-                      className='inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-pw-text transition hover:bg-white/10'>
+                      className='inline-flex items-center gap-1 rounded-xl border border-white/10 bg-pw-cyan/5 px-3 py-2 text-xs font-semibold text-pw-text transition hover:bg-white/10'>
                       <Check className='h-3.5 w-3.5' />
                       Read
                     </button>
@@ -194,7 +193,7 @@ export default function InAppNotificationToast() {
           ),
           {
             id: `pw-notification-${item.id}-${item.totalCount}`,
-            duration: 10500,
+            //duration: 10500,
             position: position.current,
           },
         );
@@ -210,8 +209,16 @@ export default function InAppNotificationToast() {
       )
         return;
       if (!item.resourceId) {
-        if (effects.current.haptics && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-          try { quizHaptic([18, 32, 18]); } catch { /* optional */ }
+        if (
+          effects.current.haptics &&
+          typeof navigator !== 'undefined' &&
+          'vibrate' in navigator
+        ) {
+          try {
+            quizHaptic([18, 32, 18]);
+          } catch {
+            /* optional */
+          }
         }
         if (effects.current.sound) playInAppNotificationTone();
         const directId = `pw-direct-notification-${item.id}`;
@@ -224,7 +231,7 @@ export default function InAppNotificationToast() {
                 : { opacity: 0, y: -18, scale: 0.97 }
               }
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              className='w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-pw-primary/25 bg-pw-surface/60 p-2 bkblur text-pw-text shadow-2xl backdrop-blur-2xl'>
+              className='w-[min(98vw,450px)] overflow-hidden rounded-[20px] border border-pw-primary/10 bg-pw-surface/60 p-2 bkblur text-pw-text shadow-2xl backdrop-blur-2xl'>
               <div className='flex items-start gap-3'>
                 <div className='grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pw-primary/15 text-pw-primary'>
                   <BellRing className='h-5 w-5' />
@@ -262,7 +269,11 @@ export default function InAppNotificationToast() {
               </div>
             </motion.div>
           ),
-          { id: directId, duration: 9000, position: position.current },
+          {
+            id: directId,
+            // duration: 9000,
+            position: position.current
+          },
         );
         return;
       }
@@ -311,16 +322,20 @@ export default function InAppNotificationToast() {
               : { opacity: 0, y: -18, scale: 0.97 }
             }
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className='w-[min(92vw,400px)] overflow-hidden rounded-2xl border border-pw-primary/20 bg-pw-surface/60 p-3 text-pw-text shadow-2xl bkblur backdrop-blur-2xl'>
-            <div className='flex items-start gap-2'>
-              <div className='grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pw-primary/15 text-pw-primary'>
-                <BellRing className='h-5 w-5' />
+            className='w-[min(98vw,450px)] overflow-hidden rounded-2xl border border-pw-primary/10 bg-pw-surface/60 p-3 text-pw-text shadow-2xl bkblur backdrop-blur-2xl'>
+            <div className='flex flex-col gap-0 items-center'>
+              <div className='flex items-start gap-2'>
+                <div className='grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-pw-primary/15 text-pw-primary'>
+                  <BellRing className='h-5 w-5' />
+                </div>
+                <div>
+                  <p className='mb-1 text-[9px] font-black uppercase tracking-[.2em] text-pw-primary'>
+                    Pingwrld · Update
+                  </p>
+                  <p className='font-semibold'>{item.title}</p>
+                </div>
               </div>
               <div className='min-w-0 flex-1'>
-                <p className='mb-1 text-[9px] font-black uppercase tracking-[.2em] text-pw-primary'>
-                  Pingwrld · Update
-                </p>
-                <p className='font-semibold'>{item.title}</p>
                 {item.body && (
                   <p className='mt-1 text-sm text-pw-muted'>{item.body}</p>
                 )}
@@ -357,7 +372,7 @@ export default function InAppNotificationToast() {
         ),
         {
           id: `pw-notification-${item.id}-${total}`,
-          duration: 10500,
+          //duration: 10500,
           position: position.current,
         },
       );

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
-import { FLEXIBLE_FEATURES } from '@/lib/config/premium';
+import { readFlexibleTools } from '@/lib/config/premium';
+import { reconcileFlexibleSubscriptions } from '@/lib/billing/flexible-subscriptions';
 
 
 export const dynamic = 'force-dynamic';
@@ -38,13 +39,19 @@ export async function GET(request: NextRequest) {
         const legacyExpiredAt = typeof metadata.tier_expired_at === 'string' ? Date.parse(metadata.tier_expired_at) : Number.NaN;
         const effectiveExpiry = Number.isFinite(expiry) ? expiry : legacyExpiredAt;
         const cleanup = typeof metadata.premium_quiz_cleanup_at === 'string' ? Date.parse(metadata.premium_quiz_cleanup_at) : 0;
-        return Number.isFinite(effectiveExpiry) && effectiveExpiry <= now && cleanup < effectiveExpiry && (tier !== 'free' || Number.isFinite(legacyExpiredAt));
+        const hasExpiredFlexibleTool = tier === 'flexible' && Array.isArray(metadata.flexible_entitlements) &&
+          metadata.flexible_entitlements.some((entry: any) => typeof entry?.expiresAt === 'string' && Date.parse(entry.expiresAt) <= now);
+        return hasExpiredFlexibleTool || (Number.isFinite(effectiveExpiry) && effectiveExpiry <= now && cleanup < effectiveExpiry && (tier !== 'free' || Number.isFinite(legacyExpiredAt)));
       });
 
       for (let offset = 0; offset < expired.length; offset += 8) {
         const batch = expired.slice(offset, offset + 8);
         const results = await Promise.allSettled(batch.map(async (user) => {
           const metadata = user.app_metadata || {};
+          if (String(metadata.tier || '') === 'flexible' && Array.isArray(metadata.flexible_entitlements)) {
+            await reconcileFlexibleSubscriptions(user.id, stripeKey);
+            return user.id;
+          }
           let expiry = typeof metadata.tier_expires_at === 'string' ? metadata.tier_expires_at : String(metadata.tier_expired_at);
           const subscriptionId = typeof metadata.stripe_subscription_id === 'string' ? metadata.stripe_subscription_id : '';
           if (subscriptionId && stripeKey) {
@@ -58,8 +65,9 @@ export async function GET(request: NextRequest) {
                 if (Number.isFinite(stripeEnd) && stripeEnd * 1000 > now) {
                 expiry = new Date(stripeEnd * 1000).toISOString();
                 const tier = ['flexible', 'standard', 'pro'].includes(String(stripeSubscription.metadata?.tier || metadata.tier)) ? String(stripeSubscription.metadata?.tier || metadata.tier) : 'free';
-                const selectedTool = String(stripeSubscription.metadata?.selectedFlexibleToolId || metadata.purchased_tools?.[0] || '');
-                const tools = tier === 'flexible' ? (FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ? [selectedTool] : []) : tier === 'free' ? [] : ['all'];
+                const tools = tier === 'flexible'
+                  ? (readFlexibleTools(stripeSubscription.metadata).length ? readFlexibleTools(stripeSubscription.metadata) : readFlexibleTools(metadata))
+                  : tier === 'free' ? [] : [];
                 const { data: account, error: lookupError } = await admin.auth.admin.getUserById(user.id);
                 if (lookupError || !account.user) throw lookupError || new Error('Could not load subscription account.');
                 const refreshedMetadata = { ...metadata, tier, tier_expires_at: expiry, tier_expired_at: null, purchased_tools: tools, stripe_subscription_id: subscriptionId, auto_renew: !stripeSubscription.cancel_at_period_end };

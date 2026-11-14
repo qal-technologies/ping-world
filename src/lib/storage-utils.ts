@@ -411,6 +411,29 @@ async function readCacheValue<T>(key: string): Promise<T | null> {
   }
 }
 
+/** Count this tab's cached attempt records by key only, without reading answers. */
+async function countCachedAttempts(owner: string, quizId?: string): Promise<number> {
+  try {
+    const db = await openCacheDb();
+    if (!db || !db.objectStoreNames.contains(CACHE_STORE_NAME)) return 0;
+    const sessionId = getAttemptSessionId();
+    const prefix = `quiz_attempt:${encodeURIComponent(owner)}:${sessionId}:`;
+    const exactKey = quizId ? `${prefix}${encodeURIComponent(quizId)}` : null;
+    return await new Promise<number>((resolve) => {
+      try {
+        const request = db.transaction(CACHE_STORE_NAME, 'readonly')
+          .objectStore(CACHE_STORE_NAME).getAllKeys();
+        request.onsuccess = () => {
+          const keys = Array.isArray(request.result) ? request.result : [];
+          resolve(keys.filter((key) => typeof key === 'string' &&
+            (exactKey ? key === exactKey : key.startsWith(prefix))).length);
+        };
+        request.onerror = () => resolve(0);
+      } catch { resolve(0); }
+    });
+  } catch { return 0; }
+}
+
 async function writeCacheValue<T>(key: string, value: T): Promise<boolean> {
   const currentKey = key;
   if (
@@ -1263,6 +1286,33 @@ const pendingResponsesKey = () =>
   `queue:${encodeURIComponent(activeStorageUserId)}`;
 const pendingAttemptQuitsKey = () =>
   `quiz_attempt_quits:${encodeURIComponent(activeStorageUserId)}`;
+const pendingQuizDeletesKey = () =>
+  `quiz_deletes:${encodeURIComponent(activeStorageUserId)}`;
+
+async function flushPendingQuizDeletes() {
+  if (!isOnline()) return;
+  const queueKey = pendingQuizDeletesKey();
+  const pending = (await readCacheValue<string[]>(queueKey)) || [];
+  for (let index = 0; index < pending.length; index++) {
+    const id = pending[index];
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      });
+      if (!response.ok && response.status !== 404) break;
+      pending.splice(index, 1);
+      index--;
+      if (queueKey !== pendingQuizDeletesKey()) return;
+      await writeCacheValue(queueKey, pending);
+    } catch {
+      break;
+    }
+  }
+}
 
 async function clearScopedCache(
   scopeId: string,
@@ -1760,6 +1810,7 @@ if (typeof window !== 'undefined') {
         }
         await flushPendingResponses();
         await flushPendingAttemptQuits();
+        await flushPendingQuizDeletes();
       } finally {
         onlineRetryInFlight = false;
       }
@@ -1866,8 +1917,71 @@ export const HybridStorage = {
       history: history.length,
     };
   },
+  /**
+   * Count records for the current account without fetching their payloads.
+   * `quiz_response` optionally scopes to a quiz id and includes active attempts.
+   */
+  async count(type: StorageItem['type'] | 'quiz_response', id?: string): Promise<number> {
+    if (type === 'quiz_response') {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token && isOnline()) {
+          const endpoint = id ? `/api/quiz-response-counts?quizId=${encodeURIComponent(id)}` : '/api/quiz-response-counts';
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: session.access_token }),
+            cache: 'no-store',
+          });
+          if (response.ok) {
+            const payload = await response.json();
+            if (typeof payload.count === 'number') return payload.count;
+            return Object.values(payload.counts || {}).reduce<number>((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+          }
+        }
+      } catch { /* local cache remains useful while offline or auth refreshes */ }
+      if (id) {
+        const quiz = await this.getQuiz(id);
+        const local = Array.isArray(quiz?.responses) ? quiz.responses.length : 0;
+        return local + await countCachedAttempts(activeStorageUserId, id);
+      }
+      const quizzes = await readLocal('quiz', activeStorageUserId);
+      const guest = activeStorageUserId === 'guest' ? [] : await readLocal('quiz', 'guest');
+      const attempts = await countCachedAttempts(activeStorageUserId) +
+        (activeStorageUserId === 'guest' ? 0 : await countCachedAttempts('guest'));
+      return [...quizzes, ...guest].reduce((sum, quiz) => sum +
+        (Array.isArray(quiz.content?.responses) ? quiz.content.responses.length : 0), 0) + attempts;
+    }
+    const localMatch = (item: StorageItem) => !id || item.id === id;
+    const table = storageNames[type].table;
+    if (table && !LOCAL_ONLY_TYPES.includes(type) && isOnline()) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          const ownerColumn = type === 'message' ? 'recipient_id'
+            : type === 'link' ? 'creator_id'
+            : 'user_id';
+          let query = supabase.from(table).select('id', { count: 'exact', head: true })
+            .eq(ownerColumn, session.user.id);
+          if (id) query = query.eq('id', id);
+          const { count, error } = await query;
+          if (!error && typeof count === 'number') {
+            // The server count is metadata-only. Read the local record bundle
+            // only to add writes that have not reached the server yet.
+            const pendingLocal = (await readLocal(type, activeStorageUserId))
+              .filter((item) => localMatch(item) && !item.is_synced).length;
+            return count + pendingLocal;
+          }
+        }
+      } catch { /* use the local count when remote counting is unavailable */ }
+    }
+    const localRows = await readLocal(type, activeStorageUserId);
+    return localRows.filter(localMatch).length;
+  },
   async clearLocalCache() {
     const db = await openCacheDb();
+
+
     if (db && db.objectStoreNames.contains(CACHE_STORE_NAME)) {
       await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
@@ -2098,12 +2212,18 @@ export const HybridStorage = {
 
   async getQuizResponses(
     quizId: string,
-    offset = 0,
+    offsetOrCursor: number | string = 0,
     fallbackQuiz?: any,
   ): Promise<{
     responses: any[];
     nextOffset: number | null;
+    nextCursor?: string | null;
     totalCount?: number;
+    submittedCount?: number;
+    activeCount?: number;
+    attemptsUnavailable?: boolean;
+    pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+    pollTruncated?: boolean;
     responsesPublicId?: string | null;
     isLocalOnly?: boolean;
     isCached?: boolean;
@@ -2118,19 +2238,26 @@ export const HybridStorage = {
       }
     } catch {}
 
-    const responseCacheKey = `quiz_responses:${encodeURIComponent(activeStorageUserId)}:${encodeURIComponent(quizId)}:${Math.max(0, Math.floor(offset))}`;
+    const pageKey = typeof offsetOrCursor === 'string' ? `cursor:${offsetOrCursor}` : `offset:${Math.max(0, Math.floor(offsetOrCursor))}`;
+    const responseCacheKey = `quiz_responses:${encodeURIComponent(activeStorageUserId)}:${encodeURIComponent(quizId)}:${encodeURIComponent(pageKey)}`;
     const readCachedPage = () =>
       readCacheValue<{
         responses: any[];
         nextOffset: number | null;
+        nextCursor?: string | null;
         totalCount?: number;
+        pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+        pollTruncated?: boolean;
       }>(responseCacheKey);
 
     const loadLocalResponses = async () => {
       const cachedPage = await readCacheValue<{
         responses: any[];
         nextOffset: number | null;
+        nextCursor?: string | null;
         totalCount?: number;
+        pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+        pollTruncated?: boolean;
       }>(responseCacheKey);
       if (cachedPage && Array.isArray(cachedPage.responses)) {
         return { ...cachedPage, isLocalOnly: true, isCached: true };
@@ -2187,12 +2314,13 @@ export const HybridStorage = {
 
       localResponses.sort(
         (a, b) =>
-          new Date(a?.timestamp || 0).getTime() -
-          new Date(b?.timestamp || 0).getTime(),
+          new Date(b?.timestamp || b?.submittedAt || b?.startedAt || 0).getTime() -
+          new Date(a?.timestamp || a?.submittedAt || a?.startedAt || 0).getTime(),
       );
       return {
         responses: localResponses,
         nextOffset: null,
+        nextCursor: null,
         totalCount: localResponses.length,
         isLocalOnly: true,
       };
@@ -2210,7 +2338,7 @@ export const HybridStorage = {
 
     try {
       const responseResult = await fetch(
-        `/api/quizzes/${encodeURIComponent(quizId)}/responses?offset=${Math.max(0, Math.floor(offset))}&limit=100`,
+        `/api/quizzes/${encodeURIComponent(quizId)}/responses?${typeof offsetOrCursor === 'string' ? `cursor=${encodeURIComponent(offsetOrCursor)}` : 'limit=50'}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2236,12 +2364,24 @@ export const HybridStorage = {
       const {
         responses: data = [],
         nextOffset = null,
+        nextCursor = null,
         totalCount,
+        submittedCount,
+        activeCount,
+        attemptsUnavailable = false,
+        pollResults,
+        pollTruncated = false,
         responsesPublicId,
       } = (await responseResult.json()) as {
         responses?: any[];
         nextOffset?: number | null;
+        nextCursor?: string | null;
         totalCount?: number;
+        submittedCount?: number;
+        activeCount?: number;
+        attemptsUnavailable?: boolean;
+        pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+        pollTruncated?: boolean;
         responsesPublicId?: string | null;
       };
       const mapped = (data || []).map((row: any) => {
@@ -2271,6 +2411,7 @@ export const HybridStorage = {
         const answers = Array.isArray(row.answers) ? row.answers : [];
         return {
           id: row.id,
+          takerNumber: row.takerNumber,
           timestamp: row.timestamp,
           score: row.score || 0,
           totalQuestions: row.totalQuestions || 0,
@@ -2299,22 +2440,24 @@ export const HybridStorage = {
         };
       });
 
-      if (mapped.length === 0) {
-        const local = await loadLocalResponses();
-        if (local.responses.length > 0) {
-          return local;
-        }
-      }
-
       await writeCacheValue(responseCacheKey, {
         responses: mapped,
         nextOffset,
+        nextCursor,
         totalCount,
+        pollResults,
+        pollTruncated,
       });
       return {
         responses: mapped,
         nextOffset,
+        nextCursor,
         totalCount,
+        submittedCount,
+        activeCount,
+        attemptsUnavailable,
+        pollResults,
+        pollTruncated,
         responsesPublicId,
         isLocalOnly: false,
       };
@@ -2779,23 +2922,41 @@ export const HybridStorage = {
    * Delete an item from local and remote.
    */
   async delete(id: string, type: StorageItem['type']) {
-    // 1. Delete locally first
+    if (type === 'quiz') {
+      const owner = activeStorageUserId;
+      const rows = await readLocal(type, owner);
+      const retained = rows.filter((item) => item.id !== id);
+      const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+      if (validQuizUuid && isOnline()) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: 'no-store',
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok && response.status !== 404) throw new Error(payload.error || `Assessment deletion failed (HTTP ${response.status}).`);
+        } else {
+          const pending = (await readCacheValue<string[]>(pendingQuizDeletesKey())) || [];
+          if (!pending.includes(id)) await writeCacheValue(pendingQuizDeletesKey(), [...pending, id]);
+        }
+      } else if (validQuizUuid) {
+        const pending = (await readCacheValue<string[]>(pendingQuizDeletesKey())) || [];
+        if (!pending.includes(id)) await writeCacheValue(pendingQuizDeletesKey(), [...pending, id]);
+      }
+      if (activeStorageUserId !== owner) return false;
+      await writeLocal(type, retained, owner);
+      await clearScopedCache(id, true, type);
+      return true;
+    }
+    // Non-quiz records are removed locally first and then synced remotely.
     const owner = activeStorageUserId;
     const local = (await readLocal(type, owner)).filter((i) => i.id !== id);
     if (activeStorageUserId !== owner) return false;
     await writeLocal(type, local, owner);
-    if (type === 'quiz') await clearScopedCache(id, true, type);
-
-    // 2. Background remote delete
-    const validQuizUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        id,
-      );
-    if (
-      isOnline() &&
-      !LOCAL_ONLY_TYPES.includes(type) &&
-      (type !== 'quiz' || validQuizUuid)
-    ) {
+    // Background remote delete for non-quiz records.
+    if (isOnline() && !LOCAL_ONLY_TYPES.includes(type)) {
       (async () => {
         try {
           // Route 'games' (Tournament Standings) remote delete to Firebase Firestore
@@ -2803,20 +2964,6 @@ export const HybridStorage = {
             const { db } = await import('@/lib/firebase');
             const { doc, deleteDoc } = await import('firebase/firestore');
             await deleteDoc(doc(db, 'tournaments', id));
-          } else if (type === 'quiz') {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            if (!session?.access_token) return;
-            const response = await fetch(
-              `/api/quizzes/${encodeURIComponent(id)}`,
-              {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${session.access_token}` },
-              },
-            );
-            if (!response.ok)
-              throw new Error('Cloud assessment delete failed.');
           } else {
             const {
               data: { session },

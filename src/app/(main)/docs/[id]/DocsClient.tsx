@@ -127,7 +127,7 @@ export default function DocsClient({ id }: { id: string }) {
   const launchHref = matchedTool?.href || `/tools/${doc.id}`;
 
   return (
-    <div className='container mx-auto px-4 sm:px-6 py-12 max-w-7xl min-h-screen pb-32'>
+    <div className='container mx-auto px-4 sm:px-6 py-12 min-h-screen pb-32'>
       {/* Screen Reader Header skip instruction */}
       <span className='sr-only'>
         You are viewing documentation for {doc.title}
@@ -147,7 +147,7 @@ export default function DocsClient({ id }: { id: string }) {
           </div>
           <div>
             <div
-              className='badge mb-1 inline-flex bkblur'
+              className='badge mb-2 inline-flex bkblur'
               style={{
                 backgroundColor: `${toolColor}12`,
                 color: toolColor,
@@ -156,7 +156,7 @@ export default function DocsClient({ id }: { id: string }) {
               }}>
               {doc.category}
             </div>
-            <h1 className='text-2xl md:text-5xl font-extrabold font-display flex flex-col leading-tight text-pw-text'>
+            <h1 className='text-2xl md:text-4xl font-extrabold font-display flex flex-col leading-tight text-pw-text'>
               {doc.title}{' '}
               <span className='text-xs text-pw-muted font-normal uppercase'>
                 Documentation
@@ -204,9 +204,9 @@ export default function DocsClient({ id }: { id: string }) {
                 className='h-5 w-5'
                 style={{ color: toolColor }}
               />{' '}
-              Concise Summary
+              Summary
             </h2>
-            <Card className='p-4 sm:p-6 bg-white/[0.01] border-white/5 text-pw-muted leading-relaxed text-sm select-all'>
+            <Card className='p-0 bg-transparent ring-0 text-pw-muted leading-relaxed text-sm select-all rounded-none'>
               {doc.summary}
             </Card>
           </section>
@@ -215,7 +215,7 @@ export default function DocsClient({ id }: { id: string }) {
           <section
             aria-label='Target Audience and Statistics'
             className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-            <Card className='p-4 sm:p-6 rounded-2xl border-white/5 bg-white/[0.01] flex items-start gap-4'>
+            <Card className='p-3 sm:p-5 rounded-2xl border-white/5 bg-white/[0.01] flex items-start gap-4 bkblur'>
               <div className='p-3 rounded-xl bg-pw-primary/10 text-pw-primary shrink-0'>
                 <Users className='h-5 w-5' />
               </div>
@@ -223,13 +223,13 @@ export default function DocsClient({ id }: { id: string }) {
                 <h3 className='text-xs font-bold uppercase tracking-wider'>
                   Target Audience
                 </h3>
-                <p className='text-sm text-pw-text/95 mt-1.5 leading-relaxed'>
+                <p className='text-sm text-pw-text/80 mt-1.5 leading-relaxed'>
                   {doc.audience}
                 </p>
               </div>
             </Card>
 
-            <Card className='p-4 sm:p-6 rounded-2xl border-white/5 bg-white/[0.01] flex items-start gap-4'>
+            <Card className='p-3 sm:p-5 rounded-2xl border-white/5 bg-white/[0.01] flex items-start gap-4 bkblur'>
               <div className='p-3 rounded-xl bg-pw-success/10 text-pw-success shrink-0'>
                 <TrendingUp className='h-5 w-5' />
               </div>
@@ -237,7 +237,7 @@ export default function DocsClient({ id }: { id: string }) {
                 <h3 className='text-xs font-bold uppercase tracking-wider'>
                   Volume Usage Metrics
                 </h3>
-                <p className='text-sm text-pw-text/95 mt-1.5 leading-relaxed'>
+                <p className='text-sm text-pw-text/80 mt-1.5 leading-relaxed'>
                   {doc.usageCount}
                 </p>
               </div>
@@ -247,11 +247,11 @@ export default function DocsClient({ id }: { id: string }) {
           {/* Feature Breakdown */}
           <section
             aria-label='Feature Breakdown'
-            className='space-y-4'>
+            className='space-y-3'>
             <h2 className='text-2xl font-bold font-display text-pw-text'>
               Gradual Feature Breakdown
             </h2>
-            <div className='space-y-6'>
+            <div className='space-y-6 sm:grid sm:grid-cols-2'>
               {activeFeatures.map((f, i) => {
                 const version = f.introduced;
                 return (
@@ -259,7 +259,7 @@ export default function DocsClient({ id }: { id: string }) {
                     key={i}
                     id={`feature-${i}`}
                     style={{ borderLeftColor: toolColor }}
-                    className=' bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-white/[0.01] sm:border sm:border-white/5 sm:border-l-2 transition-all sm:hover:bg-white/[0.02]/30'>
+                    className='bg-transparent ring-0 p-0 sm:ring-1 sm:p-4 sm:bg-white/[0.01] sm:border sm:border-white/5 sm:border-l-2 transition-all'>
                     <div className='flex items-start gap-4'>
                       <div
                         style={{
@@ -282,7 +282,7 @@ export default function DocsClient({ id }: { id: string }) {
                             </span>
                           )}
                         </div>
-                        <p className='text-xs text-pw-muted leading-relaxed select-text'>
+                        <p className='text-xs text-pw-muted select-text'>
                           {f.description}
                         </p>
                       </div>
@@ -302,7 +302,7 @@ export default function DocsClient({ id }: { id: string }) {
 
         {/* Sidebar link navigation / related tools */}
         <div className='lg:col-span-4 space-y-8 lg:sticky lg:top-24 self-start'>
-          <Card className='glass p-5 space-y-2'>
+          <Card className='glass p-4 pt-5 space-y-2'>
             <h3 className='text-sm font-bold uppercase tracking-widest text-pw-muted flex items-center gap-2'>
               <Eye className='h-4 w-4 text-pw-secondary' /> Navigation
             </h3>
@@ -319,7 +319,7 @@ export default function DocsClient({ id }: { id: string }) {
 
           {/* Table of Contents sidebar for active features */}
           {activeFeatures.length > 0 && (
-            <Card className='p-5 bg-white/[0.01] border-white/5 space-y-4 hidden md:block'>
+            <Card className='p-4 bg-white/[0.01] border-white/5 space-y-4 hidden md:block'>
               <h3 className='text-xs font-bold uppercase tracking-wider text-pw-muted'>
                 Table of Contents
               </h3>
@@ -328,7 +328,7 @@ export default function DocsClient({ id }: { id: string }) {
                   <li key={i}>
                     <a
                       href={`#feature-${i}`}
-                      className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-2 font-medium'>
+                      className='text-pw-muted hover:text-pw-primary transition-colors flex items-center gap-2 font-medium hover:translate-x-1'>
                       <span className='font-mono opacity-50'>{i + 1}.</span>
                       <span className='truncate'>{f.title}</span>
                     </a>
@@ -338,14 +338,14 @@ export default function DocsClient({ id }: { id: string }) {
             </Card>
           )}
 
-          <div className='divider my-15' />
+          <div className='divider my-10' />
 
           {/* Related Tools section */}
           <div className='space-y-4'>
             <h3 className='text-xs font-bold uppercase tracking-wider text-pw-muted pl-1'>
               Related &amp; Similar Utilities
             </h3>
-            <div className='space-y-3'>
+            <div className='space-y-2'>
               {doc.similarTools.map((sid) => {
                 const simDoc = toolDocsDb[sid];
                 if (!simDoc) return null;
@@ -356,7 +356,7 @@ export default function DocsClient({ id }: { id: string }) {
                   <Link
                     key={sid}
                     href={`/docs/${sid}`}>
-                    <div className='p-2 flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.03] transition-colors cursor-pointer group mb-3'>
+                    <div className='p-1 flex items-center justify-between rounded-xl hover:rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.03] transition-colors cursor-pointer group mb-3 hover:translate-x-1'>
                       <div className='flex items-center gap-3'>
                         <div
                           className='w-10 h-10 rounded-xl flex items-center justify-center bg-pw-surface border border-white/5 shrink-0'
@@ -366,11 +366,11 @@ export default function DocsClient({ id }: { id: string }) {
                             style={{ color: simColor }}
                           />
                         </div>
-                        <div>
+                        <div className='gap-1 flex flex-col'>
                           <span className='text-xs font-bold block text-pw-text group-hover:text-pw-primary transition-colors'>
                             {simDoc.title}
                           </span>
-                          <span className='text-[10px] text-pw-muted'>
+                          <span className='text-[10px] text-pw-muted leading-tight'>
                             {simDoc.category}
                           </span>
                         </div>

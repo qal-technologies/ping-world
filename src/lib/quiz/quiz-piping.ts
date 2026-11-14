@@ -22,6 +22,7 @@ export interface PipingContext {
   }>;
   questions?: any[];
   score?: number;
+  scorePossible?: number;
   totalQuestions?: number;
 }
 
@@ -521,8 +522,18 @@ export function resolveStandardTokens(text: string, context: PipingContext): str
   result = result.replace(/@percentage\b/gi, `${pct}%`);
 
   // 3. Question Answers by Global Index: @q1, @q2, etc.
-  const questions = context.questions || [];
+  const questions = (context.questions || []).filter((question: any) => question.type !== 'logic');
   const answers = context.userAnswers || [];
+
+  // Correctness tags are resolved before @qN so they cannot be mistaken for
+  // an answer token followed by a suffix. The score is the taker's saved,
+  // server-compatible correctness result for that exact question.
+  result = result.replace(/@q(\d+)_correct\b/gi, (_match, number) => {
+    const question = questions[Number(number) - 1];
+    if (!question) return '';
+    const answer = answers.find((item) => item.questionId === question.id);
+    return typeof answer?.correct === 'boolean' ? String(answer.correct) : '';
+  });
 
   result = result.replace(/@q(\d+)\b/gi, (_match, p1) => {
     const qIndex = parseInt(p1, 10) - 1;
@@ -585,7 +596,28 @@ export function resolveStandardTokens(text: string, context: PipingContext): str
  * Evaluates binary expressions with operators: =, !=, MATCH, match, HAS
  */
 function evaluateCondition(condStr: string, context: PipingContext): boolean {
-  const matchOperator = condStr.match(/\b(HAS|MATCH|match)\b/);
+  const within = condStr.match(/\b(WITHIN(?:\(math\))?)/i);
+  if (within) {
+    const [leftRaw, rightRaw] = condStr.split(within[0]);
+    if (rightRaw === undefined) return false;
+    const value = Number(stripQuotes(evaluateOperand(leftRaw.trim(), context)).replace(/[^0-9.+-]/g, ''));
+    const parts = rightRaw.split(/,|±|\+\/-/).map((part) => Number(stripQuotes(evaluateOperand(part.trim(), context)).replace(/[^0-9.+-]/g, '')));
+    if (!Number.isFinite(value) || !parts.length || parts.some((part) => !Number.isFinite(part))) return false;
+    if (within[0].toLowerCase().includes('(math)')) {
+      const center = parts[0];
+      const tolerance = Math.abs(parts[1] ?? 0);
+      return value >= center - tolerance && value <= center + tolerance;
+    }
+    return parts.length > 1 ? value >= Math.min(parts[0], parts[1]) && value <= Math.max(parts[0], parts[1]) : Math.abs(value - parts[0]) < Number.EPSILON * Math.max(1, Math.abs(value));
+  }
+  const mathEquals = condStr.match(/EQUALS\(math\)/i);
+  if (mathEquals) {
+    const [leftRaw, rightRaw] = condStr.split(mathEquals[0]);
+    const left = Number(stripQuotes(evaluateOperand(leftRaw.trim(), context)));
+    const right = Number(stripQuotes(evaluateOperand(rightRaw?.trim() || '', context)));
+    return Number.isFinite(left) && Number.isFinite(right) && left === right;
+  }
+  const matchOperator = condStr.match(/\b(HAS|CONTAINS|MATCH|match)\b/);
   if (matchOperator) {
     const [leftRaw, rightRaw] = condStr.split(matchOperator[0]);
     if (rightRaw === undefined) return false;

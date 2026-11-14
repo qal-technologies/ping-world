@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { tools } from '@/lib/general/data';
+import { toolDocsDb } from '@/lib/general/docs-data';
 import { COMPANY } from '@/lib/config/company';
 
 const BASE_URL = COMPANY.domain;
@@ -11,45 +12,43 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const corePages: MetadataRoute.Sitemap = [
     {
       url: BASE_URL,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 1.0,
     },
     {
       url: `${BASE_URL}/tools`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/quiz`,
-      lastModified: now,
       changeFrequency: 'daily',
-      priority: 0.9,
+      priority: 0.8,
     },
     {
       url: `${BASE_URL}/message`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
       url: `${BASE_URL}/composer`,
-      lastModified: now,
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
     },
     {
-      url: `${BASE_URL}/editor`,
-      lastModified: now,
+      url: `${BASE_URL}/text-editor`,
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
     },
     {
-      url: `${BASE_URL}/image`,
-      lastModified: now,
+      url: `${BASE_URL}/media`,
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/pricing`,
+      changeFrequency: 'monthly',
+      priority: 0.7,
     },
   ];
 
@@ -57,25 +56,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const companyPages: MetadataRoute.Sitemap = [
     {
       url: `${BASE_URL}/about`,
-      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.5,
     },
     {
       url: `${BASE_URL}/privacy`,
-      lastModified: now,
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
       url: `${BASE_URL}/terms`,
-      lastModified: now,
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
       url: `${BASE_URL}/countries`,
-      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.5,
     },
@@ -86,20 +81,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
     .filter((t) => t.href.startsWith('/tools/'))
     .map((t) => ({
       url: `${BASE_URL}${t.href}`,
-      lastModified: now,
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     }));
 
   // Docs pages — auto-generated from tool IDs
   const docPages: MetadataRoute.Sitemap = tools
-    .filter((t) => t.id)
+    .filter((t) => t.id && toolDocsDb[t.id])
     .map((t) => ({
       url: `${BASE_URL}/docs/${t.id}`,
-      lastModified: now,
       changeFrequency: 'monthly' as const,
       priority: 0.6,
     }));
 
-  return [...corePages, ...companyPages, ...toolPages, ...docPages];
+  const allPages = [...corePages, ...companyPages, ...toolPages, ...docPages];
+
+  const uniquePages = Array.from(
+    new Map(allPages.map((page) => [page.url, page])).values(),
+  );
+
+  return uniquePages;
 }

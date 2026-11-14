@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
-import { resolveTier, type PremiumTier } from '@/lib/config/premium';
+import { activeFlexibleEntitlements, resolveTier, type FlexibleFeature, type PremiumTier,FLEXIBLE_FEATURES, } from '@/lib/config/premium';
 import { HybridStorage } from '@/lib/storage-utils';
 import type { User } from '@supabase/supabase-js';
 
@@ -37,7 +37,7 @@ export interface AppContextValue {
   /** Reload user session (call after login/logout) */
   refresh: () => Promise<void>;
   /** Check if a specific paid tool/feature is unlocked */
-  isFeatureUnlocked: (featureId: string) => boolean;
+  isFeatureUnlocked: (featureId: string ) => boolean;
   /**Avatar url for display profile */
   dp: string;
 }
@@ -139,7 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // user object/session before the app starts making authenticated calls.
         const metadataAvatar = authUser.user_metadata?.avatar_url;
         const metadataPicture = authUser.user_metadata?.picture;
-        if ([metadataAvatar, metadataPicture].some((value) => typeof value === 'string' && /^data:image\//i.test(value))) {
+        if (isOnline && [metadataAvatar, metadataPicture].some((value) => typeof value === 'string' && /^data:image\//i.test(value))) {
           try {
             const { data: updated, error } = await supabase.auth.updateUser({
               data: {
@@ -172,13 +172,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // by the account holder and must not grant paid-only controls.
         const accessMeta = authUser.app_metadata ?? {};
         const resolved = resolveTier(accessMeta.tier);
+        const flexibleEntitlements = resolved === 'flexible' ? activeFlexibleEntitlements(accessMeta) : [];
         const expiry =
           typeof accessMeta.tier_expires_at === 'string' ?
             Date.parse(accessMeta.tier_expires_at)
           : Number.NaN;
-        const tierIsActive = Number.isFinite(expiry) && expiry > Date.now();
+        const tierIsActive = resolved === 'flexible'
+          ? flexibleEntitlements.length > 0
+          : Number.isFinite(expiry) && expiry > Date.now();
         setPremiumTier(tierIsActive ? resolved : 'free');
-        const tools = tierIsActive ? accessMeta.purchased_tools || [] : [];
+        const tools = resolved === 'flexible'
+          ? flexibleEntitlements.map((entry) => entry.toolId)
+          : tierIsActive ? accessMeta.purchased_tools || [] : [];
         setPurchasedTools(Array.isArray(tools) ? tools : [tools]);
 
         try {
@@ -266,15 +271,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (premiumTier === 'pro' || premiumTier === 'standard') return true;
       if (premiumTier === 'flexible') {
         // Normalize feature aliases
-        const normalizedMap: Record<string, string[]> = {
-          quizzable: ['quizzable', 'quiz', 'quiz-builder'],
-          quiz: ['quizzable', 'quiz', 'quiz-builder'],
-          composer: ['composer', 'creator-hub', 'social-composer'],
-          'creator-hub': ['composer', 'creator-hub'],
-          anonlink: ['anonlink', 'message', 'anonymous-messages'],
-          message: ['anonlink', 'message'],
-          'pdf-tools': ['pdf-tools', 'pdf', 'book-creator'],
-          pdf: ['pdf-tools', 'pdf'],
+        const normalizedMap: Record<string, string> = {
+          quiz: 'quiz',
+          composer: 'composer',
+          anonlink: 'anonlink',
+          pdf: 'pdf',
+          image: 'image',
+          'text-editor' : 'text-editor'
         };
 
         const validAliases = normalizedMap[featureId] || [featureId];

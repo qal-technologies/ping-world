@@ -7,7 +7,8 @@ export type QuestionType =
   | 'input'
   | 'range'
   | 'rating'
-  | 'upload';
+  | 'upload'
+  | 'logic';
 
 export interface QuizOption {
   id: string; // questionId-index or uuid
@@ -35,6 +36,7 @@ export interface Question {
   id: string;
   type: QuestionType;
   text: string;
+  required?: boolean;
   imageUrl?: string;
   options: QuizOption[];
   correctExplanation?: string;
@@ -62,6 +64,9 @@ export interface Question {
   skipToCat?: string; // Question-level branching: jump to first question of this category
   category?: string; // Optional category tag for grouping questions
   timer?: number; // Optional question timer in seconds
+  logicExpression?: string;
+  logicTrueRoute?: string;
+  logicFalseRoute?: string;
 }
 
 export interface Details {
@@ -85,6 +90,7 @@ export interface Details {
 
 export interface QuizTakerResponse {
   id?: string;
+  takerNumber?: number;
   status?: 'in_progress' | 'submitted' | 'expired';
   userData: Record<string, string>;
   answers: any[];
@@ -112,7 +118,7 @@ export interface Quiz {
   title: string;
   description: string;
   type: 'quiz' | 'survey';
-  surveyType?: 'research' | 'form'; // research = branching/page-by-page; form = scroll-all, no branching
+  surveyType?: 'research' | 'form' | 'poll'; // Poll uses survey responses, question-level branching, and live option tallies.
   questions: Question[];
   canGoBack?: boolean;
   showScore?: boolean;
@@ -144,7 +150,13 @@ export interface Quiz {
   createdAt: number;
   responses?: QuizTakerResponse[];
   responsesTotalCount?: number;
+  responsesSubmittedCount?: number;
+  responsesActiveCount?: number;
+  responsesAttemptsUnavailable?: boolean;
+  responsesPollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+  responsesPollTruncated?: boolean;
   responsesNextOffset?: number | null;
+  responsesNextCursor?: string | null;
   responsesLoadingMore?: boolean;
   allowEarlySubmit?: boolean;
   expires_at?: string; // ISO date

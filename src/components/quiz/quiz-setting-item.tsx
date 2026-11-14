@@ -7,7 +7,8 @@ interface QuizSettingItemProps {
   description: string;
   children: React.ReactNode;
   className?: string;
-  premium?:boolean;
+  premium?: boolean;
+  hide?: boolean;
 }
 
 export default function QuizSettingItem({
@@ -15,8 +16,10 @@ export default function QuizSettingItem({
   description,
   children,
   premium,
+  hide,
   className,
 }: QuizSettingItemProps) {
+  if(hide) return;
   return (
     <div
       className={cn(

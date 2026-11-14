@@ -9,6 +9,7 @@ interface WrapperT {
   title: string;
   description?: string;
   icon?: React.ReactNode;
+  hide?: boolean;
   capTitle?: boolean;
   children: React.ReactNode;
   color?: 'primary' | 'cyan' | 'success' | 'danger' | 'warning';
@@ -25,6 +26,7 @@ export default function Wrapper({
   color = 'primary',
   defaultOpen = false,
   premium = false,
+  hide,
 }: WrapperT) {
   const headerText = capTitle ? title.toUpperCase() : capFirst(title);
   const [open, setOpen] = useState(defaultOpen);
@@ -38,6 +40,8 @@ export default function Wrapper({
   };
 
   const activeColor = colorMap[color];
+
+  if(hide) return;
 
   return (
     <Card

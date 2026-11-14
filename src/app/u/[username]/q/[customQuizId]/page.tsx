@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: CustomQuizParams): Promise<Me
   try {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, display_name')
       .eq('username', username)
       .single();
     if (!profile) throw new Error('Quiz owner not found');
@@ -24,12 +24,16 @@ export async function generateMetadata({ params }: CustomQuizParams): Promise<Me
       .maybeSingle();
 
     if (quiz) {
-      const title = `${quiz.title} by @${username} | Quizzable`;
-      const description = quiz.description || `Assessment created by @${username}`;
+      const title = `${quiz.title} by ${profile.display_name} | Quizzable`;
+      const description = quiz.description || `Assessment created by ${profile.display_name}`;
       return {
         title,
         description,
-        openGraph: { title, description, type: 'website' },
+        openGraph: {title, description, type: 'website'},
+        robots: {
+          follow: false,
+          index:false,
+        }
       };
     }
   } catch (e) {
@@ -39,6 +43,7 @@ export async function generateMetadata({ params }: CustomQuizParams): Promise<Me
   return {
     title: `Assessment by @${username} | Quizzable`,
     description: `Take custom assessment by @${username}`,
+    
   };
 }
 

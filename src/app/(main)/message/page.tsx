@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Anonymous Messages | Ping World",
     description: "Hear the honest truth. Stay anonymous. Safe, secure, and end-to-end private messaging.",
+  },
+  alternates: {
+    canonical:'/message',
   }
 };
 

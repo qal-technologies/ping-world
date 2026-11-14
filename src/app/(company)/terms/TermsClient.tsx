@@ -30,6 +30,17 @@ export default function TermsPage() {
       <Card className='bg-transparent ring-0 sm:ring-1 sm:p-8 sm:border-white/5 sm:bg-white/[0.01] space-y-8 text-pw-muted text-sm leading-relaxed'>
         <section className='space-y-3'>
           <h2 className='text-lg font-bold text-pw-text flex items-center gap-2'>
+            <CheckCircle className='h-4.5 w-4.5 text-pw-primary' /> Notification retention
+          </h2>
+          <p>
+            In-app notification records are retained for up to 30 days after
+            their most recent activity and are then automatically deleted.
+            Removing a notification manually deletes it from the account.
+          </p>
+        </section>
+
+        <section className='space-y-3'>
+          <h2 className='text-lg font-bold text-pw-text flex items-center gap-2'>
             <CheckCircle className='h-4.5 w-4.5 text-pw-primary' /> 1. Agreement
             to Terms
           </h2>

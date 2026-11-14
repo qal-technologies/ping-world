@@ -6,6 +6,7 @@ import { readJsonWithinLimit } from '@/lib/api-auth';
 import { getRequestUser, getRequestUserFromToken } from '@/lib/api-auth';
 import { decodeStoredCorrectAnswer } from '@/lib/quiz/quiz-evaluation';
 import { calculateDobAgeYears, resolvePipedText } from '@/lib/quiz/quiz-piping';
+import { getCountryByCode } from '@/lib/countries/countries-data';
 import {
   isNotificationRecipientActive,
   sendPushToUser,
@@ -49,6 +50,30 @@ function hasSubmittedAnswer(answer: any): boolean {
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'string') return value.trim().length > 0;
   return typeof value === 'number' || typeof value === 'boolean';
+}
+
+function sanitizeRevisionAnswer(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === null || value === undefined) return undefined;
+  if (typeof value === 'string')
+    return /^data:/i.test(value) ? undefined : value.slice(0, 20_000);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'boolean') return value;
+  if (Array.isArray(value))
+    return value
+      .slice(0, 100)
+      .map((item) => sanitizeRevisionAnswer(item, depth + 1))
+      .filter((item) => item !== undefined);
+  if (typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => key !== '__proto__' && key !== 'constructor')
+        .slice(0, 30)
+        .flatMap(([key, item]) => {
+          const clean = sanitizeRevisionAnswer(item, depth + 1);
+          return clean === undefined ? [] : [[key.slice(0, 100), clean]];
+        }),
+    );
+  return undefined;
 }
 
 export async function POST(request: NextRequest) {
@@ -103,7 +128,16 @@ export async function POST(request: NextRequest) {
       const tokenHash = createHash('sha256')
         .update(submitted.attemptToken)
         .digest('hex');
-      if (prior && prior.user_data?.attemptTokenHash === tokenHash)
+      if (prior && prior.user_data?.attemptTokenHash === tokenHash) {
+        // The response may have committed while its HTTP confirmation was
+        // lost. Complete best-effort attempt cleanup before acknowledging the
+        // same idempotent submission, without touching the response's media.
+        await admin
+          .from('quiz_attempts')
+          .delete()
+          .eq('id', submitted.submissionId)
+          .eq('quiz_id', quizId)
+          .eq('attempt_token_hash', tokenHash);
         return NextResponse.json(
           {
             success: true,
@@ -116,6 +150,7 @@ export async function POST(request: NextRequest) {
           },
           { status: 200 },
         );
+      }
       if (submitted.idempotencyCheck === true)
         return NextResponse.json(
           { success: false, exists: false },
@@ -505,15 +540,7 @@ export async function POST(request: NextRequest) {
         Array.isArray(candidate.answerHistory) ?
           candidate.answerHistory.slice(-20).flatMap((revision: any) => {
             if (!revision || typeof revision !== 'object') return [];
-            const revisionAnswer =
-              typeof revision.answer === 'string' ?
-                revision.answer.slice(0, 20_000)
-              : Array.isArray(revision.answer) ?
-                revision.answer
-                  .filter((value: unknown) => typeof value === 'string')
-                  .slice(0, 100)
-                  .map((value: string) => value.slice(0, 2_000))
-              : undefined;
+            const revisionAnswer = sanitizeRevisionAnswer(revision.answer);
             return [
               {
                 ...(revisionAnswer !== undefined ?
@@ -527,6 +554,9 @@ export async function POST(request: NextRequest) {
                 : {}),
                 ...(typeof revision.fileUrl === 'string' ?
                   { fileUrl: revision.fileUrl.slice(0, 2_000_000) }
+                : {}),
+                ...(typeof revision.correct === 'boolean' ?
+                  { correct: revision.correct }
                 : {}),
                 ...((
                   typeof revision.recordedAt === 'string' &&
@@ -794,7 +824,7 @@ export async function POST(request: NextRequest) {
         attempt.answers?.__attemptSettings?.quizLayout !== 'scroll_show'
       : Boolean((quiz.settings as any)?.quizScroll) &&
         (quiz.settings as any)?.quizLayout !== 'scroll_show');
-    const currentPathQuestionIds =
+    const reachedFlowIds =
       allQuestionsInPath ?
         (
           attempt?.question_order ||
@@ -806,6 +836,22 @@ export async function POST(request: NextRequest) {
             ...answers.map((answer: any) => String(answer.questionId)),
           ]),
         );
+    const logicQuestionIds = new Set(questions.filter((question: any) => question.type === 'logic').map((question: any) => String(question.id)));
+    const currentPathQuestionIds = reachedFlowIds.filter((id: string) => !logicQuestionIds.has(String(id)));
+    if (!['timeout', 'violation'].includes(String(submitted.submissionReason || ''))) {
+      const answeredQuestionIds = new Set(
+        answers.filter(hasSubmittedAnswer).map((answer: any) => String(answer.questionId)),
+      );
+      const missingRequired = currentPathQuestionIds
+        .map((id: string) => questionMap.get(String(id)) as Record<string, any> | undefined)
+        .find((question: Record<string, any> | undefined) => question?.required === true && !answeredQuestionIds.has(String(question.id)));
+      if (missingRequired) {
+        return NextResponse.json(
+          { error: `Please answer required question: ${String(missingRequired.text || 'Required question').slice(0, 180)}.` },
+          { status: 422 },
+        );
+      }
+    }
     const allBranchesCount = currentPathQuestionIds.length;
     const validQuestionIds = new Set([
       ...questions.map((question: any) => String(question.id)),
@@ -1010,8 +1056,18 @@ export async function POST(request: NextRequest) {
           0,
         )
       : 0;
+    const geoCode = (
+      request.headers.get('x-vercel-ip-country') ||
+      request.headers.get('cf-ipcountry') ||
+      ''
+    ).trim().toUpperCase();
+    const trustedCountry = geoCode && geoCode !== 'XX' ? getCountryByCode(geoCode) : undefined;
     const responseUserData = {
       ...userData,
+      ...(trustedCountry ? {
+        country: trustedCountry.name,
+        continent: trustedCountry.region,
+      } : {}),
       ...(typeof attempt?.device_key_hash === 'string' ?
         { deviceKeyHash: attempt.device_key_hash }
       : {}),
@@ -1231,11 +1287,15 @@ export async function POST(request: NextRequest) {
         if (insertError?.code === '23505') {
           const { data: existing } = await admin
             .from('quiz_responses')
-            .select('id')
+            .select('id,user_data')
             .eq('id', row.id)
             .eq('quiz_id', quizId)
             .maybeSingle();
-          responsePersisted = Boolean(existing);
+          const expectedTokenHash = createHash('sha256')
+            .update(String(submitted.attemptToken))
+            .digest('hex');
+          responsePersisted =
+            existing?.user_data?.attemptTokenHash === expectedTokenHash;
         }
         if (!responsePersisted) {
           console.error(
@@ -1278,18 +1338,17 @@ export async function POST(request: NextRequest) {
             .eq('quiz_id', quizId)
             .maybeSingle();
           if (currentAttempt?.status !== 'submitted') {
-            await admin
-              .from('quiz_responses')
-              .delete()
-              .eq('id', row.id)
-              .eq('quiz_id', quizId);
-            return NextResponse.json(
-              {
-                error:
-                  'Could not finalize this response yet. Your attempt is still available to retry.',
-              },
-              { status: 503 },
-            );
+            // Preserve the committed response if cleanup raced with another
+            // retry. A later idempotency check will confirm it and remove any
+            // remaining attempt row. Never roll back a durable response here.
+            if (currentAttempt)
+              return NextResponse.json(
+                {
+                  error:
+                    'The response was saved, but attempt cleanup is still finishing. Retry once to confirm completion.',
+                },
+                { status: 503 },
+              );
           }
         }
       } else row.id = submittedRow.response_id;
@@ -1443,9 +1502,13 @@ export async function POST(request: NextRequest) {
         { status: 413 },
       );
     }
-    console.error('[api/quiz-responses] Submission failed.');
+    const diagnostic = error instanceof Error ? error.message : 'Unknown submission error.';
+    console.error('[api/quiz-responses] Submission failed:', diagnostic.slice(0, 400));
     return NextResponse.json(
-      { error: 'Could not save this response.' },
+      {
+        error: 'Could not save this response.',
+        ...(process.env.NODE_ENV !== 'production' ? { diagnostic: diagnostic.slice(0, 400) } : {}),
+      },
       { status: 503 },
     );
   }

@@ -9,6 +9,7 @@ import {
   FileText,
   LoaderCircle,
   MessageSquare,
+  Trash2,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -42,6 +43,8 @@ export default function InAppNotificationCenter() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
   const [preferencesVersion, setPreferencesVersion] = useState(0);
   const loadedUserId = useRef<string | null>(null);
   void preferencesVersion;
@@ -183,6 +186,43 @@ export default function InAppNotificationCenter() {
     }
   };
 
+  const deleteNotification = async (id?: string) => {
+    if (clearingAll || deletingId) return;
+    if (id) setDeletingId(id);
+    else setClearingAll(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token)
+        throw new Error('Sign in to manage notifications.');
+      const response = await fetch('/api/notifications/in-app', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(id ? { id } : { all: true }),
+          accessToken: session.access_token,
+        }),
+        cache: 'no-store',
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(result.error || 'Could not delete notification.');
+      setItems((current) =>
+        id ? current.filter((item) => item.id !== id) : [],
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ?
+          error.message
+        : 'Could not delete notification.',
+      );
+    } finally {
+      setDeletingId(null);
+      setClearingAll(false);
+    }
+  };
+
   const openAction = (item: InAppNotification) => {
     if (item.unreadCount > 0) void update(item, 'read');
     setOpen(false);
@@ -244,27 +284,42 @@ export default function InAppNotificationCenter() {
                     Updates from across Pingwrld
                   </p>
                 </div>
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  className='h-8 w-8 rounded-full'
-                  onClick={() => setOpen(false)}
-                  aria-label='Close'>
-                  <X className='h-4 w-4' />
-                </Button>
+                <div className='flex items-center gap-1'>
+                  {items.length > 0 && (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      disabled={clearingAll || Boolean(deletingId)}
+                      onClick={() => void deleteNotification()}
+                      className='h-7 gap-1 px-2 text-[10px] text-pw-danger hover:bg-pw-danger/10 rounded-full'>
+                      {clearingAll ?
+                        <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
+                      : <X className='h-3.5 w-3.5' />}{' '}
+                      Clear all
+                    </Button>
+                  )}
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    className='h-8 w-8 rounded-full'
+                    onClick={() => setOpen(false)}
+                    aria-label='Close'>
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
               </header>
-              <div className='max-h-[min(65vh,520px)] overflow-y-auto p-2 gap-1'>
+              <div className='max-h-[min(65vh,520px)] overflow-y-auto flex flex-col p-2 gap-1 items-center'>
                 {loading ?
                   <div className='flex items-center justify-center gap-4 p-8 text-sm text-pw-muted'>
                     <LoaderCircle className='h-4 w-4 animate-spin' />
-                    Loading
+                    Loading...
                   </div>
                 : items.length ?
                   items.map((item) => (
                     <article
                       key={item.id}
                       className={cn(
-                        'flex gap-2 rounded-xl p-2 transition hover:bg-white/5',
+                        'w-full flex gap-2 rounded-xl p-2 transition hover:bg-white/5',
                         item.unreadCount > 0 && 'bg-pw-primary/[0.08]',
                       )}>
                       <div className='mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-pw-primary/10 text-pw-primary'>
@@ -282,18 +337,32 @@ export default function InAppNotificationCenter() {
                               </span>
                             )}
                           </p>
-                          {item.updatedAt && (
-                            <span className='text-[10px] text-pw-muted/70 uppercase'>
-                              {new Date(item.updatedAt).toLocaleTimeString(
-                                'en-NG',
-                                {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: true,
-                                },
-                              )}
-                            </span>
-                          )}
+
+                          <div className='flex gap-1 items-center'>
+                            {item.updatedAt && (
+                              <span className='text-[10px] text-pw-muted/70 uppercase'>
+                                {new Date(item.updatedAt).toLocaleTimeString(
+                                  'en-NG',
+                                  {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  },
+                                )}
+                              </span>
+                            )}
+                            <button
+                              type='button'
+                              title='Delete notification'
+                              aria-label='Delete notification'
+                              disabled={deletingId === item.id || clearingAll}
+                              onClick={() => void deleteNotification(item.id)}
+                              className='grid h-6 w-6 place-items-center rounded-md text-pw-muted hover:bg-pw-danger/10 hover:text-pw-danger disabled:opacity-50'>
+                              {deletingId === item.id ?
+                                <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
+                              : <Trash2 className='h-3.5 w-3.5' />}
+                            </button>
+                          </div>
                         </div>
                         {item.body && (
                           <p className='whitespace-pre-wrap break-words text-xs text-pw-muted'>
@@ -346,6 +415,13 @@ export default function InAppNotificationCenter() {
                   </div>
                 }
               </div>
+              {user?.created_at &&
+                Date.now() - Date.parse(user.created_at) >=
+                  30 * 24 * 60 * 60 * 1000 && (
+                  <footer className='border-t border-white/10 px-3 py-2 text-center text-[10px] text-pw-muted'>
+                    Notifications older than 30 days are cleared automatically.
+                  </footer>
+                )}
             </motion.section>
           </>
         )}

@@ -1,5 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { activeFlexibleEntitlements } from '@/lib/config/premium';
 
 export async function readQuizTierEntitlements(admin: SupabaseClient, userId: string | null) {
   if (!userId) return { quiz: false, pro: false };
@@ -7,13 +8,14 @@ export async function readQuizTierEntitlements(admin: SupabaseClient, userId: st
   if (error) throw new Error('Could not verify assessment owner tier.');
   const metadata = data.user?.app_metadata || {};
   const expiry = typeof metadata.tier_expires_at === 'string' ? Date.parse(metadata.tier_expires_at) : Number.NaN;
+  if (metadata.tier === 'flexible') {
+    const tools = activeFlexibleEntitlements(metadata).map((entry) => entry.toolId);
+    return { quiz: tools.includes('quizzable'), pro: false };
+  }
   if (!Number.isFinite(expiry) || expiry <= Date.now()) return { quiz: false, pro: false };
   if (metadata.tier === 'pro') return { quiz: true, pro: true };
   if (metadata.tier === 'standard') return { quiz: true, pro: false };
-  if (metadata.tier !== 'flexible' || !Array.isArray(metadata.purchased_tools)) return { quiz: false, pro: false };
-  // Flexible subscriptions must name the assessment tool explicitly. Never
-  // accept a broad `all` entitlement from a flexible-plan metadata value.
-  return { quiz: metadata.purchased_tools.some((tool: unknown) => ['quizzable', 'quiz', 'quiz-builder'].includes(String(tool).toLowerCase())), pro: false };
+  return { quiz: false, pro: false };
 }
 
 /** Read the authoritative quiz entitlement from server-managed metadata. */

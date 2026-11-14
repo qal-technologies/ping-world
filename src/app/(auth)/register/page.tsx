@@ -93,7 +93,7 @@ export default function RegisterPage() {
       } catch {
         if (!cancelled) setAvailable('Could not verify username.');
       } 
-    }, 450);
+    }, 650);
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);

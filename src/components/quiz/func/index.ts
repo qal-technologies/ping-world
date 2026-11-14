@@ -1,4 +1,4 @@
-import type {Question} from "@/app/(main)/quiz";
+import type { Question, Quiz } from '@/app/(main)/quiz';
 import { decodeStoredCorrectAnswer as Decode } from '@/lib/quiz/quiz-evaluation';
 import { resolvePipedText } from '@/lib/quiz/quiz-piping';
 
@@ -25,7 +25,6 @@ export function getAssessmentDeviceKey(): string {
   }
 }
 
-
 export function getPrivateQuizAccessToken(quizId: string): string {
   try {
     return sessionStorage.getItem(`pw_private_quiz_access_v1_${quizId}`) || '';
@@ -34,7 +33,10 @@ export function getPrivateQuizAccessToken(quizId: string): string {
   }
 }
 
-export function normalizeOptionValue(question: Question, value: unknown): string {
+export function normalizeOptionValue(
+  question: Question,
+  value: unknown,
+): string {
   const raw =
     value && typeof value === 'object' && 'id' in (value as any) ?
       (value as any).id
@@ -61,6 +63,7 @@ export function calculateQuizPoints(
   let earned = 0;
   let possible = 0;
   const addPossibleForQuestion = (question: Question, answer?: any) => {
+    if (question.type === 'logic') return;
     const answered = isAnswerAttempted(answer);
     // Upload questions are completion checks for now: a supplied file is a
     // correct response worth one question point, independent of an answer key.
@@ -133,11 +136,12 @@ export function calculateQuizPoints(
     if (question.type === 'checkbox') {
       possible += ids.reduce((sum, id) => sum + weightFor(id), 0);
       const selected = Array.isArray(answer?.answer) ? answer.answer : [];
-      if (answered) earned += selected.reduce(
-        (sum: number, id: unknown) =>
-          ids.includes(String(id)) ? sum + weightFor(id) : sum,
-        0,
-      );
+      if (answered)
+        earned += selected.reduce(
+          (sum: number, id: unknown) =>
+            ids.includes(String(id)) ? sum + weightFor(id) : sum,
+          0,
+        );
       return;
     }
     const points = custom ? weightFor(normalized) : 1;
@@ -146,12 +150,13 @@ export function calculateQuizPoints(
   };
   for (const answer of answers) {
     const question = byId.get(String(answer.questionId));
-    if (question) addPossibleForQuestion(question, answer);
+    if (question && question.type !== 'logic')
+      addPossibleForQuestion(question, answer);
   }
   for (const id of pathIds) {
     if (answerIds.has(String(id))) continue;
     const question = byId.get(String(id));
-    if (question) addPossibleForQuestion(question);
+    if (question && question.type !== 'logic') addPossibleForQuestion(question);
   }
   return { earned, possible };
 }
@@ -169,18 +174,30 @@ export function keepAnswerRevision(previous: any, next: any) {
     recordedAt:
       previous.updatedAt || previous.recordedAt || new Date().toISOString(),
   };
-  const normalize = (value: any) => {
+  const stableValue = (value: any): any => {
     if (Array.isArray(value))
-      return JSON.stringify([...value].map(String).sort());
+      return value
+        .map(stableValue)
+        .sort((left, right) =>
+          JSON.stringify(left).localeCompare(JSON.stringify(right)),
+        );
     if (value && typeof value === 'object')
-      return JSON.stringify(value, Object.keys(value).sort());
-    return String(value ?? '').trim();
+      return Object.fromEntries(
+        Object.keys(value)
+          .sort()
+          .map((key) => [key, stableValue(value[key])]),
+      );
+    return typeof value === 'string' ? value.trim() : value ?? null;
   };
+  const normalize = (value: any) => JSON.stringify(stableValue(value));
   const sameAnswer =
     normalize(previous.answer) === normalize(next.answer) &&
     String(previous.fileUrl || '') === String(next.fileUrl || '') &&
     String(previous.fileName || '') === String(next.fileName || '');
-  if (!sameAnswer && (priorValue.answer !== undefined || priorValue.fileUrl)) {
+  if (
+    !sameAnswer &&
+    (isAnswerAttempted(previous) || previous?.passed === true)
+  ) {
     // Keep a bounded history. A question can be revisited often, and an upload
     // data URL in every revision would otherwise exceed attempt snapshot limits.
     if (
@@ -318,8 +335,9 @@ export function evaluateQuizAnswer({
 
   if (question.type === 'checkbox') {
     const correctIds = (
-      Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect]
-    ).map((value: unknown) => normalizeOptionValue(question, value));
+      Array.isArray(decodedCorrect) ? decodedCorrect : [decodedCorrect]).map(
+      (value: unknown) => normalizeOptionValue(question, value),
+    );
     const selectedIds = (Array.isArray(answer) ? answer : []).map(
       (value: unknown) => normalizeOptionValue(question, value),
     );
@@ -408,4 +426,35 @@ export const generateQuizId = (): string => {
   });
 };
 
-export const seedTemplateStorageKey = (): string => `pw_quiz_template_v1`;
+export const seedTemplateStorageKey = (): string => `pw_quiz_template_v1`;
+
+export function countQuestions({
+  quiz,
+  label = 'Questions',
+  showLogic,
+}: {
+  quiz: Quiz;
+    label?: string;
+    showLogic?: boolean;
+}) {
+  if (!quiz) return;
+
+  if (!quiz.questions || quiz.questions.length === 0) return 'No Questions';
+
+  const questionList = quiz.questions.filter((q) => q.type !== 'logic');
+  const logic = quiz.questions.filter(q => q.type === 'logic').length;
+  const count = questionList.length;
+  const tag = (isFor?: 'logic' | 'question') => {
+    let returning = 'Questions';
+    if(isFor === 'logic') {
+      returning = logic && logic > 1 ? 'logics' : 'logic';
+    }
+
+    if(isFor === 'question') {
+      returning = label && label.endsWith('s') ? label : label && !label.endsWith('s') ? `${label}s` : ''
+    }
+    return returning;
+  };
+
+  return `${count} ${tag('question')}${showLogic && logic > 0 ? `, ${logic} ${tag('logic')}` : ''}`;
+}

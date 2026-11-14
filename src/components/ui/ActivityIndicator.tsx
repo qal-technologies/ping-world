@@ -50,16 +50,18 @@ export function ActivityIndicator({
         className={cn(
           'fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4 p-6 transition-all duration-300 pointer-events-auto select-none',
           blurBack && 'backdrop-blur-md',
-          transparentBack ? 'bg-black/40' : 'bg-[#030612]/90',
+          transparentBack ? 'bg-transparent' : 'bg-[#030612]/90',
           className,
         )}
         onClick={(e) => e.stopPropagation()}>
-        <div className='relative flex items-center justify-center'>
-          <div className='w-12 h-12 rounded-full border-2 border-pw-primary/20 border-t-pw-primary animate-spin' />
-          <div className='absolute w-7 h-7 rounded-full border-2 border-pw-cyan/30 border-b-pw-cyan animate-spin [animation-direction:reverse]' />
+        <div className='relative flex items-center justify-center mb-2'>
+
+          <div className='absolute w-9 h-9 rounded-full border-2 border-transparent border-b-pw-cyan animate-spin delay-[600ms] [animation-direction:reverse]' />
+          <div className='absolute w-7 h-7 rounded-full border-2 border-transparent border-b-pw-primary/90 animate-spin delay-[400ms]'/>
+          <div className='absolute w-5 h-5 rounded-full border-2 border-transparent border-b-pw-cyan/80 animate-spin delay-[200ms] [animation-direction:reverse]' />
         </div>
         {message && (
-          <p className='text-sm font-bold text-pw-text tracking-wide text-center animate-pulse max-w-sm'>
+          <p className='text-sm font-bold text-pw-text tracking-wide text-center animate-pulse max-w-sm mt-1'>
             {timedOut ? 'Operation taking longer than expected...' : message}
           </p>
         )}
@@ -78,16 +80,17 @@ export function ActivityIndicator({
         className={cn(
           'absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 p-4 transition-all duration-300 pointer-events-auto select-none rounded-xl',
           blurBack && 'backdrop-blur-md',
-          transparentBack ? 'bg-black/20' : 'bg-[#030612]/80',
+          transparentBack ? 'bg-transparent' : 'bg-[#030612]/80',
           className,
         )}
         onClick={(e) => e.stopPropagation()}>
-        <div className='relative flex items-center justify-center'>
-          <div className='w-10 h-10 rounded-full border-2 border-pw-primary/20 border-t-pw-primary animate-spin' />
-          <div className='absolute w-6 h-6 rounded-full border-2 border-pw-cyan/30 border-b-pw-cyan animate-spin [animation-direction:reverse]' />
+        <div className='relative flex items-center justify-center mb-2'>
+          <div className='absolute w-9 h-9 rounded-full border-2 border-transparent border-b-pw-cyan animate-spin delay-[600ms] [animation-direction:reverse]' />
+          <div className='absolute w-7 h-7 rounded-full border-2 border-transparent border-b-pw-primary/90 animate-spin delay-[400ms]' />
+          <div className='absolute w-5 h-5 rounded-full border-2 border-transparent border-b-pw-cyan/80 animate-spin delay-[200ms] [animation-direction:reverse]' />
         </div>
         {message && (
-          <p className='text-xs font-bold text-pw-text tracking-wide text-center animate-pulse'>
+          <p className='text-sm font-bold text-pw-text tracking-wide text-center animate-pulse max-w-sm mt-1'>
             {timedOut ? 'Operation taking longer than expected...' : message}
           </p>
         )}

@@ -8,7 +8,6 @@ import {
   ArrowRight,
   ChevronRight,
   Sparkles,
-  Filter,
   X,
   Eye,
   ChevronDown,
@@ -28,7 +27,6 @@ export default function ToolsHubPage() {
   const { premiumTier } = useAppContext();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [viewCat, setViewCat] = useState(false);
   const [large, setLarge] = useState(false);
   const router = useRouter();
   const [wrappedCategories, setWrappedCategories] = useState<
@@ -62,7 +60,9 @@ export default function ToolsHubPage() {
   const handleToolClick = (e: React.MouseEvent, tool: any) => {
     if ((tool as any).proOnly && premiumTier !== 'pro') {
       e.preventDefault();
-      toast.info(`⭐ PRO Tool: "${tool.title}" is exclusive to Pro subscribers. Upgrade your plan to gain access!`);
+      toast.info(
+        `⭐ PRO Tool: "${tool.title}" is exclusive to Pro subscribers. Upgrade your plan to gain access!`,
+      );
     }
   };
 
@@ -126,32 +126,31 @@ export default function ToolsHubPage() {
 
             {/* Absolute floating search overlay prioritizing titles */}
             {search.trim().length > 0 && (
-              <div className='absolute top-full left-0 right-0 mt-2 z-50 max-h-80 overflow-y-auto bg-[#0a0c1b]/60 bkblur border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1 custom-scrollbar'>
-                {filteredTools.length === 0 ? (
+              <div className='absolute top-full left-0 right-0 mt-2 z-50 max-h-80 overflow-y-auto bg-[#0a0c1b]/60 bkblur border border-white/10 rounded-2xl shadow-2xl p-1 space-y-1 custom-scrollbar'>
+                {filteredTools.length === 0 ?
                   <p className='p-3 text-xs text-pw-muted text-center italic'>
                     No tools found matching &quot;{search}&quot;
                   </p>
-                ) : (
-                  filteredTools.slice(0, 10).map((tool) => (
+                : filteredTools.slice(0, 10).map((tool) => (
                     <Link
                       key={tool.href}
                       href={tool.href}
                       onClick={(e) => handleToolClick(e, tool)}
-                      className='flex items-center justify-between p-2.5 rounded-xl hover:bg-pw-primary/10 border border-transparent hover:border-pw-primary/20 transition-all group'>
+                      className='flex items-center justify-between p-2 rounded-xl hover:bg-pw-primary/10 transition-all group'>
                       <div className='min-w-0 pr-2'>
-                        <p className='text-xs font-bold text-white group-hover:text-pw-primary transition-colors truncate'>
-                          {tool.title}
+                        <p className='text-xs font-bold text-white transition-colors truncate'>
+                          {tool.title} ●
+                          <span className='text-[9px] font-bold uppercase tracking-wider text-pw-cyan shrink-0 ml-1'>
+                            {tool.category}
+                          </span>
                         </p>
                         <p className='text-[10px] text-pw-muted truncate'>
                           {tool.description}
                         </p>
                       </div>
-                      <span className='text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 text-pw-primary border border-white/5 shrink-0'>
-                        {tool.category}
-                      </span>
                     </Link>
                   ))
-                )}
+                }
               </div>
             )}
           </div>
@@ -159,31 +158,47 @@ export default function ToolsHubPage() {
       </div>
 
       {/* Category Dropdown and Direct Tool Launcher */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-4 w-full">
-        <div className="flex items-center gap-2.5 w-full sm:w-auto">
-          <span className="text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0">Quick Tool:</span>
+      <div className='flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-4 w-full'>
+        <div className='flex items-center gap-2.5 w-full sm:w-auto'>
+          <span className='text-xs font-bold text-pw-muted uppercase font-mono tracking-wider shrink-0'>
+            Quick Tool:
+          </span>
           <select
-            onChange={e => {
+            onChange={(e) => {
               if (e.target.value) {
                 const targetHref = e.target.value;
-                const toolObj = TOOLS.find(t => t.href === targetHref);
-                if (toolObj && (toolObj as any).proOnly && premiumTier !== 'pro') {
-                  toast.info(`⭐ PRO Tool: "${toolObj.title}" is exclusive to Pro subscribers.`);
+                const toolObj = TOOLS.find((t) => t.href === targetHref);
+                if (
+                  toolObj &&
+                  (toolObj as any).proOnly &&
+                  premiumTier !== 'pro'
+                ) {
+                  toast.info(
+                    `⭐ PRO Tool: "${toolObj.title}" is exclusive to Pro subscribers.`,
+                  );
                   return;
                 }
                 router.push(targetHref);
               }
             }}
-            defaultValue=""
-            className="h-10 rounded-xl bg-pw-surface/50 border border-white/10 px-4 font-mono text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer w-full sm:w-64"
-          >
-            <option value="" disabled className="bg-pw-surface text-pw-muted">
+            defaultValue=''
+            className='h-10 rounded-xl bg-pw-surface/50 border border-white/10 px-4 font-mono text-xs text-pw-text focus:outline-none focus:border-pw-primary cursor-pointer w-full sm:w-64 accent:bg-pw-primary/60'>
+            <option
+              value=''
+              disabled
+              className='bg-pw-surface text-pw-muted'>
               Select Tool...
             </option>
             {Object.entries(groupedTools).map(([cat, categoryTools]) => (
-              <optgroup key={cat} label={cat.toUpperCase()} className="bg-pw-surface text-pw-primary font-bold">
-                {categoryTools.map(t => (
-                  <option key={t.href} value={t.href} className="bg-pw-surface text-pw-text font-normal">
+              <optgroup
+                key={cat}
+                label={cat.toUpperCase()}
+                className='bg-pw-surface text-pw-primary font-bold'>
+                {categoryTools.map((t) => (
+                  <option
+                    key={t.href}
+                    value={t.href}
+                    className='bg-pw-surface text-pw-text font-normal'>
                     {t.title}
                   </option>
                 ))}
@@ -204,61 +219,11 @@ export default function ToolsHubPage() {
             <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6'>
               <AnimatePresence mode='popLayout'>
                 {filteredTools.map((tool) => (
-                  <motion.div
-                    key={tool.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2 }}>
-                    <Link href={tool.href} onClick={(e) => handleToolClick(e, tool)}>
-                      <Card className='card-glow bkblur h-full flex flex-col p-5 group hover:border-pw-primary/30 transition-all cursor-pointer'>
-                        <div className='flex justify-between items-start mb-6'>
-                          <div className='w-14 h-14 rounded-2xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-110 group-hover:shadow-pw-primary/5 transition-all duration-500'>
-                            <tool.icon
-                              className='h-7 w-7'
-                              style={{ color: tool.color }}
-                            />
-                          </div>
-                          <div className='flex items-center gap-1.5'>
-                            <div className='h-6 px-3 rounded-full bg-white/5 border border-white/5 text-[10px] font-bold uppercase tracking-widest flex items-center text-pw-muted'>
-                              {tool.category}
-                            </div>
-                            {(tool as any).proOnly && (
-                              <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
-                                PRO
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <h3 className='text-2xl font-bold font-display mb-3 flex items-center gap-2 group-hover:text-pw-primary transition-colors'>
-                          {tool.title}
-                          <ArrowRight className='h-5 w-5 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all' />
-                        </h3>
-                        <p className='text-pw-muted text-sm leading-relaxed flex-1'>
-                          {tool.description}
-                        </p>
-
-                        <div className='min-w-full flex items-end mt-4 '>
-                          <Link
-                            title={`Read about ${tool.title.toUpperCase()}, it's features and how to use it.`}
-                            href={`/docs/${tool.id}`}
-                            className='text-pw-muted text-xs underline cursor-pointer hover:text-pw-primary hover:font-bold'
-                            style={{ letterSpacing: '0.5px' }}>
-                            View Docs
-                          </Link>
-                        </div>
-
-                        <div className='pt-5 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors'>
-                          <span className='text-[10px] font-bold text-pw-muted tracking-widest font-mono'>
-                            v-{tool.version.v.toString()} ({tool.version.s})
-                          </span>
-                          <ChevronRight className='h-4 w-4 text-pw-muted group-hover:text-pw-primary' />
-                        </div>
-                      </Card>
-                    </Link>
-                  </motion.div>
+                  <ToolCard
+                    tool={tool}
+                    key={tool.id + 'card'}
+                    onClick={(e) => handleToolClick(e, tool)}
+                  />
                 ))}
               </AnimatePresence>
             </div>
@@ -301,7 +266,8 @@ export default function ToolsHubPage() {
                       }}
                       title='Wrap this category'
                       className='text-xs text-pw-muted font-bold font-mono uppercase tracking-widest flex gap-1 cursor-pointer'>
-                      {categoryTools.length} {categoryTools.length > 1 ? 'Tools' : 'Tool'}
+                      {categoryTools.length}{' '}
+                      {categoryTools.length > 1 ? 'Tools' : 'Tool'}
                       <ChevronDown
                         className={cn(
                           'w-4 h-4 sm:hidden',
@@ -313,56 +279,11 @@ export default function ToolsHubPage() {
 
                   <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 px-6 '>
                     {displayedTools.map((tool) => (
-                      <Link
-                        href={tool.href}
-                        key={tool.id}
-                        onClick={(e) => handleToolClick(e, tool)}>
-                        <Card className='card-glow bkblur h-full flex flex-col p-5 group hover:border-pw-primary/30 transition-all cursor-pointer'>
-                          <div className='flex justify-between items-start mb-6'>
-                            <div className='w-14 h-14 rounded-2xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-110 group-hover:shadow-pw-primary/5 transition-all duration-500'>
-                              <tool.icon
-                                className='h-7 w-7'
-                                style={{ color: tool.color }}
-                              />
-                            </div>
-                            <div className='flex items-center gap-1.5'>
-                              <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
-                                {tool.tag}
-                              </span>
-                              {(tool as any).proOnly && (
-                                <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
-                                  PRO
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <h3 className='text-2xl font-bold font-display mb-3 flex items-center gap-2 group-hover:text-pw-primary transition-colors'>
-                            {tool.title}
-                            <ArrowRight className='h-5 w-5 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all' />
-                          </h3>
-                          <p className='text-pw-muted text-sm leading-relaxed flex-1 mb-4'>
-                            {tool.description}
-                          </p>
-
-                          <div className='min-w-full flex items-end mb-4 '>
-                            <Link
-                              title={`Read about ${tool.title.toUpperCase()}, its features and how to use it.`}
-                              href={`/docs/${tool.id}`}
-                              className='text-pw-muted text-xs underline cursor-pointer hover:text-pw-primary hover:font-bold'
-                              style={{ letterSpacing: '0.5px' }}>
-                              View Docs
-                            </Link>
-                          </div>
-
-                          <div className='pt-5 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors'>
-                            <span className='text-[10px] font-bold text-pw-muted tracking-widest font-mono'>
-                              v-{tool.version.v.toString()} ({tool.version.s})
-                            </span>
-                            <ChevronRight className='h-4 w-4 text-pw-muted group-hover:text-pw-primary' />
-                          </div>
-                        </Card>
-                      </Link>
+                      <ToolCard
+                        tool={tool}
+                        key={tool.id + 'card'}
+                        onClick={(e) => handleToolClick(e, tool)}
+                      />
                     ))}
                   </div>
                   {hasMore && (
@@ -437,56 +358,11 @@ export default function ToolsHubPage() {
                 style={{ scrollbarWidth: 'none' }}>
                 {TOOLS.filter((t) => t.category === modalCategory).map(
                   (tool) => (
-                    <Link
-                      href={tool.href}
-                      key={tool.id}
-                      onClick={(e) => {
-                        handleToolClick(e, tool);
-                        if (!(tool as any).proOnly || premiumTier === 'pro') {
-                          setModalCategory(null);
-                        }
-                      }}>
-                      <Card className='card-glow p-5 flex flex-col h-full bg-white/[0.01] hover:border-pw-primary/25 cursor-pointer group'>
-                        <div className='flex items-center gap-3 mb-4'>
-                          <div className='w-10 h-10 rounded-xl flex items-center justify-center bg-pw-surface border border-white/5'>
-                            <tool.icon
-                              className='h-5 w-5'
-                              style={{ color: tool.color }}
-                            />
-                          </div>
-                          <div className='flex items-center gap-1.5'>
-                            <span className='text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/5 text-pw-muted'>
-                              {tool.tag}
-                            </span>
-                            {(tool as any).proOnly && (
-                              <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
-                                PRO
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <h4 className='font-bold text-lg text-pw-text group-hover:text-pw-primary transition-colors'>
-                          {tool.title}
-                        </h4>
-                        <p className='text-xs text-pw-muted mt-2 leading-relaxed flex-1 mb-4'>
-                          {tool.description}
-                        </p>
-
-                        <div className='min-w-full flex items-end mb-4 '>
-                          <Link
-                            title={`Read about ${tool.title.toUpperCase()}, its features and how to use it.`}
-                            href={`/docs/${tool.id}`}
-                            className='text-pw-muted text-xs underline cursor-pointer hover:text-pw-primary hover:font-bold'
-                            style={{ letterSpacing: '0.5px' }}>
-                            View Docs
-                          </Link>
-                        </div>
-
-                        <div className='pt-3 border-t border-white/5 text-[10px] font-bold text-pw-muted font-mono'>
-                          v-{tool.version.v.toString()} ({tool.version.s})
-                        </div>
-                      </Card>
-                    </Link>
+                    <ToolCard
+                      tool={tool}
+                      key={tool.id + 'card'}
+                      onClick={(e) => handleToolClick(e, tool)}
+                    />
                   ),
                 )}
               </div>
@@ -502,3 +378,80 @@ export default function ToolsHubPage() {
     </div>
   );
 }
+
+type toolstt = typeof tools;
+interface ToolsType extends toolstt {
+  id: string;
+  href: string;
+  icon: any;
+}
+
+const ToolCard = ({
+  tool,
+  onClick,
+}: {
+  tool: any;
+  onClick: (e: any, tool: typeof tools) => void;
+}) => {
+  return (
+    <motion.div
+      key={tool.id + 'inner-card'}
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.2 }}>
+      <Link
+        href={tool.href}
+        onClick={(e) => onClick(e, tool)}>
+        <Card className='card-glow bkblur h-full flex flex-col p-4 group hover:border-pw-primary/30 transition-all cursor-pointer rounded-2xl'>
+          <div className='relative flex flex-wrap gap-3 items-center'>
+            <div className='w-14 h-14 rounded-2xl flex items-center justify-center bg-pw-surface border border-white/5 shadow-xl group-hover:scale-110 group-hover:shadow-pw-primary/5 transition-all duration-500'>
+              <tool.icon
+                className='h-7 w-7'
+                style={{ color: tool.color }}
+              />
+            </div>
+
+            <div className='flex items-start gap-1 flex-wrap flex-col'>
+              <h3 className='text-xl font-bold font-display group-hover:text-pw-primary transition-colors flex gap-1 items-center'>
+                {tool.title}
+                <ArrowRight className='h-5 w-5 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all' />
+              </h3>
+              <div className='flex items-center gap-1.5'>
+                <div className='text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/2.5 border border-white/5 text-pw-muted'>
+                  {tool.category}
+                </div>
+                {(tool as any).proOnly && (
+                  <span className='text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-500'>
+                    PRO
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <p className='text-pw-muted leading-relaxed flex-1 text-sm font-medium'>
+            {tool.description}
+          </p>
+
+          <div className='min-w-full flex items-end '>
+            <Link
+              title={`Read about ${tool.title.toUpperCase()}, it's features and how to use it.`}
+              href={`/docs/${tool.id}`}
+              className='text-pw-muted text-xs underline cursor-pointer hover:text-pw-cyan hover:font-bold'
+              style={{ letterSpacing: '0.5px' }}>
+              View Docs
+            </Link>
+          </div>
+
+          <div className='pt-5 border-t border-white/5 flex items-center justify-between group-hover:border-pw-primary/10 transition-colors'>
+            <span className='text-[10px] font-bold text-white/40 tracking-widest font-mono'>
+              v-{tool.version.v.toString()} ({tool.version.s})
+            </span>
+          </div>
+        </Card>
+      </Link>
+    </motion.div>
+  );
+};

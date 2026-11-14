@@ -254,10 +254,10 @@ export function checkFileSize (size: number) {
 export default function PdfToolStudioPage() {
   const { openFile } = useAppFileViewer();
   const { isFeatureUnlocked, isPremium, user } = useAppContext();
-  const hasProPdf = isFeatureUnlocked('pdf-tools');
+  const hasProPdf = isFeatureUnlocked('pdf');
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { showAlert, showConfirm, showPrompt } = useAppModal();
+  const { showConfirm, showPrompt } = useAppModal();
 
   // ── URL-driven Tab Routing ──────────────────────────────────────
   const urlTab = searchParams.get('tab');
@@ -393,7 +393,7 @@ export default function PdfToolStudioPage() {
   >({});
   const [stackType, setStackType] = useState<'page' | 'chapter'>('page');
 
-  // jules edit: Add sidebar open/close toggle state for desktop
+  // Add sidebar open/close toggle state for desktop
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Preview & Drawer toggles
@@ -1031,7 +1031,7 @@ export default function PdfToolStudioPage() {
     toast.success('Chapter and associated pages deleted.');
   };
 
-  // jules edit: Insert new pages directly inline right after chapter's last page by index
+  // Insert new pages directly inline right after chapter's last page by index
   const handleAddPageToChapter = (chapterId: string | null) => {
     let title = `Page ${pages.length + 1}`;
 
@@ -1331,7 +1331,6 @@ export default function PdfToolStudioPage() {
         const { saveAs } = await import('file-saver');
         saveAs(blob, `${conversionFile.name.replace(/\.[^/.]+$/, '')}.doc`);
 
-        toast.dismiss(toastId);
         toast.success(
           '🎉 Successfully converted PDF to Microsoft Word (.doc)!',
         );
@@ -1352,11 +1351,11 @@ export default function PdfToolStudioPage() {
         }
         tagJsPdfDocument(doc);
         doc.save(`${conversionFile.name.replace(/\.[^/.]+$/, '')}.pdf`);
-        toast.dismiss(toastId);
         toast.success('Text exported to a paginated PDF.');
       } else if (fromFormat === 'images' && toFormat === 'pdf') {
         const { jsPDF } = await import('jspdf');
-        const { compressImageForPdf } = await import('@/lib/pdf/image-compressor');
+        const {compressImageForPdf} = await import('@/lib/pdf/image-compressor');
+
         const files = conversionQueue.length ? conversionQueue : [conversionFile];
         let doc: InstanceType<typeof jsPDF> | null = null;
         for (const [index, file] of files.entries()) {
@@ -1379,7 +1378,6 @@ export default function PdfToolStudioPage() {
         if (!doc) throw new Error('Choose at least one image.');
         tagJsPdfDocument(doc);
         doc.save(`${files[0].name.replace(/\.[^/.]+$/, '')}${files.length > 1 ? '-images' : ''}.pdf`);
-        toast.dismiss(toastId);
         toast.success(`${files.length} image${files.length === 1 ? '' : 's'} exported to PDF.`);
       } else if (fromFormat === 'pdf' && toFormat === 'txt') {
         const arrayBuffer = await conversionFile.arrayBuffer();
@@ -1405,7 +1403,6 @@ export default function PdfToolStudioPage() {
         }
         const { saveAs } = await import('file-saver');
         saveAs(new Blob([tagTextExport(pages.join('\n\n'), 'text')], { type: 'text/plain;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.txt`);
-        toast.dismiss(toastId);
         toast.success('PDF text exported. Scanned pages require OCR and are left blank.');
       } else if (fromFormat === 'txt' && toFormat === 'word') {
         const text = await conversionFile.text();
@@ -1413,7 +1410,6 @@ export default function PdfToolStudioPage() {
         const docHtml = `<html><head><meta charset="utf-8"></head><body><pre style="font-family:Calibri,Arial,sans-serif;white-space:pre-wrap">${safeText}</pre></body></html>`;
         const { saveAs } = await import('file-saver');
         saveAs(new Blob(['\ufeff', tagHtmlDocument(docHtml)], { type: 'application/msword;charset=utf-8' }), `${conversionFile.name.replace(/\.[^/.]+$/, '')}.doc`);
-        toast.dismiss(toastId);
         toast.success('Text exported as a Word-compatible document.');
       } else if (['word', 'excel', 'pptx'].includes(fromFormat)) {
         // Convert Office Open XML and CSV files using the browser's bundled JSZip;
@@ -1476,7 +1472,6 @@ export default function PdfToolStudioPage() {
           tagJsPdfDocument(doc);
           doc.save(`${baseName}.pdf`);
         }
-        toast.dismiss(toastId);
         toast.success(`${fromFormat.toUpperCase()} converted to ${toFormat.toUpperCase()}.`);
       } else if (toFormat === 'txt') {
         throw new Error('This source format is not supported for text extraction.');
@@ -1485,12 +1480,12 @@ export default function PdfToolStudioPage() {
       }
     } catch (err: any) {
       console.error('Universal conversion error:', err);
-      toast.dismiss(toastId);
       toast.error(
         'Conversion failed: ' +
           (err?.message || 'Please verify your file format.'),
       );
     } finally {
+      toast.dismiss(toastId);
       setIsConverting(false);
     }
   };
@@ -2266,7 +2261,7 @@ export default function PdfToolStudioPage() {
         <Card className='bg-transparent ring-0 sm:ring- sm:p-10 sm:bg-[#0c0d1c]/60 bkblur sm:border sm:border-white/2 sm:rounded-3xl sm:shadow-2xl space-y-4 sm:space-y-8 max-w-4xl mx-auto'>
           <div className='text-left sm:text-center space-y-2 max-w-lg mx-auto'>
             <h2 className='text-2xl font-bold font-display text-white'>
-              Text File Converter
+              File Converter
             </h2>
             <p className='text-xs text-pw-muted'>
               Select your source & target formats. The engine parses raw text
@@ -2442,7 +2437,7 @@ export default function PdfToolStudioPage() {
                   Preview file
                 </Button>
                 {conversionQueue.length > 1 && (
-                  <div className='mt-2 flex flex-wrap justify-center gap-1.5'>
+                  <div className='mt-2 flex flex-wrap justify-center gap-1.5 max-h-[30vh] overflow-y-auto'>
                     {conversionQueue.map((queuedFile, index) => (
                       <Button
                         key={`${queuedFile.name}-${queuedFile.lastModified}-${index}`}
@@ -3903,7 +3898,6 @@ export default function PdfToolStudioPage() {
               type='file'
               multiple
               accept='.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.txt,.csv,.docx,.xlsx,.pptx'
-              // accept='*'
               className='hidden'
               onChange={(e) => {
                 const files = e.target.files;
@@ -4183,16 +4177,17 @@ export default function PdfToolStudioPage() {
                 const { saveAs } = await import('file-saver');
                 saveAs(blob, `merged-document-${Date.now()}.pdf`);
 
-                toast.dismiss(toastId);
                 toast.success(
                   `Successfully combined ${mergeFiles.length} files into one PDF.`,
                 );
               } catch (err: any) {
-                toast.dismiss(toastId);
                 toast.error(
                   'Failed to merge PDFs: ' +
                     (err?.message || 'Please try again.'),
                 );
+              } finally {
+                toast.dismiss(toastId);
+                
               }
             }}
             className='btn-primary h-12 w-full text-sm font-bold shadow-xl gap-2'>
@@ -4290,12 +4285,12 @@ export default function PdfToolStudioPage() {
         </DialogContent>
       </Dialog>
 
-      {/* jules edit: Floating Book Reader Trigger Button */}
+      {/* Floating Book Reader Trigger Button */}
       {!showBookList && activeTab === 'book-editor' && (
         <button
           onClick={() => setShowOverallBookReader(true)}
           title='Open Book Reader'
-          className='fixed bottom-8 right-8 z-40 h-14 w-14 rounded-full bg-pw-primary text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-pw-primary/30 border border-white/20 group'>
+          className='fixed bottom-8 right-8 z-40 h-14 w-14 rounded-full bg-pw-primary/90 bkblur text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-pw-primary/30 border border-white/20 group'>
           <BookOpen className='h-6 w-6 group-hover:rotate-12 transition-transform' />
         </button>
       )}

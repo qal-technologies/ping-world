@@ -734,7 +734,7 @@ export default function Finished ({userData, userAnswers, questions, weightedSco
                                 onClick={() => {
                                     window.location.reload();
                                 }}
-                                className='gradient-brand w-10 h-10 border-pw-cyan border-none flex items-center rounded-full font-bold'>
+                                className='gradient-brand w-10 h-10 border-none flex items-center rounded-full font-bold'>
                                 <RefreshCcw className='w-5 h-5' />
                             </Button>
                         )}

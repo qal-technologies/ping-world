@@ -233,8 +233,8 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     ],
     similarTools: ["quizzable", "notes"]
   },
-  editor: {
-    id: "editor",
+  'text-editor': {
+    id: "text-editor",
     title: "Text Editor",
     category: "Content",
     summary: "This all-in-one text workspace lets you write rich-text documents and convert them into beautifully styled social media graphics or PDF reports without leaving your browser.",
@@ -275,11 +275,11 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     ],
     similarTools: ["composer", "word-counter"]
   },
-  image: {
-    id: "image",
-    title: "Image Toolkit",
+  media: {
+    id: "media",
+    title: "Media Editor",
     category: "Media",
-    summary: "The Image Toolkit is a high-speed, local editor that allows you to apply professional filters, adjust color balances, and resize or rotate photos instantly without uploading them to external servers.",
+    summary: "The Media Editor is a high-speed, local editor that allows you to apply professional filters, adjust color balances, and resize or rotate images, videos and audio, instantly without uploading them to external servers.",
     audience: "Graphic designers, photographers, content managers, and web editors",
     usageCount: "75,200+ visual assets optimized",
     versions: ["1.0"],

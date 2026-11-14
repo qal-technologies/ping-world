@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
-import { FLEXIBLE_FEATURES } from '@/lib/config/premium';
+import { readFlexibleTools } from '@/lib/config/premium';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
+import { reconcileFlexibleSubscriptions } from '@/lib/billing/flexible-subscriptions';
 
 type SubscriptionSnapshot = {
   current_period_end?: number | string;
@@ -54,8 +55,11 @@ export async function GET(request: NextRequest) {
       if (error) throw error;
       const users = (data.users || []).filter(
         (user) =>
-          typeof user.app_metadata?.stripe_subscription_id === 'string' &&
-          user.app_metadata.stripe_subscription_id,
+          (typeof user.app_metadata?.stripe_subscription_id === 'string' &&
+            user.app_metadata.stripe_subscription_id) ||
+            (user.app_metadata?.tier === 'flexible' &&
+              Array.isArray(user.app_metadata?.flexible_entitlements) &&
+              user.app_metadata.flexible_entitlements.length > 0),
       );
       scanned += users.length;
       for (let offset = 0; offset < users.length; offset += 6) {
@@ -63,6 +67,14 @@ export async function GET(request: NextRequest) {
         const results = await Promise.allSettled(
           batch.map(async (user) => {
             const previous = user.app_metadata || {};
+            if (previous.tier === 'flexible' && stripeKey) {
+              const beforeTools = Array.isArray(previous.purchased_tools) ? previous.purchased_tools.map(String) : [];
+              const result = await reconcileFlexibleSubscriptions(user.id, stripeKey);
+              const removedTools = beforeTools.some((tool) => !result.purchasedTools.includes(tool));
+              const renewed = result.purchasedTools.some((tool) => !beforeTools.includes(tool)) ||
+                Date.parse(String(result.tierExpiresAt || 0)) > Date.parse(String(previous.tier_expires_at || 0));
+              return { refreshed: renewed || removedTools, downgraded: removedTools };
+            }
             const subscriptionId = String(previous.stripe_subscription_id);
             let response: Response;
             let subscription: SubscriptionSnapshot | null;
@@ -132,22 +144,13 @@ export async function GET(request: NextRequest) {
                 ['flexible', 'standard', 'pro'].includes(requestedTier) ?
                   requestedTier
                 : 'free';
-              const selectedTool = String(
-                subscription.metadata?.selectedFlexibleToolId ||
-                  previous.purchased_tools?.[0] ||
-                  '',
-              );
               const purchasedTools =
                 tier === 'free' ? []
                 : tier === 'flexible' ?
-                  (
-                    FLEXIBLE_FEATURES.some(
-                      (feature) => feature.id === selectedTool,
-                    )
-                  ) ?
-                    [selectedTool]
-                  : []
-                : ['all'];
+                  (readFlexibleTools(subscription.metadata).length
+                    ? readFlexibleTools(subscription.metadata)
+                    : readFlexibleTools(previous))
+                : [];
               if (tier === 'flexible' && purchasedTools.length === 0)
                 throw new Error(
                   'Flexible subscription has no valid tool entitlement.',

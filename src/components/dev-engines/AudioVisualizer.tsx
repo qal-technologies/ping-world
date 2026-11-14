@@ -157,7 +157,7 @@ export default function AudioVisualizer() {
               step='10'
               value={freq}
               onChange={(e) => setFreq(Number(e.target.value))}
-              className='w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pw-primary'
+              className='w-full h-2 appearance-none cursor-pointer accent-pw-primary'
             />
           </div>
 
@@ -258,7 +258,7 @@ export default function AudioVisualizer() {
                       step="0.1"
                       value={trimStart}
                       onChange={e => setTrimStart(Math.min(Number(e.target.value), trimEnd - 0.1))}
-                      className="w-full h-1 bg-white/10 rounded accent-pw-primary"
+                      className="w-full h-1 accent-pw-primary"
                     />
                   </div>
                   <div className="flex-1">
@@ -270,7 +270,7 @@ export default function AudioVisualizer() {
                       step="0.1"
                       value={trimEnd}
                       onChange={e => setTrimEnd(Math.max(Number(e.target.value), trimStart + 0.1))}
-                      className="w-full h-1 bg-white/10 rounded accent-pw-primary"
+                      className="w-full h-1 accent-pw-primary"
                     />
                   </div>
                 </div>

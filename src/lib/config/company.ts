@@ -7,7 +7,7 @@ export const COMPANY = {
   name: 'Ping World',
   tagline: 'Your world of tools.',
   description:
-    'Open premium utilities and creator tools for everyone.',
+    'Open premium multi-utility web platform for digital tools for creators, developers, businesses and inidividuals.',
   version: '1.0.0',
   launchDate: '2026-08-01',
 

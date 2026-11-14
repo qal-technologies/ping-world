@@ -9,7 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { calculateDobAgeYears, formatDobAge, formatDobToWords } from '@/lib/quiz/quiz-piping';
+import {
+  calculateDobAgeYears,
+  formatDobAge,
+  formatDobToWords,
+} from '@/lib/quiz/quiz-piping';
 import { capFirst, cn } from '@/lib/utils';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,7 +36,7 @@ export default function Details({
     <div
       key='inner-details-view'
       className='container relative z-10 mx-auto px-5 py-10 max-w-lg flex-1 flex flex-col justify-center'>
-      <div className='sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl sm:glass sm:bkblur'>
+      <div className='sm:bg-white/5 sm:p-6 sm:rounded-[2.5rem] sm:border sm:border-white/10 sm:shadow-2xl sm:glass sm:bkblur sm:backdrop-blur-sm'>
         <h3 className='text-sm font-bold mb-8 mt-4 uppercase tracking-widest text-center'>
           ENTER YOUR DETAILS
         </h3>
@@ -134,7 +138,10 @@ export default function Details({
                       }
                       if (value && detail.minAge) {
                         const ageYears = calculateDobAgeYears(value);
-                        if (ageYears === null || ageYears < Number(detail.minAge)) {
+                        if (
+                          ageYears === null ||
+                          ageYears < Number(detail.minAge)
+                        ) {
                           toast.error(
                             `You're not old enough to assess this ${quiz.type}.`,
                           );
@@ -225,7 +232,7 @@ export default function Details({
             </div>
           ))}
           <Button
-            className='btn-primary h-10 sm:h-12 w-full mt-6 text-lg font-bold shadow-xl shadow-pw-primary/20'
+            className='btn-primary h-10 sm:h-12 w-full mt-6 rounded-full text-lg font-bold shadow-xl shadow-pw-primary/20'
             onClick={() => {
               const complete = quiz?.askDetails?.every(
                 (d) =>

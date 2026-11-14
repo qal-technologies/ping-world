@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Wrench,
-  LayoutDashboard,
   Menu,
   X,
   MessageSquare,
@@ -31,10 +30,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import { useAppContext } from '@/context/AppContext';
-import { SEARCH_INDEX, SearchPageItem } from '@/lib/general/search-data';
+import { SEARCH_INDEX, } from '@/lib/general/search-data';
 
 const toolLinks = [
   {
@@ -62,13 +60,13 @@ const toolLinks = [
     description: 'Conversion, merging and book creation',
   },
   {
-    href: '/image',
-    label: 'Image Toolkit',
+    href: '/media',
+    label: 'Media Editor',
     icon: ImageIcon,
-    description: 'Filters and image editing',
+    description: 'Image, Video and audio editing',
   },
   {
-    href: '/editor',
+    href: '/text-editor',
     label: 'Text Editor',
     icon: Type,
     description: 'Rich text and post maker',
@@ -111,7 +109,6 @@ export const Navbar = () => {
     }).slice(0, 6);
   }, [debouncedQuery]);
 
-
   // Click outside to close search dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -132,7 +129,6 @@ export const Navbar = () => {
     { href: '/', label: 'Home', icon: Home },
     { href: '/tools', label: 'Browse Tools', icon: Wrench },
     { href: '/api', label: 'Developer APIs', icon: Code },
-
   ];
 
   return (
@@ -142,7 +138,6 @@ export const Navbar = () => {
         {/* Logo */}
         <Link
           href='/'
-
           className='flex items-center gap-1 group'>
           <Image
             width={40}
@@ -178,8 +173,8 @@ export const Navbar = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align='start'
-              className='w-64 p-2 bg-pw-surface border-white/10 glass shadow-2xl'>
-              <div className='px-2 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
+              className='w-65 p-1 bg-pw-surface border-white/10 glass shadow-2xl rounded-2xl bkblur backdrop-blur-md'>
+              <div className='px-2 py-1 mb-1 text-[10px] font-bold uppercase tracking-widest text-pw-muted'>
                 Utility Suite
               </div>
               {toolLinks.map((tool) => {
@@ -193,18 +188,21 @@ export const Navbar = () => {
                     href={tool.href}>
                     <Link
                       href={tool.href}
-                      className='flex flex-col gap-0.5 p-1 transition-all cursor-pointer group'>
+                      className='flex gap-2 items-center p-1 py-0 transition-all cursor-pointer group rounded-2xl'>
                       <div className='flex items-center gap-2 font-medium text-xs text-pw-text group-hover:text-pw-primary'>
                         <tool.icon className='h-3.5 w-3.5' />
-                        {tool.label}
                       </div>
-                      <span
-                        className={cn(
-                          'text-[10px] text-pw-muted',
-                          active && 'text-white',
-                        )}>
-                        {tool.description}
-                      </span>
+
+                      <div className='w-full flex flex-col'>
+                        <p>{tool.label}</p>
+                        <span
+                          className={cn(
+                            'text-[10px] text-pw-muted',
+                            active && 'text-white',
+                          )}>
+                          {tool.description}
+                        </span>
+                      </div>
                     </Link>
                   </DropdownMenuItem>
                 );
@@ -213,23 +211,22 @@ export const Navbar = () => {
           </DropdownMenu>
 
           {navLinks.map((link) => {
-              const isActive =
-                pathname === link?.href ||
-                pathname.startsWith(link?.href + '/');
-              return (
-                <Link
-                  key={link?.href}
-                  href={link?.href}
-                  className={cn(
-                    'relative px-3.5 py-1.5 lg:text-xs xl:text-sm font-semibold rounded-lg text-pw-text transition-colors duration-200 li-glass',
-                    isActive ?
-                      'text-pw-cyan bg-pw-cyan/5'
-                    : 'hover:text-pw-cyan hover:bg-white/2',
-                  )}>
-                  {link?.label}
-                </Link>
-              );
-            })}
+            const isActive =
+              pathname === link?.href || pathname.startsWith(link?.href + '/');
+            return (
+              <Link
+                key={link?.href}
+                href={link?.href}
+                className={cn(
+                  'relative px-3.5 py-1.5 lg:text-xs xl:text-sm font-semibold rounded-lg text-pw-text transition-colors duration-200 li-glass',
+                  isActive ?
+                    'text-pw-cyan bg-pw-cyan/5'
+                  : 'hover:text-pw-cyan hover:bg-white/2',
+                )}>
+                {link?.label}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Right section */}
@@ -241,8 +238,9 @@ export const Navbar = () => {
               'hidden sm:flex h-9 w-9 items-center justify-center rounded-lg hover:text-pw-text',
               searchInput ? 'p-1' : 'text-pw-muted',
             )}>
-            {searchInput ? <X className='h-5 w-5 text-pw-danger rounded-full bg-pw-danger/10 bkblur' /> :
-            <SearchIcon className='h-6 w-6' />}
+            {searchInput ?
+              <X className='h-5 w-5 text-pw-danger rounded-full bg-pw-danger/10 bkblur' />
+            : <SearchIcon className='h-6 w-6' />}
           </button>
 
           {isLoggedIn ?
@@ -250,17 +248,17 @@ export const Navbar = () => {
               <Link
                 href={'/dashboard'}
                 className={cn(
-                  'hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20',
+                  'hidden md:inline-flex h-10 btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20',
                 )}>
                 Dashboard
               </Link>
-            : <div className='hidden md:inline-flex btn-primary text-sm px-10 py-2 opacity-0'>
+            : <div className='hidden h-10 md:inline-flex btn-primary text-sm px-10 py-2 opacity-0'>
                 Dashboard
               </div>
 
           : <Link
               href='/login'
-              className='hidden md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20'>
+              className='hidden h-10 md:inline-flex btn-primary text-xs font-bold px-6 py-2 shadow-lg shadow-pw-primary/20'>
               Sign In
             </Link>
           }
@@ -335,7 +333,6 @@ export const Navbar = () => {
                           setSearchQuery('');
                         }}
                         className='p-1 px-1.5 rounded-xl hover:bg-white/2 border border-transparent hover:border-white/1 flex items-center gap-2 transition-all group block'>
-                        
                         <div className='p-1 rounded-lg bg-pw-primary/10 text-pw-primary shrink-0 group-hover:scale-105 transition-transform flex align-center justify-center h-full'>
                           {item.category === 'Page' ?
                             <Layout className='h-5 w-5' />
@@ -359,7 +356,7 @@ export const Navbar = () => {
                           </p>
                         </div>
 
-                        <ChevronRight className='hidden group-hover:inline-flex h-3 w-3'/>
+                        <ChevronRight className='hidden group-hover:inline-flex h-3 w-3' />
                       </Link>
                     ))}
                   </div>
@@ -387,7 +384,7 @@ export const Navbar = () => {
               className='relative w-full mb-4'>
               <div className='flex items-center gap-2 bg-[#0c0d1c]/50 bkblur border border-white/5 px-4 py-3 rounded-xl shadow-lg focus-within:border-pw-primary/80'>
                 <Search className='h-4 w-4 text-pw-muted shrink-0' />
-                {/* jules edit: Add enter key handling for mobile search */}
+                {/* Add enter key handling for mobile search */}
                 <input
                   type='text'
                   value={searchQuery}
@@ -443,29 +440,26 @@ export const Navbar = () => {
               )}
             </div>
 
-            {[...navLinks]
-              .map((link) => {
-                const isActive =
-                  pathname === link?.href ||
-                  pathname.startsWith(link?.href + '/');
-                return (
-                  <Link
-                    key={link?.href}
-                    href={link?.href as any}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
-                      isActive ?
-                        'text-pw-cyan bg-pw-cyan/10 nav-glass bkblur'
-                      : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
-                    )}>
-                    {link && 'icon' in link && (
-                      <link.icon className='h-4 w-4' />
-                    )}
-                    {link?.label}
-                  </Link>
-                );
-              })}
+            {[...navLinks].map((link) => {
+              const isActive =
+                pathname === link?.href ||
+                pathname.startsWith(link?.href + '/');
+              return (
+                <Link
+                  key={link?.href}
+                  href={link?.href as any}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+                    isActive ?
+                      'text-pw-cyan bg-pw-cyan/10 nav-glass bkblur'
+                    : 'text-pw-muted hover:text-pw-text hover:bg-white/5',
+                  )}>
+                  {link && 'icon' in link && <link.icon className='h-4 w-4' />}
+                  {link?.label}
+                </Link>
+              );
+            })}
 
             <div className='px-3 mt-5 text-[14px] font-bold uppercase tracking-widest text-pw-cyan'>
               UTILITY
@@ -495,21 +489,19 @@ export const Navbar = () => {
                 <Link
                   href='/dashboard'
                   onClick={() => setMobileOpen(false)}
-                  className='btn-ghost text-sm text-center mt-4 h-12 flex-1'>
+                  className='btn-ghost text-sm text-center mt-4 h-10 flex-1'>
                   Dashboard
                 </Link>
               : <Link
                   href='/login'
                   onClick={() => setMobileOpen(false)}
-                  className='btn-primary text-sm text-center mt-4 h-12 flex-1'>
+                  className='btn-primary text-sm text-center mt-4 h-10 flex-1'>
                   Sign In
                 </Link>
               }
             </div>
 
-            <div className='hidden'>
-
-            </div>
+            <div className='hidden'></div>
           </div>
         </motion.div>
       )}

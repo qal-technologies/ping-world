@@ -191,7 +191,7 @@ function SettingsContent() {
     window.dispatchEvent(new Event('pw_notification_preferences'));
   };
 
-  // jules edit: Safe Auth Guard check using Supabase session to prevent redirect loops
+  // Safe Auth Guard check using Supabase session to prevent redirect loops
   useEffect(() => {
     const verifyUser = async () => {
       const {
@@ -302,7 +302,7 @@ function SettingsContent() {
     }
   };
 
-  // jules edit: Initialize user email and display name safely without re-triggering form state loops
+  // Initialize user email and display name safely without re-triggering form state loops
   useEffect(() => {
     if (user) {
       setEmail(user.email || '');
@@ -353,8 +353,9 @@ function SettingsContent() {
       'Syncing offline hybrid records with database...',
     );
     try {
-      await HybridStorage.syncPending();
-      toast.success('All local changes synchronized with cloud storage!');
+      await HybridStorage.syncPending()
+          toast.success('All local changes synchronized with cloud storage!');
+      
     } catch (err: any) {
       toast.error('Sync failed: ' + (err?.message || 'Network unreachable.'));
     } finally {
@@ -419,12 +420,7 @@ function SettingsContent() {
 
       // 3. Clear local storage
       try {
-        const keys = Object.keys(localStorage);
-        keys.forEach((key) => {
-          if (key.startsWith('pw_') || key.startsWith('pingworld_')) {
-            localStorage.removeItem(key);
-          }
-        });
+        await HybridStorage.clearLocalCache();
       } catch {}
 
       await supabase.auth.signOut();
@@ -445,10 +441,10 @@ function SettingsContent() {
 
   const handleSignOut = async () => {
     const confirmed = await showConfirm(
-      'Are you sure you want to log out? Please ensure any offline drafts or unsynced changes have been synchronized with your cloud workspace before signing out.',
+      'Are you sure you want to log out? Ensure all offline drafts or changes have been synchronized before signing out.',
       {
         title: 'Confirm Sign Out & Cloud Sync',
-        confirmText: 'Sign Out Now',
+        confirmText: 'Sign Out',
         type: 'warning',
       },
     );
@@ -456,11 +452,11 @@ function SettingsContent() {
     if (!confirmed) return;
     try {
       await HybridStorage.syncPending();
-      const { error } = await supabase.auth.signOut();
+      const {error} = await supabase.auth.signOut();
       if (error) throw error;
       await refresh();
-      toast.success('Changes synchronized. Logged out successfully.');
-      router.push('/');
+      toast.success('Logged out successfully.');
+      router.replace('/');
     } catch (error) {
       toast.error(
         error instanceof Error ?
@@ -482,7 +478,7 @@ function SettingsContent() {
   if (!user || !username) return null;
 
   return (
-    <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-5xl mx-auto'>
+    <div className='min-h-[calc(100vh-64px)] pb-24 pt-8 px-4 sm:px-6 max-w-5xl mx-auto relative'>
       {/* Settings Header */}
       <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-white/5 pb-6'>
         <div>
@@ -510,9 +506,9 @@ function SettingsContent() {
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className='space-y-6'>
+        className='relative'>
         <TabsList
-          className='bg-white/5 bkblur border border-white/10 px-0.5 rounded-full min-h-11 max-w-full items-center justify-start flex scrollable-row self-center'
+          className='bg-white/5 bkblur border border-white/10 px-0.5 rounded-full min-h-11 max-w-full items-center justify-start flex scrollable-row self-center sticky top-0'
           style={{ gap: 0 }}>
           <TabsTrigger
             value='account'
@@ -584,7 +580,9 @@ function SettingsContent() {
             </Card>
           </div>
 
-          <Card className='p-4 sm:p-6 bg-[#0c0d1c]/70 bkblur border border-white/10 rounded-2xl shadow-xl'>
+          <div className='divider my-15 sm:hidden' />
+
+          <Card className='p-0 ring-0 bg-transparent sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:backdrop-blur-md sm:border sm:border-white/10 sm:rounded-2xl sm:shadow-xl'>
             <div>
               <h3 className='text-lg font-bold font-display text-white my-1'>
                 Storage Management
@@ -645,7 +643,7 @@ function SettingsContent() {
         <TabsContent
           value='preferences'
           className='sm:space-y-4 self-center'>
-          <Card className='bg-transparent ring-0 sm:ring-1 sm:p-6 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-6 sm:shadow-xl max-w-2xl'>
+          <Card className='bg-transparent ring-0 sm:ring-1 sm:p-4 sm:bg-[#0c0d1c]/70 sm:bkblur sm:border sm:border-white/5 sm:rounded-2xl space-y-2 sm:shadow-xl max-w-2xl'>
             <div>
               <h3 className='text-lg font-bold font-display text-white'>
                 Notification Preferences
@@ -656,7 +654,7 @@ function SettingsContent() {
               </p>
             </div>
 
-            <div className='space-y-4'>
+            <div className='space-y-2'>
               <div className='flex flex-wrap items-center justify-between gap-3 p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
                 <div className='flex items-center gap-3'>
                   <Smartphone className='h-4 w-4 text-pw-primary' />
@@ -678,12 +676,12 @@ function SettingsContent() {
                       event.target.value === 'bottom' ? 'bottom' : 'top',
                     )
                   }
-                  className='rounded-lg border border-white/10 bg-pw-surface px-3 py-2 text-xs text-pw-text'>
+                  className='rounded-lg border border-white/10 bg-pw-surface/50 px-3 py-2 text-xs text-pw-text bkblur cursor-pointer'>
                   <option value='top'>Top</option>
                   <option value='bottom'>Bottom</option>
                 </select>
               </div>
-              <div className='grid gap-3 sm:grid-cols-2'>
+              <div className='grid gap-2 sm:grid-cols-2 mb-5'>
                 <label className='flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/3 px-3 py-3'>
                   <span>
                     <span className='block text-xs font-bold text-white'>
@@ -806,7 +804,7 @@ function SettingsContent() {
                 />
               </div>
 
-              <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5'>
+              <div className='flex items-center justify-between p-2 px-3 rounded-2xl bg-white/3 bkblur border border-white/5 flex-wrap'>
                 <div className='flex items-center gap-3'>
                   <Smartphone className='h-4 w-4 text-pw-primary' />
                   <div>

@@ -71,6 +71,20 @@ import {
 } from './sections';
 import { toast } from 'sonner';
 
+function hasQuestionAnswer(question: Question, value: any): boolean {
+  if (question.type === 'upload')
+    return Boolean(value && typeof value === 'object' ? value.fileUrl : value);
+  if (question.type === 'checkbox')
+    return Array.isArray(value) && value.length > 0;
+  if (question.type === 'input') return String(value ?? '').trim().length > 0;
+  if (question.type === 'range')
+    return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
+  if (question.type === 'rating')
+    return Number.isFinite(Number(value)) && Number(value) >= 1;
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== undefined && value !== null && value !== '';
+}
+
 function Taker() {
   const { openFile, isFileOpen } = useAppFileViewer();
   const isFileOpenRef = useRef(isFileOpen);
@@ -271,6 +285,7 @@ function Taker() {
   const [branchVisitCounts, setBranchVisitCounts] = useState<
     Record<string, number>
   >({});
+  const logicExecutionRef = useRef<string | null>(null);
   const [scrollBranchQuestionIds, setScrollBranchQuestionIds] = useState<
     string[] | null
   >(null);
@@ -493,7 +508,7 @@ function Taker() {
   const syncAttemptSnapshot = useCallback(
     async (snapshot: Record<string, any>, keepalive = false) => {
       if (!quiz || isLocalPreview) return false;
-      if(
+      if (
         finalSubmissionSnapshotRef.current &&
         !snapshot.finalSubmissionSnapshot
       )
@@ -577,7 +592,15 @@ function Taker() {
             keepalive,
             signal: keepalive ? undefined : AbortSignal.timeout(5000),
           });
-          if (!startResponse.ok) return false;
+          if (!startResponse.ok) {
+            const failure = await startResponse.json().catch(() => null);
+            const error = new Error(
+              failure?.error ||
+                `Could not initialize upload saving (HTTP ${startResponse.status}).`,
+            );
+            if (snapshot.finalSubmissionSnapshot) throw error;
+            return false;
+          }
           const startResult = await startResponse.json();
           preparedSnapshot = {
             ...snapshot,
@@ -591,7 +614,8 @@ function Taker() {
           };
           activeAttemptRef.current = preparedSnapshot;
           await HybridStorage.saveQuizAttemptDraft(quiz.id, preparedSnapshot);
-        } catch {
+        } catch (error) {
+          if (snapshot.finalSubmissionSnapshot) throw error;
           return false;
         }
       }
@@ -607,7 +631,8 @@ function Taker() {
             quiz.id,
             snapshot,
           );
-        } catch {
+        } catch (error) {
+          if (snapshot.finalSubmissionSnapshot) throw error;
           /* Keep the full local draft and retry media sync on the next save. */
         }
       }
@@ -651,7 +676,17 @@ function Taker() {
           activeAttemptRef.current = preparedSnapshot;
           return { success: true, alreadyClosed: true };
         }
-        if (!response.ok) return false;
+        if (!response.ok) {
+          const failure = await response.json().catch(() => null);
+          const message =
+            failure?.diagnostic && process.env.NODE_ENV !== 'production' ?
+              `${failure.error || 'Attempt could not be synchronized.'} (${failure.diagnostic})`
+            : failure?.error ||
+              `Attempt could not be synchronized (HTTP ${response.status}).`;
+          if (preparedSnapshot.finalSubmissionSnapshot)
+            throw new Error(message);
+          return false;
+        }
         const result = await response.json();
         const nextSnapshot = {
           ...preparedSnapshot,
@@ -674,7 +709,8 @@ function Taker() {
           branchHistory: preparedSnapshot.branchHistory,
         });
         return result;
-      } catch {
+      } catch (error) {
+        if (preparedSnapshot.finalSubmissionSnapshot) throw error;
         return false;
       }
     },
@@ -1279,6 +1315,40 @@ function Taker() {
     const savedForCurrent = userAnswers.find(
       (answer) => answer.questionId === currentQId,
     );
+    const currentRawAnswer =
+      q?.type === 'upload' ? savedForCurrent
+      : q?.type === 'input' ? quiz?.quizScroll ? scrollAnswers[currentQId] : content
+      : q?.type === 'checkbox' ? quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOptions
+      : quiz?.quizScroll ? scrollAnswers[currentQId]
+      : selectedOption !== null && selectedOption !== undefined && selectedOption !== '' ? selectedOption
+      : content !== '' ? content
+      : savedForCurrent?.passed ? undefined
+      : savedForCurrent?.answer;
+    const currentHasAnswer = q ? hasQuestionAnswer(q, currentRawAnswer) : false;
+
+    if (q && q.type !== 'logic' && !currentHasAnswer) {
+      if (q.required && !autoSubmit) {
+        return toast.error('This question is required. Answer it before continuing.');
+      }
+      if (q.required && autoSubmit) {
+        void finalizeQuiz(userAnswers, 'timeout');
+        return;
+      }
+      const skippedRecord = keepAnswerRevision(savedForCurrent, {
+        questionId: q.id,
+        answer: '',
+        passed: true,
+      });
+      const updated = [
+        ...userAnswers.filter((answer) => answer.questionId !== q.id),
+        skippedRecord,
+      ];
+      setUserAnswers(updated);
+      setScore(updated.filter((answer) => answer.correct === true).length);
+      proceedToNext(updated);
+      return;
+    }
+
     let currentSelectedOption =
       quiz?.quizScroll ? scrollAnswers[currentQId] : selectedOption;
     if (q?.type === 'range' || q?.type === 'rating') {
@@ -1297,7 +1367,7 @@ function Taker() {
       }
     }
 
-    if (!autoSubmit) {
+    if (!autoSubmit && q?.required) {
       if (q?.type === 'checkbox') {
         const activeBoxAnswers =
           quiz?.quizScroll ? scrollAnswers[currentQId] || [] : selectedOptions;
@@ -1459,7 +1529,10 @@ function Taker() {
       let updatedAnswers;
       if (existingIdx > -1) {
         updatedAnswers = [...userAnswers];
-        updatedAnswers[existingIdx] = { questionId: qId, answer: activeAns };
+        updatedAnswers[existingIdx] = keepAnswerRevision(
+          userAnswers[existingIdx],
+          { questionId: qId, answer: activeAns },
+        );
       } else {
         updatedAnswers = [
           ...userAnswers,
@@ -1622,50 +1695,21 @@ function Taker() {
         : (currentSavedAnswer?.answer ?? scrollAnswers[q.id])
       : (currentSavedAnswer?.answer ?? scrollAnswers[q.id])
     : undefined;
+  const requiredAnswerValue = q ?
+    q.type === 'upload' ? currentSavedAnswer
+    : q.type === 'input' ?
+      (quiz?.quizScroll ? scrollAnswers[q.id] : content) ??
+      (currentSavedAnswer?.passed ? undefined : currentSavedAnswer?.answer)
+    : q.type === 'checkbox' ?
+      (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOptions)?.length
+        ? (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOptions)
+        : currentSavedAnswer?.passed ? undefined : currentSavedAnswer?.answer
+    : (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOption) ??
+      (content !== '' ? content : undefined) ??
+      (currentSavedAnswer?.passed ? undefined : currentSavedAnswer?.answer)
+    : undefined;
   const canAdvanceCurrentQuestion = Boolean(
-    q &&
-      (q.type === 'upload' ?
-        Boolean(
-          currentSavedAnswer?.fileUrl ||
-            (quiz?.quizScroll && scrollAnswers[q.id]),
-        )
-      : q.type === 'input' ?
-        (quiz?.quizScroll ?
-          String(scrollAnswers[q.id] ?? '')
-        : String(content ?? '')
-        ).trim().length > 0
-      : q.type === 'checkbox' ?
-        (
-          (quiz?.quizScroll ? scrollAnswers[q.id] : selectedOptions) ||
-          (Array.isArray(currentSavedAnswer?.answer) ?
-            currentSavedAnswer.answer
-          : [])
-        ).length > 0
-      : q.type === 'range' ?
-        (() => {
-          const raw =
-            quiz?.quizScroll ? scrollAnswers[q.id]
-            : content !== '' ? content
-            : (selectedOption ?? currentSavedAnswer?.answer);
-          if (raw === undefined || raw === null || raw === '') return false;
-          const num = Number(raw);
-          return Number.isFinite(num) && num > 0;
-        })()
-      : q.type === 'rating' ?
-        Number(
-          quiz?.quizScroll ?
-            scrollAnswers[q.id]
-          : selectedOption || content || currentSavedAnswer?.answer,
-        ) >= 1
-      : (quiz?.quizScroll ?
-          scrollAnswers[q.id]
-        : (selectedOption ?? currentSavedAnswer?.answer)) !== undefined &&
-        (quiz?.quizScroll ?
-          scrollAnswers[q.id]
-        : (selectedOption ?? currentSavedAnswer?.answer)) !== null &&
-        (quiz?.quizScroll ?
-          scrollAnswers[q.id]
-        : (selectedOption ?? currentSavedAnswer?.answer)) !== ''),
+    q && (!q.required || hasQuestionAnswer(q, requiredAnswerValue)),
   );
 
   const answeredCount = useMemo(() => {
@@ -1675,7 +1719,9 @@ function Taker() {
   }, [userAnswers]);
   const currentPathIds =
     quiz?.quizScroll && quiz.quizLayout !== 'scroll_show' ?
-      activeQuestions.map((question) => question.id)
+      activeQuestions
+        .filter((question) => question.type !== 'logic')
+        .map((question) => question.id)
     : Array.from(
         new Set([
           ...visitedQuestionIds,
@@ -1683,10 +1729,16 @@ function Taker() {
             [activeQuestions[currentQuestion].id]
           : []),
         ]),
+      ).filter(
+        (questionId) =>
+          activeQuestions.find((question) => question.id === questionId)
+            ?.type !== 'logic',
       );
   const scorePathIds =
     quiz?.calculateAllBranches ?
-      activeQuestions.map((question) => question.id)
+      activeQuestions
+        .filter((question) => question.type !== 'logic')
+        .map((question) => question.id)
     : currentPathIds;
   const weightedScore = useMemo(
     () =>
@@ -1699,12 +1751,17 @@ function Taker() {
     [activeQuestions, userAnswers, scorePathIds.join('|')],
   );
   const totalQuestions =
-    quiz?.calculateAllBranches ? activeQuestions.length : currentPathIds.length;
+    quiz?.calculateAllBranches ?
+      activeQuestions.filter((question) => question.type !== 'logic').length
+    : currentPathIds.length;
   const touchedQuestions = new Set(
     userAnswers.map((answer) => String(answer.questionId)),
   ).size;
   const hasTimer = Boolean(quiz?.timer?.hasTimer);
-  const quitThreshold = Math.ceil((quiz?.questions.length || 0) * 0.75);
+  const quitThreshold = Math.ceil(
+    (quiz?.questions.filter((question) => question.type !== 'logic').length ||
+      0) * 0.75,
+  );
   const canQuitAssessment = !hasTimer && touchedQuestions < quitThreshold;
   const detailContext = useCallback(
     (answers: any[] = userAnswers) => ({
@@ -1715,7 +1772,7 @@ function Taker() {
       scorePossible: weightedScore.possible,
       totalQuestions:
         quiz?.calculateAllBranches ?
-          activeQuestions.length
+          activeQuestions.filter((question) => question.type !== 'logic').length
         : Math.max(currentPathIds.length, answers.length),
     }),
     [
@@ -1831,11 +1888,18 @@ function Taker() {
 
   const handlePass = () => {
     if (!q) return;
-    const passedRecord = {
-      questionId: q.id,
-      answer: '(Skipped)',
-      passed: true,
-    };
+    if (q.required) {
+      toast.error('This question is required and cannot be skipped.');
+      return;
+    }
+    const passedRecord = keepAnswerRevision(
+      userAnswers.find((answer) => answer.questionId === q.id),
+      {
+        questionId: q.id,
+        answer: '(Skipped)',
+        passed: true,
+      },
+    );
     const updated = [
       ...userAnswers.filter((a) => a.questionId !== q.id),
       passedRecord,
@@ -1898,6 +1962,26 @@ function Taker() {
         ];
       }
     }
+    if (!existingSnapshot && !['timeout', 'violation'].includes(submissionReason)) {
+      const reachedIds = new Set(
+        quiz?.quizScroll && quiz.quizLayout !== 'scroll_show'
+          ? activeQuestions.filter((question) => question.type !== 'logic').map((question) => question.id)
+          : [...visitedQuestionIds, ...(activeQuestion ? [activeQuestion.id] : [])],
+      );
+      const answeredIds = new Set(
+        finalAnswers.filter(isAnswerAttempted).map((answer) => String(answer.questionId)),
+      );
+      const missingRequired = activeQuestions.find(
+        (question) => question.type !== 'logic' && question.required &&
+          reachedIds.has(question.id) && !answeredIds.has(question.id),
+      );
+      if (missingRequired) {
+        finalizingRef.current = false;
+        toast.error(`Please answer required question: “${missingRequired.text}”.`);
+        document.getElementById(`question-${missingRequired.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
     finalizingRef.current = true;
     const frozenAnswers =
       existingSnapshot?.answers || structuredClone(finalAnswers);
@@ -1921,7 +2005,7 @@ function Taker() {
           }
         : {}),
       });
-    const frozenQuestionIds =
+    const frozenQuestionIds = (
       existingSnapshot?.questionIds ||
       Array.from(
         new Set([
@@ -1933,7 +2017,12 @@ function Taker() {
             .map((answer: any) => String(answer.questionId || ''))
             .filter(Boolean),
         ]),
-      );
+      )
+    ).filter(
+      (questionId: string) =>
+        activeQuestions.find((question) => question.id === questionId)?.type !==
+        'logic',
+    );
     const frozenReason = existingSnapshot?.reason || submissionReason;
     const frozenBranchHistory =
       existingSnapshot?.branchHistory || structuredClone(branchHistory);
@@ -1947,7 +2036,9 @@ function Taker() {
       frozenAnswers,
       correctAnswersRef.current,
       quiz?.calculateAllBranches ?
-        activeQuestions.map((question) => question.id)
+        activeQuestions
+          .filter((question) => question.type !== 'logic')
+          .map((question) => question.id)
       : frozenQuestionIds,
     );
     const frozenScore =
@@ -1958,7 +2049,7 @@ function Taker() {
     const frozenTotalQuestions =
       existingSnapshot?.totalQuestions ??
       (quiz?.calculateAllBranches ?
-        activeQuestions.length
+        activeQuestions.filter((question) => question.type !== 'logic').length
       : frozenQuestionIds.length);
     finalSubmissionSnapshotRef.current = {
       answers: frozenAnswers,
@@ -2275,6 +2366,19 @@ function Taker() {
     const answersToSave = latestAnswers || userAnswers;
 
     const q = activeQuestions[currentQuestion];
+    const routePathIds = quiz?.calculateAllBranches
+      ? activeQuestions.filter((question) => question.type !== 'logic').map((question) => question.id)
+      : Array.from(new Set([
+          ...visitedQuestionIds,
+          ...(q ? [q.id] : []),
+          ...answersToSave.map((answer) => String(answer.questionId || '')),
+        ])).filter((id) => activeQuestions.some((question) => question.id === id && question.type !== 'logic'));
+    const routeScore = calculateQuizPoints(
+      activeQuestions,
+      answersToSave,
+      correctAnswersRef.current,
+      routePathIds,
+    );
     if (q)
       setVisitedQuestionIds((previous) =>
         Array.from(new Set([...previous, q.id])),
@@ -2311,12 +2415,32 @@ function Taker() {
 
     let didBranch = false;
     let skipQuestionFallback = false;
-    if (q && (!isScrollLayout || isScrollShow)) {
+    if (q && (q.type === 'logic' || !isScrollLayout || isScrollShow)) {
       let branchTarget: string | undefined = undefined;
       let branchCat: string | undefined = undefined;
 
       // 1. Input Question Branching
-      if (q.type === 'input') {
+      if (q.type === 'logic') {
+        const condition = String(q.logicExpression || '').trim();
+        const matches =
+          condition ?
+            evaluateQuizCondition(condition, {
+              userData,
+              userAnswers: answersToSave,
+              questions: activeQuestions,
+              score: routeScore.earned,
+              scorePossible: routeScore.possible,
+              totalQuestions: routePathIds.length,
+            })
+          : false;
+        const route = String(
+          matches ? q.logicTrueRoute || '' : q.logicFalseRoute || '',
+        ).trim();
+        if (route.toLowerCase() === 'end') branchTarget = 'end';
+        else if (route.toLowerCase().startsWith('group:'))
+          branchCat = route.slice(6).trim() || undefined;
+        else if (route) branchTarget = route;
+      } else if (q.type === 'input') {
         const savedInput = answersToSave.find(
           (answer) => answer.questionId === q.id,
         )?.answer;
@@ -2332,8 +2456,9 @@ function Taker() {
                 userData,
                 userAnswers: answersToSave,
                 questions: activeQuestions,
-                score: weightedScore.earned,
-                totalQuestions: answersToSave.length,
+                score: routeScore.earned,
+                scorePossible: routeScore.possible,
+                totalQuestions: routePathIds.length,
               },
               false,
               rule.keyword,
@@ -2381,8 +2506,9 @@ function Taker() {
                 userData,
                 userAnswers: answersToSave,
                 questions: activeQuestions,
-                score: weightedScore.earned,
-                totalQuestions: answersToSave.length,
+                score: routeScore.earned,
+                scorePossible: routeScore.possible,
+                totalQuestions: routePathIds.length,
               });
             if (foundOpt.branchCondition) skipQuestionFallback = true;
             if (conditionPassed) {
@@ -2408,8 +2534,9 @@ function Taker() {
         userData,
         userAnswers: answersToSave,
         questions: activeQuestions,
-        score: weightedScore.earned,
-        totalQuestions: answersToSave.length,
+        score: routeScore.earned,
+        scorePossible: routeScore.possible,
+        totalQuestions: routePathIds.length,
       };
       if (branchTarget && branchTarget !== 'end') {
         branchTarget =
@@ -2618,6 +2745,23 @@ function Taker() {
       finalizeQuiz(answersToSave);
     }
   };
+
+  useEffect(() => {
+    if (!started || isFinished || q?.type !== 'logic') return;
+    const executionKey = `${currentQuestion}:${navigationHistory.length}:${q.id}`;
+    if (logicExecutionRef.current === executionKey) return;
+    logicExecutionRef.current = executionKey;
+    const timer = window.setTimeout(() => proceedToNext(userAnswers), 0);
+    return () => window.clearTimeout(timer);
+  }, [
+    started,
+    isFinished,
+    q?.id,
+    q?.type,
+    currentQuestion,
+    navigationHistory.length,
+    userAnswers,
+  ]);
 
   const GoBack = () => {
     setShowFeedback(false);
@@ -2922,7 +3066,7 @@ function Taker() {
 
             {/* Participant Info / Reminder Banner (Closable) */}
             {quiz?.fromPremium && quiz?.info && !dismissedQuizInfo && (
-              <div className='flex items-start justify-between gap-3 p-3 bg-pw-primary/10 border border-pw-primary/20 rounded-2xl mb-3 text-xs text-pw-text/90 leading-relaxed shadow-lg'>
+              <div className='flex items-start justify-between gap-3 p-3 bg-pw-primary/10 border border-pw-primary/20 rounded-2xl mb-3 text-xs text-pw-text/90 leading-relaxed shadow-lg bkblur'>
                 <div className='flex items-start gap-2.5'>
                   <Info
                     size={15}
@@ -2946,7 +3090,7 @@ function Taker() {
             )}
 
             {/* Header Row */}
-            <div className='sticky top-0 flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 rounded-4xl border border-white/10 bg-pw-surface/50 p-2 pt-2.5 shadow-xl bkblur backdrop-blur-2xl self-center'>
+            <div className='sticky top-0 flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 rounded-4xl border border-white/10 bg-pw-surface/50 p-2 pt-2.5 shadow-xl bkblur backdrop-blur-md self-center'>
               <div className='flex items-center pl-1.5'>
                 <h1 className='text-lg md:text-xl font-bold font-display tracking-tight leading-none'>
                   <span
@@ -2974,7 +3118,6 @@ function Taker() {
                         onClick={() =>
                           confirmLeaveQuiz(() => {
                             void (async () => {
-
                               try {
                                 let done = false;
                                 const attempt = activeAttemptRef.current;
@@ -2986,15 +3129,15 @@ function Taker() {
                                     quiz.id,
                                     attempt.attemptId,
                                     attempt.attemptToken,
-                                  ).then(data => {
-                                    if(data.success) done = true;
+                                  ).then((data) => {
+                                    if (data.success) done = true;
                                   });
                                   if (!quiz.allowRetry)
                                     localStorage.setItem(
                                       `completed_quiz_${quiz.id}`,
                                       'true',
                                     );
-                                  
+
                                   done = true;
                                 } else if (attempt?.attemptId) {
                                   await HybridStorage.deleteQuizAttemptDraft(
@@ -3002,8 +3145,8 @@ function Taker() {
                                   );
                                   done = true;
                                 }
-                                
-                                if(done) router.push('/quiz');
+
+                                if (done) router.push('/quiz');
                               } catch (error) {
                                 toast.error(
                                   error instanceof Error ?
@@ -3066,7 +3209,7 @@ function Taker() {
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{
-                        width: `${(answeredCount / Math.max(1, quiz?.calculateAllBranches ? activeQuestions.length : totalQuestions)) * 100}%`,
+                        width: `${(answeredCount / Math.max(1, quiz?.calculateAllBranches ? activeQuestions.filter((question) => question.type !== 'logic').length : totalQuestions)) * 100}%`,
                       }}
                       className='h-full gradient-brand animate-shimmer rounded-full shadow-[0_0_15px_rgba(var(--pw-primary-rgb),0.5)] transition-all duration-500'
                     />

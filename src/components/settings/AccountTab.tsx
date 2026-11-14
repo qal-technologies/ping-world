@@ -2,7 +2,17 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Calendar, Crown, DollarSign, Save, AlertTriangle, Trash2, ShieldCheck, Mail } from 'lucide-react';
+import {
+  Calendar,
+  Crown,
+  DollarSign,
+  Save,
+  AlertTriangle,
+  Trash2,
+  ShieldCheck,
+  Mail,
+  ClockIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/context/AppContext';
 import ProfileAvatarDesigner from '@/components/profile/ProfileAvatarDesigner';
 import Image from 'next/image';
+import { remainingPlanLabel } from '@/app/(main)/pricing/page';
 
 interface AccountTabProps {
   displayName: string;
@@ -29,8 +40,14 @@ export default function AccountTab({
   handleDeleteAccount,
   onNavigateSecurityTab,
 }: AccountTabProps) {
-  const { user, refresh, premiumTier, purchasedTools, username, dp } = useAppContext();
+  const { user, refresh, premiumTier, purchasedTools, username, dp } =
+    useAppContext();
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const remaining = remainingPlanLabel(
+    user?.app_metadata?.tier_expires_at,
+    user?.app_metadata?.billing_cycle,
+    user?.app_metadata?.auto_renew,
+  );
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +107,7 @@ export default function AccountTab({
       <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
         {/* Account Info Card */}
         <Card className='bg-transparent ring-0 px-2 sm:px-0 space-y-4 md:col-span-1'>
-          <div className='flex items-center gap-3 border-b border-white/5 pb-4'>
+          <div className='flex items-center gap-3 border-b border-white/5 pb-4 flex-wrap'>
             {dp.trim() ?
               <Image
                 width={48}
@@ -100,7 +117,7 @@ export default function AccountTab({
                 unoptimized
                 className='w-12 h-12 rounded-2xl object-cover object-center border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'
               />
-              : <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-lg'>
+            : <div className='w-12 h-12 rounded-2xl bg-pw-primary/10 border border-pw-primary/20 text-pw-primary flex items-center justify-center font-bold text-xl bkblur'>
                 {displayName ? displayName[0].toUpperCase() : 'U'}
               </div>
             }
@@ -115,14 +132,14 @@ export default function AccountTab({
           </div>
 
           <div className='space-y-3 text-xs'>
-            <div className='flex items-center justify-between text-pw-muted'>
+            <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
               <span className='flex items-center gap-1.5'>
-                <Mail className='h-3.5 w-3.5 text-pw-cyan'/> Email
+                <Mail className='h-3.5 w-3.5 text-pw-cyan' /> Email
               </span>
               <span className='font-mono text-white text-[11px]'>{email}</span>
             </div>
 
-            <div className='flex items-center justify-between text-pw-muted'>
+            <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
               <span className='flex items-center gap-1.5'>
                 <Calendar className='h-3.5 w-3.5 text-pw-primary' /> Member
                 Since
@@ -132,9 +149,9 @@ export default function AccountTab({
               </span>
             </div>
 
-            <div className='flex items-center justify-between text-pw-muted'>
+            <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
               <span className='flex items-center gap-1.5'>
-                <Crown className='h-3.5 w-3.5 text-pw-warning' /> Active Plan
+                <Crown className='h-3.5 w-3.5 text-pw-success' /> Active Plan
               </span>
               <span className='font-bold uppercase text-pw-primary text-[11px]'>
                 {premiumTier}
@@ -143,7 +160,7 @@ export default function AccountTab({
 
             {premiumTier === 'flexible' &&
               formattedPurchasedList.length > 0 && (
-                <div className='p-2 bg-pw-primary/2 border border-pw-primary/5 rounded-xl space-y-1'>
+                <div className='p-2 bg-pw-primary/2 border border-pw-primary/5 rounded-xl space-y-1 flex-wrap gap-2'>
                   <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider block flex items-center gap-1'>
                     <ShieldCheck className='h-3 w-3' /> Active Tools
                   </span>
@@ -158,6 +175,18 @@ export default function AccountTab({
                   </div>
                 </div>
               )}
+
+            {premiumTier !== 'free' && (
+              <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
+                <span className='flex items-center gap-1.5'>
+                  <ClockIcon className='h-3.5 w-3.5 text-pw-warning animate-pulse' />{' '}
+                  Plan Timeout
+                </span>
+                <span className='font-light text-[11px] tracking-wide'>
+                  {remaining}
+                </span>
+              </div>
+            )}
           </div>
 
           <Link href='/pricing'>
@@ -201,7 +230,7 @@ export default function AccountTab({
               <Input
                 value={email}
                 disabled
-                className='h-10 bg-white/2 border-white/5 text-xs font-mono text-pw-muted cursor-not-allowed'
+                className='h-10 bg-white/2 border-white/5 text-xs font-mono text-white/85 cursor-not-allowed'
               />
               <p className='text-[10px] text-pw-muted'>
                 To change your login email,{' '}
@@ -226,6 +255,8 @@ export default function AccountTab({
         </Card>
       </div>
 
+      <div className='divider my-10 sm:hidden' />
+
       {/* Profile Avatar Designer with Object Mocks */}
       <ProfileAvatarDesigner
         initialImage={dp || null}
@@ -233,6 +264,7 @@ export default function AccountTab({
         onSaveAvatar={async (avatarDataUrl: string) => {
           try {
             if (user?.id) {
+              // Do not add the base64 to the database, it'll take up space, create a storage bucket in supabase to save user profile images, and use them in things like anonumous or branding.
               const { error: profileError } = await supabase
                 .from('profiles')
                 .update({ avatar_url: avatarDataUrl })
@@ -240,10 +272,6 @@ export default function AccountTab({
               if (profileError) throw profileError;
             }
             const { error: authError } = await supabase.auth.updateUser({
-              // A base64 avatar in user metadata is copied into every auth JWT.
-              // Large JWTs exceed localhost's request-header limit (431) and
-              // also make ordinary authenticated API calls unnecessarily huge.
-              // Keep the image in the profile record; metadata should stay small.
               data: { avatar_url: null },
             });
             if (authError) throw authError;
@@ -253,6 +281,8 @@ export default function AccountTab({
           }
         }}
       />
+      
+      <div className='divider my-15 sm:hidden' />
 
       {/* Danger Zone */}
       <Card className='p-4 sm:p-6 bg-pw-danger/2 border border-pw-danger/10 rounded-2xl space-y-4'>
@@ -263,8 +293,7 @@ export default function AccountTab({
           <div>
             <h3 className='text-sm font-bold text-white'>Danger Zone</h3>
             <p className='text-xs text-pw-muted'>
-              Permanently delete your account and all associated studio
-              creations.
+              Permanently delete your account and all associated tool creations.
             </p>
           </div>
         </div>

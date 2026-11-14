@@ -31,6 +31,30 @@ async function getCounts(request: NextRequest, resolveUser: () => ReturnType<typ
   try {
     const admin = getSupabaseAdmin();
     const counts: Record<string, number> = {};
+    const requestedQuizId = request.nextUrl.searchParams.get('quizId');
+    if (requestedQuizId) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedQuizId)) {
+        return NextResponse.json({ error: 'Invalid assessment.' }, { status: 400 });
+      }
+      const { data: quiz, error: quizError } = await admin.from('quizzes')
+        .select('id,responses').eq('id', requestedQuizId).eq('user_id', user.id).maybeSingle();
+      if (quizError) throw quizError;
+      if (!quiz) return NextResponse.json({ error: 'Assessment not found.' }, { status: 404 });
+      const [{ count: submitted, error: responseError }, { count: active, error: attemptError }] = await Promise.all([
+        admin.from('quiz_responses').select('id', { count: 'exact', head: true }).eq('quiz_id', requestedQuizId),
+        admin.from('quiz_attempts').select('id', { count: 'exact', head: true }).eq('quiz_id', requestedQuizId).eq('status', 'in_progress'),
+      ]);
+      if (responseError) throw responseError;
+      if (attemptError) throw attemptError;
+      // Match response loading's legacy fallback: the JSONB copy is consulted
+      // only when no normalized response rows exist, so it cannot double count.
+      const submittedCount = (submitted ?? 0) > 0
+        ? submitted!
+        : Array.isArray(quiz.responses) ? quiz.responses.length : 0;
+      const activeCount = active ?? 0;
+      counts[requestedQuizId] = submittedCount + activeCount;
+      return NextResponse.json({ counts, count: counts[requestedQuizId], submittedCount, activeCount }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
 
     // 1. Try owner RPC function first (fastest and most efficient if applied in Supabase)
     const { data: rpcData, error: rpcError } = await admin.rpc('get_quiz_response_counts', {
@@ -56,42 +80,28 @@ async function getCounts(request: NextRequest, resolveUser: () => ReturnType<typ
       return NextResponse.json({ counts: {} }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
-    const quizIds = userQuizzes.map((q) => q.id);
-
-    // Count from quiz_responses table
-    try {
-      const { data: respRows } = await admin
-        .from('quiz_responses')
-        .select('quiz_id')
-        .in('quiz_id', quizIds);
-
-      if (Array.isArray(respRows)) {
-        for (const row of respRows) {
-          if (row.quiz_id) counts[row.quiz_id] = (counts[row.quiz_id] || 0) + 1;
-        }
-      }
-    } catch {}
-
-    // Count in-progress attempts from quiz_attempts
-    try {
-      const { data: attemptRows } = await admin
-        .from('quiz_attempts')
-        .select('quiz_id')
-        .in('quiz_id', quizIds)
-        .eq('status', 'in_progress');
-
-      if (Array.isArray(attemptRows)) {
-        for (const row of attemptRows) {
-          if (row.quiz_id) counts[row.quiz_id] = (counts[row.quiz_id] || 0) + 1;
-        }
-      }
-    } catch {}
-
-    // Also include quizzes that store responses in JSONB array
-    for (const q of userQuizzes) {
-      if (!counts[q.id] && Array.isArray(q.responses) && q.responses.length > 0) {
-        counts[q.id] = q.responses.length;
-      }
+    // Count with head-only queries instead of transferring every response and
+    // attempt row to the app server. Small batches avoid both large IN clauses
+    // and a burst of database requests for accounts with many assessments.
+    for (let index = 0; index < userQuizzes.length; index += 20) {
+      const batch = userQuizzes.slice(index, index + 20);
+      const batchCounts = await Promise.all(batch.map(async (quiz) => {
+        const [responseResult, attemptResult] = await Promise.all([
+          admin.from('quiz_responses').select('id', { count: 'exact', head: true }).eq('quiz_id', quiz.id),
+          admin.from('quiz_attempts').select('id', { count: 'exact', head: true }).eq('quiz_id', quiz.id).eq('status', 'in_progress'),
+        ]);
+        if (responseResult.error) throw responseResult.error;
+        if (attemptResult.error) throw attemptResult.error;
+        const normalizedResponses = responseResult.count ?? 0;
+        // Legacy responses live in a JSONB array on the assessment. Use that
+        // count only when there are no normalized response rows, avoiding a
+        // double count during partial migrations.
+        const savedResponses = normalizedResponses > 0
+          ? normalizedResponses
+          : Array.isArray(quiz.responses) ? quiz.responses.length : 0;
+        return [quiz.id, savedResponses + (attemptResult.count ?? 0)] as const;
+      }));
+      for (const [quizId, count] of batchCounts) counts[quizId] = count;
     }
 
     return NextResponse.json({ counts }, { headers: { 'Cache-Control': 'private, no-store' } });

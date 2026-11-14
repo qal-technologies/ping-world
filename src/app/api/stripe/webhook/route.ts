@@ -2,8 +2,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendThemedEmail } from '@/lib/email/resend';
-import { FLEXIBLE_FEATURES } from '@/lib/config/premium';
+import { FLEXIBLE_FEATURES, readFlexibleTools } from '@/lib/config/premium';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
+import { syncFlexibleSubscription } from '@/lib/billing/flexible-subscriptions';
 
 export const runtime = 'nodejs';
 
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       data?: { object?: Record<string, any> };
     };
     const admin = getSupabaseAdmin();
+    const webhookStripeKey = process.env.STRIPE_SECRET_KEY;
     if (event.type === 'invoice.paid') {
       const invoice = event.data?.object;
       const rawSubscriptionId =
@@ -103,6 +105,10 @@ export async function POST(request: NextRequest) {
       const userId = String(subscription.metadata?.user_id || '');
       if (!/^[0-9a-f-]{36}$/i.test(userId))
         return NextResponse.json({ received: true });
+      if (String(subscription.metadata?.tier) === 'flexible') {
+        await syncFlexibleSubscription(userId, subscription, 'upsert');
+        return NextResponse.json({ received: true, renewed: true });
+      }
       const tier =
         (
           ['flexible', 'standard', 'pro'].includes(
@@ -111,16 +117,11 @@ export async function POST(request: NextRequest) {
         ) ?
           String(subscription.metadata.tier)
         : 'free';
-      const selectedTool = String(
-        subscription.metadata?.selectedFlexibleToolId || '',
-      );
       const tools =
         tier === 'flexible' ?
-          FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ?
-            [selectedTool]
-          : []
+          readFlexibleTools(subscription.metadata)
         : tier === 'free' ? []
-        : ['all'];
+        : [];
       if (tier === 'flexible' && tools.length === 0)
         return NextResponse.json(
           { error: 'Renewed flexible plan has no valid tool.' },
@@ -171,15 +172,36 @@ export async function POST(request: NextRequest) {
       event.type === 'customer.subscription.deleted' ||
       event.type === 'customer.subscription.updated'
     ) {
-      const subscription = event.data?.object;
-      if (!subscription)
+      const eventSubscription = event.data?.object;
+      if (!eventSubscription)
         return NextResponse.json(
           { error: 'Subscription event is incomplete.' },
           { status: 400 },
         );
+      let subscription: Record<string, any> = eventSubscription;
+      if (event.type === 'customer.subscription.updated') {
+        if (!webhookStripeKey)
+          return NextResponse.json({ error: 'Billing is not configured.' }, { status: 503 });
+        const latestResponse = await fetch(
+          `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(String(subscription.id || ''))}`,
+          { headers: { Authorization: `Bearer ${webhookStripeKey}` }, cache: 'no-store', signal: AbortSignal.timeout(8_000) },
+        );
+        const latestSubscription = await latestResponse.json().catch(() => null);
+        if (!latestResponse.ok || !latestSubscription)
+          return NextResponse.json({ error: 'Could not verify the latest subscription update.' }, { status: 503 });
+        subscription = latestSubscription as Record<string, any>;
+      }
       const userId = String(subscription?.metadata?.user_id || '');
       if (!/^[0-9a-f-]{36}$/i.test(userId))
         return NextResponse.json({ received: true });
+      if (String(subscription?.metadata?.tier) === 'flexible') {
+        await syncFlexibleSubscription(
+          userId,
+          subscription,
+          event.type === 'customer.subscription.deleted' ? 'delete' : 'upsert',
+        );
+        return NextResponse.json({ received: true });
+      }
       const subscriptionActive =
         event.type === 'customer.subscription.updated' &&
         ['active', 'trialing'].includes(String(subscription?.status)) &&
@@ -197,16 +219,11 @@ export async function POST(request: NextRequest) {
         subscriptionActive ?
           new Date(Number(subscription.current_period_end) * 1000).toISOString()
         : new Date().toISOString();
-      const selectedTool = String(
-        subscription?.metadata?.selectedFlexibleToolId || '',
-      );
       const tools =
         tier === 'free' ? []
         : tier === 'flexible' ?
-          FLEXIBLE_FEATURES.some((feature) => feature.id === selectedTool) ?
-            [selectedTool]
-          : []
-        : ['all'];
+          readFlexibleTools(subscription?.metadata)
+        : [];
       const { data: account, error: accountError } =
         await admin.auth.admin.getUserById(userId);
       if (accountError || !account.user)
@@ -421,22 +438,26 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const { error: updateError } = await admin.auth.admin.updateUserById(
-      userId,
-      {
+    let updateError: unknown = null;
+    if (tier === 'flexible') {
+      try { await syncFlexibleSubscription(userId, subscription, 'upsert'); }
+      catch (error) { updateError = error; }
+    } else {
+      const result = await admin.auth.admin.updateUserById(userId, {
         app_metadata: {
           ...account.user.app_metadata,
           tier,
           tier_expires_at: expiresAt,
           tier_expired_at: null,
-          purchased_tools: tier === 'flexible' ? [selectedTool] : ['all'],
+          purchased_tools: [],
           stripe_customer_id: String(session.customer || ''),
           stripe_subscription_id: session.subscription,
           auto_renew: !subscription.cancel_at_period_end,
           billing_cycle: requestedCycle,
         },
-      },
-    );
+      });
+      updateError = result.error;
+    }
     if (updateError)
       return NextResponse.json(
         { error: 'Could not apply subscription.' },

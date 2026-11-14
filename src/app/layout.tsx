@@ -13,64 +13,75 @@ import { CookieNotice } from '@/components/layout/CookieNotice';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Ping World',
-    template: '%s | Ping World',
+    default: COMPANY.name,
+    template: `%s | ${COMPANY.name}`,
   },
-  applicationName: 'Ping World',
+  applicationName: COMPANY.name,
   category: 'Productivity & Utilities',
   classification: 'Web Application',
-  publisher: 'Paschal Ngaoka',
+  publisher: COMPANY.parent.name,
+  creator: COMPANY.name,
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
   },
   authors: [
-    { name: 'Basic Alley LLC', url: 'https://basic-alley.com' },
-    { name: 'Ping World', url: COMPANY.domain },
-    { name: 'Pascodez', url: 'https://pascodez.site' },
+    { name: COMPANY.parent.name, url: COMPANY.parent.url },
+    { name: COMPANY.name, url: COMPANY.domain },
+    { name: COMPANY.developer.name, url: COMPANY.developer.url },
     { name: 'Paschal Ngaoka', url: 'https://pasqal-dev.site' },
   ],
-  creator: 'Basic Alley LLC',
   description:
-    'Ping World is a free, all-in-one utility and creator platform. PDF tools, Image toolkit, Quiz builder, Anonymous messaging, URL shortener, post composer, and more.',
+    'Ping World is an all-in-one utility and creator platform, featuring PDF tools, image editing toolkit, quiz builder, anonymous messaging, URL shortening, content creation, and more.',
   metadataBase: new URL(COMPANY.domain),
   openGraph: {
     type: 'website',
-    emails: 'pingworld.com@gmail.com',
+    emails: COMPANY.contactEmail,
     countryName: 'Nigeria',
-    siteName: 'Ping World',
+    siteName: COMPANY.name,
     title: 'Ping World - Your world of tools.',
     description:
-      'Free tools for everyone: PDF tool, Image editing tools, social post canvas, Quizzes, URL shortener, and a full creator hub.',
+      'Explore productivity tools, PDF utilities, Image editing tools, quizzes, anonymous messaging, URL shortener, a full creator hub and creative tools in one place.',
     url: COMPANY.domain,
-    images: '/images/logo.png',
+    images: [{ url: '/images/logo.png', alt: COMPANY.name }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Ping World - Your world of tools.',
-    description: 'Free tools for everyone. Build, create, share.',
-    site: COMPANY.domain,
+    description:
+      'Explore productivity, content creation and utility tools with Ping World.',
+    site: COMPANY.socials.x,
+    images: ['/images/logo.png'],
   },
-  appleWebApp: true,
+  appleWebApp: {
+    capable: true,
+    startupImage: '/images/logo.png',
+    statusBarStyle: 'default',
+    title: COMPANY.name,
+  },
   icons: { icon: '/images/logo.png', apple: '/images/logo.png' },
   keywords: [
-    'ping world',
-    'ping wrld',
-    'ping world tools',
-    'ping world api',
+    'Ping World',
+    'Ping World tools',
+    'Ping World api',
+    'online productivity tools',
     'quiz builder',
-    'pdf tool',
+    'PDF tool',
+    'image editor',
     'image editing tool',
-    'url shortener',
-    'qr code',
+    'URL shortener',
+    'QR code generator',
+    'QR code maker',
     'anonymous messaging',
     'image toolkit',
+    'content creation tools',
     'quiz',
     'quiz taker',
     'social media platform',
     'anonymous',
     'anonymous message',
+    'anonymous link',
     'creator hub',
     'ping platform',
     'ping',
@@ -80,9 +91,6 @@ export const metadata: Metadata = {
     'free tools',
   ],
   manifest: '/manifest.json',
-  alternates: {
-    canonical: COMPANY.domain,
-  },
 };
 
 export const viewport: Viewport = {
@@ -93,29 +101,75 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const websiteSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'Ping World',
-    url: COMPANY.domain,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: `${COMPANY.domain}/tools?q={search_term_string}`,
-      'query-input': 'required name=search_term_string',
-    },
-  };
+  const organizationId = `${COMPANY.domain}/#organization`;
+  const parentOrganizationId = `${COMPANY.parent.url}/#organization`;
 
-  const softwareSchema = {
+  const appSchema = {
     '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'Ping World',
-    operatingSystem: 'All',
-    applicationCategory: 'BusinessApplication, Utilities, Productivity, Tools',
-    offers: {
-      '@type': 'Offer',
-      price: '0',
-      priceCurrency: 'USD',
-    },
+
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': parentOrganizationId,
+        name: COMPANY.parent.name,
+        url: COMPANY.parent.url,
+      },
+
+      {
+        '@type': 'Organization',
+        '@id': organizationId,
+        name: COMPANY.name,
+        url: COMPANY.domain,
+        logo: `${COMPANY.domain}/images/logo.png`,
+        sameAs: Object.values(COMPANY.socials).filter((s) =>
+          s.startsWith('https://'),
+        ),
+        parentOrganization: {
+          '@id': parentOrganizationId,
+        },
+      },
+
+      {
+        '@type': 'WebSite',
+        '@id': `${COMPANY.domain}/#website`,
+        name: COMPANY.name,
+        url: COMPANY.domain,
+        inLanguage: 'en',
+        publisher: {
+          '@id': organizationId,
+        },
+      },
+
+      {
+        '@type': 'WebApplication',
+        '@id': `${COMPANY.domain}/#webapplication`,
+        name: COMPANY.name,
+        url: COMPANY.domain,
+        description:
+          'A collection of browser-based productivity, content creation, media and utility tools.',
+        applicationCategory: 'UtilitiesApplication',
+        operatingSystem: 'Web',
+        browserRequirements: 'Requires javascript and a modern web browser.',
+        creator: {
+          '@id': organizationId,
+        },
+      },
+
+      {
+        '@type': 'SoftwareApplication',
+        '@id': `${COMPANY.domain}/#application`,
+        name: COMPANY.name,
+        url: COMPANY.domain,
+        description:
+          'A collection of browser-based productivity, content creation, media and utility tools.',
+        applicationCategory: 'UtilitiesApplication',
+        operatingSystem: 'All',
+        browserRequirements: 'Requires javascript and a modern web browser.',
+        creator: {
+          '@id': organizationId,
+        },
+      },
+    ],
   };
 
   return (
@@ -126,11 +180,9 @@ export default function RootLayout({
       <head>
         <script
           type='application/ld+json'
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
-        />
-        <script
-          type='application/ld+json'
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(appSchema).replace(/</g, '\\u003c'),
+          }}
         />
       </head>
       <body className='min-h-dvh flex flex-col antialiased'>
@@ -155,7 +207,7 @@ export default function RootLayout({
               color: '#ffff',
               fontFamily: 'var(--font-body)',
               boxShadow: '0px 1px 10px rgba(7, 0, 11, 0.3)',
-              borderRadius:'18px',
+              borderRadius: '18px',
             },
           }}
         />

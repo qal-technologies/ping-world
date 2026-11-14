@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestUser } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
-import { FLEXIBLE_FEATURES } from '@/lib/config/premium';
+import { activeFlexibleEntitlements, FLEXIBLE_FEATURES, flexibleEntitlementSummary, readFlexibleEntitlements } from '@/lib/config/premium';
 import { clearExpiredPremiumQuizData } from '@/lib/quiz/clear-expired-premium-data';
 
 export async function POST(request: NextRequest) {
@@ -72,12 +72,15 @@ export async function POST(request: NextRequest) {
     const existingMetadata = account.user.app_metadata || {};
     const existingTier = String(existingMetadata.tier || 'free');
     const existingExpiry = Date.parse(String(existingMetadata.tier_expires_at || ''));
-    const currentPlanActive = ['flexible', 'standard', 'pro'].includes(existingTier) &&
-      Number.isFinite(existingExpiry) && existingExpiry > Date.now();
+    const activeFlexible = existingTier === 'flexible' ? activeFlexibleEntitlements(existingMetadata) : [];
+    const currentPlanActive = existingTier === 'flexible' ? activeFlexible.length > 0
+      : ['standard', 'pro'].includes(existingTier) && Number.isFinite(existingExpiry) && existingExpiry > Date.now();
     if (tier === 'free' && currentPlanActive)
       return NextResponse.json({ error: 'Use the plan cancellation action to remove current entitlements.' }, { status: 409 });
     if (currentPlanActive && !(existingTier === 'flexible' && tier === 'flexible'))
       return NextResponse.json({ error: 'Cancel your current plan before selecting another plan.' }, { status: 409 });
+    if (tier === 'flexible' && activeFlexible.some((entry) => entry.toolId === selectedTool))
+      return NextResponse.json({ error: 'This tool is already included in your current plan.' }, { status: 409 });
     const billingCycle = body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
     const autoRenew = body.autoRenew !== false;
     const proposedExpiry = tier === 'free' ? new Date().toISOString() : (() => {
@@ -90,27 +93,31 @@ export async function POST(request: NextRequest) {
       date.setDate(Math.min(day, lastDay));
       return date.toISOString();
     })();
-    const expiry = currentPlanActive && existingTier === 'flexible' && tier === 'flexible'
-      ? new Date(Math.max(existingExpiry, Date.parse(proposedExpiry))).toISOString()
-      : proposedExpiry;
-    const previousTools = Array.isArray(existingMetadata.purchased_tools)
-      ? existingMetadata.purchased_tools.map(String)
+    const newEntitlement = tier === 'flexible' ? {
+      toolId: selectedTool,
+      subscriptionId: null,
+      startsAt: new Date().toISOString(),
+      expiresAt: proposedExpiry,
+      billingCycle,
+      autoRenew,
+    } as const : null;
+    const entitlements = tier === 'flexible'
+      ? [...readFlexibleEntitlements(existingMetadata).filter((entry) =>
+          entry.toolId !== selectedTool && Date.parse(entry.expiresAt) > Date.now()), newEntitlement!]
       : [];
-    const purchasedTools =
-      tier === 'free' ? []
-      : tier === 'flexible' ?
-        Array.from(new Set([
-          ...previousTools.filter((tool) => FLEXIBLE_FEATURES.some((feature) => feature.id === tool)),
-          selectedTool,
-        ]))
-      : ['all'];
+    const summary = flexibleEntitlementSummary(entitlements);
+    const purchasedTools = tier === 'free' ? [] : tier === 'flexible' ? summary.tools : ['all'];
+    const expiry = tier === 'flexible' ? summary.expiresAt || proposedExpiry : proposedExpiry;
     const { error } = await admin.auth.admin.updateUserById(user.id, {
       app_metadata: {
         ...account.user.app_metadata,
-        tier,
+        tier: tier === 'flexible' && purchasedTools.length === 0 ? 'free' : tier,
         tier_expires_at: expiry,
-        auto_renew: autoRenew,
-        billing_cycle: billingCycle,
+        tier_expired_at: null,
+        flexible_entitlements: entitlements,
+        tier_started_at: tier === 'flexible' ? new Date().toISOString() : new Date().toISOString(),
+        auto_renew: tier === 'flexible' ? summary.autoRenew : autoRenew,
+        billing_cycle: tier === 'flexible' ? (summary.active[0]?.billingCycle || billingCycle) : billingCycle,
         stripe_subscription_id: null,
         purchased_tools: purchasedTools,
       },
@@ -118,10 +125,10 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
     await admin
       .from('profiles')
-      .upsert({ id: user.id, tier, updated_at: new Date().toISOString() });
+      .upsert({ id: user.id, tier: tier === 'flexible' && purchasedTools.length === 0 ? 'free' : tier, updated_at: new Date().toISOString() });
     if (tier === 'free') await clearExpiredPremiumQuizData(admin, user.id, 'free', []);
     return NextResponse.json(
-      { success: true, tier, tierExpiresAt: expiry, purchasedTools },
+      { success: true, tier: tier === 'flexible' && purchasedTools.length === 0 ? 'free' : tier, tierExpiresAt: expiry, purchasedTools },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch {

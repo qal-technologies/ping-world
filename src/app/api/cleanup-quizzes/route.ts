@@ -5,7 +5,6 @@ import { getClientIp, isRateLimited } from '@/lib/rate-limiter';
 /**
  * GET /api/cleanup-quizzes
  * Deletes Supabase quiz entries expired for more than 48 hours.
- * Called by Vercel Cron Job (see vercel.json). Protected by CRON_SECRET header.
  */
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
@@ -35,6 +34,11 @@ export async function GET(req: NextRequest) {
     // Delete files through Storage API first; only then delete quiz rows.
     // If file cleanup fails, leave the quiz rows for a safe retry next run.
     if (quizIds.length) {
+      const { error: notificationsError } = await admin
+        .from('notification_batches')
+        .delete()
+        .in('resource_id', quizIds);
+      if (notificationsError) throw notificationsError;
       const { data: media, error: mediaError } = await admin.rpc('list_expired_quiz_media', { p_quiz_ids: quizIds });
       if (mediaError) throw mediaError;
       const byBucket = new Map<string, string[]>();
