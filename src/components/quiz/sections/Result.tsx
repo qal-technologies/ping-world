@@ -737,9 +737,9 @@ export default function Finished({
           <AnimatePresence>
             {(localScrollUp || showCompletionScrollUp) && (
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: -12 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 12 }}
+                exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.18 }}
                 className='fixed bottom-[45vh] right-4 z-[80]'>
                 <Button
