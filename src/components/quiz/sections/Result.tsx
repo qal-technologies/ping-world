@@ -741,7 +741,7 @@ export default function Finished({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 12 }}
                 transition={{ duration: 0.18 }}
-                className='fixed bottom-[40vh] right-4 z-[80]'>
+                className='fixed bottom-[45vh] right-4 z-[80]'>
                 <Button
                   aria-label='Scroll to score'
                   className='w-9 h-9 p-1 flex items-center rounded-full shadow-md border-none shadow-pw-primary/60 bg-pw-surface/30 bkblur hover:shadow-lg hover:bg-pw-surface/50'
@@ -767,7 +767,7 @@ export default function Finished({
         <div className='w-full my-1 inline-grid'>
           <div className='divider my-2 mb-3 hidden' />
 
-          <div className='flex gap-1 w-full border self-center items-center justify-center transition-all'>
+          <div className='flex gap-1 w-full self-center items-center justify-center transition-all'>
             <Link
               href={isLoggedIn ? '/quiz' : '/tools'}
               className='w-full  max-w-md '>
