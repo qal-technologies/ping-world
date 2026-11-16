@@ -1808,7 +1808,7 @@ export default function QuizPage() {
         'w-full mx-auto min-h-screen transition-all duration-500 overflow-visible',
         quizUnlocked &&
           'bg-[radial-gradient(ellipse_80%_50%_at_20%_20%,rgba(255,179,71,0.06)_0%,transparent_60%)]',
-        !isCreating && 'px-5 py-12 pb-20',
+        !isCreating && 'px-4 py-12 pb-20',
       )}>
       <AnimatePresence mode='wait'>
         {!isCreating ?
@@ -1817,7 +1817,7 @@ export default function QuizPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{opacity: 0, y: -20}}
-          className='px-10'>
+          className='sm:px-10'>
             <div className='flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12'>
               <div>
                 <div className='badge mb-4'>
