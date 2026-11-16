@@ -2,24 +2,36 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { activeFlexibleEntitlements } from '@/lib/config/premium';
 
-export async function readQuizTierEntitlements(admin: SupabaseClient, userId: string | null) {
+export async function readQuizTierEntitlements(
+  admin: SupabaseClient,
+  userId: string | null,
+) {
   if (!userId) return { quiz: false, pro: false };
   const { data, error } = await admin.auth.admin.getUserById(userId);
   if (error) throw new Error('Could not verify assessment owner tier.');
   const metadata = data.user?.app_metadata || {};
-  const expiry = typeof metadata.tier_expires_at === 'string' ? Date.parse(metadata.tier_expires_at) : Number.NaN;
+  const expiry =
+    typeof metadata.tier_expires_at === 'string' ?
+      Date.parse(metadata.tier_expires_at)
+    : Number.NaN;
   if (metadata.tier === 'flexible') {
-    const tools = activeFlexibleEntitlements(metadata).map((entry) => entry.toolId);
-    return { quiz: tools.includes('quizzable'), pro: false };
+    const tools = activeFlexibleEntitlements(metadata).map(
+      (entry) => entry.toolId,
+    );
+    return { quiz: tools.includes('quiz'), pro: false };
   }
-  if (!Number.isFinite(expiry) || expiry <= Date.now()) return { quiz: false, pro: false };
+  if (!Number.isFinite(expiry) || expiry <= Date.now())
+    return { quiz: false, pro: false };
   if (metadata.tier === 'pro') return { quiz: true, pro: true };
   if (metadata.tier === 'standard') return { quiz: true, pro: false };
   return { quiz: false, pro: false };
 }
 
 /** Read the authoritative quiz entitlement from server-managed metadata. */
-export async function hasActiveQuizEntitlement(admin: SupabaseClient, userId: string | null): Promise<boolean> {
+export async function hasActiveQuizEntitlement(
+  admin: SupabaseClient,
+  userId: string | null,
+): Promise<boolean> {
   return (await readQuizTierEntitlements(admin, userId)).quiz;
 }
 
@@ -31,10 +43,13 @@ export async function resolveQuizPrivacySettings(
   source: unknown,
   entitlementOverride?: { quiz: boolean; pro: boolean },
 ): Promise<Record<string, unknown>> {
-  const settings = source && typeof source === 'object' && !Array.isArray(source)
-    ? { ...(source as Record<string, unknown>) }
+  const settings =
+    source && typeof source === 'object' && !Array.isArray(source) ?
+      { ...(source as Record<string, unknown>) }
     : {};
-  const entitlements = entitlementOverride ?? await readQuizTierEntitlements(admin, quiz.user_id);
+  const entitlements =
+    entitlementOverride ??
+    (await readQuizTierEntitlements(admin, quiz.user_id));
   const activeQuiz = entitlements.quiz;
   if (!activeQuiz) {
     delete settings.branding;
@@ -45,7 +60,14 @@ export async function resolveQuizPrivacySettings(
     settings.fromPremium = true;
   }
   if (!entitlements.pro) {
-    for (const key of ['customUrl', 'isCustom', 'privateKey', 'privateKeyHash', 'allowedParticipantUsernames']) delete settings[key];
+    for (const key of [
+      'customUrl',
+      'isCustom',
+      'privateKey',
+      'privateKeyHash',
+      'allowedParticipantUsernames',
+    ])
+      delete settings[key];
     settings.isPrivate = false;
   }
   if (settings.isPrivate !== true) {

@@ -140,7 +140,7 @@ export function remainingPlanLabel(
 
 const TOOL_BENEFITS = [
   {
-    id: 'quizzable',
+    id: 'quiz',
     title: 'Quizzable Pro',
     icon: Brain,
     textColor: 'text-pw-primary',
@@ -167,7 +167,7 @@ const TOOL_BENEFITS = [
       'Custom link-id alias, personalized questions, 30-day lifespan, and guest-read Public Message Boards.',
   },
   {
-    id: 'pdf-tools',
+    id: 'pdf',
     title: 'PDF Tool Studio',
     icon: FileText,
     textColor: 'text-pw-warning',
@@ -577,7 +577,7 @@ export default function PricingPage() {
                 transition={{ delay: i * 0.08 }}>
                 <Card
                   className={cn(
-                    'relative p-6 flex flex-col h-full transition-all hover:scale-[1.02] border bg-card/40 bkblur rounded-2xl',
+                    'relative p-4 pb-3 flex flex-col h-full max-h-fit transition-all hover:scale-[1.02] border bg-card/40 bkblur rounded-2xl',
                     isPopular &&
                       'bg-pw-primary/5 shadow-2xl shadow-pw-primary/10 border-pw-primary',
                     isPro &&
@@ -659,10 +659,8 @@ export default function PricingPage() {
                     <li className='flex items-center gap-2 text-xs'>
                       <CheckCircle
                         className={cn(
-                          'h-3.5 w-3.5 shrink-0',
-                          tierId === 'standard' || tierId === 'pro' ?
-                            ''
-                          : 'text-pw-success',
+                          'h-3.5 w-3.5 shrink-0 text-white',
+                          tierId === 'flexible' && 'text-pw-success',
                         )}
                         style={
                           tierId === 'standard' || tierId === 'pro' ?
@@ -681,9 +679,7 @@ export default function PricingPage() {
                       <CheckCircle
                         className={cn(
                           'h-3.5 w-3.5 shrink-0',
-                          tierId === 'standard' || tierId === 'pro' ?
-                            ''
-                          : 'text-pw-success',
+                          tierId === 'flexible' && 'text-pw-success',
                         )}
                         style={
                           tierId === 'standard' || tierId === 'pro' ?
@@ -702,9 +698,7 @@ export default function PricingPage() {
                       <CheckCircle
                         className={cn(
                           'h-3.5 w-3.5 shrink-0',
-                          tierId === 'standard' || tierId === 'pro' ?
-                            ''
-                          : 'text-pw-success',
+                          tierId === 'flexible' && 'text-pw-success',
                         )}
                         style={
                           tierId === 'standard' || tierId === 'pro' ?
@@ -719,9 +713,7 @@ export default function PricingPage() {
                         <CheckCircle
                           className={cn(
                             'h-3.5 w-3.5 shrink-0',
-                            tierId === 'standard' || tierId === 'pro' ?
-                              ''
-                            : 'text-pw-success',
+                            tierId === 'flexible' && 'text-pw-success',
                           )}
                           style={
                             tierId === 'standard' || tierId === 'pro' ?
@@ -739,10 +731,8 @@ export default function PricingPage() {
                       {tier.proTools ?
                         <CheckCircle
                           className={cn(
-                            'h-3.5 w-3.5 shrink-0',
-                            tierId === 'standard' || tierId === 'pro' ?
-                              ''
-                            : 'text-pw-success',
+                            'h-3.5 w-3.5 shrink-0 text-white',
+                            tierId === 'flexible' && 'text-pw-success',
                           )}
                           style={
                             tierId === 'standard' || tierId === 'pro' ?
@@ -759,14 +749,15 @@ export default function PricingPage() {
                   </ul>
 
                   {tierId === 'flexible' && isCurrent && (
-                    <div className='pt-3 border-t border-white/5 space-y-2.5'>
+                    <div className='space-y-2.5'>
+                      <div className='divider mb-4' />
                       {/* Purchased Tools List */}
                       {activeFlexible.length > 0 && (
-                        <div className='space-y-1'>
-                          <span className='text-[10px] font-bold uppercase tracking-wider text-pw-success block'>
+                        <div className='space-y-0.5 mb-5'>
+                          <span className='text-[12px] font-bold uppercase tracking-wider text-pw-success block'>
                             Purchased Tools:
                           </span>
-                          <div className='flex gap-2 flex-wrap'>
+                          <div className='flex gap-0.5 flex-wrap'>
                             {activeFlexible.map((entitlement) => {
                               const tId = entitlement.toolId;
                               const feat = FLEXIBLE_FEATURES.find(
@@ -775,20 +766,36 @@ export default function PricingPage() {
                               return (
                                 <div
                                   key={tId}
-                                  className='flex items-center gap-2 rounded-xl border border-pw-success/10 bg-pw-success/6 pl-2 py-1'>
-                                  <span className='min-w-0 flex-1 text-[9px] font-bold text-pw-success'>
-                                    ✓ {feat ? feat.label : tId}
+                                  className='flex items-center gap-1
+                                  '>
+                                  <span className='min-w-0 flex-1 text-[10px] font-bold text-white tracking-wide'>
+                                    ● {feat ? feat.label : tId}
                                     <span className='ml-1 font-medium text-pw-muted'>
-                                      / {entitlement.billingCycle}  ·  ends{' '}
+                                      /{' '}
+                                      {entitlement.billingCycle === 'monthly' ?
+                                        'mo'
+                                      : 'yr'}{' '}
+                                      - till{' '}
                                       {new Date(
                                         entitlement?.expiresAt,
-                                      ).toLocaleDateString()}
+                                      ).toLocaleDateString('en-US', {
+                                        hour12: true,
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year:
+                                          (
+                                            entitlement.billingCycle ===
+                                            'yearly'
+                                          ) ?
+                                            'numeric'
+                                          : undefined,
+                                      })}
                                     </span>
                                   </span>
                                   <button
                                     type='button'
                                     onClick={() => void cancelFlexibleTool(tId)}
-                                    className='grid h-6 w-6 shrink-0 place-items-center rounded-md text-pw-muted transition hover:bg-pw-danger/10 hover:text-pw-danger'
+                                    className='grid h-5 w-5 shrink-0 place-items-center rounded-md text-pw-muted transition hover:bg-pw-danger/10 hover:text-pw-danger'
                                     aria-label={`Cancel ${feat?.label || tId}`}
                                     title={`Cancel ${feat?.label || tId}`}>
                                     <X className='h-3.5 w-3.5' />
@@ -802,7 +809,7 @@ export default function PricingPage() {
 
                       <div className='space-y-1.5'>
                         <label className='text-[10px] font-bold text-pw-primary uppercase block'>
-                          Select Tool to Purchase
+                          Select Tool
                         </label>
                         <div className='flex gap-1.5'>
                           <select
@@ -859,7 +866,7 @@ export default function PricingPage() {
                                 'bg-white/10 text-pw-muted cursor-none opacity-80'
                               : 'btn-primary',
                             )}>
-                            Buy
+                            Get
                           </Button>
                         </div>
                       </div>
@@ -882,7 +889,7 @@ export default function PricingPage() {
                       setIsModalOpen(true);
                     }}
                     className={cn(
-                      'w-full h-11 font-bold text-sm gap-2 transition-all relative mt-auto',
+                      'w-full h-10 font-bold text-sm gap-2 transition-all relative mt-auto',
                       isCurrent && tierId === 'free' ?
                         'bg-white/10 text-pw-muted cursor-default border border-white/10'
                       : isPopular ? 'btn-primary shadow-xl shadow-pw-primary/20'
@@ -910,7 +917,7 @@ export default function PricingPage() {
                     }
                   </Button>
 
-                  {isCurrent && currentPlanActive && currentPlanRemaining && (
+                  {isCurrent  && currentPlanActive && currentPlanRemaining && activeFlexible.length < 2 && (
                     <p className='mt-[-6px] px-2  w-full text-[11px] font-medium text-pw-muted gap-1 items-center justify-center flex text-center'>
                       {currentPlanRemaining}
                     </p>

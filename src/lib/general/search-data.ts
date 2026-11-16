@@ -35,7 +35,7 @@ export const SEARCH_INDEX: SearchPageItem[] = [
     href: '/tools/pdf?tab=conversion',
   },
   {
-    id: 'quizzable',
+    id: 'quiz',
     title: 'Quizzable (Quiz & Survey Builder)',
     category: 'Tool',
     description: 'Create interactive progressive assessments, surveys, form questionnaires, with branching logic.',

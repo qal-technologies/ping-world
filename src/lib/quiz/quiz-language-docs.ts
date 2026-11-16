@@ -17,7 +17,7 @@ export const QUIZ_SYNTAX_DOCS = {
   version: '2.0',
   description:
     'A reactive piping, mention, and evaluation syntax engine built for PingWorld quizzes, forms, and dynamic branching workflows.',
-  mainDocsUrl: '/docs/quizzable',
+  mainDocsUrl: '/docs/quiz',
 
   parametersExplained: [
     {

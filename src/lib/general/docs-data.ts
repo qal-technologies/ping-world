@@ -42,8 +42,8 @@ export const toolDocsDb: Record<string, ToolDoc> = {
     ],
     similarTools: ["ip-locator", "calculator"]
   },
-  quizzable: {
-    id: "quizzable",
+  quiz: {
+    id: "quiz",
     title: "Quizzable (Quiz Builder)",
     category: "Engagement",
     summary: "Quizzable is an interactive, fully integrated assessment platform designed to help you construct custom quizzes in seconds, share them directly with your audience via unique short-links, or back them up to reusable file configurations.",
@@ -231,7 +231,7 @@ export const toolDocsDb: Record<string, ToolDoc> = {
         introduced: "1.5"
       }
     ],
-    similarTools: ["quizzable", "notes"]
+    similarTools: ["quiz", "notes"]
   },
   'text-editor': {
     id: "text-editor",
@@ -572,7 +572,7 @@ export const toolDocsDb: Record<string, ToolDoc> = {
         introduced: "1.0"
       }
     ],
-    similarTools: ["quizzable", "calculator"]
+    similarTools: ["quiz", "calculator"]
   },
   "ip-locator": {
     id: "ip-locator",

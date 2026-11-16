@@ -87,13 +87,11 @@ export default function AccountTab({
 
   const getToolName = (toolKey: string) => {
     const map: Record<string, string> = {
-      quizzable: 'Quiz Builder',
-      quiz: 'Quiz Builder',
-      composer: 'Social Composer',
-      anonlink: 'Anonymous Messages',
-      message: 'Anonymous Messages',
-      'pdf-tools': 'PDF Studio',
+      quiz: 'Quizzable',
+      composer: 'Post Composer',
+      anonlink: 'Anonymous Link',
       pdf: 'PDF Studio',
+      image: 'Media Editor & Bizzcard',
     };
     return map[toolKey] || toolKey;
   };
@@ -151,24 +149,36 @@ export default function AccountTab({
 
             <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
               <span className='flex items-center gap-1.5'>
-                <Crown className='h-3.5 w-3.5 text-pw-success' /> Active Plan
+                <Crown className='h-3.5 w-3.5 text-pw-success' /> Plan
               </span>
               <span className='font-bold uppercase text-pw-primary text-[11px]'>
                 {premiumTier}
               </span>
             </div>
 
+            {premiumTier !== 'free' && (
+              <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
+                <span className='flex items-center gap-1.5'>
+                  <ClockIcon className='h-3.5 w-3.5 text-pw-warning animate-pulse' />{' '}
+                  Expiry
+                </span>
+                <span className='font-light text-[10px] tracking-wide'>
+                  {remaining}
+                </span>
+              </div>
+            )}
+
             {premiumTier === 'flexible' &&
               formattedPurchasedList.length > 0 && (
-                <div className='p-2 bg-pw-primary/2 border border-pw-primary/5 rounded-xl space-y-1 flex-wrap gap-2'>
-                  <span className='text-[10px] font-bold text-pw-primary uppercase tracking-wider block flex items-center gap-1'>
+                <div className='ml-3 pl-2 border-l-2 border-pw-primary space-y-1 gap-2'>
+                  <span className='text-[10px] font-bold text-white uppercase tracking-wider block flex items-center gap-1'>
                     <ShieldCheck className='h-3 w-3' /> Active Tools
                   </span>
                   <div className='flex flex-wrap gap-1'>
                     {formattedPurchasedList.map((name) => (
                       <span
                         key={name}
-                        className='text-[9px] font-semibold bg-pw-primary/15 text-pw-primary border border-pw-primary/20 rounded px-1.5 py-0.5'>
+                        className='text-[10px] font-semibold text-pw-primary px-1.5 py-0.5'>
                         {name}
                       </span>
                     ))}
@@ -176,20 +186,10 @@ export default function AccountTab({
                 </div>
               )}
 
-            {premiumTier !== 'free' && (
-              <div className='flex items-center justify-between text-pw-muted flex-wrap gap-2'>
-                <span className='flex items-center gap-1.5'>
-                  <ClockIcon className='h-3.5 w-3.5 text-pw-warning animate-pulse' />{' '}
-                  Plan Timeout
-                </span>
-                <span className='font-light text-[11px] tracking-wide'>
-                  {remaining}
-                </span>
-              </div>
-            )}
+           
           </div>
 
-          <Link href='/pricing'>
+          <Link href='/pricing' className='mx-3'>
             <Button className='btn-primary h-9 w-full text-xs font-bold mt-2 gap-1.5'>
               <DollarSign className='h-4 w-4' /> Subscription
             </Button>

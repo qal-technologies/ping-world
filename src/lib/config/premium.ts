@@ -4,7 +4,7 @@
  */
 
 export interface FlexibleIds {
-  id: 'composer' | 'quiz' | 'pdf' | 'anonlink' | 'text-editor' | 'images' | string;
+  id: 'composer' | 'quiz' | 'pdf' | 'anonlink' | 'text-editor' | 'images';
 }
 // Define flexible plan features & pricing configuration
 export interface FlexibleFeature {
@@ -27,11 +27,11 @@ export interface FlexibleToolEntitlement {
 // Modular and easily tweakable individual pricing rules for the flexible plan
 export const FLEXIBLE_FEATURES: FlexibleFeature[] = [
   { id: 'composer', label: 'Creator Hub', monthly: 2.99, yearly: 29.99 },
-  { id: 'quizzable', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
-  { id: 'pdf-studio', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99 },
+  { id: 'quiz', label: 'Quizzable Pro', monthly: 2.49, yearly: 24.99 },
+  { id: 'pdf', label: 'PDF Studio Pro', monthly: 1.49, yearly: 14.99 },
   { id: 'anonlink', label: 'AnonLink Pro', monthly: 0.99, yearly: 9.99 },
   {
-    id: 'editor',
+    id: 'text-editor',
     label: 'Rich Notes & Editor Pro',
     monthly: 0.99,
     yearly: 9.99,

@@ -7,7 +7,7 @@ import {
   type PremiumTier,
 } from '@/lib/config/premium';
 
-const QUIZ_TOOL_IDS = new Set(['quizzable', 'quiz', 'quiz-builder']);
+const QUIZ_TOOL_IDS = new Set(['quiz']);
 
 function hasQuizEntitlement(
   tier: PremiumTier,

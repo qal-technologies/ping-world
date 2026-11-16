@@ -747,7 +747,7 @@ export default function QuizBuilder({
   const [showDetails, setShowDetails] = useState(false);
 
   return (
-    <div className='flex flex-col gap-2 w-full h-screen p-0'>
+    <div className='flex flex-col gap-2 w-screen h-screen p-0'>
       {/* Background decoration */}
       <div className='orb orb-primary w-[500px] h-[500px] -bottom-40 -right-40 blur-lg opacity-20 animate-float' />
       <div className='orb orb-secondary w-[400px] h-[400px] top-0 blur-lg -left-20 animate-float opacity-15' />
@@ -4283,6 +4283,7 @@ export default function QuizBuilder({
                               }>
                               {[
                                 { title: 'All', type: '.', locked: true },
+                                { title: 'Image', type: 'image/*' },
                                 { title: 'Pdf', type: '.pdf' },
                                 { title: 'Docs', type: '.doc,.docx' },
                                 { title: 'Text', type: '.txt' },
@@ -4295,7 +4296,6 @@ export default function QuizBuilder({
                                   type: '.zip',
                                   locked: true,
                                 },
-                                { title: 'Image', type: 'image/*' },
                                 {
                                   title: 'Video',
                                   type: 'video/*',
@@ -4588,7 +4588,14 @@ export default function QuizBuilder({
                                           alt='Option'
                                           width={32}
                                           height={32}
-                                          // onClick={()=>openFile()}
+                                          onClick={() => {
+                                            if (opt.uploadUrl)
+                                              openFile({
+                                                src: opt?.uploadUrl || '',
+                                                kind: 'image',
+                                                mimeType: 'image',
+                                              });
+                                          }}
                                           unoptimized
                                           className='h-8 w-8 object-cover rounded-md border border-white/10'
                                         />

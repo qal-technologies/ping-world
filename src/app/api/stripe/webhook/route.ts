@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
             previousTier === 'standard' ||
             (previousTier === 'flexible' &&
               previousTools.some((tool) =>
-                ['quizzable', 'quiz', 'quiz-builder'].includes(
+                ['quiz'].includes(
                   tool.toLowerCase(),
                 ),
               ));
@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
             tier === 'standard' ||
             (tier === 'flexible' &&
               tools.some((tool) =>
-                ['quizzable', 'quiz', 'quiz-builder'].includes(
+                ['quiz'].includes(
                   tool.toLowerCase(),
                 ),
               ));

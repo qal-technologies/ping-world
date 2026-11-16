@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   // This prevents any authenticated user from granting themselves a free pro tier
   // by calling this endpoint in a live environment.
   if (
-    process.env.NODE_ENV === 'production' ||
+    process.env.NODE_ENV === 'production' &&
     process.env.STRIPE_SECRET_KEY
   ) {
     return NextResponse.json(

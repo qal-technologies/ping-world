@@ -1,7 +1,7 @@
 import type { Quiz } from '@/app/(main)/quiz/';
 import { supabase, supabaseStorage } from './supabase';
 import { optimizeImageForStorage } from './media-optimization';
-import {unpackPingWorldMediaUrl} from '@/lib/quiz/quiz-piping';
+import { unpackPingWorldMediaUrl } from '@/lib/quiz/quiz-piping';
 
 // Add composer_history to StorageItem type
 export type StorageItem = {
@@ -412,7 +412,10 @@ async function readCacheValue<T>(key: string): Promise<T | null> {
 }
 
 /** Count this tab's cached attempt records by key only, without reading answers. */
-async function countCachedAttempts(owner: string, quizId?: string): Promise<number> {
+async function countCachedAttempts(
+  owner: string,
+  quizId?: string,
+): Promise<number> {
   try {
     const db = await openCacheDb();
     if (!db || !db.objectStoreNames.contains(CACHE_STORE_NAME)) return 0;
@@ -421,17 +424,28 @@ async function countCachedAttempts(owner: string, quizId?: string): Promise<numb
     const exactKey = quizId ? `${prefix}${encodeURIComponent(quizId)}` : null;
     return await new Promise<number>((resolve) => {
       try {
-        const request = db.transaction(CACHE_STORE_NAME, 'readonly')
-          .objectStore(CACHE_STORE_NAME).getAllKeys();
+        const request = db
+          .transaction(CACHE_STORE_NAME, 'readonly')
+          .objectStore(CACHE_STORE_NAME)
+          .getAllKeys();
         request.onsuccess = () => {
           const keys = Array.isArray(request.result) ? request.result : [];
-          resolve(keys.filter((key) => typeof key === 'string' &&
-            (exactKey ? key === exactKey : key.startsWith(prefix))).length);
+          resolve(
+            keys.filter(
+              (key) =>
+                typeof key === 'string' &&
+                (exactKey ? key === exactKey : key.startsWith(prefix)),
+            ).length,
+          );
         };
         request.onerror = () => resolve(0);
-      } catch { resolve(0); }
+      } catch {
+        resolve(0);
+      }
     });
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 }
 
 async function writeCacheValue<T>(key: string, value: T): Promise<boolean> {
@@ -1143,7 +1157,9 @@ async function syncFromRemote(
     let remoteReadComplete = false;
     while (true) {
       const orderColumn =
-        type === 'message' || type === 'link' || type === 'quiz' ? 'created_at' : 'updated_at';
+        type === 'message' || type === 'link' || type === 'quiz' ?
+          'created_at'
+        : 'updated_at';
       let query = supabase
         .from(tableName(type))
         .select('*')
@@ -1296,7 +1312,9 @@ async function flushPendingQuizDeletes() {
   for (let index = 0; index < pending.length; index++) {
     const id = pending[index];
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) return;
       const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}`, {
         method: 'DELETE',
@@ -1317,7 +1335,7 @@ async function flushPendingQuizDeletes() {
 async function clearScopedCache(
   scopeId: string,
   removeCompletionMarker = false,
-  type?:StorageItem['type'],
+  type?: StorageItem['type'],
 ) {
   if (typeof window === 'undefined' || !scopeId) return;
   const encodedId = encodeURIComponent(scopeId);
@@ -1331,8 +1349,8 @@ async function clearScopedCache(
         const store = tx.objectStore(CACHE_STORE_NAME);
         const keysRequest = store.getAllKeys();
         keysRequest.onsuccess = () => {
-            for(const rawKey of keysRequest.result) {
-          if(dbType === 'quiz') {
+          for (const rawKey of keysRequest.result) {
+            if (dbType === 'quiz') {
               const key = String(rawKey);
               const isCurrentOwnerData = key.includes(encodedOwnerId);
               const scopedData =
@@ -1341,8 +1359,8 @@ async function clearScopedCache(
                   key.includes('quiz_responses:')) &&
                 (key.includes(scopeId) || key.includes(encodedId)) &&
                 (removeCompletionMarker || isCurrentOwnerData);
-              if(scopedData) store.delete(rawKey);
-              if(
+              if (scopedData) store.delete(rawKey);
+              if (
                 removeCompletionMarker &&
                 (key.endsWith(':draft') || key === 'draft') &&
                 (removeCompletionMarker || isCurrentOwnerData)
@@ -1350,27 +1368,28 @@ async function clearScopedCache(
                 const draftRequest = store.get(rawKey);
                 draftRequest.onsuccess = () => {
                   const record = draftRequest.result;
-                  if(!Array.isArray(record?.items)) return;
+                  if (!Array.isArray(record?.items)) return;
                   const items = record.items.filter(
                     (item: StorageItem) => item.id !== `draft-${scopeId}`,
                   );
-                  if(items.length !== record.items.length)
-                    store.put({...record, items, updatedAt: Date.now()});
+                  if (items.length !== record.items.length)
+                    store.put({ ...record, items, updatedAt: Date.now() });
                 };
               }
-              if(
+              if (
                 key.startsWith('queue:') &&
                 (removeCompletionMarker || key === pendingResponsesKey())
               ) {
                 const queueRequest = store.get(rawKey);
                 queueRequest.onsuccess = () => {
                   const record = queueRequest.result;
-                  const queue = Array.isArray(record?.value) ? record.value : [];
+                  const queue =
+                    Array.isArray(record?.value) ? record.value : [];
                   const filtered = queue.filter(
                     (entry: any) => entry?.quizId !== scopeId,
                   );
-                  if(filtered.length === queue.length) return;
-                  if(filtered.length)
+                  if (filtered.length === queue.length) return;
+                  if (filtered.length)
                     store.put({
                       ...record,
                       value: filtered,
@@ -1379,16 +1398,16 @@ async function clearScopedCache(
                   else store.delete(rawKey);
                 };
               }
-              if(removeCompletionMarker && key.endsWith(':quiz')) {
+              if (removeCompletionMarker && key.endsWith(':quiz')) {
                 const quizRequest = store.get(rawKey);
                 quizRequest.onsuccess = () => {
                   const record = quizRequest.result;
-                  if(!Array.isArray(record?.items)) return;
+                  if (!Array.isArray(record?.items)) return;
                   const items = record.items.filter(
                     (item: StorageItem) => item.id !== scopeId,
                   );
-                  if(items.length !== record.items.length)
-                    store.put({...record, items, updatedAt: Date.now()});
+                  if (items.length !== record.items.length)
+                    store.put({ ...record, items, updatedAt: Date.now() });
                 };
               }
             }
@@ -1403,46 +1422,61 @@ async function clearScopedCache(
     });
   }
 
-  for (const type of ['attempt', 'submission', 'responses'] as const) {
-    for (const key of Object.keys(localStorage)) {
-      if (
-        key.includes(encodedId) &&
-        key.includes(`quiz_${type}:`) &&
-        (removeCompletionMarker || key.includes(encodedOwnerId))
-      ) {
-        localStorage.removeItem(key);
+  if (dbType === 'quiz') {
+    for (const type of ['attempt', 'submission', 'responses'] as const) {
+      for (const key of Object.keys(localStorage)) {
+        if (
+          key.includes(encodedId) &&
+          key.includes(`quiz_${type}:`) &&
+          (removeCompletionMarker || key.includes(encodedOwnerId))
+        ) {
+          localStorage.removeItem(key);
+        }
       }
     }
-  }
 
-  if(dbType === 'quiz') {
     // Remove only queued submissions for this assessment. Other assessment
     // queues must survive a successful save or response cleanup.
-    for(const key of Object.keys(localStorage)) {
-      if(!key.startsWith('pw_queue:') && !key.startsWith('pw_quiz_response_queue_')) continue;
-      if(!removeCompletionMarker && !key.includes(encodedOwnerId)) continue;
+    for (const key of Object.keys(localStorage)) {
+      if (
+        !key.startsWith('pw_queue:') &&
+        !key.startsWith('pw_quiz_response_queue_')
+      )
+        continue;
+      if (!removeCompletionMarker && !key.includes(encodedOwnerId)) continue;
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || 'null');
-        const queue = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.value) ? parsed.value : null;
-        if(!queue) continue;
-        const filtered = queue.filter((entry: any) => entry?.quizId !== scopeId);
-        if(filtered.length === queue.length) continue;
-        if(Array.isArray(parsed)) {
-          if(filtered.length) localStorage.setItem(key, JSON.stringify(filtered));
+        const queue =
+          Array.isArray(parsed) ? parsed
+          : Array.isArray(parsed?.value) ? parsed.value
+          : null;
+        if (!queue) continue;
+        const filtered = queue.filter(
+          (entry: any) => entry?.quizId !== scopeId,
+        );
+        if (filtered.length === queue.length) continue;
+        if (Array.isArray(parsed)) {
+          if (filtered.length)
+            localStorage.setItem(key, JSON.stringify(filtered));
           else localStorage.removeItem(key);
-        } else if(filtered.length) {
-          localStorage.setItem(key, JSON.stringify({...parsed, value: filtered}));
+        } else if (filtered.length) {
+          localStorage.setItem(
+            key,
+            JSON.stringify({ ...parsed, value: filtered }),
+          );
         } else localStorage.removeItem(key);
-      } catch { /* Keep an unreadable queue; cleanup must not destroy unrelated data. */}
+      } catch {
+        /* Keep an unreadable queue; cleanup must not destroy unrelated data. */
+      }
     }
 
     // Assessment deletion clears its builder draft too. A submitted response
     // only clears taker attempt/submission data and must not erase setter edits.
-    if(removeCompletionMarker) {
+    if (removeCompletionMarker) {
       try {
         const draftKey = `draft-${scopeId}`;
         const draftRows = await readLocal('draft', activeStorageUserId);
-        if(draftRows.some((row) => row.id === draftKey)) {
+        if (draftRows.some((row) => row.id === draftKey)) {
           await writeLocal(
             'draft',
             draftRows.filter((row) => row.id !== draftKey),
@@ -1451,23 +1485,30 @@ async function clearScopedCache(
         }
         // Legacy draft snapshots are keyed by assessment id; remove only matching
         // serialized values and preserve unrelated drafts in the same browser.
-        for(const key of Object.keys(localStorage)) {
-          if(!key.startsWith('pw_quiz_drafts_')) continue;
+        for (const key of Object.keys(localStorage)) {
+          if (!key.startsWith('pw_quiz_drafts_')) continue;
           try {
             const raw = localStorage.getItem(key) || '';
             const parsed = JSON.parse(raw);
-            if(parsed?.id === scopeId || parsed?.quizId === scopeId || parsed?.id === `draft-${scopeId}`) localStorage.removeItem(key);
-          } catch { /* Leave malformed legacy storage untouched. */}
+            if (
+              parsed?.id === scopeId ||
+              parsed?.quizId === scopeId ||
+              parsed?.id === `draft-${scopeId}`
+            )
+              localStorage.removeItem(key);
+          } catch {
+            /* Leave malformed legacy storage untouched. */
+          }
         }
-      } catch { }
+      } catch {}
     }
-    if(removeCompletionMarker) {
-      for(const key of Object.keys(localStorage)) {
-        if(key.startsWith('pw_quizzes_')) localStorage.removeItem(key);
+    if (removeCompletionMarker) {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('pw_quizzes_')) localStorage.removeItem(key);
       }
       try {
         localStorage.removeItem(`completed_quiz_${scopeId}`);
-      } catch { }
+      } catch {}
     }
   }
   if (db) await pruneEmptyCacheStore(db);
@@ -1921,12 +1962,20 @@ export const HybridStorage = {
    * Count records for the current account without fetching their payloads.
    * `quiz_response` optionally scopes to a quiz id and includes active attempts.
    */
-  async count(type: StorageItem['type'] | 'quiz_response', id?: string): Promise<number> {
+  async count(
+    type: StorageItem['type'] | 'quiz_response',
+    id?: string,
+  ): Promise<number> {
     if (type === 'quiz_response') {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (session?.access_token && isOnline()) {
-          const endpoint = id ? `/api/quiz-response-counts?quizId=${encodeURIComponent(id)}` : '/api/quiz-response-counts';
+          const endpoint =
+            id ?
+              `/api/quiz-response-counts?quizId=${encodeURIComponent(id)}`
+            : '/api/quiz-response-counts';
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1936,51 +1985,76 @@ export const HybridStorage = {
           if (response.ok) {
             const payload = await response.json();
             if (typeof payload.count === 'number') return payload.count;
-            return Object.values(payload.counts || {}).reduce<number>((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+            return Object.values(payload.counts || {}).reduce<number>(
+              (sum, value) => sum + Math.max(0, Number(value) || 0),
+              0,
+            );
           }
         }
-      } catch { /* local cache remains useful while offline or auth refreshes */ }
+      } catch {
+        /* local cache remains useful while offline or auth refreshes */
+      }
       if (id) {
         const quiz = await this.getQuiz(id);
-        const local = Array.isArray(quiz?.responses) ? quiz.responses.length : 0;
-        return local + await countCachedAttempts(activeStorageUserId, id);
+        const local =
+          Array.isArray(quiz?.responses) ? quiz.responses.length : 0;
+        return local + (await countCachedAttempts(activeStorageUserId, id));
       }
       const quizzes = await readLocal('quiz', activeStorageUserId);
-      const guest = activeStorageUserId === 'guest' ? [] : await readLocal('quiz', 'guest');
-      const attempts = await countCachedAttempts(activeStorageUserId) +
-        (activeStorageUserId === 'guest' ? 0 : await countCachedAttempts('guest'));
-      return [...quizzes, ...guest].reduce((sum, quiz) => sum +
-        (Array.isArray(quiz.content?.responses) ? quiz.content.responses.length : 0), 0) + attempts;
+      const guest =
+        activeStorageUserId === 'guest' ? [] : await readLocal('quiz', 'guest');
+      const attempts =
+        (await countCachedAttempts(activeStorageUserId)) +
+        (activeStorageUserId === 'guest' ? 0 : (
+          await countCachedAttempts('guest')
+        ));
+      return (
+        [...quizzes, ...guest].reduce(
+          (sum, quiz) =>
+            sum +
+            (Array.isArray(quiz.content?.responses) ?
+              quiz.content.responses.length
+            : 0),
+          0,
+        ) + attempts
+      );
     }
     const localMatch = (item: StorageItem) => !id || item.id === id;
     const table = storageNames[type].table;
     if (table && !LOCAL_ONLY_TYPES.includes(type) && isOnline()) {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (session?.user?.id) {
-          const ownerColumn = type === 'message' ? 'recipient_id'
+          const ownerColumn =
+            type === 'message' ? 'recipient_id'
             : type === 'link' ? 'creator_id'
             : 'user_id';
-          let query = supabase.from(table).select('id', { count: 'exact', head: true })
+          let query = supabase
+            .from(table)
+            .select('id', { count: 'exact', head: true })
             .eq(ownerColumn, session.user.id);
           if (id) query = query.eq('id', id);
           const { count, error } = await query;
           if (!error && typeof count === 'number') {
             // The server count is metadata-only. Read the local record bundle
             // only to add writes that have not reached the server yet.
-            const pendingLocal = (await readLocal(type, activeStorageUserId))
-              .filter((item) => localMatch(item) && !item.is_synced).length;
+            const pendingLocal = (
+              await readLocal(type, activeStorageUserId)
+            ).filter((item) => localMatch(item) && !item.is_synced).length;
             return count + pendingLocal;
           }
         }
-      } catch { /* use the local count when remote counting is unavailable */ }
+      } catch {
+        /* use the local count when remote counting is unavailable */
+      }
     }
     const localRows = await readLocal(type, activeStorageUserId);
     return localRows.filter(localMatch).length;
   },
   async clearLocalCache() {
     const db = await openCacheDb();
-
 
     if (db && db.objectStoreNames.contains(CACHE_STORE_NAME)) {
       await new Promise<void>((resolve, reject) => {
@@ -2028,10 +2102,7 @@ export const HybridStorage = {
     quizId: string,
     options?: { removeCompletionMarker?: boolean },
   ) {
-    await clearScopedCache(
-      quizId,
-      Boolean(options?.removeCompletionMarker),
-    );
+    await clearScopedCache(quizId, Boolean(options?.removeCompletionMarker));
   },
   async clearQuizResponseCache(quizId: string) {
     await clearQuizResponsePageCache(quizId);
@@ -2112,8 +2183,15 @@ export const HybridStorage = {
         if (!key.startsWith('pw_quiz_drafts_')) continue;
         try {
           const parsed = JSON.parse(localStorage.getItem(key) || 'null');
-          if (parsed?.id === quizId || parsed?.quizId === quizId || parsed?.id === `draft-${quizId}`) localStorage.removeItem(key);
-        } catch { /* Keep unreadable legacy data rather than risk deleting another draft. */ }
+          if (
+            parsed?.id === quizId ||
+            parsed?.quizId === quizId ||
+            parsed?.id === `draft-${quizId}`
+          )
+            localStorage.removeItem(key);
+        } catch {
+          /* Keep unreadable legacy data rather than risk deleting another draft. */
+        }
       }
     } catch {}
     return removed;
@@ -2222,7 +2300,13 @@ export const HybridStorage = {
     submittedCount?: number;
     activeCount?: number;
     attemptsUnavailable?: boolean;
-    pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+    pollResults?: Array<{
+      questionId: string;
+      text: string;
+      category: string;
+      totalVotes: number;
+      options: Array<{ label: string; votes: number }>;
+    }>;
     pollTruncated?: boolean;
     responsesPublicId?: string | null;
     isLocalOnly?: boolean;
@@ -2238,7 +2322,10 @@ export const HybridStorage = {
       }
     } catch {}
 
-    const pageKey = typeof offsetOrCursor === 'string' ? `cursor:${offsetOrCursor}` : `offset:${Math.max(0, Math.floor(offsetOrCursor))}`;
+    const pageKey =
+      typeof offsetOrCursor === 'string' ?
+        `cursor:${offsetOrCursor}`
+      : `offset:${Math.max(0, Math.floor(offsetOrCursor))}`;
     const responseCacheKey = `quiz_responses:${encodeURIComponent(activeStorageUserId)}:${encodeURIComponent(quizId)}:${encodeURIComponent(pageKey)}`;
     const readCachedPage = () =>
       readCacheValue<{
@@ -2246,7 +2333,13 @@ export const HybridStorage = {
         nextOffset: number | null;
         nextCursor?: string | null;
         totalCount?: number;
-        pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+        pollResults?: Array<{
+          questionId: string;
+          text: string;
+          category: string;
+          totalVotes: number;
+          options: Array<{ label: string; votes: number }>;
+        }>;
         pollTruncated?: boolean;
       }>(responseCacheKey);
 
@@ -2256,7 +2349,13 @@ export const HybridStorage = {
         nextOffset: number | null;
         nextCursor?: string | null;
         totalCount?: number;
-        pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+        pollResults?: Array<{
+          questionId: string;
+          text: string;
+          category: string;
+          totalVotes: number;
+          options: Array<{ label: string; votes: number }>;
+        }>;
         pollTruncated?: boolean;
       }>(responseCacheKey);
       if (cachedPage && Array.isArray(cachedPage.responses)) {
@@ -2278,15 +2377,15 @@ export const HybridStorage = {
         quizId === 'pingworld-mastery-showcase' ||
         quizId === 'pingworld-showcase-assessment'
       ) {
-      try {
-        const templateStored =
-          (await readCacheValue<any[]>(
-            `template_responses:${encodeURIComponent(quizId)}`,
-          )) || [];
-        if (Array.isArray(templateStored) && templateStored.length > 0) {
-          localResponses = [...templateStored, ...localResponses];
-        }
-      } catch {}
+        try {
+          const templateStored =
+            (await readCacheValue<any[]>(
+              `template_responses:${encodeURIComponent(quizId)}`,
+            )) || [];
+          if (Array.isArray(templateStored) && templateStored.length > 0) {
+            localResponses = [...templateStored, ...localResponses];
+          }
+        } catch {}
       }
 
       try {
@@ -2314,8 +2413,12 @@ export const HybridStorage = {
 
       localResponses.sort(
         (a, b) =>
-          new Date(b?.timestamp || b?.submittedAt || b?.startedAt || 0).getTime() -
-          new Date(a?.timestamp || a?.submittedAt || a?.startedAt || 0).getTime(),
+          new Date(
+            b?.timestamp || b?.submittedAt || b?.startedAt || 0,
+          ).getTime() -
+          new Date(
+            a?.timestamp || a?.submittedAt || a?.startedAt || 0,
+          ).getTime(),
       );
       return {
         responses: localResponses,
@@ -2350,9 +2453,16 @@ export const HybridStorage = {
         const failure = await responseResult.json().catch(() => ({}));
         console.error('[Quiz feedback] Cloud response refresh failed:', {
           status: responseResult.status,
-          error: typeof failure?.error === 'string' ? failure.error : 'Unknown response loading error.',
-          diagnostic: process.env.NODE_ENV !== 'production' && typeof failure?.diagnostic === 'string'
-            ? failure.diagnostic
+          error:
+            typeof failure?.error === 'string' ?
+              failure.error
+            : 'Unknown response loading error.',
+          diagnostic:
+            (
+              process.env.NODE_ENV !== 'production' &&
+              typeof failure?.diagnostic === 'string'
+            ) ?
+              failure.diagnostic
             : undefined,
         });
         const local = await loadLocalResponses();
@@ -2380,7 +2490,13 @@ export const HybridStorage = {
         submittedCount?: number;
         activeCount?: number;
         attemptsUnavailable?: boolean;
-        pollResults?: Array<{ questionId: string; text: string; category: string; totalVotes: number; options: Array<{ label: string; votes: number }> }>;
+        pollResults?: Array<{
+          questionId: string;
+          text: string;
+          category: string;
+          totalVotes: number;
+          options: Array<{ label: string; votes: number }>;
+        }>;
         pollTruncated?: boolean;
         responsesPublicId?: string | null;
       };
@@ -2565,13 +2681,11 @@ export const HybridStorage = {
           );
           let { error } = await supabase.from(tableName(type)).upsert(payload);
           if (error?.code === '23503' && error.message.includes('profiles')) {
-            await supabase
-              .from('profiles')
-              .upsert({
-                id: userId,
-                username: 'user_' + userId.substring(0, 8),
-                display_name: 'User',
-              });
+            await supabase.from('profiles').upsert({
+              id: userId,
+              username: 'user_' + userId.substring(0, 8),
+              display_name: 'User',
+            });
             error = (await supabase.from(tableName(type)).upsert(payload))
               .error;
           }
@@ -2791,7 +2905,7 @@ export const HybridStorage = {
       const headers: Record<string, string> = {};
       // Public quiz reads are intentionally unauthenticated; omitting the session
       // avoids sending a large Supabase JWT in a request header.
-        const response = await fetch(
+      const response = await fetch(
         `/api/quizzes/${encodeURIComponent(id)}${ownerUsername ? `?owner=${encodeURIComponent(ownerUsername)}` : ''}`,
         {
           headers,
@@ -2926,24 +3040,40 @@ export const HybridStorage = {
       const owner = activeStorageUserId;
       const rows = await readLocal(type, owner);
       const retained = rows.filter((item) => item.id !== id);
-      const validQuizUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+      const validQuizUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          id,
+        );
       if (validQuizUuid && isOnline()) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (session?.access_token) {
-          const response = await fetch(`/api/quizzes/${encodeURIComponent(id)}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${session.access_token}` },
-            cache: 'no-store',
-          });
+          const response = await fetch(
+            `/api/quizzes/${encodeURIComponent(id)}`,
+            {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${session.access_token}` },
+              cache: 'no-store',
+            },
+          );
           const payload = await response.json().catch(() => ({}));
-          if (!response.ok && response.status !== 404) throw new Error(payload.error || `Assessment deletion failed (HTTP ${response.status}).`);
+          if (!response.ok && response.status !== 404)
+            throw new Error(
+              payload.error ||
+                `Assessment deletion failed (HTTP ${response.status}).`,
+            );
         } else {
-          const pending = (await readCacheValue<string[]>(pendingQuizDeletesKey())) || [];
-          if (!pending.includes(id)) await writeCacheValue(pendingQuizDeletesKey(), [...pending, id]);
+          const pending =
+            (await readCacheValue<string[]>(pendingQuizDeletesKey())) || [];
+          if (!pending.includes(id))
+            await writeCacheValue(pendingQuizDeletesKey(), [...pending, id]);
         }
       } else if (validQuizUuid) {
-        const pending = (await readCacheValue<string[]>(pendingQuizDeletesKey())) || [];
-        if (!pending.includes(id)) await writeCacheValue(pendingQuizDeletesKey(), [...pending, id]);
+        const pending =
+          (await readCacheValue<string[]>(pendingQuizDeletesKey())) || [];
+        if (!pending.includes(id))
+          await writeCacheValue(pendingQuizDeletesKey(), [...pending, id]);
       }
       if (activeStorageUserId !== owner) return false;
       await writeLocal(type, retained, owner);

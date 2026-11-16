@@ -30,7 +30,7 @@ export const tools = [
     href: '/quiz',
     color: '#18cb83ff',
     tag: 'Assessment',
-    id: 'quizzable',
+    id: 'quiz',
     category: 'Engagement',
     version: { v: '1.0', s: 'Stable' },
   },
